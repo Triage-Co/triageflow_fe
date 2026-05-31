@@ -1,0 +1,409 @@
+---
+
+description: Healthcare UI Standards
+globs:
+
+* "frontend/**"
+  alwaysApply: true
+
+---
+
+# UI Design Rules
+
+## Design System
+
+Framework:
+
+* Ant Design
+
+Design Style:
+
+* Modern Healthcare
+* Clean
+* Data Intensive
+* Accessibility First
+
+---
+
+## Color System
+
+Primary:
+
+#1677ff
+
+Success:
+
+#52c41a
+
+Warning:
+
+#faad14
+
+Error:
+
+#ff4d4f
+
+Info:
+
+#13c2c2
+
+Background:
+
+#f5f7fa
+
+Card Background:
+
+#ffffff
+
+---
+
+## Layout Rules
+
+Use:
+
+Header
+
+Sidebar
+
+Content
+
+Footer
+
+Responsive Design Required.
+
+---
+
+## Typography
+
+Font:
+
+Inter
+
+Fallback:
+
+Roboto
+
+Font Sizes:
+
+12
+
+14
+
+16
+
+20
+
+24
+
+32
+
+---
+
+## Dashboard Principles
+
+Users should understand:
+
+* Queue Status
+* Patient Status
+* Waiting Time
+* Department Load
+
+within 5 seconds.
+
+---
+
+## Admin Dashboard
+
+Widgets:
+
+Total Patients
+
+Waiting Patients
+
+Completed Visits
+
+Revenue
+
+Department Utilization
+
+Live Queue Status
+
+Hospital Heatmap
+
+AI Alerts
+
+Recent Activities
+
+Audit Logs
+
+---
+
+## Doctor Dashboard
+
+Widgets:
+
+Current Queue
+
+Priority Queue
+
+Patient Summary
+
+Clinical Orders
+
+Lab Results
+
+Patient History
+
+Quick Actions
+
+---
+
+## Receptionist Dashboard
+
+Widgets:
+
+Patient Registration
+
+Manual Check-in
+
+Insurance Verification
+
+Ticket Printing
+
+Payment Collection
+
+Queue Assignment
+
+---
+
+## Laboratory Dashboard
+
+Widgets:
+
+Waiting Samples
+
+In Progress
+
+Completed
+
+Result Upload
+
+Queue Status
+
+---
+
+## Pharmacy Dashboard
+
+Widgets:
+
+Pending Prescriptions
+
+Preparing
+
+Ready For Pickup
+
+Delivered
+
+Patient Queue
+
+---
+
+## Patient App
+
+Screens:
+
+Login
+
+Registration
+
+Triage Form
+
+Body Map
+
+Queue Tracking
+
+Payment
+
+Navigation
+
+Notifications
+
+Medical Journey
+
+Profile
+
+---
+
+## Kiosk UI
+
+Must support:
+
+Large Touch Targets
+
+High Contrast
+
+Simple Navigation
+
+Elderly Friendly UX
+
+Vietnamese Language
+
+English Language
+
+---
+
+## Tables
+
+Use Ant Design Table.
+
+Features:
+
+Pagination
+
+Search
+
+Sorting
+
+Filtering
+
+Column Visibility
+
+Export CSV
+
+---
+
+## Cards
+
+Use Cards for:
+
+Patient Summary
+
+Doctor Summary
+
+Department Status
+
+Queue Information
+
+Statistics
+
+---
+
+## Charts
+
+Preferred:
+
+Line Chart
+
+Bar Chart
+
+Area Chart
+
+Heatmap
+
+Donut Chart
+
+Avoid:
+
+3D Charts
+
+Decorative Charts
+
+---
+
+## Status Colors
+
+Emergency
+
+Red
+
+Urgent
+
+Orange
+
+Routine
+
+Green
+
+Completed
+
+Blue
+
+Cancelled
+
+Gray
+
+---
+
+## Notifications
+
+Types:
+
+Success
+
+Warning
+
+Error
+
+Info
+
+Use:
+
+Toast
+
+Notification Drawer
+
+Realtime Badge Counter
+
+---
+
+## Accessibility
+
+Support:
+
+Keyboard Navigation
+
+Screen Readers
+
+High Contrast
+
+Responsive Layout
+
+Large Font Option
+
+---
+
+## Loading States
+
+Every API request must have:
+
+Skeleton
+
+Spinner
+
+Empty State
+
+Error State
+
+Never leave blank screens.
+
+---
+
+## Realtime UI
+
+Update automatically:
+
+Queue Position
+
+Waiting Time
+
+Payment Status
+
+Lab Results
+
+Navigation Route
+
+Notifications
+
+Use Socket.IO.
+
+No manual refresh required.

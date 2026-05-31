@@ -1,0 +1,175 @@
+---
+
+description: Healthcare Domain Rules
+globs:
+alwaysApply: true
+-----------------
+
+# Healthcare Rules
+
+## System Context
+
+TriageFlowOPD is a hospital outpatient coordination platform.
+
+The system assists healthcare staff.
+
+The system DOES NOT replace doctors.
+
+---
+
+## Medical Authority
+
+AI suggestions are advisory only.
+
+Final decisions belong to:
+
+* Doctors
+* Medical Staff
+
+Never allow AI to automatically:
+
+* Diagnose diseases
+* Prescribe medication
+* Override doctors
+
+---
+
+## Patient Priority Levels
+
+Level 1
+
+Emergency
+
+Examples:
+
+* Chest pain
+* Stroke symptoms
+* Severe bleeding
+
+Level 2
+
+Urgent
+
+Examples:
+
+* High fever
+* Severe pain
+
+Level 3
+
+Routine
+
+Examples:
+
+* Follow-up visits
+* Minor symptoms
+
+---
+
+## Triage Rules
+
+Input:
+
+* Symptoms
+* Age
+* Medical History
+* Body Map Selection
+
+Output:
+
+* Recommended Specialty
+* Priority Level
+* Confidence Score
+
+All AI outputs must be explainable.
+
+---
+
+## Queue Rules
+
+Higher Priority
+
+Always Served First
+
+Priority Order:
+
+Emergency
+
+Urgent
+
+Routine
+
+Returned Patients
+
+Patients returning from:
+
+* Lab
+* Radiology
+* Imaging
+
+Should move near the top of the queue.
+
+---
+
+## Payment Rules
+
+Patient cannot enter service queue until:
+
+Payment Status = CONFIRMED
+
+Exception:
+
+Emergency Cases
+
+---
+
+## Navigation Rules
+
+Support:
+
+* Multi-floor Buildings
+* QR Checkpoints
+* Elevator Routing
+* Stair Routing
+
+Routes must be recalculated in real time.
+
+---
+
+## Notification Rules
+
+Send notifications for:
+
+* Queue Turn
+* Payment Confirmation
+* Lab Ready
+* Pharmacy Ready
+* Route Changes
+
+---
+
+## Audit Rules
+
+Track:
+
+* Doctor Decisions
+* Queue Changes
+* Payment Changes
+* Admin Overrides
+* AI Recommendations
+
+Nothing should occur without traceability.
+
+---
+
+## Privacy Rules
+
+Protect:
+
+* Patient Information
+* Medical History
+* Payment Information
+
+Mask sensitive data whenever possible.
+
+Follow healthcare data security best practices.

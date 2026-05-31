@@ -1,0 +1,144 @@
+---
+
+description: Frontend Development Rules
+globs:
+
+* "frontend/**"
+  alwaysApply: true
+
+---
+
+# Frontend Rules
+
+## Stack
+
+* ReactJS
+* TypeScript
+* Ant Design
+* React Query
+* Zustand
+* React Router
+
+---
+
+## Folder Structure
+
+src/
+
+pages/
+components/
+layouts/
+services/
+hooks/
+store/
+types/
+utils/
+routes/
+
+---
+
+## Component Rules
+
+Prefer:
+
+* Functional Components
+* Hooks
+* Reusable Components
+
+Avoid:
+
+* Class Components
+* Large Components >300 lines
+
+---
+
+## Page Structure
+
+Each page:
+
+* UI
+* Hooks
+* Service Calls
+
+Business logic belongs inside:
+
+* hooks
+* services
+
+---
+
+## Data Fetching
+
+Use React Query.
+
+Never call axios directly inside components.
+
+Use:
+
+services/
+
+Example:
+
+patientService.ts
+
+queueService.ts
+
+paymentService.ts
+
+---
+
+## State Management
+
+Use Zustand for:
+
+* Auth
+* User Profile
+* Notification
+* Global Settings
+
+Use React Query for:
+
+* API Data
+* Server Cache
+
+---
+
+## UI Guidelines
+
+Use Ant Design.
+
+Preferred components:
+
+* Table
+* Card
+* Drawer
+* Modal
+* Statistic
+* Timeline
+* Badge
+
+---
+
+## Dashboard Rules
+
+Admin Dashboard must support:
+
+* Heatmap
+* Queue Monitoring
+* Live Statistics
+* Department Status
+* Alerts
+
+Use realtime Socket.IO updates.
+
+---
+
+## Performance
+
+Use:
+
+* React.memo
+* Lazy Loading
+* Code Splitting
+
+Avoid unnecessary re-renders.

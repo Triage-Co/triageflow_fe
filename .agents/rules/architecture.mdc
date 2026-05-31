@@ -1,0 +1,49 @@
+---
+
+description: System Architecture Rules
+globs:
+alwaysApply: true
+-----------------
+
+# Architecture
+
+Use Domain Driven Design.
+
+Modules:
+
+* Auth
+* User
+* Patient
+* Triage
+* Queue
+* Navigation
+* Payment
+* Notification
+* Doctor
+* Laboratory
+* Pharmacy
+* Admin
+* Audit
+
+Each module contains:
+
+* controller
+* service
+* repository
+* dto
+* entity
+
+Follow SOLID principles.
+
+Use dependency injection.
+
+Use event-driven communication for:
+
+* Queue Updates
+* Payment Events
+* Notification Events
+* Workflow Events
+
+Avoid circular dependencies.
+
+All critical actions must generate audit logs.
