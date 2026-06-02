@@ -1,4 +1,4 @@
-name: Build & Test
+name: CI Pipeline
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [main, master, develop]
 
 jobs:
-  build:
+  ci:
     runs-on: ubuntu-latest
 
     strategy:
@@ -26,16 +26,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run linter
+      - name: Run ESLint
         run: npm run lint
+
+      - name: Type checking
+        run: npx tsc --noEmit
 
       - name: Build project
         run: npm run build
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
-        if: always()
+        if: matrix.node-version == '20.x' && always()
         with:
-          name: next-build-${{ matrix.node-version }}
+          name: next-build-artifacts
           path: .next
           retention-days: 5

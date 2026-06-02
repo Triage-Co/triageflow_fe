@@ -2,22 +2,18 @@
 
 ## 📋 Overview
 
-Dự án này được cấu hình với **GitHub Actions** cho CI/CD. Có 3 workflows chính:
+Dự án này được cấu hình với **GitHub Actions** cho CI/CD. Có 2 workflows chính:
 
-### 1. **Build & Test** (`build-test.yml`)
+### 1. **CI Pipeline** (`ci.yml`)
 - ✅ Chạy trên push và pull requests
-- ✅ Test với Node.js 18.x và 20.x
-- ✅ Cài đặt dependencies
-- ✅ Chạy linter
-- ✅ Build project
-- ✅ Upload build artifacts
+- ✅ Test với Node.js 20.x và 22.x (do Next.js 16 yêu cầu Node >= 20.9.0)
+- ✅ Cài đặt dependencies (`npm ci`)
+- ✅ Kiểm tra linting (`eslint`)
+- ✅ Kiểm tra kiểu dữ liệu (`tsc --noEmit`)
+- ✅ Kiểm tra build dự án (`npm run build`)
+- ✅ Upload build artifacts (chỉ cho Node 20.x)
 
-### 2. **Code Quality** (`code-quality.yml`)
-- ✅ ESLint checking
-- ✅ TypeScript type checking
-- ✅ Build validation
-
-### 3. **Deploy to Vercel** (`deploy-vercel.yml`)
+### 2. **Deploy to Vercel** (`deploy-vercel.yml`)
 - 🛠️ Chỉ kích hoạt thủ công bằng nút **Run workflow** (workflow_dispatch)
 - ❌ Đã tắt tự động deploy khi push hoặc pull request
 - ✅ Hỗ trợ Production & Preview deployment tùy chọn
@@ -63,8 +59,7 @@ Tạo `vercel.json` trong root:
 ```
 .github/
 ├── workflows/
-│   ├── build-test.yml      # Build & Test workflow
-│   ├── code-quality.yml    # Code quality checks
+│   ├── ci.yml              # CI Pipeline workflow (Lint, Type Check, Build)
 │   └── deploy-vercel.yml   # Deploy to Vercel
 ```
 
@@ -72,30 +67,24 @@ Tạo `vercel.json` trong root:
 
 ## 🔍 Workflow Details
 
-### **Build & Test Workflow**
+### **CI Pipeline Workflow**
 
 Trigger:
 - Push đến `main`, `master`, `develop`
-- Pull requests đến branches này
+- Pull requests đến các nhánh này
 
-Steps:
-1. Checkout code
-2. Setup Node.js
-3. Install dependencies (`npm ci`)
-4. Run linter
-5. Build project
-6. Upload artifacts
+Checks & Steps:
+1. **Checkout code**: Lấy code từ repository.
+2. **Setup Node.js**: Thiết lập môi trường chạy Node.js 20.x và 22.x.
+3. **Install dependencies**: Chạy `npm ci` cài đặt chính xác các gói.
+4. **Run ESLint**: Chạy `npm run lint` để kiểm tra lỗi code.
+5. **Type checking**: Chạy `npx tsc --noEmit` kiểm tra kiểu TypeScript.
+6. **Build project**: Chạy `npm run build` để kiểm tra cấu trúc build Next.js.
+7. **Upload artifacts**: Upload thư mục `.next` cho Node.js 20.x.
 
 ```yaml
-Logs: Actions → Build & Test → [chọn run]
+Logs: Actions → CI Pipeline → [chọn run]
 ```
-
-### **Code Quality Workflow**
-
-Checks:
-- ESLint
-- TypeScript compilation
-- Next.js build
 
 ### **Deploy Workflow**
 
@@ -116,7 +105,7 @@ Checks:
 1. **Settings → Branch protection rules**
 2. Chọn branch (main/master)
 3. Bật **Require status checks to pass**
-4. Chọn workflows: `Build & Test`, `Code Quality`
+4. Chọn workflow: `CI Pipeline`
 
 ---
 
