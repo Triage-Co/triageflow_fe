@@ -32,7 +32,7 @@ REM Step 3: Type check
 echo Running TypeScript check...
 call npx tsc --noEmit
 if errorlevel 1 (
-    echo ❌ TypeScript check failed
+    echo TypeScript check failed
     exit /b 1
 )
 echo TypeScript check passed
