@@ -27,12 +27,13 @@ async function request<T>(
     path: string,
     options?: RequestInit,
 ): Promise<ApiResponse<T>> {
+    const { headers: extraHeaders, ...restOptions } = options ?? {};
     const res = await fetch(`${API_BASE_URL}${path}`, {
         headers: {
             'Content-Type': 'application/json',
-            ...options?.headers,
+            ...extraHeaders,
         },
-        ...options,
+        ...restOptions,
     });
 
     const json = await res.json().catch(() => ({}));

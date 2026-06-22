@@ -9,6 +9,19 @@ export interface LoginResponseData {
     refreshToken: string;
 }
 
+// ─── OTP ─────────────────────────────────────────────────────────────────────
+export interface OtpSendRequest {
+    email: string;
+}
+
+export interface OtpVerifyRequest {
+    email: string;
+    otp: string;
+}
+
+// OTP verify returns a token pair (same shape as login)
+export type OtpVerifyResponseData = LoginResponseData;
+
 // ─── Register ────────────────────────────────────────────────────────────────
 export type Gender = 'MALE' | 'FEMALE' | 'OTHER';
 

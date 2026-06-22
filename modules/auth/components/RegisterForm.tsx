@@ -33,7 +33,7 @@ export function RegisterForm() {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
 
-    const [done, setDone] = useState(false);
+    const [step, setStep] = useState<'form' | 'success'>('form');
     const [form, setForm] = useState<FormState>(INITIAL);
     const [showPw, setShowPw] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
@@ -67,7 +67,7 @@ export function RegisterForm() {
                     citizen_id: form.citizen_id,
                     role: 'USER',
                 });
-                setDone(true);
+                setStep('success');
             } catch (err) {
                 setError(
                     err instanceof Error ? err.message : 'Đăng ký thất bại. Vui lòng thử lại.',
@@ -76,16 +76,27 @@ export function RegisterForm() {
         });
     }
 
-    if (done) {
+    // ── Success screen ──────────────────────────────────────────
+    if (step === 'success') {
         return (
             <div className="w-full max-w-100 mx-auto text-center">
                 <div className="mb-6 inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100">
                     <CheckCircle2 className="h-8 w-8 text-green-500" />
                 </div>
                 <h2 className="text-2xl font-bold text-neutral-900 mb-2">Đăng ký thành công!</h2>
-                <p className="text-sm text-neutral-500 mb-8">
-                    Tài khoản của bạn đã được tạo. Vui lòng đăng nhập để tiếp tục.
-                </p>
+
+                {/* Email confirmation notice */}
+                <div className="mb-6 rounded-xl border border-brand-200 bg-brand-50 px-5 py-4 text-left">
+                    <p className="text-sm font-semibold text-brand-700 mb-1">
+                        ✉️ Xác thực email của bạn
+                    </p>
+                    <p className="text-sm text-brand-600 leading-relaxed">
+                        Mail confirm đã được gửi tới{' '}
+                        <span className="font-semibold">{form.email}</span>.
+                        Hãy kiểm tra hộp thư và xác thực tài khoản trước khi đăng nhập.
+                    </p>
+                </div>
+
                 <button
                     onClick={() => router.push('/login')}
                     className="w-full rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600 transition"
