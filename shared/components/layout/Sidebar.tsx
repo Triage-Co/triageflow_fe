@@ -1,93 +1,129 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-    LayoutDashboard,
-    Users,
-    CalendarDays,
-    BarChart2,
-    Settings,
-    Activity,
+  LayoutDashboard,
+  CalendarDays,
+  BarChart2,
+  Settings,
+  Activity,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipTrigger,
-} from '@/components/ui/tooltip';
 
 interface NavItem {
-    label: string;
-    href: string;
-    icon: React.ElementType;
+  label: string;
+  href: string;
+  icon: React.ElementType;
 }
 
 const navItems: NavItem[] = [
-    { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    { label: 'Appointments', href: '/appointments', icon: CalendarDays },
-    { label: 'Reports', href: '/reports', icon: BarChart2 },
-    { label: 'Settings', href: '/settings', icon: Settings },
+  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'Appointments', href: '/appointments', icon: CalendarDays },
+  { label: 'Reports', href: '/reports', icon: BarChart2 },
+  { label: 'Settings', href: '/settings', icon: Settings },
 ];
 
 export interface SidebarUser {
-    name: string;
-    role: string;
+  name: string;
+  role: string;
 }
 
 interface SidebarProps {
-    user?: SidebarUser;
+  user?: SidebarUser;
 }
 
 export function Sidebar({ user }: SidebarProps) {
-    const pathname = usePathname();
+  const pathname = usePathname();
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
-    return (
-        <aside className="relative z-20 flex flex-col items-center w-[72px] h-screen bg-white border-r border-neutral-100 select-none shrink-0">
-            {/* Logo */}
-            <div className="flex items-center justify-center h-16 w-full shrink-0">
-                <div className="w-9 h-9 rounded-[24px] bg-brand-500 flex items-center justify-center shadow-md shadow-brand-500/20">
-                    <Activity className="w-5 h-5 text-white" />
-                </div>
+  return (
+    <aside
+      className={cn(
+        "relative flex flex-col h-[calc(100vh-32px)] my-4 ml-4 bg-white border border-neutral-200/60 shadow-[0_4px_24px_rgba(0,0,0,0.04)] rounded-[48px] select-none transition-all duration-300 ease-in-out shrink-0 overflow-hidden z-20",
+        isCollapsed ? "w-[88px]" : "w-64"
+      )}
+    >
+      {/* Header Logo Section */}
+      <div className="flex items-center justify-between px-5 py-6 shrink-0 border-b border-neutral-100">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-[24px] bg-brand-500 flex items-center justify-center shadow-md shadow-brand-500/20 shrink-0">
+            <Activity className="w-5 h-5 text-white" />
+          </div>
+          {!isCollapsed && (
+            <div className="animate-in fade-in-0 duration-300">
+              <h1 className="text-sm font-bold text-neutral-900 tracking-tight">TriageFlow</h1>
+              <p className="text-[10px] text-neutral-400 font-medium leading-none mt-0.5">Outpatient OPD</p>
             </div>
+          )}
+        </div>
+      </div>
 
-            {/* Navigation */}
-            <nav className="flex-1 flex flex-col items-center py-4 gap-1 w-full px-3">
-                {navItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive =
-                        pathname === item.href ||
-                        pathname.startsWith(item.href + '/');
+      {/* Collapse Toggle Button */}
+      <button
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        className="absolute top-[30px] -right-1 z-30 w-6 h-6 bg-white border border-neutral-200 shadow-sm rounded-full flex items-center justify-center text-neutral-400 hover:text-brand-500 hover:border-brand-300 transition-colors translate-x-1/2"
+      >
+        {isCollapsed ? (
+          <ChevronRight className="w-3.5 h-3.5" />
+        ) : (
+          <ChevronLeft className="w-3.5 h-3.5" />
+        )}
+      </button>
 
-                    return (
-                        <Tooltip key={item.href}>
-                            <TooltipTrigger render={<div className="w-full" />}>
-                                <Link
-                                    href={item.href}
-                                    className={cn(
-                                        'flex items-center justify-center w-full h-11 rounded-[24px] transition-all duration-200',
-                                        isActive
-                                            ? 'bg-brand-500 text-white shadow-md shadow-brand-500/25'
-                                            : 'text-neutral-400 hover:text-brand-500 hover:bg-brand-50/60'
-                                    )}
-                                >
-                                    <Icon className="w-5 h-5" />
-                                </Link>
-                            </TooltipTrigger>
-                            <TooltipContent side="right" sideOffset={12}>
-                                {item.label}
-                            </TooltipContent>
-                        </Tooltip>
-                    );
-                })}
-            </nav>
+      {/* Navigation Menu */}
+      <nav className="flex-1 flex flex-col gap-1.5 py-6 px-4 overflow-y-auto">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          const isActive =
+            pathname === item.href || pathname.startsWith(item.href + '/');
 
-            {/* Bottom avatar */}
-            <div className="pb-5 flex flex-col items-center">
-                <div className="w-9 h-9 rounded-[24px] bg-brand-100 flex items-center justify-center text-brand-600 font-semibold text-xs border-2 border-brand-200">
-                    {user?.name?.split(' ').slice(-2).map(w => w[0]).join('').toUpperCase() || 'VA'}
-                </div>
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                'flex items-center gap-3 w-full h-12 rounded-[24px] px-4 transition-all duration-200 ease-in-out',
+                isActive
+                  ? 'bg-brand-500 text-white shadow-md shadow-brand-500/25 font-semibold'
+                  : 'text-neutral-500 hover:text-brand-500 hover:bg-brand-50/60 font-medium'
+              )}
+            >
+              <Icon className="w-5 h-5 shrink-0" />
+              {!isCollapsed && (
+                <span className="text-sm truncate animate-in fade-in-0 slide-in-from-left-2 duration-200">
+                  {item.label}
+                </span>
+              )}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* User profile / footer section */}
+      <div className="p-4 border-t border-neutral-100 shrink-0 bg-neutral-50/50">
+        <div className={cn("flex items-center gap-3", isCollapsed ? "justify-center" : "px-2")}>
+          <div className="w-10 h-10 rounded-[24px] bg-brand-100 flex items-center justify-center text-brand-600 font-semibold text-xs border-2 border-brand-200 shrink-0">
+            {user?.name
+              ?.split(' ')
+              .slice(-2)
+              .map((w) => w[0])
+              .join('')
+              .toUpperCase() || 'VA'}
+          </div>
+          {!isCollapsed && (
+            <div className="flex-1 min-w-0 animate-in fade-in-0 duration-300">
+              <p className="text-xs font-bold text-neutral-800 truncate">{user?.name || 'Văn Anh'}</p>
+              <p className="text-[10px] text-neutral-400 font-medium uppercase tracking-wider truncate mt-0.5">
+                {user?.role || 'DOCTOR'}
+              </p>
             </div>
-        </aside>
-    );
+          )}
+        </div>
+      </div>
+    </aside>
+  );
 }

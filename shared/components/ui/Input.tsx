@@ -16,7 +16,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         {startIcon && (
           <div className={cn(
             "absolute flex items-center pointer-events-none text-neutral-400 transition-colors",
-            variant === 'pill' ? "left-4" : "left-3"
+            variant === 'pill' ? "left-4" : "left-3.5"
           )}>
             {startIcon}
           </div>
@@ -29,18 +29,18 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
 
             // Default variant styles
             variant === 'default' && [
-              "h-9 rounded-[24px] border border-neutral-200 bg-white px-3 py-2 shadow-sm",
+              "h-11 rounded-[24px] border border-neutral-200 bg-white px-4 py-3 shadow-sm",
               "focus-visible:outline-none focus-visible:border-brand-400 focus-visible:ring-2 focus-visible:ring-brand-100",
-              startIcon && "pl-9",
-              endIcon && "pr-9"
+              startIcon && "pl-10",
+              endIcon && "pr-10"
             ],
 
             // Pill variant styles (based on the provided design reference)
             variant === 'pill' && [
-              "h-10 rounded-[24px] border border-transparent bg-neutral-100/70 px-4 py-2.5",
+              "h-12 rounded-[24px] border border-transparent bg-neutral-100/70 px-5 py-3.5",
               "focus-visible:outline-none focus-visible:bg-neutral-200/50 focus-visible:border-neutral-200/30",
-              startIcon && "pl-11",
-              endIcon && "pr-11"
+              startIcon && "pl-12",
+              endIcon && "pr-12"
             ],
 
             // Error states
@@ -54,7 +54,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         {endIcon && (
           <div className={cn(
             "absolute flex items-center pointer-events-none text-neutral-400 transition-colors",
-            variant === 'pill' ? "right-4" : "right-3"
+            variant === 'pill' ? "right-4" : "right-3.5"
           )}>
             {endIcon}
           </div>

@@ -180,26 +180,26 @@ export function PatientTable({ patients, onSelectPatient }: PatientTableProps) {
             </div>
 
             {/* ── Table card ─────────────────────────────────── */}
-            <div className="bg-white rounded-[48px] border border-neutral-200/60 shadow-[0_2px_16px_rgba(0,0,0,0.04)] overflow-hidden">
+            <div className="bg-white rounded-[24px] border border-neutral-200/60 shadow-[0_2px_16px_rgba(0,0,0,0.04)] overflow-hidden">
                 <Table>
                     <TableHeader>
-                        <TableRow className="hover:bg-transparent cursor-default border-b border-neutral-100">
-                            <TableHead className="w-16 pl-6 text-xs font-semibold text-neutral-400 uppercase tracking-wider py-3.5">
+                        <TableRow className="hover:bg-transparent cursor-default border-none">
+                            <TableHead className="w-16 pl-6 text-xs font-semibold text-neutral-500 uppercase tracking-wider py-4 bg-neutral-50/85 rounded-l-[24px]">
                                 STT
                             </TableHead>
-                            <TableHead className="text-xs font-semibold text-neutral-400 uppercase tracking-wider py-3.5">
+                            <TableHead className="text-xs font-semibold text-neutral-500 uppercase tracking-wider py-4 bg-neutral-50/85">
                                 Bệnh nhân
                             </TableHead>
-                            <TableHead className="text-xs font-semibold text-neutral-400 uppercase tracking-wider py-3.5">
+                            <TableHead className="text-xs font-semibold text-neutral-500 uppercase tracking-wider py-4 bg-neutral-50/85">
                                 Ưu tiên
                             </TableHead>
-                            <TableHead className="text-xs font-semibold text-neutral-400 uppercase tracking-wider py-3.5">
+                            <TableHead className="text-xs font-semibold text-neutral-500 uppercase tracking-wider py-4 bg-neutral-50/85">
                                 Giờ đến
                             </TableHead>
-                            <TableHead className="text-xs font-semibold text-neutral-400 uppercase tracking-wider py-3.5">
+                            <TableHead className="text-xs font-semibold text-neutral-500 uppercase tracking-wider py-4 bg-neutral-50/85">
                                 Trạng thái
                             </TableHead>
-                            <TableHead className="text-xs font-semibold text-neutral-400 uppercase tracking-wider py-3.5 text-right pr-6">
+                            <TableHead className="text-xs font-semibold text-neutral-500 uppercase tracking-wider py-4 bg-neutral-50/85 rounded-r-[24px] text-right pr-6">
                                 Hành động
                             </TableHead>
                         </TableRow>

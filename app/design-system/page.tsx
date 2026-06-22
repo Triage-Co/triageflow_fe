@@ -19,6 +19,10 @@ import {
     Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
 } from '@/shared/components/ui/Dialog';
 
+// ── Layout Components ──────────────────────────────────────────────────────
+import { PageHeader } from '@/shared/components/layout/PageHeader';
+import { BottomNav } from '@/shared/components/layout/BottomNav';
+
 // ── Section Wrapper ────────────────────────────────────────────────────────
 function Section({ id, title, description, children }: {
     id: string; title: string; description: string; children: React.ReactNode;
@@ -53,6 +57,7 @@ const NAV_ITEMS = [
     { id: 'input', label: 'Input' },
     { id: 'table', label: 'Table' },
     { id: 'dialog', label: 'Dialog' },
+    { id: 'layout', label: 'Layout' },
 ];
 
 // ── Page Component ─────────────────────────────────────────────────────────
@@ -364,15 +369,15 @@ export default function DesignSystemPage() {
                     description="Compound table component: Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableFooter, TableCaption."
                 >
                     <DemoCard label="Full Table Example">
-                        <div className="rounded-[48px] border border-neutral-200/60 overflow-hidden">
+                        <div className="rounded-[24px] border border-neutral-200/60 overflow-hidden">
                             <Table>
                                 <TableHeader>
-                                    <TableRow className="hover:bg-transparent cursor-default">
-                                        <TableHead className="w-16">STT</TableHead>
-                                        <TableHead>Bệnh nhân</TableHead>
-                                        <TableHead>Ưu tiên</TableHead>
-                                        <TableHead>Trạng thái</TableHead>
-                                        <TableHead className="text-right">Hành động</TableHead>
+                                    <TableRow className="hover:bg-transparent cursor-default border-none">
+                                        <TableHead className="w-16 pl-6 py-4 bg-neutral-50/85 rounded-l-[24px]">STT</TableHead>
+                                        <TableHead className="py-4 bg-neutral-50/85">Bệnh nhân</TableHead>
+                                        <TableHead className="py-4 bg-neutral-50/85">Ưu tiên</TableHead>
+                                        <TableHead className="py-4 bg-neutral-50/85">Trạng thái</TableHead>
+                                        <TableHead className="py-4 bg-neutral-50/85 rounded-r-[24px] text-right pr-6">Hành động</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -383,7 +388,7 @@ export default function DesignSystemPage() {
                                         { stt: '04', name: 'Phạm Thu D', sub: '28 tuổi • Nữ', priority: 'danger' as const, pLabel: 'Quay lại PK', status: 'warning' as const, sLabel: 'Đang chờ' },
                                     ].map((row) => (
                                         <TableRow key={row.stt}>
-                                            <TableCell className="text-neutral-400 font-medium">{row.stt}</TableCell>
+                                            <TableCell className="text-neutral-400 font-medium pl-6">{row.stt}</TableCell>
                                             <TableCell>
                                                 <p className="font-semibold text-neutral-800 text-sm">{row.name}</p>
                                                 <p className="text-xs text-neutral-400 mt-0.5">{row.sub}</p>
@@ -394,7 +399,7 @@ export default function DesignSystemPage() {
                                             <TableCell>
                                                 <Badge variant={row.status} dot>{row.sLabel}</Badge>
                                             </TableCell>
-                                            <TableCell className="text-right">
+                                            <TableCell className="text-right pr-6">
                                                 <div className="inline-flex gap-1">
                                                     <Button variant="ghost" size="sm" className="w-8 h-8 px-0"><Eye className="w-4 h-4" /></Button>
                                                     <Button variant="ghost" size="sm" className="w-8 h-8 px-0"><Edit className="w-4 h-4" /></Button>
@@ -499,6 +504,127 @@ export default function DesignSystemPage() {
                                 </DialogFooter>
                             </DialogContent>
                         </Dialog>
+                    </DemoCard>
+                </Section>
+
+                {/* ════════════════════════════════════════════════════════════
+                    LAYOUT SYSTEM
+                   ════════════════════════════════════════════════════════════ */}
+                <Section
+                    id="layout"
+                    title="Layout System"
+                    description="Standardized layout components implementing the responsive and floating modern style hierarchy."
+                >
+                    {/* Page Header */}
+                    <DemoCard label="Page Header">
+                        <div className="bg-neutral-50 p-6 rounded-[32px] border border-neutral-100/50">
+                            <PageHeader 
+                                title="Hồ sơ bệnh án" 
+                                description="Quản lý chi tiết sinh hiệu, lịch sử khám bệnh và toa thuốc của bệnh nhân." 
+                                actions={
+                                    <>
+                                        <Button variant="outline" size="sm" startIcon={<Plus className="w-4 h-4" />}>Tạo bệnh án mới</Button>
+                                        <Button variant="brand" size="sm">Lưu thông tin</Button>
+                                    </>
+                                }
+                            />
+                        </div>
+                    </DemoCard>
+
+                    {/* Bottom Nav Mockup */}
+                    <DemoCard label="Bottom Navigation (Mobile Only)">
+                        <div className="relative h-28 bg-neutral-50 rounded-[32px] border border-neutral-100 flex items-center justify-center overflow-hidden">
+                            <p className="text-[10px] text-neutral-400 font-bold absolute top-2">Khung mô phỏng điện thoại</p>
+                            <div className="w-full max-w-sm mt-4">
+                                <div className="h-14 bg-white border border-neutral-200/60 shadow-sm rounded-[24px] flex items-center justify-around px-4">
+                                    <span className="text-[10px] font-bold text-brand-500 flex flex-col items-center cursor-pointer"><Zap className="w-4 h-4" /> Home</span>
+                                    <span className="text-[10px] font-medium text-neutral-400 flex flex-col items-center cursor-pointer"><Plus className="w-4 h-4" /> Appts</span>
+                                    <span className="text-[10px] font-medium text-neutral-400 flex flex-col items-center cursor-pointer"><Settings className="w-4 h-4" /> Settings</span>
+                                </div>
+                            </div>
+                        </div>
+                    </DemoCard>
+
+                    {/* Complete Page Mockup */}
+                    <DemoCard label="Complete Page Layout Mockup (AppShell Preview)">
+                        <div className="relative border border-neutral-200/80 rounded-[48px] bg-neutral-50 h-[480px] overflow-hidden shadow-[inset_0_2px_10px_rgba(0,0,0,0.03)] flex flex-col select-none">
+                            {/* Inner Header / TopBar mockup */}
+                            <div className="h-14 bg-white border-b border-neutral-100 px-6 flex items-center justify-between shrink-0">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-7 h-7 rounded-[24px] bg-brand-500 flex items-center justify-center">
+                                        <Zap className="w-4 h-4 text-white" />
+                                    </div>
+                                    <span className="text-xs font-bold text-neutral-800">TriageFlow</span>
+                                </div>
+                                <div className="flex items-center gap-2.5">
+                                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-[24px] bg-emerald-50 border border-emerald-100 text-[10px] text-emerald-600 font-bold">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                        Hệ thống ổn định
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <div className="w-6 h-6 rounded-[24px] bg-brand-100 flex items-center justify-center text-brand-600 font-bold text-[9px] border border-brand-200">
+                                            HA
+                                        </div>
+                                        <span className="text-[10px] font-bold text-neutral-600">Bác sĩ Hạnh</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Inner Body (Sidebar + Content) */}
+                            <div className="flex-1 flex overflow-hidden">
+                                {/* Miniature Sidebar */}
+                                <div className="w-16 bg-white border-r border-neutral-100 py-4 flex flex-col items-center justify-between shrink-0">
+                                    <div className="flex flex-col items-center gap-3 w-full">
+                                        <div className="w-9 h-9 rounded-[24px] bg-brand-500 text-white flex items-center justify-center shadow-sm"><Zap className="w-4 h-4" /></div>
+                                        <div className="w-9 h-9 rounded-[24px] bg-neutral-50 text-neutral-400 hover:text-brand-500 hover:bg-brand-50 flex items-center justify-center transition-colors cursor-pointer"><Heart className="w-4 h-4" /></div>
+                                        <div className="w-9 h-9 rounded-[24px] bg-neutral-50 text-neutral-400 hover:text-brand-500 hover:bg-brand-50 flex items-center justify-center transition-colors cursor-pointer"><Settings className="w-4 h-4" /></div>
+                                    </div>
+                                    <div className="w-8 h-8 rounded-[24px] bg-neutral-100 flex items-center justify-center text-neutral-500 text-[10px] font-bold">N</div>
+                                </div>
+
+                                {/* Content Scroll Area */}
+                                <div className="flex-1 overflow-y-auto p-4">
+                                    {/* AppShell Page Content Wrapper Mockup (bo góc 48px) */}
+                                    <div className="bg-white rounded-[48px] border border-neutral-200/60 p-5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] min-h-full space-y-4">
+                                        {/* Page Header mockup */}
+                                        <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
+                                            <div>
+                                                <h3 className="text-sm font-bold text-neutral-800">Quản lý hàng đợi</h3>
+                                                <p className="text-[10px] text-neutral-400 font-medium">Theo dõi và phân phối bệnh nhân đến phòng khám</p>
+                                            </div>
+                                            <Button size="sm" variant="brand">Thêm ca mới</Button>
+                                        </div>
+
+                                        {/* Content Grid mockup (using Cards bo góc 32px) */}
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <Card className="rounded-[32px] p-4 border-neutral-100 shadow-[0_2px_8px_rgba(0,0,0,0.01)] bg-neutral-50/30">
+                                                <p className="text-[9px] text-neutral-400 font-bold uppercase tracking-wider">Bệnh nhân đợi</p>
+                                                <p className="text-xl font-black text-brand-600 mt-1">12 ca</p>
+                                            </Card>
+                                            <Card className="rounded-[32px] p-4 border-neutral-100 shadow-[0_2px_8px_rgba(0,0,0,0.01)] bg-neutral-50/30">
+                                                <p className="text-[9px] text-neutral-400 font-bold uppercase tracking-wider">Đã tiếp nhận</p>
+                                                <p className="text-xl font-black text-neutral-800 mt-1">45 ca</p>
+                                            </Card>
+                                        </div>
+
+                                        {/* Patient List Card (bo góc 32px) */}
+                                        <Card className="rounded-[32px] p-4 border-neutral-100 shadow-[0_2px_8px_rgba(0,0,0,0.01)] bg-neutral-50/30">
+                                            <p className="text-[10px] font-bold text-neutral-800 mb-3">Hàng đợi khám</p>
+                                            <div className="space-y-2">
+                                                <div className="flex items-center justify-between text-xs bg-white p-2.5 rounded-[24px] border border-neutral-100/50">
+                                                    <span className="font-bold text-neutral-700">Nguyễn Văn An</span>
+                                                    <Badge variant="success" className="text-[9px] px-2.5 py-0.5 rounded-[24px]">Đang đợi</Badge>
+                                                </div>
+                                                <div className="flex items-center justify-between text-xs bg-white p-2.5 rounded-[24px] border border-neutral-100/50">
+                                                    <span className="font-bold text-neutral-700">Trần Thị Bình</span>
+                                                    <Badge variant="secondary" className="text-[9px] px-2.5 py-0.5 rounded-[24px]">Đang khám</Badge>
+                                                </div>
+                                            </div>
+                                        </Card>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </DemoCard>
                 </Section>
 
