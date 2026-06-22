@@ -1,4 +1,4 @@
-﻿export default function CashierPage() {
-  return null;
+export default function CashierPage() {
+    return null;
 }
 

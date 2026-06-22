@@ -1,4 +1,4 @@
-﻿export default function PatientPaymentPage() {
-  return null;
+export default function PatientPaymentPage() {
+    return null;
 }
 

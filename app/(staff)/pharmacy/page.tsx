@@ -1,4 +1,4 @@
-﻿export default function PharmacyPage() {
-  return null;
+export default function PharmacyPage() {
+    return null;
 }
 

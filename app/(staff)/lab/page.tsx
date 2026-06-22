@@ -1,4 +1,4 @@
-﻿export default function LabPage() {
-  return null;
+export default function LabPage() {
+    return null;
 }
 

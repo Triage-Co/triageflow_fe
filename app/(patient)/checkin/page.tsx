@@ -1,4 +1,4 @@
-﻿export default function CheckinPage() {
-  return null;
+export default function CheckinPage() {
+    return null;
 }
 

@@ -1,4 +1,4 @@
-﻿export default function ReceptionPage() {
-  return null;
+export default function ReceptionPage() {
+    return null;
 }
 

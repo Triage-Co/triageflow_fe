@@ -1,4 +1,4 @@
-﻿export default function ResultsPage() {
-  return null;
+export default function ResultsPage() {
+    return null;
 }
 

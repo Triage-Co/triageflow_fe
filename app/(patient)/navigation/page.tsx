@@ -1,4 +1,4 @@
-﻿export default function NavigationPage() {
-  return null;
+export default function NavigationPage() {
+    return null;
 }
 

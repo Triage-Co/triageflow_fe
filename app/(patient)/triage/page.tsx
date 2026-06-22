@@ -1,4 +1,4 @@
-﻿export default function TriagePage() {
-  return null;
+export default function TriagePage() {
+    return null;
 }
 
