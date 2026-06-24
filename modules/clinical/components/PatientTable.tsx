@@ -24,6 +24,7 @@ import {
     TableCell,
 } from '@/shared/components/ui/Table';
 import type { Patient, Priority, Status } from '@/modules/clinical/types/clinical.types';
+import { usePatientTabsStore } from '@/modules/clinical/store/clinicalStore';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const ROWS_PER_PAGE = 7;
@@ -69,6 +70,7 @@ interface PatientTableProps {
 
 export function PatientTable({ patients, onSelectPatient }: PatientTableProps) {
     const router = useRouter();
+    const { openTab } = usePatientTabsStore();
     const [search, setSearch] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [statusFilter, setStatusFilter] = useState<Status | 'all'>('all');
@@ -213,7 +215,6 @@ export function PatientTable({ patients, onSelectPatient }: PatientTableProps) {
                             </TableRow>
                         )}
                         {paginatedData.map((patient) => {
-                            const isWaiting = patient.status === 'Đang chờ';
                             return (
                                 <TableRow
                                     key={patient.id}
@@ -261,37 +262,19 @@ export function PatientTable({ patients, onSelectPatient }: PatientTableProps) {
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={() => {
-                                                    if (isWaiting) router.push(`/doctor/${patient.id}`);
+                                                    openTab({ id: patient.id, name: patient.name });
+                                                    router.push(`/doctor/${patient.id}`);
                                                 }}
-                                                disabled={!isWaiting}
-                                                className={cn(
-                                                    'w-8 h-8 px-0 rounded-[24px]',
-                                                    isWaiting
-                                                        ? 'text-brand-500 hover:bg-brand-50'
-                                                        : 'text-neutral-300'
-                                                )}
-                                                title={isWaiting ? 'Bắt đầu khám' : 'Không khả dụng'}
+                                                className="w-8 h-8 px-0 rounded-[24px] text-brand-500 hover:bg-brand-50"
+                                                title="Xem hồ sơ bệnh nhân"
                                             >
-                                                <Play
-                                                    className={cn(
-                                                        'w-4 h-4',
-                                                        isWaiting
-                                                            ? 'fill-brand-500 text-brand-500'
-                                                            : 'fill-neutral-300 text-neutral-300'
-                                                    )}
-                                                />
+                                                <Play className="w-4 h-4 fill-brand-500 text-brand-500" />
                                             </Button>
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                disabled={!isWaiting}
-                                                className={cn(
-                                                    'w-8 h-8 px-0 rounded-[24px]',
-                                                    isWaiting
-                                                        ? 'text-brand-500 hover:bg-brand-50'
-                                                        : 'text-neutral-300'
-                                                )}
-                                                title={isWaiting ? 'Xuất hồ sơ' : 'Không khả dụng'}
+                                                className="w-8 h-8 px-0 rounded-[24px] text-neutral-400 hover:bg-neutral-50"
+                                                title="Xuất hồ sơ"
                                             >
                                                 <Download className="w-4 h-4" />
                                             </Button>

@@ -37,3 +37,30 @@ export interface StatItem {
     label: string;
     color?: string;
 }
+
+// ── Clinical workflow ────────────────────────────────────────────────────────
+export type WorkflowStepStatus = 'completed' | 'current' | 'pending';
+
+export interface WorkflowStep {
+    id: string;
+    label: string;
+    status: WorkflowStepStatus;
+}
+
+export type ClinicalStage =
+    | 'examination'
+    | 'paraclinical'
+    | 'diagnosis'
+    | 'procedure'
+    | 'prescription';
+
+export type LabOrderStatus = 'Chờ thực hiện' | 'Đang thực hiện' | 'Hoàn tất';
+
+export interface LabOrder {
+    id: string;
+    name: string;
+    group: string;
+    status: LabOrderStatus;
+    receivedAt?: string;
+    returnedAt?: string;
+}

@@ -1,10 +1,12 @@
-﻿'use client';
+'use client';
 
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Cross, AlertCircle, Loader2 } from 'lucide-react';
 import { authService } from '@/modules/auth/services/authService';
+import { useAuthStore } from '@/store/authStore';
+import { getUserFromToken } from '@/shared/utils/jwt';
 import { OtpStep } from './OtpStep';
 
 // Flag stored in localStorage after first successful OTP verify
@@ -13,6 +15,7 @@ const otpFlagKey = (email: string) => `tfopd_otp_verified_${email}`;
 export function LoginForm() {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
+    const { setUser } = useAuthStore();
 
     const [step, setStep] = useState<'credentials' | 'otp'>('credentials');
     const [email, setEmail] = useState('');
@@ -40,7 +43,9 @@ export function LoginForm() {
                 // Skip OTP if this email has already been verified before
                 if (localStorage.getItem(otpFlagKey(email))) {
                     storeTokens(token, refreshToken);
-                    router.push('/dashboard');
+                    const user = getUserFromToken(token);
+                    if (user) setUser(user);
+                    router.push('/doctor');
                     return;
                 }
 
@@ -57,7 +62,9 @@ export function LoginForm() {
         // Mark this email as OTP-verified so future logins skip OTP
         localStorage.setItem(otpFlagKey(email), '1');
         storeTokens(data.token, data.refreshToken);
-        router.push('/dashboard');
+        const user = getUserFromToken(data.token);
+        if (user) setUser(user);
+        router.push('/doctor');
     }
 
     if (step === 'otp') {
