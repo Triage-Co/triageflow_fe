@@ -32,7 +32,7 @@ export function AppShell({ children, user, title, description, actions, bare }: 
         {/* Scrollable Content Container */}
         {bare ? (
           <div className="flex-1 overflow-hidden px-4 md:px-6 pb-4 md:pb-6 pt-2">
-            <div className="h-full bg-white rounded-[48px] border border-neutral-200/60 shadow-[0_2px_16px_rgba(0,0,0,0.02)] overflow-hidden flex flex-col">
+            <div className="h-full bg-white rounded-4xl border border-neutral-200/60 shadow-[0_2px_16px_rgba(0,0,0,0.02)] overflow-hidden flex flex-col">
               {children}
             </div>
           </div>
@@ -45,7 +45,7 @@ export function AppShell({ children, user, title, description, actions, bare }: 
               )}
 
               {/* Outer container using 48px border radius */}
-              <div className="bg-white rounded-[48px] border border-neutral-200/60 p-6 md:p-8 shadow-[0_2px_16px_rgba(0,0,0,0.02)] min-h-[calc(100vh-180px)]">
+              <div className="bg-white rounded-4xl border border-neutral-200/60 p-6 md:p-8 shadow-[0_2px_16px_rgba(0,0,0,0.02)] min-h-[calc(100vh-180px)]">
                 {children}
               </div>
             </div>

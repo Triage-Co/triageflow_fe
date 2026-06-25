@@ -118,7 +118,7 @@ export function Sidebar({ user }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "relative flex flex-col h-[calc(100vh-32px)] my-4 ml-4 bg-white border border-neutral-200/60 shadow-[0_4px_24px_rgba(0,0,0,0.04)] rounded-[48px] select-none transition-all duration-300 ease-in-out shrink-0 overflow-hidden z-20",
+        "relative flex flex-col h-[calc(100vh-32px)] my-4 ml-4 bg-white border border-neutral-200/60 shadow-[0_4px_24px_rgba(0,0,0,0.04)] rounded-4xl select-none transition-all duration-300 ease-in-out shrink-0 overflow-hidden z-20",
         isCollapsed ? "w-[88px]" : "w-64"
       )}
     >

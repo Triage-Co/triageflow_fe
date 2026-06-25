@@ -18,7 +18,7 @@ export function TopBar({ user }: TopBarProps) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   return (
-    <header className="relative flex items-center justify-between h-16 my-4 mr-4 ml-4 md:ml-0 bg-white border border-neutral-200/60 shadow-[0_4px_20px_rgba(0,0,0,0.02)] rounded-[48px] px-6 shrink-0 z-10 select-none">
+    <header className="relative flex items-center justify-between h-16 my-4 mr-4 ml-4 md:ml-0 bg-white border border-neutral-200/60 shadow-[0_4px_20px_rgba(0,0,0,0.02)] rounded-4xl px-6 shrink-0 z-10 select-none">
       {/* Left side: Search or Quick Info */}
       <div className="flex items-center gap-3 flex-1 max-w-xs md:max-w-sm">
         <div className="relative w-full flex items-center">

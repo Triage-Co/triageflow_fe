@@ -125,7 +125,7 @@ export function PatientTable({ patients, onSelectPatient }: PatientTableProps) {
     return (
         <>
             {/* ── Search + Filter bar ────────────────────────── */}
-            <div className="flex items-center justify-between gap-4 mb-6 bg-white rounded-[48px] border border-neutral-200/60 shadow-[0_2px_12px_rgba(0,0,0,0.04)] px-3 py-2">
+            <div className="flex items-center justify-between gap-4 mb-6 bg-white rounded-3xl border border-neutral-200/60 shadow-[0_2px_12px_rgba(0,0,0,0.04)] px-3 py-2">
                 <div className="flex-1 max-w-sm">
                     <Input
                         type="text"
@@ -182,7 +182,7 @@ export function PatientTable({ patients, onSelectPatient }: PatientTableProps) {
             </div>
 
             {/* ── Table card ─────────────────────────────────── */}
-            <div className="bg-white rounded-[24px] border border-neutral-200/60 shadow-[0_2px_16px_rgba(0,0,0,0.04)] overflow-hidden">
+            <div className="bg-white rounded-3xl border border-neutral-200/60 shadow-[0_2px_16px_rgba(0,0,0,0.04)] overflow-hidden">
                 <Table>
                     <TableHeader>
                         <TableRow className="hover:bg-transparent cursor-default border-none">

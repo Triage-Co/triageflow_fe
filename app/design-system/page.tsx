@@ -517,7 +517,7 @@ export default function DesignSystemPage() {
                 >
                     {/* Page Header */}
                     <DemoCard label="Page Header">
-                        <div className="bg-neutral-50 p-6 rounded-[32px] border border-neutral-100/50">
+                        <div className="bg-neutral-50 p-6 rounded-2xl border border-neutral-100/50">
                             <PageHeader 
                                 title="Hồ sơ bệnh án" 
                                 description="Quản lý chi tiết sinh hiệu, lịch sử khám bệnh và toa thuốc của bệnh nhân." 
@@ -533,10 +533,10 @@ export default function DesignSystemPage() {
 
                     {/* Bottom Nav Mockup */}
                     <DemoCard label="Bottom Navigation (Mobile Only)">
-                        <div className="relative h-28 bg-neutral-50 rounded-[32px] border border-neutral-100 flex items-center justify-center overflow-hidden">
+                        <div className="relative h-28 bg-neutral-50 rounded-4xl border border-neutral-100 flex items-center justify-center overflow-hidden">
                             <p className="text-[10px] text-neutral-400 font-bold absolute top-2">Khung mô phỏng điện thoại</p>
                             <div className="w-full max-w-sm mt-4">
-                                <div className="h-14 bg-white border border-neutral-200/60 shadow-sm rounded-[24px] flex items-center justify-around px-4">
+                                <div className="h-14 bg-white border border-neutral-200/60 shadow-sm rounded-3xl flex items-center justify-around px-4">
                                     <span className="text-[10px] font-bold text-brand-500 flex flex-col items-center cursor-pointer"><Zap className="w-4 h-4" /> Home</span>
                                     <span className="text-[10px] font-medium text-neutral-400 flex flex-col items-center cursor-pointer"><Plus className="w-4 h-4" /> Appts</span>
                                     <span className="text-[10px] font-medium text-neutral-400 flex flex-col items-center cursor-pointer"><Settings className="w-4 h-4" /> Settings</span>
@@ -584,8 +584,8 @@ export default function DesignSystemPage() {
 
                                 {/* Content Scroll Area */}
                                 <div className="flex-1 overflow-y-auto p-4">
-                                    {/* AppShell Page Content Wrapper Mockup (bo góc 48px) */}
-                                    <div className="bg-white rounded-[48px] border border-neutral-200/60 p-5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] min-h-full space-y-4">
+                                    {/* AppShell Page Content Wrapper Mockup (bo góc 32px) */}
+                                    <div className="bg-white rounded-3xl border border-neutral-200/60 p-5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] min-h-full space-y-4">
                                         {/* Page Header mockup */}
                                         <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
                                             <div>
@@ -595,20 +595,20 @@ export default function DesignSystemPage() {
                                             <Button size="sm" variant="brand">Thêm ca mới</Button>
                                         </div>
 
-                                        {/* Content Grid mockup (using Cards bo góc 32px) */}
+                                        {/* Content Grid mockup (using Cards bo góc 24px) */}
                                         <div className="grid grid-cols-2 gap-3">
-                                            <Card className="rounded-[32px] p-4 border-neutral-100 shadow-[0_2px_8px_rgba(0,0,0,0.01)] bg-neutral-50/30">
+                                            <Card className="rounded-2xl p-4 border-neutral-100 shadow-[0_2px_8px_rgba(0,0,0,0.01)] bg-neutral-50/30">
                                                 <p className="text-[9px] text-neutral-400 font-bold uppercase tracking-wider">Bệnh nhân đợi</p>
                                                 <p className="text-xl font-black text-brand-600 mt-1">12 ca</p>
                                             </Card>
-                                            <Card className="rounded-[32px] p-4 border-neutral-100 shadow-[0_2px_8px_rgba(0,0,0,0.01)] bg-neutral-50/30">
+                                            <Card className="rounded-2xl p-4 border-neutral-100 shadow-[0_2px_8px_rgba(0,0,0,0.01)] bg-neutral-50/30">
                                                 <p className="text-[9px] text-neutral-400 font-bold uppercase tracking-wider">Đã tiếp nhận</p>
                                                 <p className="text-xl font-black text-neutral-800 mt-1">45 ca</p>
                                             </Card>
                                         </div>
 
-                                        {/* Patient List Card (bo góc 32px) */}
-                                        <Card className="rounded-[32px] p-4 border-neutral-100 shadow-[0_2px_8px_rgba(0,0,0,0.01)] bg-neutral-50/30">
+                                        {/* Patient List Card (bo góc 24px) */}
+                                        <Card className="rounded-2xl p-4 border-neutral-100 shadow-[0_2px_8px_rgba(0,0,0,0.01)] bg-neutral-50/30">
                                             <p className="text-[10px] font-bold text-neutral-800 mb-3">Hàng đợi khám</p>
                                             <div className="space-y-2">
                                                 <div className="flex items-center justify-between text-xs bg-white p-2.5 rounded-[24px] border border-neutral-100/50">
