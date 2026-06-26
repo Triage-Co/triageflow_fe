@@ -78,3 +78,13 @@ export interface UpdateProfileRequest {
     dob: string;          // YYYY-MM-DD
     gender: Gender;
 }
+
+export interface ForgotPasswordRequest {
+    email: string;
+}
+
+export interface ForgotPasswordVerifyRequest {
+    email: string;
+    otp: string;
+    password: string;
+}

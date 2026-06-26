@@ -10,6 +10,8 @@ import type {
     AuthUser,
     UserProfile,
     UpdateProfileRequest,
+    ForgotPasswordRequest,
+    ForgotPasswordVerifyRequest,
 } from '@/shared/types/auth.types';
 
 export const authService = {
@@ -44,4 +46,12 @@ export const authService = {
         apiClient.patch<UserProfile>('/api/auth/update', data, {
             headers: { Authorization: `Bearer ${token}` },
         }),
+
+    /** Request password reset OTP */
+    forgotPassword: (data: ForgotPasswordRequest) =>
+        apiClient.post<null>('/api/auth/forgot', data),
+
+    /** Verify OTP and reset password */
+    forgotPasswordVerify: (data: ForgotPasswordVerifyRequest) =>
+        apiClient.post<null>('/api/auth/forgot/verify', data),
 };
