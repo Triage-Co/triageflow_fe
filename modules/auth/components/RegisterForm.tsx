@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
@@ -7,7 +7,7 @@ import {
     Eye, EyeOff, Cross, AlertCircle, Loader2, CheckCircle2,
 } from 'lucide-react';
 import { authService } from '@/modules/auth/services/authService';
-import type { Gender } from '@/shared/types/auth.types';
+import type { Gender, StaffRole } from '@/shared/types/auth.types';
 
 interface FormState {
     email: string;
@@ -17,6 +17,7 @@ interface FormState {
     confirmPassword: string;
     gender: Gender;
     citizen_id: string;
+    role: StaffRole;
 }
 
 const INITIAL: FormState = {
@@ -27,7 +28,19 @@ const INITIAL: FormState = {
     confirmPassword: '',
     gender: 'MALE',
     citizen_id: '',
+    role: 'DOCTOR',
 };
+
+const ROLE_OPTIONS: { value: StaffRole; label: string }[] = [
+    { value: 'DOCTOR', label: 'Bác sĩ' },
+    { value: 'NURSE', label: 'Y tá' },
+    { value: 'RECEPTIONIST', label: 'Lễ tân' },
+    { value: 'LAB_STAFF', label: 'Nhân viên xét nghiệm' },
+    { value: 'PHARMACY_STAFF', label: 'Nhân viên dược' },
+    { value: 'CASHIER', label: 'Thu ngân' },
+    { value: 'ADMIN', label: 'Quản trị viên' },
+    { value: 'USER', label: 'Bệnh nhân' },
+];
 
 export function RegisterForm() {
     const router = useRouter();
@@ -65,7 +78,7 @@ export function RegisterForm() {
                     password: form.password,
                     gender: form.gender,
                     citizen_id: form.citizen_id,
-                    role: 'USER',
+                    role: form.role,
                 });
                 setStep('success');
             } catch (err) {
@@ -195,6 +208,24 @@ export function RegisterForm() {
                             <option value="OTHER">Khác</option>
                         </select>
                     </div>
+                </div>
+
+                <div className="space-y-1.5">
+                    <label htmlFor="role" className="block text-sm font-medium text-neutral-700">
+                        Vai trò
+                    </label>
+                    <select
+                        id="role"
+                        required
+                        value={form.role}
+                        onChange={(e) => update('role', e.target.value)}
+                        disabled={isPending}
+                        className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-neutral-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
+                    >
+                        {ROLE_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                    </select>
                 </div>
 
                 <div className="space-y-1.5">

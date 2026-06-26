@@ -58,4 +58,11 @@ export const apiClient = {
             body: JSON.stringify(body),
             ...init,
         }),
+
+    patch: <T>(path: string, body: unknown, init?: RequestInit) =>
+        request<T>(path, {
+            method: 'PATCH',
+            body: JSON.stringify(body),
+            ...init,
+        }),
 };

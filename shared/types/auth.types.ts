@@ -7,6 +7,8 @@ export interface LoginRequest {
 export interface LoginResponseData {
     token: string;
     refreshToken: string;
+    username: string;
+    role: string;
 }
 
 // ─── OTP ─────────────────────────────────────────────────────────────────────
@@ -25,6 +27,16 @@ export type OtpVerifyResponseData = LoginResponseData;
 // ─── Register ────────────────────────────────────────────────────────────────
 export type Gender = 'MALE' | 'FEMALE' | 'OTHER';
 
+export type StaffRole =
+    | 'USER'
+    | 'DOCTOR'
+    | 'NURSE'
+    | 'RECEPTIONIST'
+    | 'LAB_STAFF'
+    | 'PHARMACY_STAFF'
+    | 'CASHIER'
+    | 'ADMIN';
+
 export interface RegisterRequest {
     email: string;
     fullName: string;
@@ -32,7 +44,7 @@ export interface RegisterRequest {
     password: string;
     gender: Gender;
     citizen_id: string;
-    role: 'USER';
+    role: StaffRole;
 }
 
 export interface RegisterResponseData {
@@ -46,4 +58,23 @@ export interface AuthUser {
     email: string;
     fullName?: string;
     role: string;
+    avatar?: string;
+}
+
+export interface UserProfile {
+    id: string;
+    full_name: string;
+    email: string;
+    dob: string;          // ISO date: e.g. 2004-04-07T00:00:00.000Z
+    role: string;
+    gender: Gender;
+    citizen_id: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface UpdateProfileRequest {
+    fullName: string;
+    dob: string;          // YYYY-MM-DD
+    gender: Gender;
 }

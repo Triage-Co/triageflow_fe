@@ -7,6 +7,9 @@ import type {
     OtpVerifyResponseData,
     RegisterRequest,
     RegisterResponseData,
+    AuthUser,
+    UserProfile,
+    UpdateProfileRequest,
 } from '@/shared/types/auth.types';
 
 export const authService = {
@@ -23,4 +26,22 @@ export const authService = {
 
     register: (data: RegisterRequest) =>
         apiClient.post<RegisterResponseData>('/api/auth/register', data),
+
+    /** Fetch the current user's profile (includes real role from DB). */
+    getMe: (token: string) =>
+        apiClient.get<AuthUser>('/api/auth/me', {
+            headers: { Authorization: `Bearer ${token}` },
+        }),
+
+    /** Fetch user profile */
+    getProfile: (token: string) =>
+        apiClient.get<UserProfile>('/api/auth/profile', {
+            headers: { Authorization: `Bearer ${token}` },
+        }),
+
+    /** Update user profile */
+    updateProfile: (data: UpdateProfileRequest, token: string) =>
+        apiClient.patch<UserProfile>('/api/auth/update', data, {
+            headers: { Authorization: `Bearer ${token}` },
+        }),
 };

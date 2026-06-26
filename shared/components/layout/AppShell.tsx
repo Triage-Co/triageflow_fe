@@ -8,7 +8,7 @@ import { BottomNav } from './BottomNav';
 
 interface AppShellProps {
   children: React.ReactNode;
-  user?: { name: string; role: string };
+  user?: { name: string; role: string; avatar?: string };
   title?: string;
   description?: string;
   actions?: React.ReactNode;

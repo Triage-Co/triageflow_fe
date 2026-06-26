@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Cross, AlertCircle, Loader2 } from 'lucide-react';
 import { authService } from '@/modules/auth/services/authService';
 import { useAuthStore } from '@/store/authStore';
-import { getUserFromToken } from '@/shared/utils/jwt';
 import { OtpStep } from './OtpStep';
 
 // Flag stored in localStorage after first successful OTP verify
@@ -15,7 +14,7 @@ const otpFlagKey = (email: string) => `tfopd_otp_verified_${email}`;
 export function LoginForm() {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
-    const { setUser } = useAuthStore();
+    const { loginSuccess, setRememberMe: storeRememberMe } = useAuthStore();
 
     const [step, setStep] = useState<'credentials' | 'otp'>('credentials');
     const [email, setEmail] = useState('');
@@ -25,10 +24,40 @@ export function LoginForm() {
     const [rememberMe, setRememberMe] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    function storeTokens(token: string, refreshToken: string) {
-        const storage = rememberMe ? localStorage : sessionStorage;
-        storage.setItem('accessToken', token);
-        storage.setItem('refreshToken', refreshToken);
+    /** Persist login data into the auth store */
+    async function completeLogin(token: string, refreshToken: string, username: string, role: string) {
+        storeRememberMe(rememberMe);
+        
+        let displayFullName = username;
+        let userId = email;
+        const localAvatar = typeof window !== 'undefined' ? localStorage.getItem('tfopd_avatar') || undefined : undefined;
+
+        try {
+            // Fetch the user's actual profile using the new token to get the real full_name and user ID from DB
+            const profileRes = await authService.getProfile(token);
+            if (profileRes && profileRes.data) {
+                if (profileRes.data.full_name) {
+                    displayFullName = profileRes.data.full_name;
+                }
+                if (profileRes.data.id) {
+                    userId = profileRes.data.id;
+                }
+            }
+        } catch (err) {
+            console.error('Failed to sync profile during login:', err);
+        }
+
+        loginSuccess({
+            user: { 
+                id: userId, 
+                email, 
+                fullName: displayFullName, 
+                role, 
+                avatar: localAvatar 
+            },
+            accessToken: token,
+            refreshToken,
+        });
     }
 
     function handleSubmit(e: React.FormEvent) {
@@ -37,14 +66,13 @@ export function LoginForm() {
         startTransition(async () => {
             try {
                 const loginRes = await authService.login({ email, password });
-                const token = loginRes.data.token;
-                const refreshToken = loginRes.data.refreshToken;
+                const { token, refreshToken, username, role } = loginRes.data;
+
+                // Store user profile + tokens (fetching real profile inside)
+                await completeLogin(token, refreshToken, username, role);
 
                 // Skip OTP if this email has already been verified before
                 if (localStorage.getItem(otpFlagKey(email))) {
-                    storeTokens(token, refreshToken);
-                    const user = getUserFromToken(token);
-                    if (user) setUser(user);
                     router.push('/doctor');
                     return;
                 }
@@ -58,12 +86,12 @@ export function LoginForm() {
         });
     }
 
-    function handleOtpVerified(data: { token: string; refreshToken: string }) {
+    async function handleOtpVerified(data: { token: string; refreshToken: string; username?: string; role?: string }) {
         // Mark this email as OTP-verified so future logins skip OTP
         localStorage.setItem(otpFlagKey(email), '1');
-        storeTokens(data.token, data.refreshToken);
-        const user = getUserFromToken(data.token);
-        if (user) setUser(user);
+        if (data.username && data.role) {
+            await completeLogin(data.token, data.refreshToken, data.username, data.role);
+        }
         router.push('/doctor');
     }
 

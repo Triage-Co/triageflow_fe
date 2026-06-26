@@ -79,6 +79,7 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
 export interface SidebarUser {
   name: string;
   role: string;
+  avatar?: string;
 }
 
 interface SidebarProps {
@@ -187,13 +188,17 @@ export function Sidebar({ user }: SidebarProps) {
               isDropdownOpen && "bg-brand-50"
             )}
           >
-            <div className="w-10 h-10 rounded-[24px] bg-brand-100 flex items-center justify-center text-brand-600 font-semibold text-xs border-2 border-brand-200 shrink-0">
-              {user?.name
-                ?.split(' ')
-                .slice(-2)
-                .map((w) => w[0])
-                .join('')
-                .toUpperCase() || 'VA'}
+            <div className="w-10 h-10 rounded-[24px] bg-brand-100 flex items-center justify-center text-brand-600 font-semibold text-xs border-2 border-brand-200 shrink-0 overflow-hidden">
+              {user?.avatar ? (
+                <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                user?.name
+                  ?.split(' ')
+                  .slice(-2)
+                  .map((w) => w[0])
+                  .join('')
+                  .toUpperCase() || 'VA'
+              )}
             </div>
             {!isCollapsed && (
               <div className="flex-1 min-w-0 text-left">
