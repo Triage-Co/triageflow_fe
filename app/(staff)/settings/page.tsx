@@ -6,7 +6,6 @@ import {
     User, 
     Upload, 
     Printer, 
-    Loader2, 
     CheckCircle2, 
     AlertCircle, 
     Trash2, 
@@ -41,12 +40,33 @@ export default function SettingsPage() {
     const [gender, setGender] = useState<Gender>('MALE');
 
     // Custom State (persisted locally)
-    const [extPhone, setExtPhone] = useState('1234');
-    const [avatarUrl, setAvatarUrl] = useState('');
+    const [extPhone, setExtPhone] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('tfopd_ext_phone') || '1234';
+        }
+        return '1234';
+    });
+    const [avatarUrl, setAvatarUrl] = useState(() => {
+        const storeUser = useAuthStore.getState().user;
+        if (typeof window !== 'undefined') {
+            return storeUser?.avatar || localStorage.getItem('tfopd_avatar') || '';
+        }
+        return storeUser?.avatar || '';
+    });
     
     // Printer State (persisted locally)
-    const [defaultPrinter, setDefaultPrinter] = useState('Máy in nhiệt – Quầy 3');
-    const [paperSize, setPaperSize] = useState('Khổ nhiệt 80mm');
+    const [defaultPrinter, setDefaultPrinter] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('tfopd_default_printer') || 'Máy in nhiệt – Quầy 3';
+        }
+        return 'Máy in nhiệt – Quầy 3';
+    });
+    const [paperSize, setPaperSize] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('tfopd_paper_size') || 'Khổ nhiệt 80mm';
+        }
+        return 'Khổ nhiệt 80mm';
+    });
 
     // UI Loading & Interaction States
     const [isLoading, setIsLoading] = useState(true);
@@ -78,17 +98,8 @@ export default function SettingsPage() {
     // ── Fetch Profile on Mount ───────────────────────────────────────────────
     useEffect(() => {
         if (!accessToken) {
-            showToast('Vui lòng đăng nhập để truy cập cài đặt.', 'error');
             router.push('/login');
             return;
-        }
-
-        // Load persisted local configurations
-        if (typeof window !== 'undefined') {
-            setDefaultPrinter(localStorage.getItem('tfopd_default_printer') || 'Máy in nhiệt – Quầy 3');
-            setPaperSize(localStorage.getItem('tfopd_paper_size') || 'Khổ nhiệt 80mm');
-            setExtPhone(localStorage.getItem('tfopd_ext_phone') || '1234');
-            setAvatarUrl(user?.avatar || localStorage.getItem('tfopd_avatar') || '');
         }
 
         const fetchProfile = async () => {
@@ -287,6 +298,7 @@ export default function SettingsPage() {
                             <div className="relative w-24 h-24 rounded-full border-2 border-dashed border-neutral-200 bg-neutral-50/50 flex flex-col items-center justify-center text-neutral-400 overflow-hidden shrink-0 group shadow-inner">
                                 {avatarUrl ? (
                                     <>
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
                                         <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                                         <button
                                             type="button"

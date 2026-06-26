@@ -190,6 +190,7 @@ export function Sidebar({ user }: SidebarProps) {
           >
             <div className="w-10 h-10 rounded-[24px] bg-brand-100 flex items-center justify-center text-brand-600 font-semibold text-xs border-2 border-brand-200 shrink-0 overflow-hidden">
               {user?.avatar ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" />
               ) : (
                 user?.name
