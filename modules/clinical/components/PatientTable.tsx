@@ -8,13 +8,9 @@ import {
     Play,
     Download,
     Clock,
-    ChevronLeft,
-    ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Input } from '@/shared/components/ui/Input';
 import { Button } from '@/shared/components/ui/Button';
-import { Badge } from '@/shared/components/ui/Badge';
 import {
     Table,
     TableHeader,
@@ -29,36 +25,35 @@ import { usePatientTabsStore } from '@/modules/clinical/store/clinicalStore';
 // ── Constants ──────────────────────────────────────────────────────────────
 const ROWS_PER_PAGE = 7;
 
-// ── Priority Badge mapping → Badge variants ────────────────────────────────
-const PRIORITY_VARIANT: Record<Priority, { variant: 'success' | 'warning' | 'info' | 'danger' }> = {
-    'Bình thường': { variant: 'success' },
-    'Ngồi xe lăn': { variant: 'warning' },
-    'Khám sức khỏe': { variant: 'info' },
-    'Quay lại phòng khám': { variant: 'danger' },
-};
-
+// ── Priority Badge component ──────────────────────────────────────────────
 function PriorityBadge({ priority }: { priority: Priority }) {
-    const { variant } = PRIORITY_VARIANT[priority];
     return (
-        <Badge variant={variant} dot>
+        <span className="inline-flex items-center bg-[#F3F3F3] text-[#7B7B7B] text-[12px] font-semibold px-3 py-1 rounded-full border border-neutral-200/30">
             {priority}
-        </Badge>
+        </span>
     );
 }
 
-// ── Status Badge mapping → Badge variants ──────────────────────────────────
-const STATUS_CONFIG: Record<Status, { variant: 'success' | 'info' | 'warning' }> = {
-    'Đã khám': { variant: 'success' },
-    'Đang khám': { variant: 'info' },
-    'Đang chờ': { variant: 'warning' },
-};
-
+// ── Status Badge component ────────────────────────────────────────────────
 function StatusBadge({ status }: { status: Status }) {
-    const { variant } = STATUS_CONFIG[status];
+    if (status === 'Đã khám') {
+        return (
+            <span className="inline-flex items-center bg-[#E2F7EB] text-[#0D9448] text-[12px] font-semibold px-3 py-1 rounded-full">
+                {status}
+            </span>
+        );
+    }
+    if (status === 'Đang khám') {
+        return (
+            <span className="inline-flex items-center bg-[#E8F2FF] text-[#1A73E8] text-[12px] font-semibold px-3 py-1 rounded-full">
+                {status}
+            </span>
+        );
+    }
     return (
-        <Badge variant={variant} dot>
+        <span className="inline-flex items-center bg-[#FFEFE2] text-[#F39C12] text-[12px] font-semibold px-3 py-1 rounded-full">
             {status}
-        </Badge>
+        </span>
     );
 }
 
@@ -118,26 +113,27 @@ export function PatientTable({ patients, onSelectPatient }: PatientTableProps) {
             if (safePage < totalPages - 3) pages.push('...');
             pages.push(totalPages - 1, totalPages);
         }
-        // Deduplicate
         return [...new Set(pages)];
     };
 
     return (
         <>
             {/* ── Search + Filter bar ────────────────────────── */}
-            <div className="flex items-center justify-between gap-4 mb-6 bg-white rounded-3xl border border-neutral-200/60 shadow-[0_2px_12px_rgba(0,0,0,0.04)] px-3 py-2">
+            <div className="flex items-center justify-between gap-4 mb-6">
                 <div className="flex-1 max-w-sm">
-                    <Input
-                        type="text"
-                        placeholder="Tìm kiếm tên hoặc mã bệnh nhân..."
-                        value={search}
-                        onChange={(e) => {
-                            setSearch(e.target.value);
-                            setCurrentPage(1);
-                        }}
-                        startIcon={<Search className="w-4 h-4 text-neutral-400" />}
-                        variant="pill"
-                    />
+                    <div className="relative">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-neutral-400" />
+                        <input
+                            type="text"
+                            placeholder="Tìm kiếm tên hoặc mã bệnh nhân..."
+                            value={search}
+                            onChange={(e) => {
+                                setSearch(e.target.value);
+                                setCurrentPage(1);
+                            }}
+                            className="w-full h-10 pl-11 pr-4 bg-white border border-neutral-200 hover:border-neutral-300 focus:border-neutral-400 rounded-full text-[13px] text-neutral-800 placeholder-neutral-400 outline-none transition-all"
+                        />
+                    </div>
                 </div>
 
                 <div className="relative">
@@ -146,7 +142,7 @@ export function PatientTable({ patients, onSelectPatient }: PatientTableProps) {
                         onClick={() => setShowFilter(!showFilter)}
                         startIcon={<Filter className="w-4 h-4" />}
                         className={cn(
-                            'rounded-[24px] shadow-[0_1px_4px_rgba(0,0,0,0.04)]',
+                            'h-10 px-5 rounded-full border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-[13px] font-semibold',
                             statusFilter !== 'all'
                                 ? 'text-brand-600 bg-brand-50 border-brand-200 hover:bg-brand-100/60'
                                 : ''
@@ -157,7 +153,7 @@ export function PatientTable({ patients, onSelectPatient }: PatientTableProps) {
 
                     {/* Filter dropdown */}
                     {showFilter && (
-                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-[24px] border border-neutral-100 shadow-xl z-30 py-2 animate-in fade-in-0 zoom-in-95 duration-150">
+                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl border border-neutral-100 shadow-xl z-30 py-2 animate-in fade-in-0 zoom-in-95 duration-150">
                             {(['all', 'Đang chờ', 'Đang khám', 'Đã khám'] as const).map((option) => (
                                 <button
                                     key={option}
@@ -169,7 +165,7 @@ export function PatientTable({ patients, onSelectPatient }: PatientTableProps) {
                                     className={cn(
                                         'w-full text-left px-4 py-2.5 text-sm font-medium transition-colors',
                                         statusFilter === option
-                                            ? 'text-brand-600 bg-brand-50/60'
+                                            ? 'text-[#8B7CF6] bg-[#8B7CF6]/10'
                                             : 'text-neutral-600 hover:bg-neutral-50'
                                     )}
                                 >
@@ -182,26 +178,26 @@ export function PatientTable({ patients, onSelectPatient }: PatientTableProps) {
             </div>
 
             {/* ── Table card ─────────────────────────────────── */}
-            <div className="bg-white rounded-3xl border border-neutral-200/60 shadow-[0_2px_16px_rgba(0,0,0,0.04)] overflow-hidden">
+            <div className="bg-white rounded-3xl border border-neutral-100 shadow-[0_2px_16px_rgba(0,0,0,0.02)] overflow-hidden">
                 <Table>
                     <TableHeader>
-                        <TableRow className="hover:bg-transparent cursor-default border-none">
-                            <TableHead className="w-16 pl-6 text-xs font-semibold text-neutral-500 uppercase tracking-wider py-4 bg-neutral-50/85 rounded-l-[24px]">
+                        <TableRow className="hover:bg-transparent cursor-default border-b border-neutral-100">
+                            <TableHead className="w-20 pl-8 text-[13px] font-bold text-neutral-700 py-4">
                                 STT
                             </TableHead>
-                            <TableHead className="text-xs font-semibold text-neutral-500 uppercase tracking-wider py-4 bg-neutral-50/85">
+                            <TableHead className="text-[13px] font-bold text-neutral-700 py-4">
                                 Bệnh nhân
                             </TableHead>
-                            <TableHead className="text-xs font-semibold text-neutral-500 uppercase tracking-wider py-4 bg-neutral-50/85">
+                            <TableHead className="text-[13px] font-bold text-neutral-700 py-4">
                                 Ưu tiên
                             </TableHead>
-                            <TableHead className="text-xs font-semibold text-neutral-500 uppercase tracking-wider py-4 bg-neutral-50/85">
+                            <TableHead className="text-[13px] font-bold text-neutral-700 py-4">
                                 Giờ đến
                             </TableHead>
-                            <TableHead className="text-xs font-semibold text-neutral-500 uppercase tracking-wider py-4 bg-neutral-50/85">
+                            <TableHead className="text-[13px] font-bold text-neutral-700 py-4">
                                 Trạng thái
                             </TableHead>
-                            <TableHead className="text-xs font-semibold text-neutral-500 uppercase tracking-wider py-4 bg-neutral-50/85 rounded-r-[24px] text-right pr-6">
+                            <TableHead className="text-[13px] font-bold text-neutral-700 py-4 text-right pr-8">
                                 Hành động
                             </TableHead>
                         </TableRow>
@@ -214,16 +210,18 @@ export function PatientTable({ patients, onSelectPatient }: PatientTableProps) {
                                 </TableCell>
                             </TableRow>
                         )}
-                        {paginatedData.map((patient) => {
+                        {paginatedData.map((patient, index) => {
+                            const isWaiting = patient.status === 'Đang chờ';
+                            const paddedStt = String(patient.stt || (safePage - 1) * ROWS_PER_PAGE + index + 1).padStart(2, '0');
                             return (
                                 <TableRow
                                     key={patient.id}
-                                    className="group hover:bg-brand-50/30 transition-colors duration-150 cursor-pointer border-b border-neutral-50 last:border-b-0"
+                                    className="group hover:bg-[#8B7CF6]/5 transition-colors duration-150 cursor-pointer border-b border-neutral-50 last:border-b-0"
                                     onClick={() => onSelectPatient(patient)}
                                 >
                                     {/* STT */}
-                                    <TableCell className="text-neutral-400 font-medium text-sm pl-6 py-4">
-                                        {patient.stt}
+                                    <TableCell className="text-neutral-400 font-medium text-sm pl-8 py-4">
+                                        {paddedStt}
                                     </TableCell>
 
                                     {/* Patient info */}
@@ -234,7 +232,7 @@ export function PatientTable({ patients, onSelectPatient }: PatientTableProps) {
                                         </p>
                                     </TableCell>
 
-                                    {/* Priority — using Badge */}
+                                    {/* Priority */}
                                     <TableCell className="py-4">
                                         <PriorityBadge priority={patient.priority} />
                                     </TableCell>
@@ -252,32 +250,47 @@ export function PatientTable({ patients, onSelectPatient }: PatientTableProps) {
                                         <StatusBadge status={patient.status} />
                                     </TableCell>
 
-                                    {/* Actions — using Button */}
-                                    <TableCell className="text-right pr-6 py-4">
+                                    {/* Actions */}
+                                    <TableCell className="text-right pr-8 py-4">
                                         <div
                                             className="inline-flex items-center gap-2"
                                             onClick={(e) => e.stopPropagation()}
                                         >
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
+                                            <button
                                                 onClick={() => {
                                                     openTab({ id: patient.id, name: patient.name });
                                                     router.push(`/doctor/${patient.id}`);
                                                 }}
-                                                className="w-8 h-8 px-0 rounded-[24px] text-brand-500 hover:bg-brand-50"
-                                                title="Xem hồ sơ bệnh nhân"
+                                                className={cn(
+                                                    'w-8 h-8 flex items-center justify-center rounded-full transition-all duration-150',
+                                                    isWaiting
+                                                        ? 'text-[#8B7CF6] hover:bg-[#8B7CF6]/10'
+                                                        : 'text-neutral-300 cursor-not-allowed'
+                                                )}
+                                                disabled={!isWaiting}
+                                                title={isWaiting ? 'Bắt đầu khám' : 'Không khả dụng'}
                                             >
-                                                <Play className="w-4 h-4 fill-brand-500 text-brand-500" />
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="w-8 h-8 px-0 rounded-[24px] text-neutral-400 hover:bg-neutral-50"
-                                                title="Xuất hồ sơ"
+                                                <Play
+                                                    className={cn(
+                                                        'w-4 h-4',
+                                                        isWaiting
+                                                            ? 'fill-[#8B7CF6] text-[#8B7CF6]'
+                                                            : 'fill-neutral-300 text-neutral-300'
+                                                    )}
+                                                />
+                                            </button>
+                                            <button
+                                                className={cn(
+                                                    'w-8 h-8 flex items-center justify-center rounded-full transition-all duration-150',
+                                                    isWaiting
+                                                        ? 'text-[#8B7CF6] hover:bg-[#8B7CF6]/10'
+                                                        : 'text-neutral-300 cursor-not-allowed'
+                                                )}
+                                                disabled={!isWaiting}
+                                                title={isWaiting ? 'Xuất hồ sơ' : 'Không khả dụng'}
                                             >
                                                 <Download className="w-4 h-4" />
-                                            </Button>
+                                            </button>
                                         </div>
                                     </TableCell>
                                 </TableRow>
@@ -289,58 +302,44 @@ export function PatientTable({ patients, onSelectPatient }: PatientTableProps) {
 
             {/* ── Pagination ─────────────────────────────────── */}
             {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-6">
-                    {/* Showing X of Y */}
-                    <span className="text-sm text-neutral-400 font-medium">
-                        Hiển thị {(safePage - 1) * ROWS_PER_PAGE + 1}–
-                        {Math.min(safePage * ROWS_PER_PAGE, filtered.length)} / {filtered.length} bệnh nhân
-                    </span>
-
-                    <div className="flex items-center gap-1">
-                        <Button
-                            variant="ghost"
-                            size="sm"
+                <div className="flex justify-center mt-8">
+                    <div className="flex items-center gap-1 bg-white px-2 py-1.5 rounded-full border border-neutral-200/80 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+                        <button
                             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                             disabled={safePage === 1}
-                            startIcon={<ChevronLeft className="w-4 h-4" />}
-                            className="text-neutral-400 hover:text-neutral-700"
+                            className="text-[13px] text-neutral-400 hover:text-neutral-700 disabled:opacity-50 disabled:pointer-events-none font-semibold px-3 py-1.5 flex items-center transition-colors"
                         >
-                            Previous
-                        </Button>
+                            <span className="mr-1.5">←</span> Previous
+                        </button>
 
                         {getPageNumbers().map((n, i) =>
                             n === '...' ? (
-                                <span key={`dots-${i}`} className="px-1 text-neutral-300 text-sm">
+                                <span key={`dots-${i}`} className="w-8 h-8 flex items-center justify-center text-neutral-400 text-sm select-none">
                                     ...
                                 </span>
                             ) : (
-                                <Button
+                                <button
                                     key={n}
-                                    variant={safePage === n ? 'brand' : 'ghost'}
-                                    size="sm"
                                     onClick={() => setCurrentPage(n)}
                                     className={cn(
-                                        'w-8 h-8 px-0 rounded-[24px]',
+                                        'w-8 h-8 flex items-center justify-center text-[13px] transition-all duration-150',
                                         safePage === n
-                                            ? 'shadow-sm'
-                                            : 'text-neutral-500'
+                                            ? 'bg-[#8B7CF6] text-white font-bold rounded-lg shadow-sm'
+                                            : 'text-neutral-500 hover:text-neutral-800 font-semibold rounded-lg hover:bg-neutral-50'
                                     )}
                                 >
                                     {n}
-                                </Button>
+                                </button>
                             )
                         )}
 
-                        <Button
-                            variant="ghost"
-                            size="sm"
+                        <button
                             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                             disabled={safePage === totalPages}
-                            endIcon={<ChevronRight className="w-4 h-4" />}
-                            className="text-neutral-400 hover:text-neutral-700"
+                            className="text-[13px] text-neutral-500 hover:text-neutral-800 disabled:opacity-50 disabled:pointer-events-none font-semibold px-3 py-1.5 flex items-center transition-colors"
                         >
-                            Next
-                        </Button>
+                            Next <span className="ml-1.5">→</span>
+                        </button>
                     </div>
                 </div>
             )}

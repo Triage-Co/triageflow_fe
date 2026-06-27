@@ -14,7 +14,7 @@ interface UIActions {
 type UIStore = UIState & UIActions;
 
 const initialState: UIState = {
-    sidebarOpen: true,
+    sidebarOpen: false,
     theme: 'light',
     notifications: [],
 };

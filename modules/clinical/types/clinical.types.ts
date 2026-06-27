@@ -11,6 +11,21 @@ export interface Vitals {
     spO2: number;            // %
 }
 
+// ── Medical Record ─────────────────────────────────────────────────────────
+export interface MedicalRecord {
+    visitReason: string;
+    clinicalProgression: string;
+    medicalHistory: string[];
+    physicalExam: {
+        throat?: string;
+        lungs: string;
+        heart: string;
+        abdomen: string;
+    };
+    diagnosis?: string;
+    treatmentPlan?: string;
+}
+
 // ── Patient ────────────────────────────────────────────────────────────────
 export interface Patient {
     id: string;
@@ -24,11 +39,15 @@ export interface Patient {
     status: Status;
     // Extended info shown in the detail drawer
     visitReason: string;
+    shortDiagnosis?: string;
     allergies: string[];
     medicalHistory: string[];
     vitals: Vitals;
     insurance: { hasInsurance: boolean; coverage: string };
     visitType: 'Tái khám' | 'Khám mới' | 'Cấp cứu';
+    // EMR-specific fields
+    medicalRecord?: MedicalRecord;
+    department?: string;
 }
 
 // ── Stat Card ──────────────────────────────────────────────────────────────
