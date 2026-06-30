@@ -14,7 +14,6 @@ interface EMRHeaderProps {
 export function EMRHeader({ activeTabId }: EMRHeaderProps) {
     const router = useRouter();
     const [tabs, setTabs] = useState<{ id: string; name: string }[]>([]);
-    const isDashboardActive = activeTabId === 'dashboard';
 
     useEffect(() => {
         // Load tabs from localStorage or fallback to defaults
@@ -23,7 +22,7 @@ export function EMRHeader({ activeTabId }: EMRHeaderProps) {
         if (stored) {
             try {
                 currentTabs = JSON.parse(stored);
-            } catch (e) {
+            } catch {
                 // ignore
             }
         }
@@ -40,7 +39,10 @@ export function EMRHeader({ activeTabId }: EMRHeaderProps) {
             }
         }
 
-        setTabs(currentTabs);
+        const timer = setTimeout(() => {
+            setTabs(currentTabs);
+        }, 0);
+        return () => clearTimeout(timer);
     }, [activeTabId]);
 
     const handleCloseTab = (e: React.MouseEvent, tabId: string) => {
