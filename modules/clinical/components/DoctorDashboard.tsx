@@ -1,21 +1,20 @@
 'use client';
 
-import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Patient } from '@/modules/clinical/types/clinical.types';
 import { EMRWorkspaceLayout } from '@/shared/components/layout/EMRWorkspaceLayout';
 import { StatCards } from './StatCards';
 import { PatientTable } from './PatientTable';
-import { PatientDrawer } from './PatientDrawer';
 import { MOCK_PATIENTS, MOCK_STATS } from '@/modules/clinical/services/clinicalService';
+import { usePatientTabsStore } from '@/modules/clinical/store/clinicalStore';
 
 export function DoctorDashboard() {
     const router = useRouter();
-    const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+    const { openTab } = usePatientTabsStore();
 
     const handleSelectPatient = (patient: Patient) => {
-        // Row click → open drawer
-        setSelectedPatient(patient);
+        openTab({ id: patient.id, name: patient.name });
+        router.push(`/doctor/${patient.id}`);
     };
 
     return (
@@ -43,12 +42,6 @@ export function DoctorDashboard() {
                     />
                 </div>
             </div>
-
-            {/* ── Patient Detail Drawer ────────── */}
-            <PatientDrawer
-                patient={selectedPatient}
-                onClose={() => setSelectedPatient(null)}
-            />
         </EMRWorkspaceLayout>
     );
 }
