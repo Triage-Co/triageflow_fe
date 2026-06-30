@@ -18,6 +18,7 @@ interface FormState {
     gender: Gender;
     citizen_id: string;
     role: StaffRole;
+    phone: string;
 }
 
 const INITIAL: FormState = {
@@ -29,6 +30,7 @@ const INITIAL: FormState = {
     gender: 'MALE',
     citizen_id: '',
     role: 'DOCTOR',
+    phone: '',
 };
 
 const ROLE_OPTIONS: { value: StaffRole; label: string }[] = [
@@ -69,16 +71,25 @@ export function RegisterForm() {
             return;
         }
 
+        const formatDob = (ymdDate: string) => {
+            const parts = ymdDate.split('-');
+            if (parts.length === 3) {
+                return `${parts[2]}-${parts[1]}-${parts[0]}`;
+            }
+            return ymdDate;
+        };
+
         startTransition(async () => {
             try {
                 await authService.register({
                     email: form.email,
-                    fullName: form.fullName,
-                    dob: form.dob,
+                    full_name: form.fullName,
+                    dob: formatDob(form.dob),
                     password: form.password,
                     gender: form.gender,
                     citizen_id: form.citizen_id,
                     role: form.role,
+                    phone: form.phone || undefined,
                 });
                 setStep('success');
             } catch (err) {
@@ -228,22 +239,41 @@ export function RegisterForm() {
                     </select>
                 </div>
 
-                <div className="space-y-1.5">
-                    <label htmlFor="citizen_id" className="block text-sm font-medium text-neutral-700">
-                        CCCD / CMND
-                    </label>
-                    <input
-                        id="citizen_id"
-                        type="text"
-                        inputMode="numeric"
-                        maxLength={12}
-                        required
-                        placeholder="084203000761"
-                        value={form.citizen_id}
-                        onChange={(e) => update('citizen_id', e.target.value.replace(/\D/g, '').slice(0, 12))}
-                        disabled={isPending}
-                        className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-neutral-900 placeholder-neutral-400 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
-                    />
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                        <label htmlFor="citizen_id" className="block text-sm font-medium text-neutral-700">
+                            CCCD / CMND
+                        </label>
+                        <input
+                            id="citizen_id"
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={12}
+                            required
+                            placeholder="084203000761"
+                            value={form.citizen_id}
+                            onChange={(e) => update('citizen_id', e.target.value.replace(/\D/g, '').slice(0, 12))}
+                            disabled={isPending}
+                            className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-neutral-900 placeholder-neutral-400 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
+                        />
+                    </div>
+                    <div className="space-y-1.5">
+                        <label htmlFor="phone" className="block text-sm font-medium text-neutral-700">
+                            Số điện thoại
+                        </label>
+                        <input
+                            id="phone"
+                            type="text"
+                            inputMode="tel"
+                            maxLength={10}
+                            required
+                            placeholder="0947900432"
+                            value={form.phone}
+                            onChange={(e) => update('phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                            disabled={isPending}
+                            className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-neutral-900 placeholder-neutral-400 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
+                        />
+                    </div>
                 </div>
 
                 <div className="space-y-1.5">

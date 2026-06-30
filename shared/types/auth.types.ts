@@ -39,12 +39,13 @@ export type StaffRole =
 
 export interface RegisterRequest {
     email: string;
-    fullName: string;
-    dob: string;          // ISO date: YYYY-MM-DD
+    full_name: string;
+    dob: string;          // Date format: DD-MM-YYYY
     password: string;
     gender: Gender;
     citizen_id: string;
     role: StaffRole;
+    phone?: string;
 }
 
 export interface RegisterResponseData {
@@ -71,12 +72,14 @@ export interface UserProfile {
     citizen_id: string;
     createdAt: string;
     updatedAt: string;
+    phone?: string;
 }
 
 export interface UpdateProfileRequest {
-    fullName: string;
-    dob: string;          // YYYY-MM-DD
+    full_name: string;
+    dob: string;          // Date format: DD-MM-YYYY
     gender: Gender;
+    phone?: string;
 }
 
 export interface ForgotPasswordRequest {

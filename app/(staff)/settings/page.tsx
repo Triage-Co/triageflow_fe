@@ -4,11 +4,9 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
     User, 
-    Upload, 
     Printer, 
     CheckCircle2, 
     AlertCircle, 
-    Trash2, 
     Lock, 
     Info, 
     Save 
@@ -42,16 +40,9 @@ export default function SettingsPage() {
     // Custom State (persisted locally)
     const [extPhone, setExtPhone] = useState(() => {
         if (typeof window !== 'undefined') {
-            return localStorage.getItem('tfopd_ext_phone') || '1234';
+            return localStorage.getItem('tfopd_ext_phone') || '1234567890';
         }
-        return '1234';
-    });
-    const [avatarUrl, setAvatarUrl] = useState(() => {
-        const storeUser = useAuthStore.getState().user;
-        if (typeof window !== 'undefined') {
-            return storeUser?.avatar || localStorage.getItem('tfopd_avatar') || '';
-        }
-        return storeUser?.avatar || '';
+        return '1234567890';
     });
     
     // Printer State (persisted locally)
@@ -71,7 +62,6 @@ export default function SettingsPage() {
     // UI Loading & Interaction States
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
-    const [isDragging, setIsDragging] = useState(false);
     const [toasts, setToasts] = useState<Toast[]>([]);
 
     // ── Toast Utility ────────────────────────────────────────────────────────
@@ -111,6 +101,10 @@ export default function SettingsPage() {
                     setEmail(res.data.email || '');
                     setDob(formatIsoDateToYmd(res.data.dob));
                     setGender(res.data.gender || 'MALE');
+                    if (res.data.phone) {
+                        setExtPhone(res.data.phone);
+                        localStorage.setItem('tfopd_ext_phone', res.data.phone);
+                    }
                 }
             } catch (err) {
                 showToast(err instanceof Error ? err.message : 'Không thể tải thông tin nhân viên.', 'error');
@@ -122,47 +116,6 @@ export default function SettingsPage() {
         fetchProfile();
     }, [accessToken, router]);
 
-    // ── Drag & Drop Handlers ──────────────────────────────────────────────────
-    const handleDragOver = (e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(true);
-    };
-
-    const handleDragLeave = () => {
-        setIsDragging(false);
-    };
-
-    const processFile = (file: File) => {
-        if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-            showToast('Định dạng tệp không được hỗ trợ. Chỉ hỗ trợ PNG, JPG, WebP.', 'error');
-            return;
-        }
-
-        if (file.size > 5 * 1024 * 1024) {
-            showToast('Ảnh quá lớn. Dung lượng tối đa cho phép là 5MB.', 'error');
-            return;
-        }
-
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            setAvatarUrl(reader.result as string);
-            showToast('Đã tải ảnh lên thành công. Hãy bấm Lưu để cập nhật!', 'info');
-        };
-        reader.readAsDataURL(file);
-    };
-
-    const handleDrop = (e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(false);
-        const file = e.dataTransfer.files?.[0];
-        if (file) processFile(file);
-    };
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) processFile(file);
-    };
-
     // ── Form Submission handler ───────────────────────────────────────────────
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -173,34 +126,49 @@ export default function SettingsPage() {
             return;
         }
 
+        // Convert YYYY-MM-DD to DD-MM-YYYY
+        const formatDob = (ymdDate: string) => {
+            const parts = ymdDate.split('-');
+            if (parts.length === 3) {
+                return `${parts[2]}-${parts[1]}-${parts[0]}`;
+            }
+            return ymdDate;
+        };
+
         try {
             setIsSaving(true);
 
             // 1. Send update request to server
             await authService.updateProfile({
-                fullName,
-                dob,
-                gender
+                full_name: fullName,
+                dob: formatDob(dob),
+                gender,
+                phone: extPhone || undefined
             }, accessToken);
 
             // 2. Save local configurations to localStorage
             localStorage.setItem('tfopd_default_printer', defaultPrinter);
             localStorage.setItem('tfopd_paper_size', paperSize);
             localStorage.setItem('tfopd_ext_phone', extPhone);
-            localStorage.setItem('tfopd_avatar', avatarUrl);
 
             // 3. Update global auth store state
             if (user) {
                 setUser({
                     ...user,
-                    fullName: fullName,
-                    avatar: avatarUrl || undefined
+                    fullName: fullName
                 });
             }
 
             showToast('Lưu cấu hình và thông tin cá nhân thành công!', 'success');
         } catch (err) {
-            showToast(err instanceof Error ? err.message : 'Có lỗi xảy ra khi lưu cấu hình.', 'error');
+            let errorMsg = 'Có lỗi xảy ra khi lưu cấu hình.';
+            if (err instanceof Error) {
+                const errData = err as unknown as Record<string, unknown>;
+                errorMsg = Array.isArray(errData.message) 
+                    ? errData.message.join(', ') 
+                    : err.message;
+            }
+            showToast(errorMsg, 'error');
         } finally {
             setIsSaving(false);
         }
@@ -215,15 +183,6 @@ export default function SettingsPage() {
                         <div className="h-4 bg-neutral-200 rounded-[12px] w-2/5 mb-8" />
                         
                         <Card className="p-6 md:p-8 space-y-8">
-                            <div className="flex flex-col md:flex-row gap-6 items-center">
-                                <div className="w-24 h-24 rounded-full bg-neutral-200 shrink-0" />
-                                <div className="flex-1 space-y-3 w-full">
-                                    <div className="h-4 bg-neutral-200 rounded-[12px] w-1/4" />
-                                    <div className="h-3 bg-neutral-200 rounded-[12px] w-1/2" />
-                                    <div className="h-20 bg-neutral-200 rounded-2xl w-full" />
-                                </div>
-                            </div>
-                            
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4">
                                 <div className="md:col-span-2 space-y-2">
                                     <div className="h-3.5 bg-neutral-200 rounded-[12px] w-16" />
@@ -283,7 +242,7 @@ export default function SettingsPage() {
                     {/* ── Card 1: Employee Info ── */}
                     <Card className="p-6 md:p-8 hover:shadow-[0_8px_30px_rgb(0,0,0,0.02)] transition-shadow duration-300">
                         {/* Header title */}
-                        <div className="flex items-center gap-2 mb-8">
+                        <div className="flex items-center gap-2 mb-6">
                             <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100/50">
                                 <User className="w-4.5 h-4.5" />
                             </div>
@@ -292,69 +251,8 @@ export default function SettingsPage() {
                             </h3>
                         </div>
 
-                        {/* Avatar upload layout */}
-                        <div className="flex flex-col md:flex-row gap-6 items-start md:items-center pb-8 border-b border-neutral-100/80 mb-6">
-                            {/* Avatar Display */}
-                            <div className="relative w-24 h-24 rounded-full border-2 border-dashed border-neutral-200 bg-neutral-50/50 flex flex-col items-center justify-center text-neutral-400 overflow-hidden shrink-0 group shadow-inner">
-                                {avatarUrl ? (
-                                    <>
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                                        <button
-                                            type="button"
-                                            onClick={() => setAvatarUrl('')}
-                                            className="absolute inset-0 bg-neutral-950/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white transition-colors duration-200"
-                                            title="Xóa ảnh"
-                                        >
-                                            <Trash2 className="w-5 h-5" />
-                                        </button>
-                                    </>
-                                ) : (
-                                    <>
-                                        <User className="w-8 h-8 text-neutral-300" />
-                                        <span className="text-[10px] mt-1.5 font-bold text-neutral-400 uppercase tracking-wider scale-95">Chưa có ảnh</span>
-                                    </>
-                                )}
-                            </div>
-
-                            {/* Dropzone Upload */}
-                            <div className="flex-1 w-full space-y-3">
-                                <div>
-                                    <h4 className="text-sm font-bold text-neutral-800">Ảnh đại diện</h4>
-                                    <p className="text-xs text-neutral-400 font-medium mt-0.5">
-                                        Định dạng JPG, PNG hoặc WebP. Tối đa 5MB. Khuyến nghị kích thước 200×200px.
-                                    </p>
-                                </div>
-
-                                <label
-                                    onDragOver={handleDragOver}
-                                    onDragLeave={handleDragLeave}
-                                    onDrop={handleDrop}
-                                    className={cn(
-                                        "flex flex-col items-center justify-center border-2 border-dashed rounded-2xl p-6 cursor-pointer transition-all duration-200 text-center w-full",
-                                        isDragging
-                                            ? "border-brand-500 bg-brand-50/15"
-                                            : "border-neutral-200 hover:border-brand-300 hover:bg-neutral-50/20"
-                                    )}
-                                >
-                                    <input
-                                        type="file"
-                                        accept="image/png, image/jpeg, image/webp"
-                                        onChange={handleFileChange}
-                                        className="hidden"
-                                    />
-                                    <div className="w-10 h-10 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 mb-2.5 transition-colors">
-                                        <Upload className="w-5 h-5" />
-                                    </div>
-                                    <p className="text-sm font-medium text-neutral-600">
-                                        Kéo thả ảnh vào đây hoặc <span className="text-brand-500 font-semibold hover:underline">nhấp để chọn file</span>
-                                    </p>
-                                </label>
-                            </div>
-                        </div>
-
                         {/* Input Form Fields */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                             {/* Fullname */}
                             <div className="md:col-span-2 space-y-2">
                                 <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Họ và tên</label>
@@ -383,8 +281,9 @@ export default function SettingsPage() {
                                 <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Số điện thoại nội bộ</label>
                                 <Input
                                     value={extPhone}
-                                    onChange={(e) => setExtPhone(e.target.value)}
-                                    placeholder="Ví dụ: 1234"
+                                    onChange={(e) => setExtPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                                    placeholder="Ví dụ: 0912345678"
+                                    maxLength={10}
                                     className="h-11 shadow-sm"
                                 />
                             </div>
