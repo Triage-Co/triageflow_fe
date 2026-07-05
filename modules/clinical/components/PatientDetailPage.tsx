@@ -8,10 +8,20 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Patient } from '@/modules/clinical/types/clinical.types';
-import { MOCK_LAB_ORDERS, MOCK_DIAGNOSIS } from '@/modules/clinical/services/clinicalService';
 import { DoctorHeader } from './DoctorHeader';
 import { WorkflowDiagram } from './WorkflowDiagram';
 import { ClinicalProcessPanel } from './ClinicalProcessPanel';
+
+const MOCK_LAB_ORDERS = [
+    { id: 'lab-1', name: 'Tổng phân tích tế bào máu', group: 'Huyết học', status: 'Chờ thực hiện' as const },
+    { id: 'lab-2', name: 'X-quang ngực thẳng', group: 'Chẩn đoán hình ảnh', status: 'Chờ thực hiện' as const },
+    { id: 'lab-3', name: 'Siêu âm bụng', group: 'Siêu âm', status: 'Chờ thực hiện' as const },
+];
+
+const MOCK_DIAGNOSIS = {
+    code: 'J02.9',
+    description: 'Đau hố chậu phải',
+};
 
 type DetailTab = 'info' | 'process';
 

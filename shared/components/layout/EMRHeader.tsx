@@ -5,20 +5,20 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { X, List } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { EMR_PATIENT_TABS, MOCK_EMR_PATIENTS } from '@/modules/clinical/data/emr-mock-data';
 
 interface EMRHeaderProps {
     activeTabId: string; // 'dashboard' or patient.id
+    activeTabName?: string;
 }
 
-export function EMRHeader({ activeTabId }: EMRHeaderProps) {
+export function EMRHeader({ activeTabId, activeTabName }: EMRHeaderProps) {
     const router = useRouter();
     const [tabs, setTabs] = useState<{ id: string; name: string }[]>([]);
 
     useEffect(() => {
-        // Load tabs from localStorage or fallback to defaults
+        // Load tabs from localStorage or fallback to empty array
         const stored = localStorage.getItem('emr_patient_tabs');
-        let currentTabs = EMR_PATIENT_TABS;
+        let currentTabs: { id: string; name: string }[] = [];
         if (stored) {
             try {
                 currentTabs = JSON.parse(stored);
@@ -29,10 +29,18 @@ export function EMRHeader({ activeTabId }: EMRHeaderProps) {
 
         // If currently viewing a patient detail page, ensure this tab is open
         if (activeTabId && activeTabId !== 'dashboard') {
-            const hasTab = currentTabs.some((t) => t.id === activeTabId);
-            if (!hasTab) {
-                const mockPatient = MOCK_EMR_PATIENTS[activeTabId];
-                const patientName = mockPatient ? mockPatient.name : `Bệnh nhân ${activeTabId}`;
+            const tabIndex = currentTabs.findIndex((t) => t.id === activeTabId);
+            if (tabIndex >= 0) {
+                // If tab exists, but has a placeholder name or different name, update it
+                const existingTab = currentTabs[tabIndex];
+                if (activeTabName && (existingTab.name.startsWith('Bệnh nhân ') || existingTab.name === activeTabId || existingTab.name !== activeTabName)) {
+                    currentTabs = [...currentTabs];
+                    currentTabs[tabIndex] = { ...existingTab, name: activeTabName };
+                    localStorage.setItem('emr_patient_tabs', JSON.stringify(currentTabs));
+                }
+            } else {
+                // Tab does not exist, add it
+                const patientName = activeTabName || `Bệnh nhân ${activeTabId}`;
                 const updatedTabs = [...currentTabs, { id: activeTabId, name: patientName }];
                 currentTabs = updatedTabs;
                 localStorage.setItem('emr_patient_tabs', JSON.stringify(updatedTabs));
@@ -43,7 +51,7 @@ export function EMRHeader({ activeTabId }: EMRHeaderProps) {
             setTabs(currentTabs);
         }, 0);
         return () => clearTimeout(timer);
-    }, [activeTabId]);
+    }, [activeTabId, activeTabName]);
 
     const handleCloseTab = (e: React.MouseEvent, tabId: string) => {
         e.preventDefault();

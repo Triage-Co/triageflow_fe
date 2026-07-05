@@ -33,7 +33,6 @@ interface NavItem {
 const NAV_BY_ROLE: Record<string, NavItem[]> = {
     DOCTOR: [
         { label: 'Danh sách bệnh nhân', href: '/doctor', icon: ClipboardList },
-        { label: 'Tiếp nhận', href: '/reception', icon: UserCheck },
         { label: 'Thông báo', href: '/notifications', icon: Bell },
         { label: 'Cài đặt', href: '/settings', icon: Settings },
     ],
