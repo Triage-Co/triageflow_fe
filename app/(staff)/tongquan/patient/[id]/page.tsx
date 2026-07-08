@@ -5,27 +5,36 @@ import { EMRPageLayout } from '@/shared/components/layout/EMRPageLayout';
 import { notFound } from 'next/navigation';
 import { clinicalService, mapBackendPatientToFrontend } from '@/modules/clinical/services/clinicalService';
 import { useAuthStore } from '@/modules/auth/store/authStore';
+import { usePatientTabsStore } from '@/modules/clinical/store/clinicalStore';
 import type { Patient } from '@/modules/clinical/types/clinical.types';
 import { Loader2, AlertCircle } from 'lucide-react';
 
 export default function TongQuanPatientPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
     const accessToken = useAuthStore((s) => s.accessToken);
+    const { getPatientData, setPatientData } = usePatientTabsStore();
 
-    const [patient, setPatient] = useState<Patient | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+    // Synchronously initialize state from the Zustand cache to avoid useEffect setState lints
+    const [patient, setPatient] = useState<Patient | null>(() => {
+        return getPatientData(id) || null;
+    });
+    const [isLoading, setIsLoading] = useState(() => {
+        return !getPatientData(id);
+    });
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!accessToken || !id) return;
+        if (patient) return; // Already cached and loaded
+        if (!id || !accessToken) return;
 
         const fetchPatient = async () => {
             try {
-                setIsLoading(true);
                 setError(null);
                 const res = await clinicalService.getPatientByQueueId(id, accessToken);
                 if (res?.data) {
-                    setPatient(mapBackendPatientToFrontend(res.data));
+                    const mapped = mapBackendPatientToFrontend(res.data);
+                    setPatient(mapped);
+                    setPatientData(id, mapped);
                 } else {
                     setError('Không tìm thấy thông tin bệnh nhân.');
                 }
@@ -37,7 +46,7 @@ export default function TongQuanPatientPage({ params }: { params: Promise<{ id: 
         };
 
         fetchPatient();
-    }, [id, accessToken]);
+    }, [id, accessToken, patient, setPatientData]);
 
     if (isLoading) {
         return (

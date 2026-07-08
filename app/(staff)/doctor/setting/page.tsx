@@ -25,7 +25,7 @@ interface Toast {
     type: 'success' | 'error' | 'info';
 }
 
-export default function SettingsPage() {
+export default function DoctorSettingsPage() {
     const router = useRouter();
     const accessToken = useAuthStore((s) => s.accessToken);
     const user = useAuthStore((s) => s.user);

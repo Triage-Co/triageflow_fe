@@ -5,6 +5,7 @@ import type { Patient } from '@/modules/clinical/types/clinical.types';
 import { EMRWorkspaceLayout } from './EMRWorkspaceLayout';
 import { LeftPatientPanel } from './LeftPatientPanel';
 import { RightMedicalArea } from './RightMedicalArea';
+import { usePatientTabsStore } from '@/modules/clinical/store/clinicalStore';
 
 interface EMRPageLayoutProps {
     patient: Patient;
@@ -12,9 +13,11 @@ interface EMRPageLayoutProps {
 
 export function EMRPageLayout({ patient: initialPatient }: EMRPageLayoutProps) {
     const [patient, setPatient] = useState<Patient>(initialPatient);
+    const { setPatientData } = usePatientTabsStore();
 
     const handleUpdatePatient = (updated: Patient) => {
         setPatient(updated);
+        setPatientData(updated.id, updated);
     };
 
     return (

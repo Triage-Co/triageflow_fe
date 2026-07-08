@@ -33,8 +33,8 @@ interface NavItem {
 const NAV_BY_ROLE: Record<string, NavItem[]> = {
     DOCTOR: [
         { label: 'Danh sách bệnh nhân', href: '/doctor', icon: ClipboardList },
-        { label: 'Thông báo', href: '/notifications', icon: Bell },
-        { label: 'Cài đặt', href: '/settings', icon: Settings },
+        { label: 'Thông báo', href: '/doctor/notification', icon: Bell },
+        { label: 'Cài đặt', href: '/doctor/setting', icon: Settings },
     ],
     NURSE: [
         { label: 'Danh sách bệnh nhân', href: '/doctor', icon: ClipboardList },
@@ -148,7 +148,9 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
                 {navItems.map((item) => {
                     const Icon = item.icon;
                     const isActive =
-                        pathname === item.href || pathname.startsWith(item.href + '/');
+                        item.href === '/doctor'
+                            ? pathname === '/doctor' || (pathname.startsWith('/doctor/') && !pathname.startsWith('/doctor/notification') && !pathname.startsWith('/doctor/setting'))
+                            : pathname === item.href || pathname.startsWith(item.href + '/');
 
                     return (
                         <Link

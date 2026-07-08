@@ -2,18 +2,27 @@
 
 import { useState } from 'react';
 import type { Patient } from '@/modules/clinical/types/clinical.types';
-import { Search, Settings, Pencil } from 'lucide-react';
+import { 
+    Search, 
+    Settings, 
+    Pencil,
+    Stethoscope,
+    Microscope,
+    ClipboardList,
+    Syringe,
+    Pill
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type MedTab = 'kham-benh' | 'can-lam-sang' | 'chan-doan' | 'thu-thuat' | 'don-thuoc';
 type EditingSection = 'visitReason' | 'clinicalProgression' | 'medicalHistory' | 'physicalExam' | null;
 
-const MED_TABS: { id: MedTab; label: string }[] = [
-    { id: 'kham-benh', label: 'Khám bệnh' },
-    { id: 'can-lam-sang', label: 'Cận lâm sàng' },
-    { id: 'chan-doan', label: 'Chẩn đoán & điều trị' },
-    { id: 'thu-thuat', label: 'Thu thuật' },
-    { id: 'don-thuoc', label: 'Đơn thuốc' },
+const MED_TABS: { id: MedTab; label: string; icon: React.ElementType }[] = [
+    { id: 'kham-benh', label: 'Khám bệnh', icon: Stethoscope },
+    { id: 'can-lam-sang', label: 'Cận lâm sàng', icon: Microscope },
+    { id: 'chan-doan', label: 'Chẩn đoán & điều trị', icon: ClipboardList },
+    { id: 'thu-thuat', label: 'Thu thuật', icon: Syringe },
+    { id: 'don-thuoc', label: 'Đơn thuốc', icon: Pill },
 ];
 
 interface SectionCardProps {
@@ -350,21 +359,22 @@ export function RightMedicalArea({ patient, onUpdatePatient }: RightMedicalAreaP
             </div>
 
             {/* ── Toolbar tabs ── */}
-            <div className="flex items-center gap-1 px-5 pt-3 pb-0 shrink-0">
-                {MED_TABS.map(({ id, label }) => {
+            <div className="flex items-center gap-2 px-5 pt-3 pb-1 shrink-0 overflow-x-auto">
+                {MED_TABS.map(({ id, label, icon: Icon }) => {
                     const isActive = activeTab === id;
                     return (
                         <button
                             key={id}
                             onClick={() => setActiveTab(id)}
                             className={cn(
-                                'flex items-center gap-1.5 px-3.5 py-2 rounded-t-lg text-[12px] font-semibold transition-all duration-150 border border-transparent cursor-pointer',
+                                'flex items-center gap-2 px-4 py-2 text-[12px] font-semibold transition-all duration-150 rounded-full border cursor-pointer whitespace-nowrap',
                                 isActive
-                                    ? 'bg-white text-[#8B7CF6] border-[#EBEBEB] border-b-white shadow-sm'
-                                    : 'text-[#9C9C9C] hover:text-[#8B7CF6] hover:bg-white/60'
+                                    ? 'bg-white text-[#2D2D2D] border-[#EBEBEB] shadow-sm'
+                                    : 'bg-transparent text-[#9C9C9C] border-transparent hover:text-[#8B7CF6] hover:bg-white/60'
                             )}
                         >
-                            {label}
+                            <Icon className={cn("w-3.5 h-3.5 shrink-0", isActive ? "text-[#8B7CF6]" : "text-[#9C9C9C]")} />
+                            <span>{label}</span>
                         </button>
                     );
                 })}
