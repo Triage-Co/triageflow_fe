@@ -52,7 +52,7 @@ export function EMRHeader({ activeTabId, activeTabName }: EMRHeaderProps) {
     const isDashboardActive = activeTabId === 'dashboard';
 
     return (
-        <header className="flex items-end h-10 bg-[#8B7CF6] shrink-0 select-none rounded-t-[16px] overflow-hidden">
+        <header className="flex items-end h-10 bg-[#8B7CF6] shrink-0 select-none overflow-hidden">
             {/* Merged tabs container without gaps */}
             <div className="flex items-end h-full">
                 <Link

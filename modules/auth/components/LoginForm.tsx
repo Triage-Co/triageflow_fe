@@ -11,6 +11,20 @@ import { OtpStep } from './OtpStep';
 // Flag stored in localStorage after first successful OTP verify
 const otpFlagKey = (email: string) => `tfopd_otp_verified_${email}`;
 
+/** Return the default landing page for a given staff role */
+function getDefaultRoute(role: string): string {
+    switch (role?.toUpperCase()) {
+        case 'ADMIN': return '/dashboard';
+        case 'DOCTOR':
+        case 'NURSE': return '/doctor';
+        case 'RECEPTIONIST': return '/reception';
+        case 'LAB_STAFF': return '/lab';
+        case 'PHARMACY_STAFF': return '/pharmacy';
+        case 'CASHIER': return '/cashier';
+        default: return '/dashboard';
+    }
+}
+
 export function LoginForm() {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
@@ -73,7 +87,7 @@ export function LoginForm() {
 
                 // Skip OTP if this email has already been verified before
                 if (localStorage.getItem(otpFlagKey(email))) {
-                    router.push('/doctor');
+                    router.push(getDefaultRoute(role));
                     return;
                 }
 
@@ -92,7 +106,7 @@ export function LoginForm() {
         if (data.username && data.role) {
             await completeLogin(data.token, data.refreshToken, data.username, data.role);
         }
-        router.push('/doctor');
+        router.push(getDefaultRoute(data.role ?? ''));
     }
 
     if (step === 'otp') {

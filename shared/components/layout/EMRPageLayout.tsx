@@ -23,7 +23,7 @@ export function EMRPageLayout({ patient: initialPatient }: EMRPageLayoutProps) {
     return (
         <EMRWorkspaceLayout activeTabId={patient.id} activeTabName={patient.name}>
             {/* ── Body below header ── */}
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex overflow-hidden bg-gradient-to-br from-[#EEEDFC] via-[#F9ECF2] to-[#E6E9FC] p-4 gap-4">
                 {/* 1. Collapsible patient info panel */}
                 <div className="relative shrink-0">
                     <LeftPatientPanel

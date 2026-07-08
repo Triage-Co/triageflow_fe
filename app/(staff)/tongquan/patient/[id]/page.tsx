@@ -14,18 +14,28 @@ export default function TongQuanPatientPage({ params }: { params: Promise<{ id: 
     const accessToken = useAuthStore((s) => s.accessToken);
     const { getPatientData, setPatientData } = usePatientTabsStore();
 
-    // Synchronously initialize state from the Zustand cache to avoid useEffect setState lints
-    const [patient, setPatient] = useState<Patient | null>(() => {
-        return getPatientData(id) || null;
-    });
-    const [isLoading, setIsLoading] = useState(() => {
-        return !getPatientData(id);
-    });
+    // Always start with isLoading=true and patient=null so server+client initial render is identical.
+    // The Zustand persist store only hydrates on the client, so reading from it during useState init
+    // causes a server/client mismatch (hydration error). We defer reading the cache to useEffect.
+    const [patient, setPatient] = useState<Patient | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (patient) return; // Already cached and loaded
-        if (!id || !accessToken) return;
+        if (!id) return;
+
+        // 1. Check Zustand cache first (client-only, safe in useEffect)
+        const cached = getPatientData(id);
+        if (cached) {
+            const timer = setTimeout(() => {
+                setPatient(cached);
+                setIsLoading(false);
+            }, 0);
+            return () => clearTimeout(timer);
+        }
+
+        // 2. No cache — fetch from API
+        if (!accessToken) return;
 
         const fetchPatient = async () => {
             try {
@@ -46,7 +56,7 @@ export default function TongQuanPatientPage({ params }: { params: Promise<{ id: 
         };
 
         fetchPatient();
-    }, [id, accessToken, patient, setPatientData]);
+    }, [id, accessToken, getPatientData, setPatientData]);
 
     if (isLoading) {
         return (

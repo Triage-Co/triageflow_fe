@@ -103,8 +103,9 @@ export function DoctorDashboard() {
     return (
         <EMRWorkspaceLayout activeTabId="dashboard">
             {/* ── Page content ────────────────── */}
-            <div className="flex-1 flex flex-col bg-white border-t border-l border-[#EBEBEB] overflow-hidden">
-                <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 flex flex-col p-3 pb-5 overflow-hidden">
+                <div className="h-fit max-h-full flex flex-col bg-white rounded-[24px] border border-neutral-200/50 shadow-[0_4px_24px_-4px_rgba(139,124,246,0.02)] overflow-hidden">
+                    <div className="flex-1 overflow-y-auto p-6">
                     {/* Title + Stats row */}
                     <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-5 mb-6">
                         <div>
@@ -126,11 +127,10 @@ export function DoctorDashboard() {
                                 <button
                                     key={tab.value}
                                     onClick={() => setSelectedDate(tab.value)}
-                                    className={`pb-3 text-sm font-bold border-b-2 transition-all duration-200 shrink-0 cursor-pointer ${
-                                        isActive
-                                            ? 'border-[#8B7CF6] text-[#8B7CF6]'
-                                            : 'border-transparent text-neutral-400 hover:text-neutral-700'
-                                    }`}
+                                    className={`pb-3 text-sm font-bold border-b-2 transition-all duration-200 shrink-0 cursor-pointer ${isActive
+                                        ? 'border-[#8B7CF6] text-[#8B7CF6]'
+                                        : 'border-transparent text-neutral-400 hover:text-neutral-700'
+                                        }`}
                                 >
                                     {tab.label}
                                 </button>
@@ -160,6 +160,7 @@ export function DoctorDashboard() {
                     )}
                 </div>
             </div>
+        </div>
         </EMRWorkspaceLayout>
     );
 }

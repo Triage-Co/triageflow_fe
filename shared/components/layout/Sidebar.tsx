@@ -4,11 +4,9 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-    Activity,
     Bell,
     ChevronLeft,
     ChevronRight,
-    ClipboardList,
     LayoutDashboard,
     Settings,
     UserCheck,
@@ -16,9 +14,9 @@ import {
     FlaskConical,
     Pill,
     CreditCard,
-    ShieldCheck,
     LogOut,
     User,
+    Stethoscope,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { authService } from '@/shared/services/authService';
@@ -32,15 +30,15 @@ interface NavItem {
 
 const NAV_BY_ROLE: Record<string, NavItem[]> = {
     DOCTOR: [
-        { label: 'Danh sách bệnh nhân', href: '/doctor', icon: ClipboardList },
+        { label: 'Danh sách bệnh nhân', href: '/doctor', icon: LayoutDashboard },
         { label: 'Thông báo', href: '/doctor/notification', icon: Bell },
         { label: 'Cài đặt', href: '/doctor/setting', icon: Settings },
     ],
     NURSE: [
-        { label: 'Danh sách bệnh nhân', href: '/doctor', icon: ClipboardList },
+        { label: 'Danh sách bệnh nhân', href: '/doctor', icon: LayoutDashboard },
         { label: 'Tiếp nhận', href: '/reception', icon: UserCheck },
-        { label: 'Thông báo', href: '/notifications', icon: Bell },
-        { label: 'Cài đặt', href: '/settings', icon: Settings },
+        { label: 'Thông báo', href: '/doctor/notification', icon: Bell },
+        { label: 'Cài đặt', href: '/doctor/setting', icon: Settings },
     ],
     RECEPTIONIST: [
         { label: 'Tiếp nhận', href: '/reception', icon: UserCheck },
@@ -66,8 +64,7 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
     ADMIN: [
         { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
         { label: 'Người dùng', href: '/admin/users', icon: Users },
-        { label: 'Quyền truy cập', href: '/admin/roles', icon: ShieldCheck },
-        { label: 'Cài đặt', href: '/settings', icon: Settings },
+        { label: 'Cài đặt', href: '/admin/settings', icon: Settings },
     ],
     default: [
         { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -124,14 +121,17 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
     return (
         <aside
             className={cn(
-                'relative flex flex-col h-full bg-[#F5F2FF] shrink-0 select-none transition-all duration-300 ease-in-out overflow-hidden',
+                'relative flex flex-col h-full bg-[#EEEDFC] shrink-0 select-none transition-all duration-300 ease-in-out overflow-hidden',
                 isCollapsed ? 'w-[52px]' : 'w-[220px]'
             )}
         >
             {/* ── Logo ──────────────────────────────────── */}
-            <div className="flex items-center gap-3 px-3 pt-5 pb-5 shrink-0 min-h-[72px]">
+            <div className={cn(
+                'flex items-center gap-3 pt-5 pb-5 shrink-0 min-h-[72px]',
+                isCollapsed ? 'justify-center px-0' : 'px-3'
+            )}>
                 <div className="w-9 h-9 rounded-xl bg-[#8B7CF6] flex items-center justify-center shadow-md shadow-[#8B7CF6]/30 shrink-0">
-                    <Activity className="w-4 h-4 text-white" />
+                    <Stethoscope className="w-4 h-4 text-white" />
                 </div>
                 {!isCollapsed && (
                     <div className="overflow-hidden">
@@ -144,7 +144,10 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
             </div>
 
             {/* ── Nav ───────────────────────────────────── */}
-            <nav className="flex-1 flex flex-col gap-1 px-1.5 overflow-y-auto overflow-x-hidden">
+            <nav className={cn(
+                'flex-1 flex flex-col gap-1 overflow-y-auto overflow-x-hidden',
+                isCollapsed ? 'items-center px-0 py-1' : 'px-1.5'
+            )}>
                 {navItems.map((item) => {
                     const Icon = item.icon;
                     const isActive =
@@ -152,36 +155,52 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
                             ? pathname === '/doctor' || (pathname.startsWith('/doctor/') && !pathname.startsWith('/doctor/notification') && !pathname.startsWith('/doctor/setting'))
                             : pathname === item.href || pathname.startsWith(item.href + '/');
 
+                    if (isCollapsed) {
+                        return (
+                            <Link
+                                key={item.href}
+                                href={item.href}
+                                title={item.label}
+                                className={cn(
+                                    'w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200',
+                                    isActive
+                                        ? 'bg-[#DDD6FE] text-[#8B7CF6]'
+                                        : 'text-[#7B7B7B] hover:bg-[#DDD6FE]/60 hover:text-[#8B7CF6]'
+                                )}
+                            >
+                                <Icon className="w-4 h-4 shrink-0" />
+                            </Link>
+                        );
+                    }
+
                     return (
                         <Link
                             key={item.href}
                             href={item.href}
-                            title={isCollapsed ? item.label : undefined}
                             className={cn(
-                                'flex items-center gap-3 h-11 rounded-xl px-3 transition-all duration-200 text-[13px] font-medium',
-                                isCollapsed && 'justify-center px-0',
+                                'flex items-center gap-3 h-11 rounded-2xl px-3 transition-all duration-200 text-[13px]',
                                 isActive
-                                    ? 'bg-[#8B7CF6] text-white shadow-sm shadow-[#8B7CF6]/25'
-                                    : 'text-[#7B7B7B] hover:bg-[#8B7CF6]/10 hover:text-[#8B7CF6]'
+                                    ? 'bg-[#DDD6FE] text-[#8B7CF6] font-bold'
+                                    : 'text-[#7B7B7B] font-medium hover:bg-[#DDD6FE]/50 hover:text-[#8B7CF6]'
                             )}
                         >
                             <Icon className="w-4.5 h-4.5 shrink-0" />
-                            {!isCollapsed && (
-                                <span className="truncate whitespace-nowrap">{item.label}</span>
-                            )}
+                            <span className="truncate whitespace-nowrap">{item.label}</span>
                         </Link>
                     );
                 })}
             </nav>
 
             {/* ── Collapse toggle button ─────────────────── */}
-            <div className={cn('px-1.5 py-2 shrink-0', isCollapsed && 'flex justify-center')}>
+            <div className={cn('py-2 shrink-0', isCollapsed ? 'flex justify-center' : 'px-1.5')}>
                 <button
                     onClick={handleToggle}
                     title={isCollapsed ? 'Mở rộng' : 'Thu gọn'}
                     className={cn(
-                        'flex items-center gap-2 h-9 rounded-xl px-3 w-full transition-all duration-200 text-[12px] font-medium text-[#7B7B7B] hover:bg-[#8B7CF6]/10 hover:text-[#8B7CF6]',
-                        isCollapsed && 'justify-center px-0 w-10'
+                        'flex items-center gap-2 transition-all duration-200 text-[12px] font-medium text-[#7B7B7B] hover:text-[#8B7CF6]',
+                        isCollapsed
+                            ? 'w-9 h-9 rounded-full justify-center hover:bg-[#DDD6FE]/60'
+                            : 'h-9 rounded-2xl px-3 w-full hover:bg-[#DDD6FE]/50'
                     )}
                 >
                     {isCollapsed ? (
