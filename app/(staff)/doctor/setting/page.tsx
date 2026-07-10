@@ -4,19 +4,18 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     User,
-    Printer,
     CheckCircle2,
     AlertCircle,
     Lock,
     Info,
-    Save
+    Save,
+    Loader2
 } from 'lucide-react';
-import { authService } from '@/modules/auth/services/authService';
 import { useAuthStore } from '@/store/authStore';
 import { Card } from '@/shared/components/ui/Card';
 import { Input } from '@/shared/components/ui/Input';
 import { Button } from '@/shared/components/ui/Button';
-import type { Gender } from '@/shared/types/auth.types';
+import type { Gender, UserProfile } from '@/shared/types/auth.types';
 import { cn } from '@/lib/utils';
 import { EMRWorkspaceLayout } from '@/shared/components/layout/EMRWorkspaceLayout';
 
@@ -26,48 +25,129 @@ interface Toast {
     type: 'success' | 'error' | 'info';
 }
 
+// ── Extracted Settings Form Component ─────────────────────────────────────
+function SettingsForm({
+    profile,
+    onSave,
+    isSaving
+}: {
+    profile: UserProfile;
+    onSave: (data: { userName: string; gender: Gender; extPhone: string }) => Promise<void>;
+    isSaving: boolean;
+}) {
+    const [userName, setUserName] = useState(profile.user_name || '');
+    const [email] = useState(profile.email || '');
+    const [gender, setGender] = useState<Gender>(profile.gender || 'MALE');
+
+    const [extPhone, setExtPhone] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('tfopd_ext_phone') || profile.phone || '';
+        }
+        return profile.phone || '';
+    });
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        onSave({ userName, gender, extPhone });
+    };
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-6">
+            {/* ── Card 1: Employee Info ── */}
+            <Card className="p-6 md:p-8 hover:shadow-[0_8px_30px_rgb(0,0,0,0.02)] transition-shadow duration-300">
+                {/* Header title */}
+                <div className="flex items-center gap-2 mb-6">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100/50">
+                        <User className="w-4.5 h-4.5" />
+                    </div>
+                    <h3 className="font-bold text-neutral-800 text-[15px] tracking-wide">
+                        Thông tin nhân viên
+                    </h3>
+                </div>
+
+                {/* Input Form Fields */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    {/* Fullname */}
+                    <div className="md:col-span-2 space-y-2">
+                        <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Họ và tên</label>
+                        <Input
+                            value={userName}
+                            onChange={(e) => setUserName(e.target.value)}
+                            placeholder="Nhập họ và tên của bạn"
+                            className="h-11 shadow-sm"
+                        />
+                    </div>
+
+                    {/* Email (Disabled) */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Email</label>
+                        <Input
+                            value={email}
+                            disabled
+                            placeholder="email@hospital.vn"
+                            className="bg-neutral-50 text-neutral-400 border-neutral-200/80 cursor-not-allowed select-none h-11"
+                            startIcon={<Lock className="w-4 h-4 text-neutral-300 shrink-0" />}
+                        />
+                    </div>
+
+                    {/* Ext Phone */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Số điện thoại nội bộ</label>
+                        <Input
+                            value={extPhone}
+                            onChange={(e) => setExtPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                            placeholder="Ví dụ: 0912345678"
+                            maxLength={10}
+                            className="h-11 shadow-sm"
+                        />
+                    </div>
+
+                    {/* Gender Select */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Giới tính</label>
+                        <select
+                            value={gender}
+                            onChange={(e) => setGender(e.target.value as Gender)}
+                            className="flex h-11 w-full rounded-[24px] border border-neutral-200 bg-white px-4 py-2 text-sm text-neutral-900 shadow-sm transition-all focus-visible:outline-none focus-visible:border-brand-400 focus-visible:ring-2 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            <option value="MALE">Nam</option>
+                            <option value="FEMALE">Nữ</option>
+                            <option value="OTHER">Khác</option>
+                        </select>
+                    </div>
+                </div>
+            </Card>
+
+            {/* ── Actions Row ── */}
+            <div className="flex justify-end pt-2">
+                <Button
+                    type="submit"
+                    isLoading={isSaving}
+                    size="lg"
+                    variant="brand"
+                    className="w-full sm:w-auto shadow-md hover:shadow-lg transition-all duration-200"
+                    startIcon={<Save className="w-4.5 h-4.5" />}
+                >
+                    Lưu thay đổi
+                </Button>
+            </div>
+        </form>
+    );
+}
+
+// ── Main Page Component ──────────────────────────────────────────────────
 export default function DoctorSettingsPage() {
     const router = useRouter();
     const accessToken = useAuthStore((s) => s.accessToken);
-    const user = useAuthStore((s) => s.user);
-    const setUser = useAuthStore((s) => s.setUser);
+    const profile = useAuthStore((s) => s.profile);
+    const fetchProfile = useAuthStore((s) => s.fetchProfile);
+    const updateProfile = useAuthStore((s) => s.updateProfile);
 
     const [mounted, setMounted] = useState(false);
-
-    // Profile State (from backend API)
-    const [fullName, setFullName] = useState('');
-    const [email, setEmail] = useState('');
-    const [dob, setDob] = useState('');
-    const [gender, setGender] = useState<Gender>('MALE');
-
-    // Custom State (persisted locally)
-    const [extPhone, setExtPhone] = useState(() => {
-        if (typeof window !== 'undefined') {
-            return localStorage.getItem('tfopd_ext_phone') || '1234567890';
-        }
-        return '1234567890';
-    });
-
-    // Printer State (persisted locally)
-    const [defaultPrinter, setDefaultPrinter] = useState(() => {
-        if (typeof window !== 'undefined') {
-            return localStorage.getItem('tfopd_default_printer') || 'Máy in nhiệt – Quầy 3';
-        }
-        return 'Máy in nhiệt – Quầy 3';
-    });
-    const [paperSize, setPaperSize] = useState(() => {
-        if (typeof window !== 'undefined') {
-            return localStorage.getItem('tfopd_paper_size') || 'Khổ nhiệt 80mm';
-        }
-        return 'Khổ nhiệt 80mm';
-    });
-
-    // UI Loading & Interaction States
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [toasts, setToasts] = useState<Toast[]>([]);
 
-    // ── Toast Utility ────────────────────────────────────────────────────────
     const showToast = (message: string, type: 'success' | 'error' | 'info') => {
         const id = Date.now().toString();
         setToasts((prev) => [...prev, { id, message, type }]);
@@ -76,19 +156,6 @@ export default function DoctorSettingsPage() {
         }, 4000);
     };
 
-    // ── ISO Date converter to YYYY-MM-DD ─────────────────────────────────────
-    const formatIsoDateToYmd = (isoString?: string) => {
-        if (!isoString) return '';
-        try {
-            const date = new Date(isoString);
-            if (isNaN(date.getTime())) return '';
-            return date.toISOString().split('T')[0];
-        } catch {
-            return '';
-        }
-    };
-
-    // Set mounted flag
     useEffect(() => {
         const timer = setTimeout(() => {
             setMounted(true);
@@ -96,7 +163,6 @@ export default function DoctorSettingsPage() {
         return () => clearTimeout(timer);
     }, []);
 
-    // ── Fetch Profile on Mount ───────────────────────────────────────────────
     useEffect(() => {
         if (!mounted) return;
 
@@ -105,20 +171,10 @@ export default function DoctorSettingsPage() {
             return;
         }
 
-        const fetchProfile = async () => {
+        const load = async () => {
             try {
                 setIsLoading(true);
-                const res = await authService.getProfile(accessToken);
-                if (res && res.data) {
-                    setFullName(res.data.full_name || '');
-                    setEmail(res.data.email || '');
-                    setDob(formatIsoDateToYmd(res.data.dob));
-                    setGender(res.data.gender || 'MALE');
-                    if (res.data.phone) {
-                        setExtPhone(res.data.phone);
-                        localStorage.setItem('tfopd_ext_phone', res.data.phone);
-                    }
-                }
+                await fetchProfile(accessToken);
             } catch (err) {
                 showToast(err instanceof Error ? err.message : 'Không thể tải thông tin nhân viên.', 'error');
             } finally {
@@ -126,52 +182,26 @@ export default function DoctorSettingsPage() {
             }
         };
 
-        fetchProfile();
-    }, [accessToken, router, mounted]);
+        load();
+    }, [accessToken, router, mounted, fetchProfile]);
 
-    // ── Form Submission handler ───────────────────────────────────────────────
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSave = async (data: { userName: string; gender: Gender; extPhone: string }) => {
         if (!accessToken) return;
 
-        if (!fullName.trim()) {
+        if (!data.userName.trim()) {
             showToast('Họ và tên không được để trống.', 'error');
             return;
         }
 
-        // Convert YYYY-MM-DD to DD-MM-YYYY
-        const formatDob = (ymdDate: string) => {
-            const parts = ymdDate.split('-');
-            if (parts.length === 3) {
-                return `${parts[2]}-${parts[1]}-${parts[0]}`;
-            }
-            return ymdDate;
-        };
-
         try {
             setIsSaving(true);
-
-            // 1. Send update request to server
-            await authService.updateProfile({
-                full_name: fullName,
-                dob: formatDob(dob),
-                gender,
-                phone: extPhone || undefined
+            await updateProfile({
+                user_name: data.userName,
+                gender: data.gender,
+                phone: data.extPhone || undefined
             }, accessToken);
 
-            // 2. Save local configurations to localStorage
-            localStorage.setItem('tfopd_default_printer', defaultPrinter);
-            localStorage.setItem('tfopd_paper_size', paperSize);
-            localStorage.setItem('tfopd_ext_phone', extPhone);
-
-            // 3. Update global auth store state
-            if (user) {
-                setUser({
-                    ...user,
-                    fullName: fullName
-                });
-            }
-
+            localStorage.setItem('tfopd_ext_phone', data.extPhone);
             showToast('Lưu cấu hình và thông tin cá nhân thành công!', 'success');
         } catch (err) {
             let errorMsg = 'Có lỗi xảy ra khi lưu cấu hình.';
@@ -254,135 +284,18 @@ export default function DoctorSettingsPage() {
                             </div>
 
                             {/* ── Main Form ── */}
-                            <form onSubmit={handleSubmit} className="space-y-6">
-                                {/* ── Card 1: Employee Info ── */}
-                                <Card className="p-6 md:p-8 hover:shadow-[0_8px_30px_rgb(0,0,0,0.02)] transition-shadow duration-300">
-                                    {/* Header title */}
-                                    <div className="flex items-center gap-2 mb-6">
-                                        <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100/50">
-                                            <User className="w-4.5 h-4.5" />
-                                        </div>
-                                        <h3 className="font-bold text-neutral-800 text-[15px] tracking-wide">
-                                            Thông tin nhân viên
-                                        </h3>
-                                    </div>
-
-                                    {/* Input Form Fields */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                        {/* Fullname */}
-                                        <div className="md:col-span-2 space-y-2">
-                                            <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Họ và tên</label>
-                                            <Input
-                                                value={fullName}
-                                                onChange={(e) => setFullName(e.target.value)}
-                                                placeholder="Nhập họ và tên của bạn"
-                                                className="h-11 shadow-sm"
-                                            />
-                                        </div>
-
-                                        {/* Email (Disabled) */}
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Email</label>
-                                            <Input
-                                                value={email}
-                                                disabled
-                                                placeholder="email@hospital.vn"
-                                                className="bg-neutral-50 text-neutral-400 border-neutral-200/80 cursor-not-allowed select-none h-11"
-                                                startIcon={<Lock className="w-4 h-4 text-neutral-300 shrink-0" />}
-                                            />
-                                        </div>
-
-                                        {/* Ext Phone */}
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Số điện thoại nội bộ</label>
-                                            <Input
-                                                value={extPhone}
-                                                onChange={(e) => setExtPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                                                placeholder="Ví dụ: 0912345678"
-                                                maxLength={10}
-                                                className="h-11 shadow-sm"
-                                            />
-                                        </div>
-
-                                        {/* Date of Birth */}
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Ngày sinh</label>
-                                            <Input
-                                                type="date"
-                                                value={dob}
-                                                onChange={(e) => setDob(e.target.value)}
-                                                className="h-11 shadow-sm"
-                                            />
-                                        </div>
-
-                                        {/* Gender Select */}
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Giới tính</label>
-                                            <select
-                                                value={gender}
-                                                onChange={(e) => setGender(e.target.value as Gender)}
-                                                className="flex h-11 w-full rounded-[24px] border border-neutral-200 bg-white px-4 py-2 text-sm text-neutral-900 shadow-sm transition-all focus-visible:outline-none focus-visible:border-brand-400 focus-visible:ring-2 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-50"
-                                            >
-                                                <option value="MALE">Nam</option>
-                                                <option value="FEMALE">Nữ</option>
-                                                <option value="OTHER">Khác</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </Card>
-
-                                {/* ── Card 2: Printer configuration ── */}
-                                <Card className="p-6 md:p-8 hover:shadow-[0_8px_30px_rgb(0,0,0,0.02)] transition-shadow duration-300">
-                                    {/* Header title */}
-                                    <div className="flex items-center gap-2 mb-6">
-                                        <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100/50">
-                                            <Printer className="w-4.5 h-4.5" />
-                                        </div>
-                                        <h3 className="font-bold text-neutral-800 text-[15px] tracking-wide">
-                                            Cấu hình máy in
-                                        </h3>
-                                    </div>
-
-                                    {/* Fields */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                        {/* Default Printer name */}
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Máy in mặc định</label>
-                                            <Input
-                                                value={defaultPrinter}
-                                                onChange={(e) => setDefaultPrinter(e.target.value)}
-                                                placeholder="Ví dụ: Máy in nhiệt – Quầy 3"
-                                                className="h-11 shadow-sm"
-                                            />
-                                        </div>
-
-                                        {/* Paper size */}
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Khổ giấy</label>
-                                            <Input
-                                                value={paperSize}
-                                                onChange={(e) => setPaperSize(e.target.value)}
-                                                placeholder="Ví dụ: Khổ nhiệt 80mm"
-                                                className="h-11 shadow-sm"
-                                            />
-                                        </div>
-                                    </div>
-                                </Card>
-
-                                {/* ── Actions Row ── */}
-                                <div className="flex justify-end pt-2">
-                                    <Button
-                                        type="submit"
-                                        isLoading={isSaving}
-                                        size="lg"
-                                        variant="brand"
-                                        className="w-full sm:w-auto shadow-md hover:shadow-lg transition-all duration-200"
-                                        startIcon={<Save className="w-4.5 h-4.5" />}
-                                    >
-                                        Lưu thay đổi
-                                    </Button>
+                            {profile ? (
+                                <SettingsForm
+                                    profile={profile}
+                                    onSave={handleSave}
+                                    isSaving={isSaving}
+                                />
+                            ) : (
+                                <div className="flex flex-col items-center justify-center py-20 text-neutral-400 gap-3">
+                                    <Loader2 className="w-8 h-8 animate-spin text-[#8B7CF6]" />
+                                    <p className="text-sm font-semibold">Đang tải thông tin...</p>
                                 </div>
-                            </form>
+                            )}
                         </div>
                     </div>
                 </div>

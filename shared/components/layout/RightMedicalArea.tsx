@@ -602,14 +602,14 @@ export function RightMedicalArea({ patient, onUpdatePatient }: RightMedicalAreaP
             <div className="flex items-center gap-3 px-5 py-3 bg-white border-b border-[#EBEBEB] shrink-0">
                 {/* Avatar */}
                 <div className="w-9 h-9 rounded-full bg-[#F5F2FF] border-2 border-[#8B7CF6]/20 flex items-center justify-center shrink-0 text-[#8B7CF6] font-bold text-sm">
-                    {patient.name.split(' ').pop()?.charAt(0)}
+                    {patient.name?.split(' ').pop()?.charAt(0) ?? '?'}
                 </div>
 
                 {/* Name + meta */}
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[14px] font-bold text-[#2D2D2D]">{patient.name}</span>
-                        {patient.insurance.hasInsurance && (
+                        <span className="text-[14px] font-bold text-[#2D2D2D]">{patient.name ?? 'Bệnh nhân'}</span>
+                        {patient.insurance?.hasInsurance && (
                             <span className="text-[10px] font-bold text-[#22C55E] bg-[#F0FDF4] border border-[#BBF7D0] px-2 py-0.5 rounded-full">
                                 BHYT {patient.insurance.coverage}
                             </span>

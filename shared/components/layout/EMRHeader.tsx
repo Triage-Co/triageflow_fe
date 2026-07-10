@@ -29,7 +29,11 @@ export function EMRHeader({ activeTabId, activeTabName }: EMRHeaderProps) {
 
         // If currently viewing a patient detail page, ensure this tab is open
         if (activeTabId && activeTabId !== 'dashboard') {
-            const patientName = activeTabName || `Bệnh nhân ${activeTabId}`;
+            const isUuid = (str: string) => /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(str);
+            let patientName = activeTabName;
+            if (!patientName || isUuid(patientName) || patientName === `Bệnh nhân ${activeTabId}` || patientName.includes(activeTabId)) {
+                patientName = 'Bệnh nhân';
+            }
             const timer = setTimeout(() => {
                 openTab({ id: activeTabId, name: patientName });
             }, 0);
@@ -72,6 +76,9 @@ export function EMRHeader({ activeTabId, activeTabName }: EMRHeaderProps) {
                     const isActive = tab.id === activeTabId;
                     const showSeparatorAfter = !isActive && (i === tabsToRender.length - 1 || tabsToRender[i + 1].id !== activeTabId);
 
+                    const isUuid = (str: string) => /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(str);
+                    const displayName = !tab.name || isUuid(tab.name) || tab.name === `Bệnh nhân ${tab.id}` || tab.name.includes(tab.id) ? 'Bệnh nhân' : tab.name;
+
                     return (
                         <div key={tab.id} className="flex items-end h-full">
                             <div
@@ -86,7 +93,7 @@ export function EMRHeader({ activeTabId, activeTabName }: EMRHeaderProps) {
                                     href={`/doctor/${tab.id}`}
                                     className="h-full pl-5 pr-2 flex items-center"
                                 >
-                                    <span>{tab.name}</span>
+                                    <span>{displayName}</span>
                                 </Link>
                                 <button
                                     onClick={(e) => handleCloseTab(e, tab.id)}
