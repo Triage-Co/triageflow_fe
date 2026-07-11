@@ -38,8 +38,8 @@ export function LeftPatientPanel({ patient, isOpen }: LeftPanelProps) {
     return (
         <div
             className={cn(
-                'relative flex flex-col shrink-0 transition-all duration-300 h-full overflow-hidden rounded-[24px] border border-neutral-200/50 shadow-[0_4px_24px_-4px_rgba(139,124,246,0.06)]',
-                isOpen ? 'w-77.5 bg-white' : 'w-11 bg-white'
+                'relative flex flex-col shrink-0 transition-all duration-300 h-full overflow-hidden',
+                isOpen ? 'w-77.5' : 'w-11'
             )}
         >
             {/* ── COLLAPSED STATE — icon strip only ── */}

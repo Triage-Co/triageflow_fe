@@ -597,7 +597,7 @@ export function RightMedicalArea({ patient, onUpdatePatient }: RightMedicalAreaP
     const [activeTab, setActiveTab] = useState<MedTab>('kham-benh');
 
     return (
-        <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-[24px] border border-neutral-200/50 shadow-[0_4px_24px_-4px_rgba(139,124,246,0.02)]">
+        <div className="flex-1 flex flex-col overflow-hidden">
             {/* ── Patient mini-header ── */}
             <div className="flex items-center gap-3 px-5 py-3 bg-white border-b border-[#EBEBEB] shrink-0">
                 {/* Avatar */}
@@ -634,25 +634,27 @@ export function RightMedicalArea({ patient, onUpdatePatient }: RightMedicalAreaP
             </div>
 
             {/* ── Toolbar tabs ── */}
-            <div className="flex items-center gap-2 px-5 pt-3 pb-1 shrink-0 overflow-x-auto">
-                {MED_TABS.map(({ id, label, icon: Icon }) => {
-                    const isActive = activeTab === id;
-                    return (
-                        <button
-                            key={id}
-                            onClick={() => setActiveTab(id)}
-                            className={cn(
-                                'flex items-center gap-2 px-4 py-2 text-[12px] font-semibold transition-all duration-150 rounded-full border cursor-pointer whitespace-nowrap',
-                                isActive
-                                    ? 'bg-white text-[#2D2D2D] border-[#EBEBEB] shadow-sm'
-                                    : 'bg-transparent text-[#9C9C9C] border-transparent hover:text-[#8B7CF6] hover:bg-white/60'
-                            )}
-                        >
-                            <Icon className={cn("w-3.5 h-3.5 shrink-0", isActive ? "text-[#8B7CF6]" : "text-[#9C9C9C]")} />
-                            <span>{label}</span>
-                        </button>
-                    );
-                })}
+            <div className="px-5 pt-3 pb-1 shrink-0 overflow-x-auto">
+                <div className="inline-flex p-0.5 bg-[#E8E7F5]/60 rounded-full border border-neutral-200/30 gap-0.5">
+                    {MED_TABS.map(({ id, label, icon: Icon }) => {
+                        const isActive = activeTab === id;
+                        return (
+                            <button
+                                key={id}
+                                onClick={() => setActiveTab(id)}
+                                className={cn(
+                                    'flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[11px] font-bold transition-all duration-150 cursor-pointer whitespace-nowrap',
+                                    isActive
+                                        ? 'bg-white text-[#2D2D2D] shadow-sm'
+                                        : 'text-[#7C7C8A] hover:text-[#8B7CF6]'
+                                )}
+                            >
+                                <Icon className={cn("w-3.5 h-3.5 shrink-0", isActive ? "text-[#8B7CF6]" : "text-[#7C7C8A]")} />
+                                <span>{label}</span>
+                            </button>
+                        );
+                    })}
+                </div>
             </div>
 
             {/* ── Tab content ── */}
