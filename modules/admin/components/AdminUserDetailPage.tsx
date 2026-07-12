@@ -64,7 +64,7 @@ export function AdminUserDetailPage() {
     const accessToken = useAuthStore((s) => s.accessToken);
     const { accounts, fetchAccounts } = useAdminStore();
     const [selectedUser, setSelectedUser] = useState<Account | null>(null);
-    const [isFetchingDetail, setIsFetchingDetail] = useState(true);
+    const [isFetchingDetail, setIsFetchingDetail] = useState(false);
 
     useEffect(() => {
         if (accessToken && accounts.length === 0) {
@@ -74,16 +74,12 @@ export function AdminUserDetailPage() {
 
     useEffect(() => {
         if (!accessToken || !userId) {
-            setIsFetchingDetail(false);
             return;
         }
 
         const fromList = accounts.find(
             (a) => a.id === userId || a.account_id === userId || a.profile?.id === userId
         );
-        if (fromList) {
-            setSelectedUser(fromList);
-        }
 
         const fetchDetail = async () => {
             try {
@@ -94,7 +90,7 @@ export function AdminUserDetailPage() {
                 }
             } catch {
                 // Fallback UI below will handle not-found/error state.
-                setSelectedUser(null);
+                setSelectedUser(fromList ?? null);
             } finally {
                 setIsFetchingDetail(false);
             }
