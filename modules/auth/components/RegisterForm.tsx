@@ -7,42 +7,25 @@ import {
     Eye, EyeOff, Cross, AlertCircle, Loader2, CheckCircle2,
 } from 'lucide-react';
 import { authService } from '@/modules/auth/services/authService';
-import type { Gender, StaffRole } from '@/shared/types/auth.types';
+import type { Gender } from '@/shared/types/auth.types';
 
 interface FormState {
     email: string;
-    fullName: string;
-    dob: string;
+    userName: string;
     password: string;
     confirmPassword: string;
     gender: Gender;
-    citizen_id: string;
-    role: StaffRole;
     phone: string;
 }
 
 const INITIAL: FormState = {
     email: '',
-    fullName: '',
-    dob: '',
+    userName: '',
     password: '',
     confirmPassword: '',
     gender: 'MALE',
-    citizen_id: '',
-    role: 'DOCTOR',
     phone: '',
 };
-
-const ROLE_OPTIONS: { value: StaffRole; label: string }[] = [
-    { value: 'DOCTOR', label: 'Bác sĩ' },
-    { value: 'NURSE', label: 'Y tá' },
-    { value: 'RECEPTIONIST', label: 'Lễ tân' },
-    { value: 'LAB_STAFF', label: 'Nhân viên xét nghiệm' },
-    { value: 'PHARMACY_STAFF', label: 'Nhân viên dược' },
-    { value: 'CASHIER', label: 'Thu ngân' },
-    { value: 'ADMIN', label: 'Quản trị viên' },
-    { value: 'USER', label: 'Bệnh nhân' },
-];
 
 export function RegisterForm() {
     const router = useRouter();
@@ -62,34 +45,31 @@ export function RegisterForm() {
         e.preventDefault();
         setError(null);
 
+        if (!form.userName.trim()) {
+            setError('Vui lòng nhập tên người dùng.');
+            return;
+        }
+        if (!form.email.trim()) {
+            setError('Vui lòng nhập email.');
+            return;
+        }
+        if (!form.phone.trim()) {
+            setError('Vui lòng nhập số điện thoại.');
+            return;
+        }
         if (form.password !== form.confirmPassword) {
             setError('Mật khẩu xác nhận không khớp.');
             return;
         }
-        if (form.citizen_id.length < 9) {
-            setError('Số CCCD/CMND không hợp lệ.');
-            return;
-        }
-
-        const formatDob = (ymdDate: string) => {
-            const parts = ymdDate.split('-');
-            if (parts.length === 3) {
-                return `${parts[2]}-${parts[1]}-${parts[0]}`;
-            }
-            return ymdDate;
-        };
 
         startTransition(async () => {
             try {
                 await authService.register({
+                    user_name: form.userName,
                     email: form.email,
-                    full_name: form.fullName,
-                    dob: formatDob(form.dob),
                     password: form.password,
                     gender: form.gender,
-                    citizen_id: form.citizen_id,
-                    role: form.role,
-                    phone: form.phone || undefined,
+                    phone: form.phone,
                 });
                 setStep('success');
             } catch (err) {
@@ -141,7 +121,7 @@ export function RegisterForm() {
                     Tạo tài khoản
                 </h2>
                 <p className="mt-1.5 text-sm text-neutral-500">
-                    Đăng ký bệnh nhân tại hệ thống TriageFlowOPD
+                    Đăng ký tài khoản tại hệ thống TriageFlowOPD
                 </p>
             </div>
 
@@ -154,17 +134,16 @@ export function RegisterForm() {
 
             <form onSubmit={handleSubmit} className="space-y-4" noValidate>
                 <div className="space-y-1.5">
-                    <label htmlFor="fullName" className="block text-sm font-medium text-neutral-700">
-                        Họ và tên
+                    <label htmlFor="userName" className="block text-sm font-medium text-neutral-700">
+                        Tên người dùng
                     </label>
                     <input
-                        id="fullName"
+                        id="userName"
                         type="text"
-                        autoComplete="name"
                         required
-                        placeholder="Nguyễn Văn A"
-                        value={form.fullName}
-                        onChange={(e) => update('fullName', e.target.value)}
+                        placeholder="DuongMinh"
+                        value={form.userName}
+                        onChange={(e) => update('userName', e.target.value)}
                         disabled={isPending}
                         className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-neutral-900 placeholder-neutral-400 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
                     />
@@ -189,20 +168,6 @@ export function RegisterForm() {
 
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                        <label htmlFor="dob" className="block text-sm font-medium text-neutral-700">
-                            Ngày sinh
-                        </label>
-                        <input
-                            id="dob"
-                            type="date"
-                            required
-                            value={form.dob}
-                            onChange={(e) => update('dob', e.target.value)}
-                            disabled={isPending}
-                            className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-neutral-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
-                        />
-                    </div>
-                    <div className="space-y-1.5">
                         <label htmlFor="gender" className="block text-sm font-medium text-neutral-700">
                             Giới tính
                         </label>
@@ -218,44 +183,6 @@ export function RegisterForm() {
                             <option value="FEMALE">Nữ</option>
                             <option value="OTHER">Khác</option>
                         </select>
-                    </div>
-                </div>
-
-                <div className="space-y-1.5">
-                    <label htmlFor="role" className="block text-sm font-medium text-neutral-700">
-                        Vai trò
-                    </label>
-                    <select
-                        id="role"
-                        required
-                        value={form.role}
-                        onChange={(e) => update('role', e.target.value)}
-                        disabled={isPending}
-                        className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-neutral-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
-                    >
-                        {ROLE_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                    </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                        <label htmlFor="citizen_id" className="block text-sm font-medium text-neutral-700">
-                            CCCD / CMND
-                        </label>
-                        <input
-                            id="citizen_id"
-                            type="text"
-                            inputMode="numeric"
-                            maxLength={12}
-                            required
-                            placeholder="084203000761"
-                            value={form.citizen_id}
-                            onChange={(e) => update('citizen_id', e.target.value.replace(/\D/g, '').slice(0, 12))}
-                            disabled={isPending}
-                            className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-neutral-900 placeholder-neutral-400 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
-                        />
                     </div>
                     <div className="space-y-1.5">
                         <label htmlFor="phone" className="block text-sm font-medium text-neutral-700">
