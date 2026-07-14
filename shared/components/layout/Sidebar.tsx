@@ -75,7 +75,7 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
         { label: 'Cấu hình AI', href: '/admin/ai-config', icon: Cpu },
         { label: 'Quy trình khám bệnh', href: '/admin/process', icon: Stethoscope },
         { label: 'Quản lý người dùng', href: '/admin/users', icon: Users },
-        { label: 'Quản lý phòng khám', href: '/admin/clinics', icon: Home },
+        { label: 'Quản lý phòng khám', href: '/admin/rooms', icon: Home },
         { label: 'Nhật ký kiểm toán', href: '/admin/audit', icon: FileText },
         { label: 'Cài đặt', href: '/admin/settings', icon: Settings },
     ],

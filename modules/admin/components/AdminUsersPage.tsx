@@ -18,6 +18,9 @@ import {
     Trash2,
     Filter,
     User as UserIcon,
+    Clock,
+    ShieldOff,
+    X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAdminStore } from '../store/adminStore';
@@ -75,39 +78,63 @@ export function AdminUsersPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const ITEMS_PER_PAGE = 10;
 
+    // Ban Modal states
+    const [banTargetId, setBanTargetId] = useState<string | null>(null);
+    const [banMinutes, setBanMinutes] = useState<string>('150');
+    const [banPreset, setBanPreset] = useState<string>('CUSTOM');
+    const [isBanning, setIsBanning] = useState(false);
+    const [banError, setBanError] = useState<string | null>(null);
+
+    const BAN_PRESETS = [
+        { label: '30 phút', value: '30' },
+        { label: '1 giờ',   value: '60' },
+        { label: '3 giờ',   value: '180' },
+        { label: '1 ngày',  value: '1440' },
+        { label: '7 ngày',  value: '10080' },
+        { label: '30 ngày', value: '43200' },
+    ];
+
     useEffect(() => {
         if (accessToken) {
             fetchAccounts(accessToken);
         }
     }, [accessToken, fetchAccounts]);
 
-    const promptBanDuration = (): BanDuration | null => {
-        const rawMinutes = window.prompt('Nhập thời gian khóa tài khoản (phút):', '150');
-        if (rawMinutes === null) return null;
+    const openBanModal = (id: string) => {
+        setBanTargetId(id);
+        setBanPreset('150');
+        setBanMinutes('150');
+        setBanError(null);
+    };
 
-        const totalMinutes = Number(rawMinutes.trim());
+    const closeBanModal = () => {
+        setBanTargetId(null);
+        setBanError(null);
+    };
+
+    const handleBan = async () => {
+        if (!accessToken || !banTargetId) return;
+
+        const totalMinutes = Number(banMinutes.trim());
         if (!Number.isFinite(totalMinutes) || totalMinutes <= 0) {
-            window.alert('Thời gian khóa phải là số phút lớn hơn 0.');
-            return null;
+            setBanError('Thời gian khóa phải là số phút lớn hơn 0.');
+            return;
         }
 
         const normalizedMinutes = Math.floor(totalMinutes);
         const hours = Math.floor(normalizedMinutes / 60);
         const minutes = normalizedMinutes % 60;
-        return { hours, minutes };
-    };
+        const duration: BanDuration = { hours, minutes };
 
-    const handleBan = async (id: string) => {
-        if (!accessToken) return;
-        const duration = promptBanDuration();
-        if (!duration) return;
-
-        setActionLoadingId(id);
+        setIsBanning(true);
+        setBanError(null);
         try {
-            await banAccount(id, duration, accessToken);
-        } catch {
-            // Error managed by store
+            await banAccount(banTargetId, duration, accessToken);
+            closeBanModal();
+        } catch (err) {
+            setBanError(err instanceof Error ? err.message : 'Khóa tài khoản thất bại.');
         } finally {
+            setIsBanning(false);
             setActionLoadingId(null);
         }
     };
@@ -339,9 +366,9 @@ export function AdminUsersPage() {
                                                                     <button
                                                                         onClick={() => {
                                                                             if (!accountId) return;
-                                                                            handleBan(accountId);
+                                                                            openBanModal(accountId);
                                                                         }}
-                                                                        disabled={!accountId || actionLoadingId === accountId}
+                                                                        disabled={!accountId}
                                                                         className="p-1 text-red-500 hover:text-red-600 disabled:opacity-50 cursor-pointer"
                                                                         title="Khóa tài khoản"
                                                                     >
@@ -410,6 +437,105 @@ export function AdminUsersPage() {
                     </div>
                 </div>
             </div>
+
+            {/* ══ Backdrop ══ */}
+            {!!banTargetId && (
+                <div
+                    className="fixed inset-0 bg-neutral-900/40 backdrop-blur-[2px] z-50"
+                    onClick={closeBanModal}
+                />
+            )}
+
+            {/* ══ Ban Modal ══ */}
+            {!!banTargetId && (
+                <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[460px] bg-white rounded-3xl shadow-2xl p-6 z-[60] flex flex-col gap-5">
+                    {/* Header */}
+                    <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-11 h-11 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center shrink-0">
+                                <ShieldOff className="w-5 h-5 text-red-500" />
+                            </div>
+                            <div>
+                                <h2 className="text-[16px] font-bold text-[#2D2D2D]">Khóa tài khoản</h2>
+                                <p className="text-[11px] text-[#ADADAD] font-medium mt-0.5">Chọn thời hạn khóa bên dưới</p>
+                            </div>
+                        </div>
+                        <button onClick={closeBanModal} className="text-neutral-400 hover:text-neutral-600 cursor-pointer mt-0.5">
+                            <X className="w-4.5 h-4.5" />
+                        </button>
+                    </div>
+
+                    {/* Presets */}
+                    <div className="space-y-1.5">
+                        <p className="text-[11px] font-bold text-neutral-400 uppercase">Chọn nhanh</p>
+                        <div className="grid grid-cols-3 gap-2">
+                            {BAN_PRESETS.map((p) => (
+                                <button
+                                    key={p.value}
+                                    onClick={() => { setBanPreset(p.value); setBanMinutes(p.value); }}
+                                    className={cn(
+                                        'py-2 rounded-xl border text-[12px] font-bold transition cursor-pointer',
+                                        banPreset === p.value
+                                            ? 'bg-red-500 border-red-500 text-white shadow-sm'
+                                            : 'bg-white border-neutral-200 text-neutral-600 hover:border-red-200 hover:text-red-500 hover:bg-red-50'
+                                    )}
+                                >
+                                    {p.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Custom input */}
+                    <div className="space-y-1.5">
+                        <p className="text-[11px] font-bold text-neutral-400 uppercase">Hoặc nhập số phút tùy chỉnh</p>
+                        <div className="flex items-center gap-2 bg-[#F8F9FA] rounded-xl px-3.5 py-2.5 border border-neutral-200 focus-within:border-red-300 transition">
+                            <Clock className="w-4 h-4 text-neutral-400 shrink-0" />
+                            <input
+                                type="number"
+                                min={1}
+                                placeholder="Ví dụ: 150"
+                                value={banMinutes}
+                                onChange={(e) => { setBanMinutes(e.target.value); setBanPreset('CUSTOM'); }}
+                                className="bg-transparent flex-1 outline-none text-[13px] font-bold text-[#2D2D2D] placeholder-neutral-300"
+                            />
+                            <span className="text-[11px] font-bold text-neutral-400">phút</span>
+                        </div>
+                        {banMinutes && Number(banMinutes) > 0 && (
+                            <p className="text-[11px] text-[#8B7CF6] font-semibold pl-1">
+                                ≈ {Math.floor(Number(banMinutes) / 60) > 0 ? `${Math.floor(Number(banMinutes) / 60)} giờ ` : ''}{Number(banMinutes) % 60 > 0 ? `${Number(banMinutes) % 60} phút` : ''}
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Error */}
+                    {banError && (
+                        <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 p-3">
+                            <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                            <span className="text-[12px] text-red-700 font-semibold">{banError}</span>
+                        </div>
+                    )}
+
+                    {/* Actions */}
+                    <div className="flex gap-3 pt-1 border-t border-neutral-100">
+                        <button
+                            onClick={closeBanModal}
+                            disabled={isBanning}
+                            className="flex-1 py-2.5 border border-neutral-200 hover:bg-neutral-50 rounded-xl text-xs font-bold text-neutral-500 transition cursor-pointer"
+                        >
+                            Hủy
+                        </button>
+                        <button
+                            onClick={handleBan}
+                            disabled={isBanning || !banMinutes}
+                            className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
+                        >
+                            {isBanning && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                            Xác nhận khóa
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
