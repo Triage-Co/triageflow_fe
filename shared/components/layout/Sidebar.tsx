@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-    Activity,
+    BarChart3,
     Bell,
     ChevronLeft,
     ChevronRight,
@@ -19,6 +19,9 @@ import {
     ShieldCheck,
     LogOut,
     User,
+    UserPlus,
+    Search,
+    Stethoscope,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { authService } from '@/shared/services/authService';
@@ -43,9 +46,11 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
         { label: 'Cài đặt', href: '/settings', icon: Settings },
     ],
     RECEPTIONIST: [
-        { label: 'Tiếp nhận', href: '/reception', icon: UserCheck },
-        { label: 'Bệnh nhân', href: '/patients', icon: Users },
+        { label: 'Tổng quan', href: '/reception', icon: LayoutDashboard },
+        { label: 'Đăng ký bệnh nhân', href: '/reception/register', icon: UserPlus },
+        { label: 'Tra cứu bệnh nhân', href: '/reception/search', icon: Search },
         { label: 'Thông báo', href: '/notifications', icon: Bell },
+        { label: 'Thống kê', href: '/reception/stats', icon: BarChart3 },
         { label: 'Cài đặt', href: '/settings', icon: Settings },
     ],
     LAB_STAFF: [
@@ -76,6 +81,17 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
     ],
 };
 
+const ROLE_LABELS: Record<string, string> = {
+    RECEPTIONIST: 'Lễ tân',
+    DOCTOR: 'Bác sĩ',
+    NURSE: 'Y tá',
+    ADMIN: 'Quản trị',
+    LAB_STAFF: 'Xét nghiệm',
+    PHARMACY_STAFF: 'Dược',
+    CASHIER: 'Thu ngân',
+    USER: 'Bệnh nhân',
+};
+
 export interface SidebarUser {
     name: string;
     role: string;
@@ -95,12 +111,20 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
     const { logout } = useAuthStore();
     const [internalCollapsed, setInternalCollapsed] = useState(false);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [avatarBroken, setAvatarBroken] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     const isCollapsed = collapsed !== undefined ? collapsed : internalCollapsed;
     const handleToggle = onToggle ?? (() => setInternalCollapsed(v => !v));
 
     const navItems = NAV_BY_ROLE[user?.role?.toUpperCase() ?? ''] ?? NAV_BY_ROLE.default;
+
+    const isNavItemActive = (href: string) => {
+        if (href === '/reception') {
+            return pathname === '/reception';
+        }
+        return pathname === href || pathname.startsWith(`${href}/`);
+    };
 
     // Handle click outside dropdown
     useEffect(() => {
@@ -114,6 +138,10 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    useEffect(() => {
+        setAvatarBroken(false);
+    }, [user?.avatar]);
+
     const handleLogout = () => {
         authService.logout();
         logout();
@@ -125,18 +153,18 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
         <aside
             className={cn(
                 'relative flex flex-col h-full bg-[#F5F2FF] shrink-0 select-none transition-all duration-300 ease-in-out overflow-hidden',
-                isCollapsed ? 'w-[52px]' : 'w-[220px]'
+                isCollapsed ? 'w-[56px]' : 'w-[248px]',
             )}
         >
             {/* ── Logo ──────────────────────────────────── */}
-            <div className="flex items-center gap-3 px-3 pt-5 pb-5 shrink-0 min-h-[72px]">
-                <div className="w-9 h-9 rounded-xl bg-[#8B7CF6] flex items-center justify-center shadow-md shadow-[#8B7CF6]/30 shrink-0">
-                    <Activity className="w-4 h-4 text-white" />
+            <div className="flex items-center gap-3 px-4 pt-6 pb-6 shrink-0">
+                <div className="w-10 h-10 rounded-[12px] bg-[#8B7CF6] flex items-center justify-center shadow-[0_4px_12px_rgba(139,124,246,0.35)] shrink-0">
+                    <Stethoscope className="w-[18px] h-[18px] text-white" strokeWidth={2.25} />
                 </div>
                 {!isCollapsed && (
-                    <div className="overflow-hidden">
-                        <p className="text-[13px] font-bold text-[#2D2D2D] leading-none whitespace-nowrap">TriageFlow</p>
-                        <p className="text-[10px] text-[#8B7CF6] font-semibold tracking-wider uppercase mt-0.5 whitespace-nowrap">
+                    <div className="overflow-hidden min-w-0">
+                        <p className="text-[15px] font-bold text-[#1F2937] leading-none whitespace-nowrap">TriageFlow</p>
+                        <p className="text-[10px] text-[#8B7CF6] font-semibold tracking-[0.08em] uppercase mt-1 whitespace-nowrap">
                             OPD SYSTEM
                         </p>
                     </div>
@@ -144,11 +172,10 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
             </div>
 
             {/* ── Nav ───────────────────────────────────── */}
-            <nav className="flex-1 flex flex-col gap-1 px-1.5 overflow-y-auto overflow-x-hidden">
+            <nav className="flex-1 flex flex-col gap-1.5 px-3 overflow-y-auto overflow-x-hidden">
                 {navItems.map((item) => {
                     const Icon = item.icon;
-                    const isActive =
-                        pathname === item.href || pathname.startsWith(item.href + '/');
+                    const isActive = isNavItemActive(item.href);
 
                     return (
                         <Link
@@ -156,14 +183,17 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
                             href={item.href}
                             title={isCollapsed ? item.label : undefined}
                             className={cn(
-                                'flex items-center gap-3 h-11 rounded-xl px-3 transition-all duration-200 text-[13px] font-medium',
-                                isCollapsed && 'justify-center px-0',
+                                'flex items-center gap-3 h-10 rounded-[12px] px-3 transition-all duration-200 text-[13px]',
+                                isCollapsed && 'justify-center px-0 w-10 mx-auto',
                                 isActive
-                                    ? 'bg-[#8B7CF6] text-white shadow-sm shadow-[#8B7CF6]/25'
-                                    : 'text-[#7B7B7B] hover:bg-[#8B7CF6]/10 hover:text-[#8B7CF6]'
+                                    ? 'bg-[#EDE9FE] text-[#8B7CF6] font-semibold shadow-[inset_0_0_0_1px_rgba(139,124,246,0.08)]'
+                                    : 'text-[#4B5563] font-medium hover:bg-[#8B7CF6]/10 hover:text-[#7C3AED]',
                             )}
                         >
-                            <Icon className="w-4.5 h-4.5 shrink-0" />
+                            <Icon
+                                className={cn('w-[18px] h-[18px] shrink-0', isActive ? 'text-[#8B7CF6]' : 'text-[#6B7280]')}
+                                strokeWidth={isActive ? 2.25 : 2}
+                            />
                             {!isCollapsed && (
                                 <span className="truncate whitespace-nowrap">{item.label}</span>
                             )}
@@ -194,20 +224,25 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
             </div>
 
             {/* ── User profile / footer section ────────── */}
-            <div className={cn('px-3 py-4 shrink-0 border-t border-[#8B7CF6]/10', isCollapsed && 'px-1.5')}>
+            <div className={cn('px-4 py-4 shrink-0 border-t border-[#8B7CF6]/10', isCollapsed && 'px-2')}>
                 <div className="relative" ref={dropdownRef}>
                     <button
                         onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                         className={cn(
-                            'flex items-center gap-3 w-full rounded-xl px-2 py-1.5 hover:bg-[#8B7CF6]/10 transition-colors',
-                            isDropdownOpen && 'bg-[#8B7CF6]/10',
-                            isCollapsed && 'justify-center px-0'
+                            'flex items-center gap-3 w-full rounded-[12px] px-2 py-2 hover:bg-[#EDE9FE]/60 transition-colors',
+                            isDropdownOpen && 'bg-[#EDE9FE]/60',
+                            isCollapsed && 'justify-center px-0',
                         )}
                     >
-                        <div className="w-9 h-9 rounded-full bg-[#8B7CF6]/20 flex items-center justify-center shrink-0 border-2 border-[#8B7CF6]/30 overflow-hidden">
-                            {user?.avatar ? (
+                        <div className="w-9 h-9 rounded-full bg-[#EDE9FE] flex items-center justify-center shrink-0 border border-[#8B7CF6]/20 overflow-hidden">
+                            {user?.avatar && !avatarBroken ? (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                                <img
+                                    src={user.avatar}
+                                    alt="Avatar"
+                                    className="w-full h-full object-cover"
+                                    onError={() => setAvatarBroken(true)}
+                                />
                             ) : (
                                 <User className="w-4 h-4 text-[#8B7CF6]" />
                             )}
@@ -217,8 +252,8 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
                                 <p className="text-[12px] font-bold text-[#2D2D2D] truncate">
                                     {user?.name || 'Nguyen Van A'}
                                 </p>
-                                <p className="text-[10px] text-[#7B7B7B] font-medium uppercase tracking-wider truncate mt-0.5">
-                                    {user?.role || 'Doctor'}
+                                <p className="text-[10px] text-[#7B7B7B] font-medium tracking-wide truncate mt-0.5">
+                                    {ROLE_LABELS[user?.role?.toUpperCase() ?? ''] || user?.role || 'Doctor'}
                                 </p>
                             </div>
                         )}

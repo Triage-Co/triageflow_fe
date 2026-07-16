@@ -315,6 +315,7 @@ triageflow_fe/
 │
 ├── docs/                             # ── Documentation ──
 │   ├── Structure.md                  # This file
+│   ├── API.md                        # Backend API integration guide
 │   └── SRS/
 │       └── SRS.md                    # Software Requirements Specification
 │
@@ -422,6 +423,15 @@ import { Button, Input, Card } from '@/shared/components/ui';
 | `reception` | `(staff)/reception` | UC-06/07/10: Reception workflow |
 | `cashier` | `(staff)/cashier` | UC-08/09: Cash & Refund |
 | `admin` | `(admin)/*` | UC-17/18: Monitoring & Config |
+
+---
+
+## Related Documentation
+
+| Document | Description |
+|----------|-------------|
+| [API.md](./API.md) | Backend endpoints, request/response schemas, auth flows, clinical mapping |
+| [SRS/SRS.md](./SRS/SRS.md) | Software Requirements Specification |
 
 ---
 

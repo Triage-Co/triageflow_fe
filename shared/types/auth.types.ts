@@ -38,14 +38,13 @@ export type StaffRole =
     | 'ADMIN';
 
 export interface RegisterRequest {
+    user_name: string;
     email: string;
-    full_name: string;
-    dob: string;          // Date format: DD-MM-YYYY
     password: string;
     gender: Gender;
-    citizen_id: string;
-    role: StaffRole;
-    phone?: string;
+    phone: string;
+    /** BE hiện không nhận field này — role gán phía server. */
+    role?: StaffRole;
 }
 
 export interface RegisterResponseData {

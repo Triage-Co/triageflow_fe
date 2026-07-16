@@ -125,8 +125,8 @@ export function OtpStep({ email, authToken, onVerified, onBack }: OtpStepProps) 
 
                 <button
                     type="submit"
-                    disabled={isPending || otp.length !== 8}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={isPending}
+                    className="flex w-full min-h-[48px] items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-3 text-base sm:text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 active:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 touch-manipulation cursor-pointer"
                 >
                     {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                     {isPending ? 'Đang xác thực...' : 'Xác nhận OTP'}

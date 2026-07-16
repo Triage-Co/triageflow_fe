@@ -153,3 +153,150 @@
     @apply font-sans;
   }
 }
+
+/* CCCD / VNeID QR scanner — html5-qrcode video preview */
+.cccd-qr-reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 0 !important;
+}
+
+.cccd-qr-reader > div {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 320px !important;
+  border: none !important;
+}
+
+.cccd-qr-reader #qr-shaded-region {
+  display: none !important;
+}
+
+.cccd-ekyc-reader,
+#ekyc_sdk_intergrated {
+  width: 100%;
+  min-height: 420px;
+  background: #fff;
+}
+
+/* Scanning animations */
+@keyframes cccd-scan-sweep {
+  0% {
+    top: 6%;
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    top: 92%;
+    opacity: 0.35;
+  }
+}
+
+@keyframes cccd-scan-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.55;
+  }
+}
+
+@keyframes cccd-frame-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(139, 124, 246, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 18px 4px rgba(139, 124, 246, 0.45);
+  }
+}
+
+@keyframes cccd-dots-blink {
+  0%,
+  20% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.2;
+  }
+}
+
+.cccd-scan-pulse-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #34d399;
+  box-shadow: 0 0 8px #34d399;
+  animation: cccd-scan-pulse 1.2s ease-in-out infinite;
+}
+
+.cccd-scan-dots {
+  animation: cccd-dots-blink 1.4s ease-in-out infinite;
+}
+
+.cccd-scan-line {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    #a78bfa 20%,
+    #8b7cf6 50%,
+    #a78bfa 80%,
+    transparent
+  );
+  box-shadow: 0 0 10px #8b7cf6, 0 0 20px rgba(139, 124, 246, 0.5);
+  animation: cccd-scan-sweep 2s ease-in-out infinite;
+}
+
+.cccd-scan-frame-glow {
+  animation: cccd-frame-glow 2s ease-in-out infinite;
+}
+
+.cccd-scan-corner {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border-color: #8b7cf6;
+  border-style: solid;
+}
+
+.cccd-scan-corner-tl {
+  top: 0;
+  left: 0;
+  border-width: 4px 0 0 4px;
+  border-radius: 8px 0 0 0;
+}
+
+.cccd-scan-corner-tr {
+  top: 0;
+  right: 0;
+  border-width: 4px 4px 0 0;
+  border-radius: 0 8px 0 0;
+}
+
+.cccd-scan-corner-bl {
+  bottom: 0;
+  left: 0;
+  border-width: 0 0 4px 4px;
+  border-radius: 0 0 0 8px;
+}
+
+.cccd-scan-corner-br {
+  bottom: 0;
+  right: 0;
+  border-width: 0 4px 4px 0;
+  border-radius: 0 0 8px 0;
+}

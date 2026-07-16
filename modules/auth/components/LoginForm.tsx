@@ -11,6 +11,10 @@ import { OtpStep } from './OtpStep';
 // Flag stored in localStorage after first successful OTP verify
 const otpFlagKey = (email: string) => `tfopd_otp_verified_${email}`;
 
+function getPostLoginPath(role: string) {
+    return role.toUpperCase() === 'RECEPTIONIST' ? '/reception' : '/doctor';
+}
+
 export function LoginForm() {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
@@ -63,9 +67,17 @@ export function LoginForm() {
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         setError(null);
+
+        const trimmedEmail = email.trim();
+        const trimmedPassword = password.trim();
+        if (!trimmedEmail || !trimmedPassword) {
+            setError('Vui lòng nhập email và mật khẩu.');
+            return;
+        }
+
         startTransition(async () => {
             try {
-                const loginRes = await authService.login({ email, password });
+                const loginRes = await authService.login({ email: trimmedEmail, password: trimmedPassword });
                 const { token, refreshToken, username, role } = loginRes.data;
 
                 // Store user profile + tokens (fetching real profile inside)
@@ -73,7 +85,7 @@ export function LoginForm() {
 
                 // Skip OTP if this email has already been verified before
                 if (localStorage.getItem(otpFlagKey(email))) {
-                    router.push('/doctor');
+                    router.push(getPostLoginPath(role));
                     return;
                 }
 
@@ -92,7 +104,7 @@ export function LoginForm() {
         if (data.username && data.role) {
             await completeLogin(data.token, data.refreshToken, data.username, data.role);
         }
-        router.push('/doctor');
+        router.push(getPostLoginPath(data.role ?? ''));
     }
 
     if (step === 'otp') {
@@ -127,21 +139,23 @@ export function LoginForm() {
                 </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+            <form onSubmit={handleSubmit} method="post" className="space-y-5" noValidate>
                 <div className="space-y-1.5">
                     <label htmlFor="email" className="block text-sm font-medium text-neutral-700">
                         Email
                     </label>
                     <input
                         id="email"
+                        name="email"
                         type="email"
                         autoComplete="email"
                         required
                         placeholder="doctor@hospital.vn"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
+                        onInput={(e) => setEmail((e.target as HTMLInputElement).value)}
                         disabled={isPending}
-                        className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-neutral-900 placeholder-neutral-400 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
+                        className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-3 text-base sm:text-sm sm:py-2.5 text-neutral-900 placeholder-neutral-400 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
                     />
                 </div>
 
@@ -152,17 +166,23 @@ export function LoginForm() {
                     <div className="relative">
                         <input
                             id="password"
+                            name="password"
                             type={showPassword ? 'text' : 'password'}
                             autoComplete="current-password"
                             required
                             placeholder="..."
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
+                            onInput={(e) => setPassword((e.target as HTMLInputElement).value)}
                             disabled={isPending}
-                            className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 pr-11 text-sm text-neutral-900 placeholder-neutral-400 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
+                            className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-3 pr-12 text-base sm:text-sm sm:py-2.5 text-neutral-900 placeholder-neutral-400 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
                         />
-                        <button type="button" tabIndex={-1} onClick={() => setShowPassword((v) => !v)}
-                            className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-neutral-400 hover:text-neutral-600">
+                        <button
+                            type="button"
+                            tabIndex={-1}
+                            onClick={() => setShowPassword((v) => !v)}
+                            className="absolute inset-y-0 right-0 flex min-w-[44px] items-center justify-center text-neutral-400 hover:text-neutral-600 touch-manipulation"
+                        >
                             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
                     </div>
@@ -181,8 +201,8 @@ export function LoginForm() {
 
                 <button
                     type="submit"
-                    disabled={isPending || !email || !password}
-                    className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={isPending}
+                    className="mt-1 flex w-full min-h-[48px] items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-3 text-base sm:text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 active:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 touch-manipulation cursor-pointer relative z-10"
                 >
                     {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                     {isPending ? 'Đang xác thực...' : 'Tiếp tục'}

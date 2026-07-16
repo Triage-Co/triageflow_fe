@@ -1,5 +1,5 @@
-import { DoctorDashboard } from '@/modules/clinical/components/DoctorDashboard';
+import { ReceptionDashboard } from '@/modules/reception/components/ReceptionDashboard';
 
 export default function ReceptionPage() {
-    return <DoctorDashboard />;
+    return <ReceptionDashboard />;
 }

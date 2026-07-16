@@ -7,6 +7,7 @@ import {
     Eye, EyeOff, Cross, AlertCircle, Loader2, CheckCircle2,
 } from 'lucide-react';
 import { authService } from '@/modules/auth/services/authService';
+import { buildUserNameFromFullName } from '@/shared/utils/userName';
 import type { Gender, StaffRole } from '@/shared/types/auth.types';
 
 interface FormState {
@@ -70,26 +71,22 @@ export function RegisterForm() {
             setError('Số CCCD/CMND không hợp lệ.');
             return;
         }
-
-        const formatDob = (ymdDate: string) => {
-            const parts = ymdDate.split('-');
-            if (parts.length === 3) {
-                return `${parts[2]}-${parts[1]}-${parts[0]}`;
-            }
-            return ymdDate;
-        };
+        if (!form.phone.trim() || form.phone.replace(/\D/g, '').length < 9) {
+            setError('Vui lòng nhập số điện thoại hợp lệ.');
+            return;
+        }
 
         startTransition(async () => {
             try {
                 await authService.register({
+                    user_name: buildUserNameFromFullName(
+                        form.fullName,
+                        form.email.split('@')[0] || 'user',
+                    ),
                     email: form.email,
-                    full_name: form.fullName,
-                    dob: formatDob(form.dob),
                     password: form.password,
                     gender: form.gender,
-                    citizen_id: form.citizen_id,
-                    role: form.role,
-                    phone: form.phone || undefined,
+                    phone: form.phone.trim(),
                 });
                 setStep('success');
             } catch (err) {
