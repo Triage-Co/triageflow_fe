@@ -61,6 +61,14 @@ const displayGender = (genderVal?: string) => {
     return 'Khác';
 };
 
+const getCompactPages = (totalPages: number): Array<number | 'ellipsis'> => {
+    if (totalPages <= 6) {
+        return Array.from({ length: totalPages }, (_, idx) => idx + 1);
+    }
+
+    return [1, 2, 'ellipsis', totalPages - 1, totalPages];
+};
+
 /* ─── Component ──────────────────────────────────────────────────────────── */
 
 export function AdminUsersPage() {
@@ -87,10 +95,10 @@ export function AdminUsersPage() {
 
     const BAN_PRESETS = [
         { label: '30 phút', value: '30' },
-        { label: '1 giờ',   value: '60' },
-        { label: '3 giờ',   value: '180' },
-        { label: '1 ngày',  value: '1440' },
-        { label: '7 ngày',  value: '10080' },
+        { label: '1 giờ', value: '60' },
+        { label: '3 giờ', value: '180' },
+        { label: '1 ngày', value: '1440' },
+        { label: '7 ngày', value: '10080' },
         { label: '30 ngày', value: '43200' },
     ];
 
@@ -409,19 +417,23 @@ export function AdminUsersPage() {
                                         >
                                             Trước
                                         </button>
-                                        {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((p) => (
-                                            <button
-                                                key={p}
-                                                onClick={() => setCurrentPage(p)}
-                                                className={cn(
-                                                    "w-8 h-8 flex items-center justify-center text-xs font-bold rounded-lg border transition cursor-pointer",
-                                                    currentPage === p
-                                                        ? "bg-[#8B7CF6] border-[#8B7CF6] text-white"
-                                                        : "bg-white border-[#EBEBEB] text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6]"
-                                                )}
-                                            >
-                                                {p}
-                                            </button>
+                                        {getCompactPages(totalPages).map((page, idx) => (
+                                            page === 'ellipsis' ? (
+                                                <span key={`ellipsis-${idx}`} className="px-1 text-sm font-bold text-[#ADADAD] select-none">...</span>
+                                            ) : (
+                                                <button
+                                                    key={page}
+                                                    onClick={() => setCurrentPage(page)}
+                                                    className={cn(
+                                                        "w-8 h-8 flex items-center justify-center text-xs font-bold rounded-lg border transition cursor-pointer",
+                                                        currentPage === page
+                                                            ? "bg-[#8B7CF6] border-[#8B7CF6] text-white"
+                                                            : "bg-white border-[#EBEBEB] text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6]"
+                                                    )}
+                                                >
+                                                    {page}
+                                                </button>
+                                            )
                                         ))}
                                         <button
                                             onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}

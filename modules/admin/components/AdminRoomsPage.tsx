@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
     Search,
     Plus,
@@ -12,36 +13,58 @@ import {
     Pencil,
     Trash2,
     AlertTriangle,
+    Eye,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRoomStore } from '../store/roomStore';
 import { useAuthStore } from '@/modules/auth/store/authStore';
-import type { HospitalRoom } from '../types/room.types';
+import type { HospitalRoom, Specialty } from '../types/room.types';
 
-/* ─── Specialty Mapping Dictionary ─────────────────────────────────────────── */
+/* ─── Specialty Helpers ─────────────────────────────────────────────────────── */
 
-export const SPECIALTY_MAP: Record<string, { name: string; color: string; bg: string; border: string }> = {
-    '67906e4a-2a6f-4760-a794-e17c24924c80': { name: 'Khoa Nội tổng quát', color: 'text-[#1E78FF]', bg: 'bg-[#E8F1FF]', border: 'border-[#D0E2FF]' },
-    '344d49b9-e191-4a85-8bbd-09afe8315b70': { name: 'Khoa Ngoại tổng quát', color: 'text-[#8B7CF6]', bg: 'bg-[#F5F2FF]', border: 'border-[#E0DCFB]' },
-    'f4825efc-8ba7-4db2-a994-94d3bcabc835': { name: 'Khoa Nhi', color: 'text-[#D81B60]', bg: 'bg-[#FCE4EC]', border: 'border-[#F8BBD0]' },
-    'ac75f9ca-4079-4d65-bf0b-474334af3f68': { name: 'Khoa Tai Mũi Họng', color: 'text-[#00ACC1]', bg: 'bg-[#E0F7FA]', border: 'border-[#B2EBF2]' },
-    '082650f9-be60-48c3-8039-f6d48ad11144': { name: 'Khoa Răng Hàm Mặt', color: 'text-[#43A047]', bg: 'bg-[#E8F5E9]', border: 'border-[#C8E6C9]' },
+/** Trả về tên chuyên khoa từ nested specialty object, fallback lookup trong danh sách chuyên khoa */
+const getSpecialtyName = (room: HospitalRoom, specialties: Specialty[]): string => {
+    if (room.specialty?.specialty_name) return room.specialty.specialty_name;
+    const found = specialties.find((s) => s.specialty_id === room.specialty_id);
+    if (found?.specialty_name) return found.specialty_name;
+    if (room.specialty?.specialty_code) return room.specialty.specialty_code;
+    if (found?.specialty_code) return found.specialty_code;
+    return `ID: ${room.specialty_id.slice(0, 8)}…`;
 };
 
-const getSpecialtyDetails = (id: string) => {
-    return SPECIALTY_MAP[id] || {
-        name: `Chuyên khoa ${id.slice(0, 8)}`,
-        color: 'text-neutral-500',
-        bg: 'bg-neutral-50',
-        border: 'border-neutral-200'
-    };
+/** Trả về mã chuyên khoa từ nested specialty object, fallback lookup trong danh sách chuyên khoa */
+const getSpecialtyCode = (room: HospitalRoom, specialties: Specialty[]): string => {
+    if (room.specialty?.specialty_code) return room.specialty.specialty_code;
+    const found = specialties.find((s) => s.specialty_id === room.specialty_id);
+    if (found?.specialty_code) return found.specialty_code;
+    return 'N/A';
+};
+
+const getCompactPages = (totalPages: number): Array<number | 'ellipsis'> => {
+    if (totalPages <= 6) {
+        return Array.from({ length: totalPages }, (_, idx) => idx + 1);
+    }
+
+    return [1, 2, 'ellipsis', totalPages - 1, totalPages];
 };
 
 /* ─── Component ──────────────────────────────────────────────────────────── */
 
 export function AdminRoomsPage() {
+    const router = useRouter();
     const accessToken = useAuthStore((s) => s.accessToken);
-    const { rooms, isLoading, error, fetchRooms, createRoom, updateRoom, deleteRoom, clearError } = useRoomStore();
+    const {
+        rooms,
+        specialties,
+        isLoading,
+        error,
+        fetchRooms,
+        fetchSpecialties,
+        createRoom,
+        updateRoom,
+        deleteRoom,
+        clearError,
+    } = useRoomStore();
 
     const [searchQuery, setSearchQuery] = useState('');
     const [specialtyFilter, setSpecialtyFilter] = useState('ALL');
@@ -56,7 +79,7 @@ export function AdminRoomsPage() {
     const [createError, setCreateError] = useState<string | null>(null);
     const [createForm, setCreateForm] = useState({
         room_name: '',
-        specialty_id: '67906e4a-2a6f-4760-a794-e17c24924c80',
+        specialty_id: '',
         custom_specialty_id: '',
     });
 
@@ -78,17 +101,17 @@ export function AdminRoomsPage() {
     useEffect(() => {
         if (accessToken) {
             fetchRooms(accessToken);
+            fetchSpecialties(accessToken);
         }
-    }, [accessToken, fetchRooms]);
+    }, [accessToken, fetchRooms, fetchSpecialties]);
 
     /* ── Helpers ─────────────────────────────────────────────── */
 
     const openEditModal = (room: HospitalRoom) => {
-        const isKnown = Object.keys(SPECIALTY_MAP).includes(room.specialty_id);
         setEditForm({
             room_name: room.room_name,
-            specialty_id: isKnown ? room.specialty_id : 'CUSTOM',
-            custom_specialty_id: isKnown ? '' : room.specialty_id,
+            specialty_id: room.specialty_id,
+            custom_specialty_id: '',
         });
         setEditError(null);
         setEditingRoom(room);
@@ -116,7 +139,11 @@ export function AdminRoomsPage() {
         try {
             await createRoom({ room_name: createForm.room_name, specialty_id: specId }, accessToken || '');
             setIsCreateModalOpen(false);
-            setCreateForm({ room_name: '', specialty_id: '67906e4a-2a6f-4760-a794-e17c24924c80', custom_specialty_id: '' });
+            setCreateForm({ room_name: '', specialty_id: specialties[0]?.specialty_id || '', custom_specialty_id: '' });
+            // Refetch to sync updated relationship from database
+            if (accessToken) {
+                await fetchRooms(accessToken);
+            }
         } catch (err) {
             setCreateError(err instanceof Error ? err.message : 'Tạo phòng khám thất bại.');
         } finally {
@@ -141,6 +168,10 @@ export function AdminRoomsPage() {
         try {
             await updateRoom(editingRoom.room_id, { room_name: editForm.room_name, specialty_id: specId }, accessToken || '');
             setEditingRoom(null);
+            // Refetch to sync updated relationship from database
+            if (accessToken) {
+                await fetchRooms(accessToken);
+            }
         } catch (err) {
             setEditError(err instanceof Error ? err.message : 'Cập nhật phòng khám thất bại.');
         } finally {
@@ -178,8 +209,12 @@ export function AdminRoomsPage() {
         return matchesSearch && matchesSpecialty;
     });
 
-    const totalPages = Math.ceil(filteredRooms.length / ITEMS_PER_PAGE);
-    const paginatedRooms = filteredRooms.slice(
+    const sortedRooms = [...filteredRooms].sort((a, b) =>
+        a.room_name.localeCompare(b.room_name, undefined, { numeric: true, sensitivity: 'base' })
+    );
+
+    const totalPages = Math.ceil(sortedRooms.length / ITEMS_PER_PAGE);
+    const paginatedRooms = sortedRooms.slice(
         (currentPage - 1) * ITEMS_PER_PAGE,
         currentPage * ITEMS_PER_PAGE
     );
@@ -200,7 +235,14 @@ export function AdminRoomsPage() {
                                 </h1>
                             </div>
                             <button
-                                onClick={() => setIsCreateModalOpen(true)}
+                                onClick={() => {
+                                    setIsCreateModalOpen(true);
+                                    setCreateForm({
+                                        room_name: '',
+                                        specialty_id: specialties[0]?.specialty_id || '',
+                                        custom_specialty_id: '',
+                                    });
+                                }}
                                 className="flex items-center gap-2 px-4 py-2.5 bg-[#8B7CF6] hover:bg-[#7a6ae5] text-white text-[13px] font-bold rounded-xl transition-all shadow-sm cursor-pointer"
                             >
                                 <Plus className="w-4 h-4" />
@@ -233,11 +275,13 @@ export function AdminRoomsPage() {
                                     <select
                                         value={specialtyFilter}
                                         onChange={(e) => { setSpecialtyFilter(e.target.value); setCurrentPage(1); }}
-                                        className="w-full text-xs text-[#2D2D2D] border border-neutral-200 rounded-xl px-3 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold"
+                                        className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
                                     >
                                         <option value="ALL">Tất cả chuyên khoa</option>
-                                        {Object.entries(SPECIALTY_MAP).map(([id, info]) => (
-                                            <option key={id} value={id}>{info.name}</option>
+                                        {specialties.map((sp) => (
+                                            <option key={sp.specialty_id} value={sp.specialty_id}>
+                                                {sp.specialty_name || sp.specialty_code}
+                                            </option>
                                         ))}
                                     </select>
                                 </div>
@@ -268,59 +312,62 @@ export function AdminRoomsPage() {
                                 <table className="w-full text-left">
                                     <thead>
                                         <tr className="bg-neutral-50/80 border-b border-[#EBEBEB]">
+                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider w-[80px]">STT</th>
                                             <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Tên phòng</th>
-                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Chuyên khoa</th>
-                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Mã Room ID</th>
-                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Mã Physical Room</th>
-                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider text-right">Thao tác</th>
+                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Tên chuyên khoa</th>
+                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Mã chuyên khoa</th>
+                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider text-right w-[150px]">Thao tác</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-neutral-100">
-                                        {paginatedRooms.map((room, index) => {
-                                            const specInfo = getSpecialtyDetails(room.specialty_id);
-                                            return (
-                                                <tr key={room.room_id || index} className="hover:bg-neutral-50/50 transition-colors group">
-                                                    <td className="px-5 py-4">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-9 h-9 rounded-xl bg-[#F5F2FF] border border-[#E0DCFB] flex items-center justify-center shrink-0">
-                                                                <Home className="w-4 h-4 text-[#8B7CF6]" />
-                                                            </div>
-                                                            <span className="text-[13px] font-bold text-[#2D2D2D]">{room.room_name}</span>
+                                        {paginatedRooms.map((room, index) => (
+                                            <tr key={room.room_id || index} className="hover:bg-neutral-50/50 transition-colors group">
+                                                <td className="px-5 py-4 text-[13px] font-semibold text-[#7B7B7B]">
+                                                    {(currentPage - 1) * ITEMS_PER_PAGE + index + 1}
+                                                </td>
+                                                <td className="px-5 py-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-9 h-9 rounded-xl bg-[#F5F2FF] border border-[#E0DCFB] flex items-center justify-center shrink-0">
+                                                            <Home className="w-4 h-4 text-[#8B7CF6]" />
                                                         </div>
-                                                    </td>
-                                                    <td className="px-5 py-4">
-                                                        <span className={cn(
-                                                            'inline-flex items-center text-[10px] font-bold px-3 py-1 rounded-full border',
-                                                            specInfo.color, specInfo.bg, specInfo.border
-                                                        )}>
-                                                            {specInfo.name}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-5 py-4 text-[12px] text-[#7B7B7B] font-mono">{room.room_id}</td>
-                                                    <td className="px-5 py-4 text-[12px] text-neutral-400 font-medium">
-                                                        {room.physical_room_id || 'Chưa liên kết bản đồ'}
-                                                    </td>
-                                                    <td className="px-5 py-4">
-                                                        <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <button
-                                                                onClick={() => openEditModal(room)}
-                                                                title="Chỉnh sửa phòng"
-                                                                className="w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-400 hover:text-[#8B7CF6] hover:border-[#8B7CF6]/30 hover:bg-[#F5F2FF] transition cursor-pointer"
-                                                            >
-                                                                <Pencil className="w-3.5 h-3.5" />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => openDeleteModal(room)}
-                                                                title="Xóa phòng"
-                                                                className="w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition cursor-pointer"
-                                                            >
-                                                                <Trash2 className="w-3.5 h-3.5" />
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
+                                                        <span className="text-[13px] font-bold text-[#2D2D2D]">{room.room_name}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-5 py-4">
+                                                    <span className="inline-flex items-center text-[10px] font-bold px-3 py-1 rounded-full border bg-[#F5F2FF] text-[#8B7CF6] border-[#E0DCFB] w-fit">
+                                                        {getSpecialtyName(room, specialties)}
+                                                    </span>
+                                                </td>
+                                                <td className="px-5 py-4 text-[12px] text-[#7B7B7B] font-mono">
+                                                    {getSpecialtyCode(room, specialties)}
+                                                </td>
+                                                <td className="px-5 py-4">
+                                                    <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button
+                                                            onClick={() => router.push(`/admin/rooms/${room.room_id}`)}
+                                                            title="Xem chi tiết phòng"
+                                                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-400 hover:text-[#8B7CF6] hover:border-[#8B7CF6]/30 hover:bg-[#F5F2FF] transition cursor-pointer"
+                                                        >
+                                                            <Eye className="w-3.5 h-3.5" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => openEditModal(room)}
+                                                            title="Chỉnh sửa phòng"
+                                                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-400 hover:text-[#8B7CF6] hover:border-[#8B7CF6]/30 hover:bg-[#F5F2FF] transition cursor-pointer"
+                                                        >
+                                                            <Pencil className="w-3.5 h-3.5" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => openDeleteModal(room)}
+                                                            title="Xóa phòng"
+                                                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition cursor-pointer"
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
                                     </tbody>
                                 </table>
                             )}
@@ -347,19 +394,23 @@ export function AdminRoomsPage() {
                                         >
                                             Trước
                                         </button>
-                                        {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((p) => (
-                                            <button
-                                                key={p}
-                                                onClick={() => setCurrentPage(p)}
-                                                className={cn(
-                                                    'w-8 h-8 flex items-center justify-center text-xs font-bold rounded-lg border transition cursor-pointer',
-                                                    currentPage === p
-                                                        ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white'
-                                                        : 'bg-white border-[#EBEBEB] text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6]'
-                                                )}
-                                            >
-                                                {p}
-                                            </button>
+                                        {getCompactPages(totalPages).map((page, idx) => (
+                                            page === 'ellipsis' ? (
+                                                <span key={`ellipsis-${idx}`} className="px-1 text-sm font-bold text-[#ADADAD] select-none">...</span>
+                                            ) : (
+                                                <button
+                                                    key={page}
+                                                    onClick={() => setCurrentPage(page)}
+                                                    className={cn(
+                                                        'w-8 h-8 flex items-center justify-center text-xs font-bold rounded-lg border transition cursor-pointer',
+                                                        currentPage === page
+                                                            ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white'
+                                                            : 'bg-white border-[#EBEBEB] text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6]'
+                                                    )}
+                                                >
+                                                    {page}
+                                                </button>
+                                            )
                                         ))}
                                         <button
                                             onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
@@ -427,8 +478,10 @@ export function AdminRoomsPage() {
                                 onChange={(e) => setCreateForm(prev => ({ ...prev, specialty_id: e.target.value }))}
                                 className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
                             >
-                                {Object.entries(SPECIALTY_MAP).map(([id, info]) => (
-                                    <option key={id} value={id}>{info.name}</option>
+                                {specialties.map((sp) => (
+                                    <option key={sp.specialty_id} value={sp.specialty_id}>
+                                        {sp.specialty_name || sp.specialty_code}
+                                    </option>
                                 ))}
                                 <option value="CUSTOM">Khác (Nhập mã ID thủ công)...</option>
                             </select>
@@ -505,8 +558,10 @@ export function AdminRoomsPage() {
                                 onChange={(e) => setEditForm(prev => ({ ...prev, specialty_id: e.target.value }))}
                                 className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
                             >
-                                {Object.entries(SPECIALTY_MAP).map(([id, info]) => (
-                                    <option key={id} value={id}>{info.name}</option>
+                                {specialties.map((sp) => (
+                                    <option key={sp.specialty_id} value={sp.specialty_id}>
+                                        {sp.specialty_name || sp.specialty_code}
+                                    </option>
                                 ))}
                                 <option value="CUSTOM">Khác (Nhập mã ID thủ công)...</option>
                             </select>

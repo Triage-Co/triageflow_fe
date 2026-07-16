@@ -20,9 +20,9 @@ import {
     Activity,
     Map,
     Cpu,
-    FileText,
     Home,
     ListOrdered,
+    CalendarClock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { authService } from '@/shared/services/authService';
@@ -76,7 +76,8 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
         { label: 'Quy trình khám bệnh', href: '/admin/process', icon: Stethoscope },
         { label: 'Quản lý người dùng', href: '/admin/users', icon: Users },
         { label: 'Quản lý phòng khám', href: '/admin/rooms', icon: Home },
-        { label: 'Nhật ký kiểm toán', href: '/admin/audit', icon: FileText },
+        { label: 'Quản lý nhân viên', href: '/admin/staff', icon: UserCheck },
+        { label: 'Ca trực', href: '/admin/shift', icon: CalendarClock },
         { label: 'Cài đặt', href: '/admin/settings', icon: Settings },
     ],
     default: [

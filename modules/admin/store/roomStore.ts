@@ -1,16 +1,18 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import type { HospitalRoom, CreateRoomDto, UpdateRoomDto } from '../types/room.types';
+import type { HospitalRoom, CreateRoomDto, UpdateRoomDto, Specialty } from '../types/room.types';
 import { roomService } from '../services/roomService';
 
 export interface RoomState {
     rooms: HospitalRoom[];
+    specialties: Specialty[];
     isLoading: boolean;
     error: string | null;
 }
 
 export interface RoomActions {
     fetchRooms: (token: string) => Promise<void>;
+    fetchSpecialties: (token: string) => Promise<void>;
     createRoom: (data: CreateRoomDto, token: string) => Promise<void>;
     updateRoom: (id: string, data: UpdateRoomDto, token: string) => Promise<void>;
     deleteRoom: (id: string, token: string) => Promise<void>;
@@ -21,6 +23,7 @@ type RoomStore = RoomState & RoomActions;
 
 const initialState: RoomState = {
     rooms: [],
+    specialties: [],
     isLoading: false,
     error: null,
 };
@@ -40,6 +43,19 @@ export const useRoomStore = create<RoomStore>()(
                         error: err instanceof Error ? err.message : 'Không thể tải danh sách phòng bệnh.',
                         isLoading: false,
                     }, false, 'fetchRooms/failure');
+                }
+            },
+
+            fetchSpecialties: async (token: string) => {
+                set({ isLoading: true, error: null }, false, 'fetchSpecialties/pending');
+                try {
+                    const res = await roomService.getSpecialties(token);
+                    set({ specialties: res.data || [], isLoading: false }, false, 'fetchSpecialties/success');
+                } catch (err) {
+                    set({
+                        error: err instanceof Error ? err.message : 'Không thể tải danh sách chuyên khoa.',
+                        isLoading: false,
+                    }, false, 'fetchSpecialties/failure');
                 }
             },
 

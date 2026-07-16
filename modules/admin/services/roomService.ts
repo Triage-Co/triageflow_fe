@@ -1,5 +1,5 @@
 import { apiClient } from '@/shared/services/apiClient';
-import type { HospitalRoom, CreateRoomDto, UpdateRoomDto } from '../types/room.types';
+import type { HospitalRoom, CreateRoomDto, UpdateRoomDto, Specialty } from '../types/room.types';
 
 export const roomService = {
     getRooms: async (token: string) => {
@@ -28,6 +28,12 @@ export const roomService = {
 
     deleteRoom: async (id: string, token: string) => {
         return apiClient.delete<void>(`/api/room/${id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+    },
+
+    getSpecialties: async (token: string) => {
+        return apiClient.get<Specialty[]>('/api/specialty', {
             headers: { Authorization: `Bearer ${token}` },
         });
     },
