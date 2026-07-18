@@ -17,6 +17,12 @@ import {
     LogOut,
     User,
     Stethoscope,
+    Activity,
+    Map,
+    Cpu,
+    Home,
+    ListOrdered,
+    CalendarClock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { authService } from '@/shared/services/authService';
@@ -62,8 +68,16 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
         { label: 'Cài đặt', href: '/settings', icon: Settings },
     ],
     ADMIN: [
-        { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-        { label: 'Người dùng', href: '/admin/users', icon: Users },
+        { label: 'Tổng quan', href: '/dashboard', icon: LayoutDashboard },
+        { label: 'Biểu đồ nhiệt', href: '/admin/heatmap', icon: Activity },
+        { label: 'Cấu hình bản đồ', href: '/admin/map', icon: Map },
+        { label: 'Hàng chờ bệnh nhân', href: '/admin/queue', icon: ListOrdered },
+        { label: 'Cấu hình AI', href: '/admin/ai-config', icon: Cpu },
+        { label: 'Quy trình khám bệnh', href: '/admin/process', icon: Stethoscope },
+        { label: 'Quản lý người dùng', href: '/admin/users', icon: Users },
+        { label: 'Quản lý phòng khám', href: '/admin/rooms', icon: Home },
+        { label: 'Quản lý nhân viên', href: '/admin/staff', icon: UserCheck },
+        { label: 'Ca trực', href: '/admin/shift', icon: CalendarClock },
         { label: 'Cài đặt', href: '/admin/settings', icon: Settings },
     ],
     default: [
