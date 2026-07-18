@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { X, List } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { usePatientTabsStore } from '@/modules/clinical/store/clinicalStore';
 
 interface EMRHeaderProps {
     activeTabId: string; // 'dashboard' or patient.id
@@ -13,96 +14,86 @@ interface EMRHeaderProps {
 
 export function EMRHeader({ activeTabId, activeTabName }: EMRHeaderProps) {
     const router = useRouter();
-    const [tabs, setTabs] = useState<{ id: string; name: string }[]>([]);
+    const { openTabs, openTab, closeTab } = usePatientTabsStore();
+    const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
-        // Load tabs from localStorage or fallback to empty array
-        const stored = localStorage.getItem('emr_patient_tabs');
-        let currentTabs: { id: string; name: string }[] = [];
-        if (stored) {
-            try {
-                currentTabs = JSON.parse(stored);
-            } catch {
-                // ignore
-            }
-        }
+        const timer = setTimeout(() => {
+            setMounted(true);
+        }, 0);
+        return () => clearTimeout(timer);
+    }, []);
+
+    useEffect(() => {
+        if (!mounted) return;
 
         // If currently viewing a patient detail page, ensure this tab is open
         if (activeTabId && activeTabId !== 'dashboard') {
-            const tabIndex = currentTabs.findIndex((t) => t.id === activeTabId);
-            if (tabIndex >= 0) {
-                // If tab exists, but has a placeholder name or different name, update it
-                const existingTab = currentTabs[tabIndex];
-                if (activeTabName && (existingTab.name.startsWith('Bệnh nhân ') || existingTab.name === activeTabId || existingTab.name !== activeTabName)) {
-                    currentTabs = [...currentTabs];
-                    currentTabs[tabIndex] = { ...existingTab, name: activeTabName };
-                    localStorage.setItem('emr_patient_tabs', JSON.stringify(currentTabs));
-                }
-            } else {
-                // Tab does not exist, add it
-                const patientName = activeTabName || `Bệnh nhân ${activeTabId}`;
-                const updatedTabs = [...currentTabs, { id: activeTabId, name: patientName }];
-                currentTabs = updatedTabs;
-                localStorage.setItem('emr_patient_tabs', JSON.stringify(updatedTabs));
+            const isUuid = (str: string) => /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(str);
+            let patientName = activeTabName;
+            if (!patientName || isUuid(patientName) || patientName === `Bệnh nhân ${activeTabId}` || patientName.includes(activeTabId)) {
+                patientName = 'Bệnh nhân';
             }
+            const timer = setTimeout(() => {
+                openTab({ id: activeTabId, name: patientName });
+            }, 0);
+            return () => clearTimeout(timer);
         }
-
-        const timer = setTimeout(() => {
-            setTabs(currentTabs);
-        }, 0);
-        return () => clearTimeout(timer);
-    }, [activeTabId, activeTabName]);
+    }, [activeTabId, activeTabName, openTab, mounted]);
 
     const handleCloseTab = (e: React.MouseEvent, tabId: string) => {
         e.preventDefault();
         e.stopPropagation();
 
-        const newTabs = tabs.filter((t) => t.id !== tabId);
-        setTabs(newTabs);
-        localStorage.setItem('emr_patient_tabs', JSON.stringify(newTabs));
+        closeTab(tabId);
 
         if (tabId === activeTabId) {
-            router.push('/reception');
+            router.push('/doctor');
         }
     };
 
+    const tabsToRender = mounted ? openTabs : [];
+    const isDashboardActive = activeTabId === 'dashboard';
+
     return (
-        <header className="flex items-end h-10 bg-[#8B7CF6] shrink-0 select-none">
-            {/* Patient list dashboard tab on the left */}
+        <header className="flex items-end h-10 bg-[#8B7CF6] shrink-0 select-none overflow-hidden">
+            {/* Merged tabs container without gaps */}
             <div className="flex items-end h-full">
                 <Link
-                    href="/reception"
+                    href="/doctor"
                     className={cn(
-                        'relative h-10 w-12 flex items-center justify-center rounded-t-[12px] transition-all duration-200 mr-1',
-                        'bg-white text-[#8B7CF6] after:content-[\'\'] after:absolute after:bottom-0 after:left-full after:w-4 after:h-4 after:bg-transparent after:rounded-bl-[16px] after:shadow-[-4px_4px_0_4px_#ffffff]'
-                        // Always white to merge with LeftPatientPanel/PatientList container below
+                        'relative h-10 w-12 flex items-center justify-center rounded-t-[16px] transition-all duration-200',
+                        isDashboardActive
+                            ? 'bg-white text-[#8B7CF6] after:content-[\'\'] after:absolute after:bottom-0 after:left-full after:w-4 after:h-4 after:bg-transparent after:rounded-bl-[16px] after:shadow-[-4px_4px_0_4px_#ffffff] z-10'
+                            : 'text-white/80 hover:text-white hover:bg-white/10'
                     )}
                 >
                     <List className="w-5 h-5" />
                 </Link>
-            </div>
 
-            {/* Patient tabs with separators */}
-            <div className="flex items-end h-full">
-                {tabs.map((tab, i) => {
+                {/* Patient tabs */}
+                {tabsToRender.map((tab, i) => {
                     const isActive = tab.id === activeTabId;
-                    const showSeparatorAfter = !isActive && (i === tabs.length - 1 || tabs[i + 1].id !== activeTabId);
+                    const showSeparatorAfter = !isActive && (i === tabsToRender.length - 1 || tabsToRender[i + 1].id !== activeTabId);
+
+                    const isUuid = (str: string) => /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(str);
+                    const displayName = !tab.name || isUuid(tab.name) || tab.name === `Bệnh nhân ${tab.id}` || tab.name.includes(tab.id) ? 'Bệnh nhân' : tab.name;
 
                     return (
                         <div key={tab.id} className="flex items-end h-full">
                             <div
                                 className={cn(
-                                    'relative h-10 flex items-center text-[13px] font-bold transition-all duration-200 group mr-1',
+                                    'relative h-10 flex items-center text-[13px] font-bold transition-all duration-200 group rounded-t-[16px]',
                                     isActive
-                                        ? 'bg-white text-[#2D2D2D] shadow-sm rounded-t-[12px] before:content-[\'\'] before:absolute before:bottom-0 before:right-full before:w-4 before:h-4 before:bg-transparent before:rounded-br-[16px] before:shadow-[4px_4px_0_4px_#ffffff] after:content-[\'\'] after:absolute after:bottom-0 after:left-full after:w-4 after:h-4 after:bg-transparent after:rounded-bl-[16px] after:shadow-[-4px_4px_0_4px_#ffffff]'
-                                        : 'text-white/80 hover:text-white hover:bg-white/10 rounded-t-[12px]'
+                                        ? 'bg-white text-[#2D2D2D] shadow-sm before:content-[\'\'] before:absolute before:bottom-0 before:right-full before:w-4 before:h-4 before:bg-transparent before:rounded-br-[16px] before:shadow-[4px_4px_0_4px_#ffffff] after:content-[\'\'] after:absolute after:bottom-0 after:left-full after:w-4 after:h-4 after:bg-transparent after:rounded-bl-[16px] after:shadow-[-4px_4px_0_4px_#ffffff] z-10'
+                                        : 'text-white/80 hover:text-white hover:bg-white/10'
                                 )}
                             >
                                 <Link
                                     href={`/doctor/${tab.id}`}
                                     className="h-full pl-5 pr-2 flex items-center"
                                 >
-                                    <span>{tab.name}</span>
+                                    <span>{displayName}</span>
                                 </Link>
                                 <button
                                     onClick={(e) => handleCloseTab(e, tab.id)}

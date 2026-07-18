@@ -30,7 +30,7 @@ export function DoctorHeader() {
     };
 
     return (
-        <div className="bg-gradient-to-r from-brand-500 via-brand-400 to-brand-300 px-4 py-2.5 flex items-center gap-2 shrink-0 shadow-sm min-h-[52px]">
+        <div className="bg-brand-500 px-4 py-2.5 flex items-center gap-2 shrink-0 shadow-sm min-h-[52px]">
             {/* List icon — navigates back to patient list */}
             <button
                 onClick={() => router.push('/doctor')}

@@ -35,16 +35,22 @@ export function LoginForm() {
         let displayFullName = username;
         let userId = email;
         const localAvatar = typeof window !== 'undefined' ? localStorage.getItem('tfopd_avatar') || undefined : undefined;
+        let profileData = null;
 
         try {
-            // Fetch the user's actual profile using the new token to get the real full_name and user ID from DB
+            // Fetch the user's actual profile using the new token to get the real user_name and user ID from DB
             const profileRes = await authService.getProfile(token);
             if (profileRes && profileRes.data) {
-                if (profileRes.data.full_name) {
+                profileData = profileRes.data;
+                if (profileRes.data.user_name) {
+                    displayFullName = profileRes.data.user_name;
+                } else if (profileRes.data.full_name) {
                     displayFullName = profileRes.data.full_name;
                 }
                 if (profileRes.data.id) {
                     userId = profileRes.data.id;
+                } else if (profileRes.data.account_id) {
+                    userId = profileRes.data.account_id;
                 }
             }
         } catch (err) {
@@ -61,6 +67,7 @@ export function LoginForm() {
             },
             accessToken: token,
             refreshToken,
+            profile: profileData,
         });
     }
 

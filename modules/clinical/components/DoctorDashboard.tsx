@@ -16,7 +16,7 @@ export function DoctorDashboard() {
     const { openTab } = usePatientTabsStore();
     const accessToken = useAuthStore((s) => s.accessToken);
 
-    // Generate tabs: today + 4 past days — timezone-safe
+    // Generate tabs: 3 past days + today + 3 future days — timezone-safe
     const dateTabs = useMemo(() => {
         const days = [];
         const nowLocal = new Date();
@@ -24,9 +24,9 @@ export function DoctorDashboard() {
         const localMonth = nowLocal.getMonth();
         const localDay = nowLocal.getDate();
 
-        for (let i = 0; i < 5; i++) {
-            // i=0 → today, i=1 → yesterday, …, i=4 → 4 days ago
-            const d = new Date(localYear, localMonth, localDay - i);
+        for (let i = -3; i <= 3; i++) {
+            // i=-3 → 3 days ago, i=0 → today, i=3 → 3 days in future
+            const d = new Date(localYear, localMonth, localDay + i);
 
             const yyyy = d.getFullYear();
             const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -36,8 +36,10 @@ export function DoctorDashboard() {
             let label = '';
             if (i === 0) {
                 label = `Hôm nay, ${dd}/${mm}`;
-            } else if (i === 1) {
+            } else if (i === -1) {
                 label = `Hôm qua, ${dd}/${mm}`;
+            } else if (i === 1) {
+                label = `Ngày mai, ${dd}/${mm}`;
             } else {
                 const weekday = d.getDay();
                 const daysOfWeek = ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
@@ -49,7 +51,13 @@ export function DoctorDashboard() {
         return days;
     }, []);
 
-    const [selectedDate, setSelectedDate] = useState(dateTabs[0].value);
+    const [selectedDate, setSelectedDate] = useState(() => {
+        const nowLocal = new Date();
+        const yyyy = nowLocal.getFullYear();
+        const mm = String(nowLocal.getMonth() + 1).padStart(2, '0');
+        const dd = String(nowLocal.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    });
     const [patients, setPatients] = useState<Patient[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -95,8 +103,9 @@ export function DoctorDashboard() {
     return (
         <EMRWorkspaceLayout activeTabId="dashboard">
             {/* ── Page content ────────────────── */}
-            <div className="flex-1 flex flex-col bg-white border-t border-l border-[#EBEBEB] overflow-hidden">
-                <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 flex flex-col p-3 pb-5 overflow-hidden">
+                <div className="h-fit max-h-full flex flex-col bg-white rounded-[24px] border border-neutral-200/50 shadow-[0_4px_24px_-4px_rgba(139,124,246,0.02)] overflow-hidden">
+                    <div className="flex-1 overflow-y-auto p-6">
                     {/* Title + Stats row */}
                     <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-5 mb-6">
                         <div>
@@ -118,11 +127,10 @@ export function DoctorDashboard() {
                                 <button
                                     key={tab.value}
                                     onClick={() => setSelectedDate(tab.value)}
-                                    className={`pb-3 text-sm font-bold border-b-2 transition-all duration-200 shrink-0 cursor-pointer ${
-                                        isActive
-                                            ? 'border-[#8B7CF6] text-[#8B7CF6]'
-                                            : 'border-transparent text-neutral-400 hover:text-neutral-700'
-                                    }`}
+                                    className={`pb-3 text-sm font-bold border-b-2 transition-all duration-200 shrink-0 cursor-pointer ${isActive
+                                        ? 'border-[#8B7CF6] text-[#8B7CF6]'
+                                        : 'border-transparent text-neutral-400 hover:text-neutral-700'
+                                        }`}
                                 >
                                     {tab.label}
                                 </button>
@@ -152,6 +160,7 @@ export function DoctorDashboard() {
                     )}
                 </div>
             </div>
+        </div>
         </EMRWorkspaceLayout>
     );
 }

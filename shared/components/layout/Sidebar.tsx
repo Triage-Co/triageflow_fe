@@ -8,7 +8,6 @@ import {
     Bell,
     ChevronLeft,
     ChevronRight,
-    ClipboardList,
     LayoutDashboard,
     Settings,
     UserCheck,
@@ -16,7 +15,6 @@ import {
     FlaskConical,
     Pill,
     CreditCard,
-    ShieldCheck,
     LogOut,
     User,
     UserPlus,
@@ -35,15 +33,15 @@ interface NavItem {
 
 const NAV_BY_ROLE: Record<string, NavItem[]> = {
     DOCTOR: [
-        { label: 'Danh sách bệnh nhân', href: '/doctor', icon: ClipboardList },
-        { label: 'Thông báo', href: '/notifications', icon: Bell },
-        { label: 'Cài đặt', href: '/settings', icon: Settings },
+        { label: 'Danh sách bệnh nhân', href: '/doctor', icon: LayoutDashboard },
+        { label: 'Thông báo', href: '/doctor/notification', icon: Bell },
+        { label: 'Cài đặt', href: '/doctor/setting', icon: Settings },
     ],
     NURSE: [
-        { label: 'Danh sách bệnh nhân', href: '/doctor', icon: ClipboardList },
+        { label: 'Danh sách bệnh nhân', href: '/doctor', icon: LayoutDashboard },
         { label: 'Tiếp nhận', href: '/reception', icon: UserCheck },
-        { label: 'Thông báo', href: '/notifications', icon: Bell },
-        { label: 'Cài đặt', href: '/settings', icon: Settings },
+        { label: 'Thông báo', href: '/doctor/notification', icon: Bell },
+        { label: 'Cài đặt', href: '/doctor/setting', icon: Settings },
     ],
     RECEPTIONIST: [
         { label: 'Tổng quan', href: '/reception', icon: LayoutDashboard },
@@ -69,10 +67,17 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
         { label: 'Cài đặt', href: '/settings', icon: Settings },
     ],
     ADMIN: [
-        { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-        { label: 'Người dùng', href: '/admin/users', icon: Users },
-        { label: 'Quyền truy cập', href: '/admin/roles', icon: ShieldCheck },
-        { label: 'Cài đặt', href: '/settings', icon: Settings },
+        { label: 'Tổng quan', href: '/dashboard', icon: LayoutDashboard },
+        { label: 'Biểu đồ nhiệt', href: '/admin/heatmap', icon: Activity },
+        { label: 'Cấu hình bản đồ', href: '/admin/map', icon: Map },
+        { label: 'Hàng chờ bệnh nhân', href: '/admin/queue', icon: ListOrdered },
+        { label: 'Cấu hình AI', href: '/admin/ai-config', icon: Cpu },
+        { label: 'Quy trình khám bệnh', href: '/admin/process', icon: Stethoscope },
+        { label: 'Quản lý người dùng', href: '/admin/users', icon: Users },
+        { label: 'Quản lý phòng khám', href: '/admin/rooms', icon: Home },
+        { label: 'Quản lý nhân viên', href: '/admin/staff', icon: UserCheck },
+        { label: 'Ca trực', href: '/admin/shift', icon: CalendarClock },
+        { label: 'Cài đặt', href: '/admin/settings', icon: Settings },
     ],
     default: [
         { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -181,7 +186,6 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
                         <Link
                             key={item.href}
                             href={item.href}
-                            title={isCollapsed ? item.label : undefined}
                             className={cn(
                                 'flex items-center gap-3 h-10 rounded-[12px] px-3 transition-all duration-200 text-[13px]',
                                 isCollapsed && 'justify-center px-0 w-10 mx-auto',
@@ -203,13 +207,15 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
             </nav>
 
             {/* ── Collapse toggle button ─────────────────── */}
-            <div className={cn('px-1.5 py-2 shrink-0', isCollapsed && 'flex justify-center')}>
+            <div className={cn('py-2 shrink-0', isCollapsed ? 'flex justify-center' : 'px-1.5')}>
                 <button
                     onClick={handleToggle}
                     title={isCollapsed ? 'Mở rộng' : 'Thu gọn'}
                     className={cn(
-                        'flex items-center gap-2 h-9 rounded-xl px-3 w-full transition-all duration-200 text-[12px] font-medium text-[#7B7B7B] hover:bg-[#8B7CF6]/10 hover:text-[#8B7CF6]',
-                        isCollapsed && 'justify-center px-0 w-10'
+                        'flex items-center gap-2 transition-all duration-200 text-[12px] font-medium text-[#7B7B7B] hover:text-[#8B7CF6]',
+                        isCollapsed
+                            ? 'w-9 h-9 rounded-full justify-center hover:bg-[#DDD6FE]/60'
+                            : 'h-9 rounded-2xl px-3 w-full hover:bg-[#DDD6FE]/50'
                     )}
                 >
                     {isCollapsed ? (

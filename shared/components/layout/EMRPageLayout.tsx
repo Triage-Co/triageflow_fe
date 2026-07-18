@@ -5,6 +5,7 @@ import type { Patient } from '@/modules/clinical/types/clinical.types';
 import { EMRWorkspaceLayout } from './EMRWorkspaceLayout';
 import { LeftPatientPanel } from './LeftPatientPanel';
 import { RightMedicalArea } from './RightMedicalArea';
+import { usePatientTabsStore } from '@/modules/clinical/store/clinicalStore';
 
 interface EMRPageLayoutProps {
     patient: Patient;
@@ -12,17 +13,19 @@ interface EMRPageLayoutProps {
 
 export function EMRPageLayout({ patient: initialPatient }: EMRPageLayoutProps) {
     const [patient, setPatient] = useState<Patient>(initialPatient);
+    const { setPatientData } = usePatientTabsStore();
 
     const handleUpdatePatient = (updated: Patient) => {
         setPatient(updated);
+        setPatientData(updated.id, updated);
     };
 
     return (
         <EMRWorkspaceLayout activeTabId={patient.id} activeTabName={patient.name}>
             {/* ── Body below header ── */}
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex overflow-hidden border-t border-neutral-200/60 bg-white">
                 {/* 1. Collapsible patient info panel */}
-                <div className="relative shrink-0">
+                <div className="relative shrink-0 border-r border-neutral-200/60 bg-[#FDFDFD]">
                     <LeftPatientPanel
                         patient={patient}
                         isOpen={true}
