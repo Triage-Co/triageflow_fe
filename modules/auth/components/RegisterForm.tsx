@@ -7,7 +7,8 @@ import {
     Eye, EyeOff, Cross, AlertCircle, Loader2, CheckCircle2,
 } from 'lucide-react';
 import { authService } from '@/modules/auth/services/authService';
-import type { Gender } from '@/shared/types/auth.types';
+import { buildUserNameFromFullName } from '@/shared/utils/userName';
+import type { Gender, StaffRole } from '@/shared/types/auth.types';
 
 interface FormState {
     email: string;
@@ -61,15 +62,22 @@ export function RegisterForm() {
             setError('Mật khẩu xác nhận không khớp.');
             return;
         }
+        if (!form.phone.trim() || form.phone.replace(/\D/g, '').length < 9) {
+            setError('Vui lòng nhập số điện thoại hợp lệ.');
+            return;
+        }
 
         startTransition(async () => {
             try {
                 await authService.register({
-                    user_name: form.userName,
+                    user_name: buildUserNameFromFullName(
+                        form.fullName,
+                        form.email.split('@')[0] || 'user',
+                    ),
                     email: form.email,
                     password: form.password,
                     gender: form.gender,
-                    phone: form.phone,
+                    phone: form.phone.trim(),
                 });
                 setStep('success');
             } catch (err) {
