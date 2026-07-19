@@ -2,13 +2,33 @@ import React from 'react';
 import { useKioskStore } from '../store/kioskStore';
 import { Camera, ArrowLeft, ShieldCheck } from 'lucide-react';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { useAuthStore } from '../store/authStore';
 
 export const QRScannerModal: React.FC = () => {
+  const [cccd, setCccd] = React.useState('');
+  const [error, setError] = React.useState('');
+  const loginCitizen = useAuthStore((state) => state.loginCitizen);
   const activeModal = useKioskStore((state) => state.activeModal);
   const targetViewAfterScan = useKioskStore((state) => state.targetViewAfterScan);
   const closeModal = useKioskStore((state) => state.closeModal);
-  const simulateScanCCCD = useKioskStore((state) => state.simulateScanCCCD);
   const isLoading = useKioskStore((state) => state.isLoading);
+  const navigateToView = useKioskStore((state) => state.navigateToView);
+
+  const handleConfirm = async () => {
+    if (!/^\d{12}$/.test(cccd)) {
+      setError('CCCD phải gồm 12 chữ số');
+      return;
+    }
+    setError('');
+    try {
+      await loginCitizen(cccd);
+      closeModal();
+      navigateToView(targetViewAfterScan ?? 'home');
+    } catch (e) {
+      console.error(e);
+      setError('Xác thực thất bại');
+    }
+  };
 
   if (activeModal !== 'scan_cccd') return null;
 
@@ -58,8 +78,19 @@ export const QRScannerModal: React.FC = () => {
           </div>
 
           <div className="pt-2 w-full max-w-xs">
+            <div className="flex flex-col items-center w-full max-w-xs space-y-2">
+              <input
+                type="text"
+                value={cccd}
+                onChange={(e) => setCccd(e.target.value)}
+                placeholder="Nhập CCCD (12 chữ số)"
+                maxLength={12}
+                className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-[#155DFC]"
+              />
+              {error && <p className="text-red-500 text-sm">{error}</p>}
+            </div>
             <PrimaryButton 
-              onClick={simulateScanCCCD}
+              onClick={handleConfirm}
               isLoading={isLoading}
               className="w-full text-base"
             >

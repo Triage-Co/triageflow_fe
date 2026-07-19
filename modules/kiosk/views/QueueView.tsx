@@ -1,12 +1,22 @@
 import React from 'react';
 import { useKioskStore } from '../store/kioskStore';
-import { PrimaryButton } from '../components/PrimaryButton';
-import { ArrowLeft, Clock, MapPin, Navigation } from 'lucide-react';
+import { ArrowLeft, Clock, MapPin } from 'lucide-react';
 
 export const QueueView: React.FC = () => {
   const goHome = useKioskStore((state) => state.goHome);
   const navigateToView = useKioskStore((state) => state.navigateToView);
+
+  // Dynamic ticket state from Kiosk Store
   const activeTicket = useKioskStore((state) => state.activeTicket);
+  const selectedDoctor = useKioskStore((state) => state.selectedDoctor);
+
+  const roomName = activeTicket?.roomNumber || selectedDoctor?.room || 'Phòng khám';
+  const specialtyName = activeTicket?.clinicName || selectedDoctor?.specialty || 'Nội Tổng Quát';
+  const locationName = activeTicket?.location || selectedDoctor?.location || 'Tầng 2 - Khu B';
+  const ticketNo = activeTicket?.ticketNumber || 'A01';
+  const callingNo = activeTicket?.currentCallingNo || 'A01';
+  const waitingCount = activeTicket?.waitingCount || 3;
+  const estimatedWait = activeTicket?.estimatedWaitMinutes || 10;
 
   return (
     <div className="w-full max-w-5xl mx-auto px-6 py-6 z-10 space-y-6">
@@ -19,7 +29,7 @@ export const QueueView: React.FC = () => {
           <ArrowLeft className="w-4 h-4" /> Quay lại
         </button>
         <h2 className="text-2xl font-black text-[#1E2939] tracking-tight">
-          Theo dõi hàng đợi
+          Theo dõi hàng đợi khám bệnh
         </h2>
       </div>
 
@@ -28,26 +38,26 @@ export const QueueView: React.FC = () => {
         <div className="bg-[#4F80E1] text-white rounded-[28px] p-8 shadow-xl space-y-6 relative overflow-hidden text-center">
           <div className="space-y-1">
             <h3 className="text-2xl font-black tracking-tight">Hàng đợi của bạn</h3>
-            <p className="text-xs font-bold text-blue-100">Phòng Xét nghiệm máu LAB-02</p>
+            <p className="text-xs font-bold text-blue-100">{roomName} - {specialtyName}</p>
           </div>
 
           <div className="grid grid-cols-3 gap-4 border-t border-white/20 pt-6 max-w-2xl mx-auto">
             <div>
               <span className="text-[11px] font-bold text-blue-100 uppercase block mb-1">Số đang gọi</span>
-              <span className="text-3xl font-black">{activeTicket?.currentCallingNo || 'A09'}</span>
+              <span className="text-3xl font-black">{callingNo}</span>
             </div>
             <div className="border-x border-white/20 px-2">
               <span className="text-[11px] font-bold text-blue-100 uppercase block mb-1">Số của bạn</span>
-              <span className="text-3xl font-black">{activeTicket?.ticketNumber || 'A12'}</span>
+              <span className="text-3xl font-black">{ticketNo}</span>
             </div>
             <div>
               <span className="text-[11px] font-bold text-blue-100 uppercase block mb-1">Ước tính chờ</span>
-              <span className="text-3xl font-black">{activeTicket?.estimatedWaitMinutes || 10} <span className="text-xs font-normal">phút</span></span>
+              <span className="text-3xl font-black">{estimatedWait} <span className="text-xs font-normal">phút</span></span>
             </div>
           </div>
 
           <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/20 text-xs font-extrabold text-blue-100 max-w-md mx-auto">
-            Còn <span className="text-white text-sm font-black">3</span> người trước bạn
+            Còn <span className="text-white text-sm font-black">{waitingCount}</span> bệnh nhân trước bạn
           </div>
         </div>
 
@@ -60,8 +70,8 @@ export const QueueView: React.FC = () => {
                 <MapPin className="w-6 h-6" />
               </div>
               <div>
-                <h4 className="font-extrabold text-[#1E2939] text-sm">Vị trí phòng</h4>
-                <p className="text-xs text-neutral-500 font-semibold">{activeTicket?.location || 'Tầng 2 - Khu B'}</p>
+                <h4 className="font-extrabold text-[#1E2939] text-sm">Vị trí phòng khám</h4>
+                <p className="text-xs text-neutral-500 font-semibold">{locationName}</p>
               </div>
             </div>
 
@@ -80,38 +90,14 @@ export const QueueView: React.FC = () => {
             </div>
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <h4 className="font-extrabold text-[#1E2939] text-sm">Trạng thái</h4>
+                <h4 className="font-extrabold text-[#1E2939] text-sm">Trạng thái hàng đợi</h4>
                 <span className="text-[10px] font-bold bg-blue-50 text-[#155DFC] px-2.5 py-0.5 rounded-full border border-blue-100">
-                  Đang chờ
+                  Đang chờ gọi số
                 </span>
               </div>
               <p className="text-xs text-neutral-500 font-medium leading-relaxed">
-                Vui lòng chờ tại khu vực phòng chờ. Hệ thống sẽ thông báo khi đến lượt.
+                Vui lòng giữ phiếu khám và chờ tại sảnh chờ. Hệ thống loa và màn hình LED sẽ thông báo khi đến lượt.
               </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom Card: Hàng đợi tiếp theo */}
-        <div className="bg-white rounded-[28px] p-6 shadow-md border border-neutral-100 space-y-4">
-          <h4 className="font-extrabold text-[#1E2939] text-sm">Hàng đợi tiếp theo</h4>
-          
-          <div className="bg-neutral-50 rounded-2xl p-4 border border-neutral-100 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="px-3 py-1.5 bg-white border border-neutral-200 rounded-xl font-mono text-xs font-black text-neutral-700">
-                STT: B08
-              </div>
-              <div>
-                <h5 className="font-extrabold text-[#1E2939] text-sm">X-Quang ngực</h5>
-                <p className="text-xs text-neutral-500 font-medium">Phòng XR-05 • Tầng 3 • Khu A</p>
-              </div>
-            </div>
-
-            <div className="text-right">
-              <span className="text-[11px] font-bold bg-neutral-200/80 text-neutral-600 px-3 py-1 rounded-xl border border-neutral-300/60 inline-block mb-1">
-                Chưa đến lượt
-              </span>
-              <span className="text-[11px] text-neutral-400 font-semibold block">~25 phút</span>
             </div>
           </div>
         </div>

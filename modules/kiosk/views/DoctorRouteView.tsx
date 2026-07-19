@@ -2,14 +2,61 @@ import React from 'react';
 import { useKioskStore } from '../store/kioskStore';
 import { ArrowLeft, MapPin, Navigation, QrCode, CheckCircle2, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { RouteStepItem } from '../types/kiosk.types';
 
 export const DoctorRouteView: React.FC = () => {
-  const goHome = useKioskStore((state) => state.goHome);
   const navigateToView = useKioskStore((state) => state.navigateToView);
-  const routeSteps = useKioskStore((state) => state.routeSteps);
+  const routeStepsFromStore = useKioskStore((state) => state.routeSteps);
+  const activeTicket = useKioskStore((state) => state.activeTicket);
+  const selectedDoctor = useKioskStore((state) => state.selectedDoctor);
   const showToast = useKioskStore((state) => state.showToast);
 
-  const currentStepItem = routeSteps.find(s => s.status === 'in_progress') || routeSteps[1];
+  const roomName = activeTicket?.roomNumber || selectedDoctor?.room || 'P.204';
+  const specialtyName = activeTicket?.clinicName || selectedDoctor?.specialty || 'Nội Tổng Quát';
+  const locationName = activeTicket?.location || selectedDoctor?.location || 'Tầng 2 - Khu B';
+  const ticketNo = activeTicket?.ticketNumber || 'A01';
+
+  // Nếu store chưa có routeSteps động thì tự động dựng lộ trình chuẩn dựa vào activeTicket thực tế
+  const routeSteps: RouteStepItem[] = routeStepsFromStore.length > 0
+    ? routeStepsFromStore
+    : [
+        {
+          id: 1,
+          title: 'Đăng ký & Khảo sát AI',
+          subtitle: 'Kiosk tự phục vụ',
+          room: 'Sảnh chính',
+          location: 'Tầng 1',
+          status: 'completed'
+        },
+        {
+          id: 2,
+          title: `Khám ${specialtyName}`,
+          subtitle: `Bác sĩ ${activeTicket?.doctorName || selectedDoctor?.name || 'chuyên khoa phụ trách'}`,
+          room: roomName,
+          location: locationName,
+          queueNo: ticketNo,
+          estimatedWait: `${activeTicket?.estimatedWaitMinutes || 10} phút`,
+          status: 'in_progress'
+        },
+        {
+          id: 3,
+          title: 'Cận lâm sàng / Xét nghiệm',
+          subtitle: 'Khi có chỉ định từ Bác sĩ',
+          room: 'Khu Xét Nghiệm',
+          location: 'Tầng 1 - Khu C',
+          status: 'pending'
+        },
+        {
+          id: 4,
+          title: 'Nhận đơn thuốc & Hoàn tất',
+          subtitle: 'Quầy Dược bệnh viện',
+          room: 'Nhà thuốc Bệnh viện',
+          location: 'Tầng 1 - Sảnh phụ',
+          status: 'pending'
+        }
+      ];
+
+  const currentStepItem = routeSteps.find(s => s.status === 'in_progress') || routeSteps[0];
 
   return (
     <div className="w-full max-w-5xl mx-auto px-6 py-6 z-10 space-y-6">
@@ -28,15 +75,15 @@ export const DoctorRouteView: React.FC = () => {
         </div>
 
         <button 
-          onClick={() => showToast('Đang tạo mã Master QR...', 'info')}
+          onClick={() => showToast('Đang tạo mã QR Lộ trình...', 'info')}
           className="flex items-center gap-2 px-4 py-2 bg-white rounded-xl text-xs font-extrabold text-[#1E2939] shadow-sm border border-neutral-200 hover:bg-neutral-50 transition-colors cursor-pointer"
         >
-          <QrCode className="w-4 h-4 text-[#155DFC]" /> Master QR
+          <QrCode className="w-4 h-4 text-[#155DFC]" /> QR Lộ trình
         </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Card: Điểm đến hiện tại (4 cols) */}
+        {/* Left Card: Điểm đến hiện tại */}
         <div className="lg:col-span-4 bg-[#4F80E1] text-white rounded-[28px] p-6 shadow-xl space-y-5 flex flex-col justify-between">
           <div className="space-y-4">
             <span className="text-xs font-bold text-blue-100 uppercase tracking-wider">Điểm đến hiện tại</span>
@@ -70,14 +117,14 @@ export const DoctorRouteView: React.FC = () => {
             onClick={() => navigateToView('map')}
             className="w-full py-3 bg-white text-[#155DFC] rounded-2xl font-extrabold text-xs flex items-center justify-center gap-2 shadow-md hover:bg-blue-50 transition-all cursor-pointer"
           >
-            <Navigation className="w-4 h-4 rotate-45" /> Xem đường đi
+            <Navigation className="w-4 h-4 rotate-45" /> Xem sơ đồ đường đi
           </button>
         </div>
 
-        {/* Right Card: Stepper Timeline (8 cols) */}
+        {/* Right Card: Stepper Timeline */}
         <div className="lg:col-span-8 bg-white rounded-[28px] p-6 shadow-md border border-neutral-100 space-y-4">
           <h3 className="font-extrabold text-[#1E2939] text-base border-b border-neutral-100 pb-3">
-            Lộ trình bác sĩ chỉ định
+            Lộ trình di chuyển khám bệnh
           </h3>
 
           <div className="space-y-3">
@@ -98,7 +145,6 @@ export const DoctorRouteView: React.FC = () => {
                   )}
                 >
                   <div className="flex items-center gap-3.5">
-                    {/* Circle icon */}
                     <div className={cn(
                       "w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0",
                       isCompleted && "bg-neutral-300 text-neutral-700",

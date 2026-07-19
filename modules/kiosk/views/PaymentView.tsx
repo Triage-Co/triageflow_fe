@@ -7,10 +7,9 @@ import {
   QrCode, 
   CheckCircle2, 
   Clock, 
-  MapPin, 
   Printer, 
-  Navigation,
-  CreditCard
+  CreditCard,
+  Loader2
 } from 'lucide-react';
 
 export const PaymentView: React.FC = () => {
@@ -18,9 +17,24 @@ export const PaymentView: React.FC = () => {
   const navigateToView = useKioskStore((state) => state.navigateToView);
   const paymentMethod = useKioskStore((state) => state.paymentMethod);
   const setPaymentMethod = useKioskStore((state) => state.setPaymentMethod);
+
+  // Dynamic Payment & State from Kiosk Store
   const activeBill = useKioskStore((state) => state.activeBill);
-  const payBill = useKioskStore((state) => state.payBill);
+  const paymentQrData = useKioskStore((state) => state.paymentQrData);
+  const patientInfo = useKioskStore((state) => state.patientInfo);
+  const isPaymentChecking = useKioskStore((state) => state.isPaymentChecking);
+  const verifyPaymentAndIssueTicket = useKioskStore((state) => state.verifyPaymentAndIssueTicket);
   const showToast = useKioskStore((state) => state.showToast);
+
+  // Tính toán hiển thị tiền & thông tin VietQR động
+  const totalAmount = paymentQrData?.amount || activeBill?.totalAmount || 150000;
+  const formattedAmount = totalAmount.toLocaleString('vi-VN') + ' đ';
+  const patientCodeDisplay = activeBill?.patientCode || patientInfo?.idNumber || 'BN-2026';
+  const paymentContentDisplay = paymentQrData?.description || activeBill?.items?.[0]?.name || 'Phí khám bệnh chuyên khoa';
+  
+  // URL mã QR VietQR động từ PayOS payload
+  const qrCodePayload = paymentQrData?.qrCode || `PAYOS:${paymentQrData?.orderCode || Date.now()}`;
+  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrCodePayload)}`;
 
   return (
     <div className="w-full max-w-5xl mx-auto px-6 py-6 z-10 space-y-6">
@@ -33,13 +47,13 @@ export const PaymentView: React.FC = () => {
           <ArrowLeft className="w-4 h-4" /> Quay lại
         </button>
         <h2 className="text-2xl font-black text-[#1E2939] tracking-tight">
-          {paymentMethod === null && 'Thanh toán'}
-          {paymentMethod === 'bank' && 'Thanh toán QR'}
-          {paymentMethod === 'counter' && 'Hỗ trợ thanh toán'}
+          {paymentMethod === null && 'Thanh toán viện phí'}
+          {paymentMethod === 'bank' && 'Thanh toán VietQR'}
+          {paymentMethod === 'counter' && 'Hỗ trợ thanh toán tại quầy'}
         </h2>
       </div>
 
-      {/* STATE 1: 2 LỰA CHỌN THANH TOÁN (Screenshot 5 Left) */}
+      {/* STATE 1: LỰA CHỌN PHƯƠNG THỨC THANH TOÁN */}
       {paymentMethod === null && (
         <div className="bg-white/80 backdrop-blur-md rounded-[32px] p-10 shadow-xl border border-neutral-100 text-center space-y-8 max-w-3xl mx-auto">
           <div className="space-y-2">
@@ -48,7 +62,7 @@ export const PaymentView: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-xl mx-auto">
-            {/* Card 1: Ngân hàng */}
+            {/* Card 1: Ngân hàng VietQR */}
             <button
               onClick={() => setPaymentMethod('bank')}
               className="p-8 bg-white rounded-[32px] border border-neutral-200/80 shadow-md hover:shadow-xl hover:scale-[1.03] active:scale-[0.98] transition-all cursor-pointer flex flex-col items-center text-center space-y-4 group"
@@ -58,7 +72,7 @@ export const PaymentView: React.FC = () => {
               </div>
               <div className="space-y-1">
                 <h4 className="font-extrabold text-[#1E2939] text-base">Thanh toán bằng ngân hàng</h4>
-                <p className="text-xs text-neutral-400 font-medium">Quét mã QR bằng ứng dụng ngân hàng</p>
+                <p className="text-xs text-neutral-400 font-medium">Quét mã VietQR bằng ứng dụng ngân hàng</p>
               </div>
             </button>
 
@@ -79,44 +93,54 @@ export const PaymentView: React.FC = () => {
         </div>
       )}
 
-      {/* STATE 2: THANH TOÁN QR (Screenshot 5 Right) */}
+      {/* STATE 2: THANH TOÁN VIETQR CHUẨN ĐỘNG */}
       {paymentMethod === 'bank' && (
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 max-w-4xl mx-auto">
-          {/* Left Card: QR Scanner */}
+          {/* Cột trái: Khung mã VietQR thực tế */}
           <div className="md:col-span-6 bg-white rounded-[28px] p-8 shadow-md border border-neutral-100 flex flex-col items-center text-center space-y-4">
             <h4 className="font-extrabold text-[#1E2939] text-base">Quét mã để thanh toán</h4>
-            <div className="w-56 h-56 bg-neutral-900 rounded-3xl p-4 flex items-center justify-center shadow-lg relative group">
-              <QrCode className="w-48 h-48 text-white" strokeWidth={1.2} />
+            
+            <div className="bg-white p-3 rounded-3xl border border-neutral-200 shadow-lg relative group">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={qrImageUrl}
+                alt="Mã QR Thanh toán VietQR"
+                className="w-52 h-52 object-contain"
+              />
             </div>
-            <p className="text-xs font-semibold text-neutral-400">Sử dụng ứng dụng ngân hàng để quét mã QR</p>
+            
+            <div className="space-y-1">
+              <p className="text-xs font-bold text-neutral-600">Ngân hàng: {paymentQrData?.accountName || 'MB BANK / VIETQR'}</p>
+              <p className="text-[11px] font-semibold text-neutral-400">Số TK: {paymentQrData?.accountNumber || '999988887777'}</p>
+            </div>
           </div>
 
-          {/* Right Card: Thông tin thanh toán */}
+          {/* Cột phải: Chi tiết hóa đơn & Nút bấm xác nhận */}
           <div className="md:col-span-6 bg-white rounded-[28px] p-8 shadow-md border border-neutral-100 flex flex-col justify-between space-y-6">
             <div className="space-y-4">
-              <h4 className="font-extrabold text-[#1E2939] text-base border-b border-neutral-100 pb-3">Thông tin thanh toán</h4>
+              <h4 className="font-extrabold text-[#1E2939] text-base border-b border-neutral-100 pb-3">Chi tiết thanh toán</h4>
               
               <div className="space-y-3 text-xs font-semibold text-neutral-600">
                 <div>
-                  <span className="text-neutral-400 block mb-0.5">Nội dung</span>
-                  <span className="font-bold text-[#1E2939] text-sm">Xét nghiệm máu + X-Quang</span>
+                  <span className="text-neutral-400 block mb-0.5">Nội dung chuyển khoản</span>
+                  <span className="font-bold text-[#1E2939] text-sm break-all">{paymentContentDisplay}</span>
                 </div>
                 <div>
                   <span className="text-neutral-400 block mb-0.5">Mã bệnh nhân</span>
-                  <span className="font-bold text-[#1E2939] text-sm">{activeBill?.patientCode || 'BN20260516001'}</span>
+                  <span className="font-bold text-[#1E2939] text-sm">{patientCodeDisplay}</span>
                 </div>
                 <div>
-                  <span className="text-neutral-400 block mb-0.5">Số tiền</span>
-                  <span className="font-black text-2xl text-[#1E2939]">450.000 đ</span>
+                  <span className="text-neutral-400 block mb-0.5">Tổng số tiền</span>
+                  <span className="font-black text-2xl text-[#155DFC]">{formattedAmount}</span>
                 </div>
               </div>
 
               {/* Waiting status pill */}
               <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-4 text-xs space-y-1 text-amber-800">
                 <div className="flex items-center gap-2 font-bold">
-                  <Clock className="w-4 h-4 text-amber-600" /> ⏳ Đang chờ thanh toán
+                  <Clock className="w-4 h-4 text-amber-600" /> ⏳ Đang chờ hệ thống ngân hàng ghi nhận
                 </div>
-                <p className="text-[11px] text-amber-700 font-medium">Vui lòng quét mã QR bằng ứng dụng ngân hàng để hoàn tất thanh toán</p>
+                <p className="text-[11px] text-amber-700 font-medium">Vui lòng hoàn tất chuyển khoản, sau đó bấm nút bên dưới để cấp Số thứ tự (STT).</p>
               </div>
             </div>
 
@@ -124,15 +148,25 @@ export const PaymentView: React.FC = () => {
               <PrimaryButton variant="outline" onClick={() => setPaymentMethod(null)}>
                 Đổi phương thức
               </PrimaryButton>
-              <PrimaryButton onClick={payBill} className="flex-1">
-                Giả lập quét QR
-              </PrimaryButton>
+              <button
+                onClick={verifyPaymentAndIssueTicket}
+                disabled={isPaymentChecking}
+                className="flex-1 py-3.5 px-4 bg-[#155DFC] hover:bg-blue-700 text-white rounded-2xl font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {isPaymentChecking ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Đang kiểm tra...
+                  </>
+                ) : (
+                  "Tôi đã thanh toán xong →"
+                )}
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* STATE 3: HỖ TRỢ THANH TOÁN TẠI QUẦY (Screenshot 6 Right) */}
+      {/* STATE 3: HỖ TRỢ THANH TOÁN TẠI QUẦY THU NGÂN */}
       {paymentMethod === 'counter' && (
         <div className="space-y-6 max-w-5xl mx-auto">
           {/* Top Blue Banner */}
@@ -141,17 +175,16 @@ export const PaymentView: React.FC = () => {
               👤
             </div>
             <div className="space-y-1">
-              <h3 className="text-2xl font-black tracking-tight">Vui lòng đến quầy thu ngân số 03</h3>
-              <p className="text-xs font-bold text-blue-100">để hoàn tất thanh toán</p>
+              <h3 className="text-2xl font-black tracking-tight">Vui lòng di chuyển đến Quầy thu ngân sảnh chính</h3>
+              <p className="text-xs font-bold text-blue-100">để thực hiện thanh toán tiền mặt</p>
             </div>
 
             <button 
               onClick={() => navigateToView('map')}
               className="px-5 py-2.5 bg-white text-[#155DFC] rounded-xl font-bold text-xs shadow-md hover:bg-blue-50 transition-colors cursor-pointer"
             >
-              Xem bản đồ chi tiết
+              Xem bản đồ sơ đồ bệnh viện
             </button>
-            <span className="text-[11px] font-semibold text-blue-100">Tầng 1 – Khu vực sảnh chính</span>
           </div>
 
           {/* Bottom 3 Cards */}
@@ -160,38 +193,37 @@ export const PaymentView: React.FC = () => {
             <div className="bg-white rounded-[28px] p-6 shadow-md border border-neutral-100 space-y-4">
               <div className="flex items-center gap-2 font-bold text-[#1E2939] text-xs">
                 <CreditCard className="w-4 h-4 text-[#155DFC]" />
-                <span>Thông tin thanh toán</span>
+                <span>Thông tin hóa đơn</span>
               </div>
               <div className="space-y-2 text-xs font-semibold text-neutral-600">
-                <div><span className="text-neutral-400 block">Nội dung</span> <span className="font-bold text-[#1E2939]">Phí khám bệnh</span></div>
-                <div><span className="text-neutral-400 block">Mã bệnh nhân</span> <span className="font-bold text-[#1E2939]">BN20260516001</span></div>
-                <div className="border-t border-neutral-100 pt-2"><span className="text-neutral-400 block">Số tiền cần thanh toán</span> <span className="font-black text-xl text-[#1E2939]">450.000 đ</span></div>
+                <div><span className="text-neutral-400 block">Nội dung</span> <span className="font-bold text-[#1E2939]">{paymentContentDisplay}</span></div>
+                <div><span className="text-neutral-400 block">Mã bệnh nhân</span> <span className="font-bold text-[#1E2939]">{patientCodeDisplay}</span></div>
+                <div className="border-t border-neutral-100 pt-2"><span className="text-neutral-400 block">Số tiền cần thanh toán</span> <span className="font-black text-xl text-[#1E2939]">{formattedAmount}</span></div>
               </div>
             </div>
 
             {/* Card 2: Phiếu thanh toán */}
             <div className="bg-white rounded-[28px] p-6 shadow-md border border-neutral-100 flex flex-col items-center text-center space-y-3">
-              <h4 className="font-extrabold text-[#1E2939] text-xs">Phiếu thanh toán</h4>
+              <h4 className="font-extrabold text-[#1E2939] text-xs">Phiếu thanh toán quầy</h4>
               <div className="w-24 h-24 bg-amber-400 text-white rounded-2xl flex items-center justify-center p-2 shadow-inner">
                 <QrCode className="w-20 h-20 text-neutral-900" strokeWidth={1.5} />
               </div>
-              <span className="font-black text-[#1E2939] text-sm">PY-A12-001</span>
+              <span className="font-black text-[#1E2939] text-sm">PY-{patientCodeDisplay}</span>
               <button 
-                onClick={() => showToast('Đang phát lệnh in phiếu thanh toán...', 'info')}
+                onClick={() => showToast('Đang phát lệnh in phiếu thanh toán quầy...', 'info')}
                 className="w-full py-2 bg-[#4F80E1] text-white rounded-xl font-bold text-xs shadow-md hover:bg-blue-600 transition-colors cursor-pointer"
               >
-                🖨 In phiếu thanh toán
+                🖨 In phiếu thanh toán quầy
               </button>
             </div>
 
             {/* Card 3: Lưu ý quan trọng */}
             <div className="bg-white rounded-[28px] p-6 shadow-md border border-neutral-100 space-y-3 text-xs font-semibold text-neutral-700">
-              <h4 className="font-extrabold text-[#1E2939]">Lưu ý quan trọng:</h4>
+              <h4 className="font-extrabold text-[#1E2939]">Hướng dẫn tiếp theo:</h4>
               <div className="space-y-2 text-[11px] text-neutral-600">
-                <p className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 text-[#155DFC] shrink-0 mt-0.5" /> Xuất trình phiếu thanh toán cho thu ngân</p>
-                <p className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 text-[#155DFC] shrink-0 mt-0.5" /> Thanh toán số tiền: <strong>450.000 đ</strong></p>
-                <p className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 text-[#155DFC] shrink-0 mt-0.5" /> Sau khi thanh toán, bạn sẽ nhận được phiếu khám bệnh</p>
-                <p className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 text-[#155DFC] shrink-0 mt-0.5" /> Hệ thống sẽ tự động kích hoạt hàng đợi của bạn</p>
+                <p className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 text-[#155DFC] shrink-0 mt-0.5" /> Xuất trình phiếu này cho nhân viên quầy thu ngân</p>
+                <p className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 text-[#155DFC] shrink-0 mt-0.5" /> Thanh toán số tiền: <strong>{formattedAmount}</strong></p>
+                <p className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 text-[#155DFC] shrink-0 mt-0.5" /> Nhân viên sẽ xác nhận và hệ thống tự động cấp Số thứ tự khám</p>
               </div>
             </div>
           </div>

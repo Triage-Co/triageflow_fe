@@ -10,62 +10,61 @@ interface RegisterStepperProps {
 
 const STEPS: { id: AIRegisterStep; stepNo: number; label: string }[] = [
   { id: 'body_select', stepNo: 1, label: 'Chọn vùng đau' },
-  { id: 'symptom_select', stepNo: 2, label: 'Mô tả triệu chứng' },
-  { id: 'quiz_detail', stepNo: 3, label: 'Câu hỏi chi tiết' },
-  { id: 'ai_result', stepNo: 4, label: 'Phân tích AI' },
-  { id: 'doctor_select', stepNo: 5, label: 'Chọn bác sĩ' },
+  { id: 'quiz_detail', stepNo: 2, label: 'Câu hỏi chi tiết' },
+  { id: 'ai_result', stepNo: 3, label: 'Phân tích AI' },
+  { id: 'doctor_select', stepNo: 4, label: 'Chọn bác sĩ' },
 ];
 
 const STEP_ORDER: Record<AIRegisterStep, number> = {
   body_select: 1,
-  symptom_select: 2,
-  quiz_detail: 3,
-  ai_result: 4,
-  doctor_select: 5,
-  confirm_info: 6
+  symptom_select: 1,
+  quiz_detail: 2,
+  ai_result: 3,
+  doctor_select: 4,
+  confirm_info: 5
 };
 
 export const RegisterStepper: React.FC<RegisterStepperProps> = ({ currentStep }) => {
   const currentStepNum = STEP_ORDER[currentStep] || 1;
 
   return (
-    <div className="w-56 bg-white rounded-[28px] p-6 shadow-md border border-neutral-100 flex flex-col gap-6 shrink-0 select-none">
+    <div className="w-64 bg-white rounded-[36px] p-8 shadow-sm border border-neutral-100/80 flex flex-col justify-between shrink-0 self-stretch select-none">
       {STEPS.map((step, idx) => {
         const isCompleted = step.stepNo < currentStepNum;
         const isActive = step.stepNo === currentStepNum;
         const isLast = idx === STEPS.length - 1;
 
         return (
-          <div key={step.id} className="relative flex items-center gap-3.5">
-            {/* Connecting line */}
+          <div key={step.id} className="relative flex items-center gap-4 py-2">
+            {/* Connecting vertical line (Matching Figma thin soft blue) */}
             {!isLast && (
-              <div 
+              <div
                 className={cn(
-                  "absolute left-4 top-8 w-0.5 h-7 transition-colors duration-300",
-                  isCompleted ? "bg-[#155DFC]" : "bg-neutral-200"
-                )} 
+                  "absolute left-5 top-12 w-0.5 h-16 transition-colors duration-300",
+                  (isCompleted || isActive) ? "bg-[#A0C2F9]" : "bg-neutral-200"
+                )}
               />
             )}
 
-            {/* Circle Badge */}
+            {/* Circle Badge (Matching Figma double blue ring icon for step 1) */}
             <div
               className={cn(
-                "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 shrink-0 z-10",
-                isCompleted && "bg-[#155DFC] text-white shadow-sm shadow-blue-500/30",
-                isActive && "bg-[#155DFC] text-white ring-4 ring-blue-100 shadow-md shadow-blue-500/20",
-                !isCompleted && !isActive && "bg-neutral-200 text-neutral-500"
+                "w-10 h-10 rounded-full flex items-center justify-center text-sm font-extrabold transition-all duration-300 shrink-0 z-10",
+                (isCompleted || isActive)
+                  ? "bg-[#5E96F6] text-white shadow-sm shadow-blue-400/30 ring-4 ring-[#D8E6FE]"
+                  : "bg-[#8D95A5] text-white font-extrabold"
               )}
             >
-              {isCompleted ? <Check className="w-4 h-4 stroke-[3]" /> : step.stepNo}
+              {(isCompleted || isActive) ? <Check className="w-5 h-5 stroke-[3]" /> : step.stepNo}
             </div>
 
-            {/* Label */}
-            <span 
+            {/* Step Label */}
+            <span
               className={cn(
-                "text-xs font-bold transition-colors leading-snug",
-                isActive && "text-[#155DFC]",
-                isCompleted && "text-neutral-700",
-                !isActive && !isCompleted && "text-neutral-400 font-medium"
+                "text-xs font-extrabold transition-colors leading-snug",
+                isActive && "text-[#2563EB]",
+                isCompleted && "text-neutral-800",
+                !isActive && !isCompleted && "text-[#8D95A5]"
               )}
             >
               {step.label}

@@ -1,445 +1,528 @@
-import React from 'react';
-import { useKioskStore, MOCK_DOCTORS } from '../store/kioskStore';
+import React, { useState, useEffect } from 'react';
+import { useKioskStore } from '../store/kioskStore';
+import { useTriageStore } from '../store/triageStore';
 import { RegisterStepper } from '../components/RegisterStepper';
-import { BodySelector } from '../components/BodySelector';
-import { PrimaryButton } from '../components/PrimaryButton';
-import { 
-  ArrowLeft, 
-  X, 
-  CheckCircle2, 
-  AlertTriangle, 
-  Sparkles, 
-  User, 
-  Clock, 
-  MapPin,
-  Flame,
-  Zap,
-  Activity,
-  HeartPulse
+import { BodyMapSelector } from '../components/BodyMapSelector';
+import { SymptomSelectorModal } from '../modals/SymptomSelectorModal';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Sparkles,
+  Loader2,
+  HelpCircle,
+  Clock,
+  UserCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { AIRegisterStep, DoctorItem, DoctorSlotItem } from '../types/kiosk.types';
 
 export const RegisterView: React.FC = () => {
+  // 1. KioskStore điều phối chung
   const aiRegisterStep = useKioskStore((state) => state.aiRegisterStep);
   const setAIRegisterStep = useKioskStore((state) => state.setAIRegisterStep);
-  const selectedBodyParts = useKioskStore((state) => state.selectedBodyParts);
-  const removeBodyPart = useKioskStore((state) => state.removeBodyPart);
-  const selectedSymptoms = useKioskStore((state) => state.selectedSymptoms);
-  const toggleSymptom = useKioskStore((state) => state.toggleSymptom);
-  const removeSymptom = useKioskStore((state) => state.removeSymptom);
-  const symptomDuration = useKioskStore((state) => state.symptomDuration);
-  const setSymptomDuration = useKioskStore((state) => state.setSymptomDuration);
-  const painLevel = useKioskStore((state) => state.painLevel);
-  const setPainLevel = useKioskStore((state) => state.setPainLevel);
-  const hasEmergency = useKioskStore((state) => state.hasEmergency);
-  const setHasEmergency = useKioskStore((state) => state.setHasEmergency);
-  const aiAnalysisResult = useKioskStore((state) => state.aiAnalysisResult);
-  const selectedDoctor = useKioskStore((state) => state.selectedDoctor);
-  const setSelectedDoctor = useKioskStore((state) => state.setSelectedDoctor);
-  const runAIAnalysis = useKioskStore((state) => state.runAIAnalysis);
-  const confirmRegistration = useKioskStore((state) => state.confirmRegistration);
+  const selectedGender = useKioskStore((state) => state.selectedGender);
+  const modalBodyPart = useKioskStore((state) => state.selectedBodyPart);
+  const setModalBodyPart = useKioskStore((state) => state.setSelectedBodyPart);
   const goHome = useKioskStore((state) => state.goHome);
-  const navigateToView = useKioskStore((state) => state.navigateToView);
 
-  const commonSymptoms = [
-    { name: 'Nổi mẩn đỏ', icon: Flame },
-    { name: 'Rát', icon: Zap },
-    { name: 'Tê bì', icon: Activity },
-    { name: 'Sưng tấy', icon: HeartPulse },
-    { name: 'Đau Nhức', icon: Activity },
-    { name: 'Bầm tím', icon: HeartPulse }
-  ];
+  // Dynamic Booking & Doctor State từ KioskStore
+  const availableDoctors = useKioskStore((state) => state.availableDoctors);
+  const availableSlots = useKioskStore((state) => state.availableSlots);
+  const isDoctorLoading = useKioskStore((state) => state.isDoctorLoading);
+  const isBookingProcessing = useKioskStore((state) => state.isBookingProcessing);
+
+  const executeAutoBooking = useKioskStore((state) => state.executeAutoBooking);
+  const fetchDoctorsAndSlots = useKioskStore((state) => state.fetchDoctorsAndSlots);
+  const fetchSlotsForDoctor = useKioskStore((state) => state.fetchSlotsForDoctor);
+  const executeManualBooking = useKioskStore((state) => state.executeManualBooking);
+
+  // 2. TriageStore quản lý luồng hỏi động nâng cao
+  const selectedSymptoms = useTriageStore((state) => state.selectedSymptoms);
+  const removeSymptom = useTriageStore((state) => state.removeSymptom);
+  const fetchAndMergeSymptoms = useTriageStore((state) => state.fetchAndMergeSymptoms);
+
+  const isApiLoading = useTriageStore((state) => state.isApiLoading);
+  const currentQuestion = useTriageStore((state) => state.currentQuestion);
+  const recommendedSpecialists = useTriageStore((state) => state.recommendedSpecialists);
+  const startDiagnosisFlow = useTriageStore((state) => state.startDiagnosisFlow);
+  const submitAnswersBatch = useTriageStore((state) => state.submitAnswersBatch);
+
+  // Local selection state cho chọn bác sĩ & khung giờ
+  const [selectedDoctorObj, setSelectedDoctorObj] = useState<DoctorItem | null>(null);
+  const [selectedSlotObj, setSelectedSlotObj] = useState<DoctorSlotItem | null>(null);
+
+  // Modal Control Local
+  const [isSymptomModalOpen, setIsSymptomModalOpen] = useState<boolean>(false);
+
+  // Trạng thái lưu trữ cục bộ các câu trả lời trên màn hình hiện tại
+  const [localAnswers, setLocalAnswers] = useState<Record<string, 'present' | 'absent' | 'unknown'>>({});
+
+  // Tự động làm sạch form câu trả lời cũ mỗi khi máy chủ trả về nhóm câu hỏi mới
+  useEffect(() => {
+    setLocalAnswers({});
+  }, [currentQuestion]);
+
+  const handleOpenRegionModal = (partId: string) => {
+    setModalBodyPart(partId);
+    setIsSymptomModalOpen(true);
+    fetchAndMergeSymptoms(partId);
+  };
+
+  // Tải danh sách Bác sĩ động khi chuyển sang bước doctor_select
+  const handleGoToDoctorSelect = () => {
+    const mainSpecialtyCode = recommendedSpecialists[0]?.specialty_code || 'SP_20';
+    fetchDoctorsAndSlots(mainSpecialtyCode);
+    setAIRegisterStep('doctor_select' as AIRegisterStep);
+  };
+
+  // Chọn Bác sĩ -> Lấy ngay khung giờ trống
+  const handleSelectDoctor = (doc: DoctorItem) => {
+    setSelectedDoctorObj(doc);
+    setSelectedSlotObj(null);
+    fetchSlotsForDoctor(doc.doctor_id);
+  };
+
+  // Kiểm tra xem tất cả câu hỏi con hiển thị trên màn hình đã được tích chọn hay chưa
+  const isAllAnswered = currentQuestion?.items
+    ? currentQuestion.items.every((item: any) => localAnswers[item.id])
+    : false;
+
+  // Thực hiện đóng gói dữ liệu và đẩy lên API khi nhấn nút "Tiếp tục" cuối trang
+  const handleNextQuestion = () => {
+    const formattedAnswers = Object.entries(localAnswers).map(([id, choiceId]) => ({
+      id,
+      choice_id: choiceId
+    }));
+    submitAnswersBatch(formattedAnswers);
+  };
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-6 py-6 z-10 space-y-5">
-      {/* Header bar */}
+    <div className="w-full min-h-screen p-6 lg:p-8 z-10 select-none flex flex-col justify-between space-y-6">
+
+      {/* Top Header Bar */}
       <div className="flex items-center gap-4">
-        <button 
-          onClick={goHome} 
-          className="flex items-center gap-2 px-4 py-2 bg-white/90 rounded-full text-xs font-bold text-neutral-700 shadow-sm border border-neutral-200 hover:bg-neutral-50 transition-colors cursor-pointer"
+        <button
+          onClick={goHome}
+          className="flex items-center gap-2 px-5 py-2.5 bg-white rounded-xl text-xs font-bold text-neutral-800 shadow-sm border border-neutral-100/80 hover:bg-neutral-50 transition-all cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" /> Quay lại
         </button>
-        <h2 className="text-2xl font-black text-[#1E2939] tracking-tight">
-          {aiRegisterStep === 'confirm_info' ? 'Xác nhận thông tin' : 'Phân loại triệu chứng AI'}
+        <h2 className="text-2xl lg:text-3xl font-black text-[#1E2939] tracking-tight ml-2">
+          {aiRegisterStep === 'quiz_detail'
+            ? 'Khảo sát triệu chứng nâng cao'
+            : aiRegisterStep === 'ai_result'
+              ? 'Kết quả khuyến nghị chuyên khoa'
+              : aiRegisterStep === 'doctor_select'
+                ? 'Chọn Bác sĩ & Khung giờ khám'
+                : 'Chọn vùng & triệu chứng đau'}
         </h2>
       </div>
 
-      {/* Main Container Layout with Stepper Sidebar */}
-      {aiRegisterStep !== 'confirm_info' ? (
-        <div className="flex flex-col md:flex-row gap-6">
-          {/* Left Stepper Sidebar */}
-          <RegisterStepper currentStep={aiRegisterStep} />
+      {/* Main Content Layout */}
+      <div className="flex flex-col lg:flex-row gap-6 flex-1 items-stretch min-h-[580px]">
+        {/* Left Stepper Sidebar */}
+        <RegisterStepper currentStep={aiRegisterStep} />
 
-          {/* Right Main Step Content */}
-          <div className="flex-1 space-y-6">
+        {/* STEP 1: BODY SELECT CANVAS */}
+        {aiRegisterStep === 'body_select' && (
+          <>
+            <div className="flex-1 flex flex-col self-stretch">
+              <BodyMapSelector onRegionClick={handleOpenRegionModal} />
+            </div>
 
-            {/* STEP 1: CHỌN VÙNG ĐAU */}
-            {aiRegisterStep === 'body_select' && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <div className="lg:col-span-8">
-                  <BodySelector />
-                </div>
+            {/* Right Sidebar Area */}
+            <div className="w-full lg:w-80 shrink-0 flex flex-col justify-between space-y-5 h-full">
+              <div className="bg-white rounded-[36px] p-6 shadow-sm border border-neutral-100/80 space-y-4">
+                <h3 className="font-extrabold text-[#1E2939] text-base">
+                  Triệu chứng đã chọn ({selectedSymptoms.length})
+                </h3>
 
-                <div className="lg:col-span-4 bg-white rounded-[28px] p-6 shadow-md border border-neutral-100 flex flex-col justify-between space-y-4">
-                  <div className="space-y-4">
-                    <h3 className="font-extrabold text-[#1E2939] text-sm">Vùng đã chọn ({selectedBodyParts.length})</h3>
-
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {selectedBodyParts.map((part) => (
-                        <div key={part} className="flex items-center justify-between bg-blue-50/70 border border-blue-100 px-4 py-2.5 rounded-2xl text-xs font-bold text-[#1E2939]">
-                          <span>{part}</span>
-                          <button onClick={() => removeBodyPart(part)} className="text-neutral-400 hover:text-rose-500 cursor-pointer">
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="bg-neutral-50 p-4 rounded-2xl border border-neutral-100 text-[11px] text-neutral-500 font-medium leading-relaxed">
-                      Lưu ý: Bạn có thể chọn nhiều vùng đau. Hệ thống AI sẽ phân tích và đề xuất chuyên khoa phù hợp.
-                    </div>
-                  </div>
-
-                  <PrimaryButton 
-                    onClick={() => setAIRegisterStep('symptom_select')}
-                    disabled={selectedBodyParts.length === 0}
-                    className="w-full"
-                  >
-                    Tiếp tục →
-                  </PrimaryButton>
-                </div>
-              </div>
-            )}
-
-            {/* STEP 2: MÔ TẢ TRIỆU CHỨNG */}
-            {aiRegisterStep === 'symptom_select' && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <div className="lg:col-span-8 bg-white rounded-[28px] p-6 shadow-md border border-neutral-100 space-y-4">
-                  <h3 className="font-extrabold text-[#1E2939] text-base">Triệu chứng thường gặp</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                    {commonSymptoms.map((sym) => {
-                      const isSelected = selectedSymptoms.includes(sym.name);
-                      const IconComp = sym.icon;
-                      return (
+                <div className="space-y-3 max-h-56 overflow-y-auto">
+                  {selectedSymptoms.length > 0 ? (
+                    selectedSymptoms.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between bg-[#D8E6FE] px-5 py-3.5 rounded-2xl text-xs font-extrabold text-[#1E2939]"
+                      >
+                        <span className="truncate max-w-[180px]">{item.labelVn}</span>
                         <button
-                          key={sym.name}
-                          onClick={() => toggleSymptom(sym.name)}
-                          className={cn(
-                            "p-5 rounded-2xl border flex flex-col items-center justify-center gap-2 transition-all cursor-pointer aspect-square",
-                            isSelected 
-                              ? "bg-blue-50 border-[#155DFC] text-[#155DFC] ring-2 ring-blue-200" 
-                              : "bg-white border-neutral-200 hover:border-neutral-300 text-neutral-700"
-                          )}
+                          type="button"
+                          onClick={() => removeSymptom(item.id)}
+                          className="text-neutral-600 hover:text-rose-600 font-bold cursor-pointer text-xs ml-2 shrink-0"
                         >
-                          <IconComp className="w-6 h-6" />
-                          <span className="text-xs font-bold">{sym.name}</span>
+                          Xóa
                         </button>
-                      );
-                    })}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-xs text-neutral-400 italic bg-neutral-50 p-4 rounded-2xl border border-neutral-100 text-center">
+                      Chưa chọn triệu chứng nào. Nhấp vào hình cơ thể để chọn triệu chứng.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-[#EBF3FF] rounded-[28px] p-6 text-xs text-neutral-600 font-semibold text-center leading-relaxed">
+                <strong>Lưu ý:</strong> Bạn có thể chọn nhiều triệu chứng đau. Hệ thống AI sẽ phân tích và đề xuất chuyên khoa phù hợp.
+              </div>
+
+              <button
+                type="button"
+                onClick={startDiagnosisFlow}
+                disabled={selectedSymptoms.length === 0 || isApiLoading}
+                className={cn(
+                  "w-full py-4 rounded-full text-white font-bold text-base shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer",
+                  selectedSymptoms.length > 0 && !isApiLoading ? "bg-[#74A4F6] hover:bg-[#2563EB]" : "bg-neutral-300 cursor-not-allowed"
+                )}
+              >
+                {isApiLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" /> Đang chuẩn bị khảo sát...
+                  </>
+                ) : (
+                  "Tiếp tục →"
+                )}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* STEP 2: CÂU HỎI ĐỘNG */}
+        {aiRegisterStep === 'quiz_detail' && (
+          <div className="flex-1 flex flex-col justify-between space-y-6">
+            <div className="bg-white rounded-[32px] p-8 shadow-sm border border-neutral-100/80 space-y-6 flex-1 flex flex-col justify-between items-center relative min-h-[460px]">
+
+              {isApiLoading && (
+                <div className="absolute inset-0 bg-white/70 backdrop-blur-sm z-10 flex items-center justify-center rounded-[32px]">
+                  <div className="flex flex-col items-center gap-2">
+                    <Loader2 className="w-10 h-10 text-[#74A4F6] animate-spin" />
+                    <span className="text-xs font-bold text-neutral-500">Hệ thống AI đang phân tích...</span>
                   </div>
                 </div>
+              )}
 
-                <div className="lg:col-span-4 bg-white rounded-[28px] p-6 shadow-md border border-neutral-100 flex flex-col justify-between space-y-4">
-                  <div className="space-y-4">
-                    <h3 className="font-extrabold text-[#1E2939] text-sm">Triệu chứng đã chọn ({selectedSymptoms.length})</h3>
-                    <div className="space-y-2">
-                      {selectedSymptoms.map((sym) => (
-                        <div key={sym} className="flex items-center justify-between bg-blue-50/70 border border-blue-100 px-4 py-2.5 rounded-2xl text-xs font-bold text-[#1E2939]">
-                          <span>{sym}</span>
-                          <button onClick={() => removeSymptom(sym)} className="text-neutral-400 hover:text-rose-500 cursor-pointer">
-                            <X className="w-4 h-4" />
+              {currentQuestion ? (
+                <div className="w-full max-w-2xl space-y-6 text-center animate-in fade-in duration-300 flex-1 flex flex-col justify-center">
+                  <div className="w-16 h-16 rounded-full bg-blue-50 text-[#74A4F6] flex items-center justify-center mx-auto shadow-sm mb-2">
+                    <HelpCircle className="w-8 h-8" />
+                  </div>
+
+                  <h3 className="text-xl sm:text-2xl font-black text-[#1E2939] leading-snug tracking-tight px-4 mb-4">
+                    {currentQuestion.text}
+                  </h3>
+
+                  {currentQuestion.items && currentQuestion.items.length === 1 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 px-4">
+                      {currentQuestion.items[0].choices.map((choice: any) => {
+                        const isSelected = localAnswers[currentQuestion.items[0].id] === choice.id;
+                        return (
+                          <button
+                            key={choice.id}
+                            type="button"
+                            onClick={() => setLocalAnswers({ [currentQuestion.items[0].id]: choice.id })}
+                            className={cn(
+                              "py-4 px-6 rounded-2xl text-sm font-extrabold border shadow-sm transition-all cursor-pointer active:scale-98 text-center",
+                              isSelected
+                                ? "bg-[#2563EB] border-[#2563EB] text-white hover:bg-blue-700"
+                                : "bg-white border-neutral-200 text-neutral-700 hover:bg-blue-50 hover:border-[#74A4F6] hover:text-[#2563EB]"
+                            )}
+                          >
+                            {choice.label === 'Yes' || choice.id === 'present' ? 'Có / Đúng' : choice.label === 'No' || choice.id === 'absent' ? 'Không' : 'Không rõ / Chưa biết'}
                           </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-h-[300px] overflow-y-auto pt-2 px-2 custom-scrollbar">
+                      {currentQuestion.items && currentQuestion.items.map((item: any) => (
+                        <div
+                          key={item.id}
+                          className="bg-neutral-50/70 p-4 rounded-2xl border border-neutral-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition-all hover:bg-neutral-50 hover:border-neutral-200"
+                        >
+                          <span className="font-extrabold text-neutral-700 text-sm text-left leading-snug flex-1">
+                            {item.name}
+                          </span>
+                          <div className="grid grid-cols-3 gap-2 shrink-0 w-full sm:w-auto">
+                            {item.choices.map((choice: any) => {
+                              const isSelected = localAnswers[item.id] === choice.id;
+                              return (
+                                <button
+                                  key={choice.id}
+                                  type="button"
+                                  onClick={() => setLocalAnswers(prev => ({ ...prev, [item.id]: choice.id }))}
+                                  className={cn(
+                                    "py-2.5 px-3 rounded-xl text-xs font-black border shadow-sm transition-all cursor-pointer active:scale-95 text-center min-w-[75px]",
+                                    isSelected
+                                      ? "bg-[#2563EB] border-[#2563EB] text-white hover:bg-blue-700"
+                                      : "bg-white border-neutral-200 text-neutral-600 hover:bg-blue-50 hover:border-[#74A4F6] hover:text-[#2563EB]"
+                                  )}
+                                >
+                                  {choice.label === 'Yes' || choice.id === 'present' ? 'Có' : choice.label === 'No' || choice.id === 'absent' ? 'Không' : 'Không rõ'}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
                       ))}
                     </div>
-
-                    <div className="space-y-2 pt-2">
-                      <h4 className="text-xs font-bold text-neutral-400">Vùng đau đã chọn:</h4>
-                      <div className="flex flex-wrap gap-1.5">
-                        {selectedBodyParts.map((part) => (
-                          <span key={part} className="px-2.5 py-1 bg-neutral-100 border border-neutral-200 rounded-lg text-[10px] font-bold text-neutral-600">
-                            {part}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3">
-                    <PrimaryButton variant="outline" onClick={() => setAIRegisterStep('body_select')}>
-                      Quay lại
-                    </PrimaryButton>
-                    <PrimaryButton onClick={() => setAIRegisterStep('quiz_detail')} className="flex-1">
-                      Tiếp tục →
-                    </PrimaryButton>
-                  </div>
+                  )}
                 </div>
+              ) : (
+                <div className="text-center italic text-neutral-400 text-xs my-auto">
+                  Không tìm thấy câu hỏi tiếp theo từ máy chủ.
+                </div>
+              )}
+
+              {currentQuestion && (
+                <div className="w-full max-w-md pt-4 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleNextQuestion}
+                    disabled={!isAllAnswered || isApiLoading}
+                    className={cn(
+                      "w-full py-3.5 rounded-full text-white font-bold text-base shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer",
+                      isAllAnswered && !isApiLoading ? "bg-[#74A4F6] hover:bg-[#2563EB]" : "bg-neutral-300 cursor-not-allowed"
+                    )}
+                  >
+                    {isApiLoading ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" /> Đang gửi đáp án...
+                      </>
+                    ) : (
+                      "Tiếp tục câu hỏi →"
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="text-center text-[11px] text-neutral-400 font-medium shrink-0">
+              * Vui lòng trả lời trung thực để hệ thống hỗ trợ chỉ định chuyên khoa chính xác nhất.
+            </div>
+          </div>
+        )}
+
+        {/* STEP 3: KẾT QUẢ ĐỀ XUẤT CHUYÊN KHOA AI & NÚT XẾP PHÒNG TỰ ĐỘNG */}
+        {aiRegisterStep === 'ai_result' && (
+          <div className="space-y-6 flex-1 flex flex-col justify-between">
+            <div className="bg-[#74A4F6] text-white rounded-[36px] p-8 shadow-xl flex flex-col items-center text-center space-y-3 relative overflow-hidden">
+              <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center text-white backdrop-blur-md mb-1">
+                <CheckCircle2 className="w-9 h-9" />
               </div>
-            )}
+              <h2 className="text-2xl sm:text-3xl font-black tracking-tight">Phân tích hoàn tất!</h2>
+              <p className="text-xs font-extrabold text-blue-100 bg-white/10 px-5 py-2 rounded-full backdrop-blur-md border border-white/20">
+                Đã xác định được chuyên khoa khám phù hợp nhất
+              </p>
+            </div>
 
-            {/* STEP 3: CÂU HỎI CHI TIẾT */}
-            {aiRegisterStep === 'quiz_detail' && (
-              <div className="bg-white rounded-[28px] p-8 shadow-md border border-neutral-100 space-y-6">
-                <h3 className="font-extrabold text-[#1E2939] text-lg">Chi tiết triệu chứng</h3>
+            <div className="bg-white rounded-[36px] p-8 shadow-sm border border-neutral-100 space-y-5 flex-1 overflow-y-auto">
+              <div className="flex items-center gap-2 font-black text-[#1E2939] border-b border-neutral-100 pb-4 text-base">
+                <Sparkles className="w-5 h-5 text-[#74A4F6]" />
+                <span>Chuyên khoa gợi ý ưu tiên cho bạn:</span>
+              </div>
 
-                {/* Q1: Triệu chứng kéo dài bao lâu? */}
-                <div className="bg-neutral-50/80 rounded-2xl p-5 border border-neutral-100 space-y-3">
-                  <h4 className="font-bold text-sm text-[#1E2939]">1. Triệu chứng kéo dài bao lâu?</h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {['Vài giờ', '1-2 ngày', '3-7 ngày', 'Hơn 1 tuần'].map((dur) => (
-                      <button
-                        key={dur}
-                        onClick={() => setSymptomDuration(dur)}
-                        className={cn(
-                          "py-3 px-4 rounded-xl text-xs font-bold border transition-all cursor-pointer",
-                          symptomDuration === dur
-                            ? "bg-[#155DFC] text-white border-[#155DFC] shadow-md shadow-blue-500/20"
-                            : "bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-100"
-                        )}
-                      >
-                        {dur}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Q2: Mức độ đau từ 1-10 */}
-                <div className="bg-neutral-50/80 rounded-2xl p-5 border border-neutral-100 space-y-3">
-                  <div className="flex justify-between items-center text-sm font-bold text-[#1E2939]">
-                    <span>2. Mức độ đau từ 1-10</span>
-                    <span className="text-[#155DFC] bg-blue-50 px-3 py-1 rounded-full border border-blue-100 text-xs">
-                      Đau mức {painLevel}/10
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-4 pt-2">
-                    <span className="text-xs font-bold text-neutral-400">Nhẹ (1)</span>
-                    <input 
-                      type="range" 
-                      min="1" 
-                      max="10" 
-                      value={painLevel} 
-                      onChange={(e) => setPainLevel(parseInt(e.target.value))}
-                      className="flex-1 accent-[#155DFC] h-2 bg-neutral-200 rounded-lg cursor-pointer"
-                    />
-                    <span className="text-xs font-bold text-neutral-400">Nặng (10)</span>
-                  </div>
-                </div>
-
-                {/* Q3: Dấu hiệu khẩn cấp */}
-                <div className="bg-rose-50/50 rounded-2xl p-5 border border-rose-100 space-y-3">
-                  <div className="flex items-center gap-2 text-rose-700 font-bold text-sm">
-                    <AlertTriangle className="w-5 h-5 text-rose-500" />
-                    <span>3. Bạn có gặp các triệu chứng khẩn cấp sau không?</span>
-                  </div>
-                  <p className="text-xs text-neutral-500">Đau ngực dữ dội, khó thở nghiêm trọng, mất ý thức, co giật</p>
-                  <div className="grid grid-cols-2 gap-4 pt-1">
-                    <button
-                      onClick={() => setHasEmergency(true)}
-                      className={cn(
-                        "py-3 rounded-xl text-xs font-bold border transition-all cursor-pointer",
-                        hasEmergency 
-                          ? "bg-rose-600 text-white border-rose-600 shadow-md shadow-rose-500/20" 
-                          : "bg-white text-rose-600 border-rose-200 hover:bg-rose-50"
-                      )}
+              <div className="space-y-3">
+                {recommendedSpecialists.length > 0 ? (
+                  recommendedSpecialists.map((spec, idx) => (
+                    <div
+                      key={spec.id || idx}
+                      className="p-5 rounded-2xl border flex items-center justify-between transition-all bg-emerald-50/50 border-emerald-200 text-emerald-900 shadow-sm"
                     >
-                      Có - Cần cấp cứu ngay
-                    </button>
-                    <button
-                      onClick={() => setHasEmergency(false)}
-                      className={cn(
-                        "py-3 rounded-xl text-xs font-bold border transition-all cursor-pointer",
-                        !hasEmergency 
-                          ? "bg-[#1E2939] text-white border-[#1E2939]" 
-                          : "bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-100"
-                      )}
-                    >
-                      Không
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex justify-between pt-2">
-                  <PrimaryButton variant="outline" onClick={() => setAIRegisterStep('symptom_select')}>
-                    Quay lại
-                  </PrimaryButton>
-                  <PrimaryButton onClick={runAIAnalysis}>
-                    <Sparkles className="w-4 h-4" /> Phân tích AI →
-                  </PrimaryButton>
-                </div>
-              </div>
-            )}
-
-            {/* STEP 4: PHÂN TÍCH AI */}
-            {aiRegisterStep === 'ai_result' && (
-              <div className="space-y-6">
-                {/* Recommendation Banner */}
-                <div className="bg-[#4F80E1] text-white rounded-[28px] p-8 shadow-xl flex flex-col items-center text-center space-y-3 relative overflow-hidden">
-                  <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center text-white backdrop-blur-md mb-1">
-                    <CheckCircle2 className="w-8 h-8" />
-                  </div>
-                  <h2 className="text-2xl font-black tracking-tight">
-                    Khuyến nghị: {aiAnalysisResult?.recommendedSpecialty || 'Nội Tổng Quát'}
-                  </h2>
-                  <p className="text-xs font-semibold text-blue-100 bg-white/10 px-4 py-1.5 rounded-full backdrop-blur-md border border-white/20">
-                    Mức độ ưu tiên: {aiAnalysisResult?.priority || 'Thường'}
-                  </p>
-                </div>
-
-                {/* AI Analysis Details */}
-                <div className="bg-white rounded-[28px] p-6 shadow-md border border-neutral-100 space-y-4">
-                  <div className="flex items-center gap-2 font-bold text-[#1E2939] border-b border-neutral-100 pb-3">
-                    <Sparkles className="w-5 h-5 text-[#155DFC]" />
-                    <span>Phân tích của AI</span>
-                  </div>
-
-                  <div className="space-y-3 text-xs font-semibold text-neutral-700">
-                    <div className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-[#155DFC]" /> Triệu chứng chính: {selectedSymptoms.join(', ') || 'đau đầu, sốt'}</div>
-                    <div className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-[#155DFC]" /> Mức độ đau: {painLevel}/10</div>
-                    <div className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-[#155DFC]" /> Thời gian: {symptomDuration}</div>
-                    <div className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-[#155DFC]" /> {hasEmergency ? '⚠️ Có dấu hiệu khẩn cấp' : 'Không có dấu hiệu khẩn cấp'}</div>
-                  </div>
-                </div>
-
-                <div className="flex gap-4">
-                  <PrimaryButton onClick={() => setAIRegisterStep('doctor_select')} className="flex-1">
-                    Chọn bác sĩ →
-                  </PrimaryButton>
-                  <PrimaryButton onClick={confirmRegistration} variant="secondary" className="flex-1">
-                    Bỏ qua →
-                  </PrimaryButton>
-                </div>
-              </div>
-            )}
-
-            {/* STEP 5: CHỌN BÁC SĨ */}
-            {aiRegisterStep === 'doctor_select' && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                {/* Doctor List */}
-                <div className="lg:col-span-7 space-y-4">
-                  <h3 className="font-extrabold text-[#1E2939] text-base">Danh sách Bác sĩ sẵn sàng</h3>
-                  {MOCK_DOCTORS.map((doc) => {
-                    const isSelected = selectedDoctor?.id === doc.id;
-                    return (
-                      <button
-                        key={doc.id}
-                        onClick={() => setSelectedDoctor(doc)}
-                        className={cn(
-                          "w-full p-5 rounded-[24px] border text-left flex items-start gap-4 transition-all cursor-pointer",
-                          isSelected
-                            ? "bg-blue-50/80 border-[#155DFC] ring-2 ring-blue-200 shadow-md"
-                            : "bg-white border-neutral-100 hover:border-neutral-200"
-                        )}
-                      >
-                        <div className="w-12 h-12 rounded-full bg-blue-100 text-[#155DFC] flex items-center justify-center font-bold text-lg shrink-0">
-                          👨‍⚕️
-                        </div>
-                        <div className="space-y-1">
-                          <h4 className="font-extrabold text-[#1E2939] text-sm">{doc.name}</h4>
-                          <p className="text-xs text-neutral-500 font-medium">{doc.specialty}</p>
-                          <p className="text-[11px] text-neutral-400">Phòng {doc.room} • {doc.location}</p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Selected Doctor Card */}
-                <div className="lg:col-span-5 bg-white rounded-[28px] p-6 shadow-md border border-neutral-100 flex flex-col justify-between space-y-6">
-                  <div className="space-y-4">
-                    <h3 className="font-extrabold text-[#1E2939] text-sm">Bác sĩ đã chọn</h3>
-
-                    {selectedDoctor && (
-                      <div className="flex flex-col items-center text-center space-y-3 p-6 bg-neutral-50 rounded-2xl border border-neutral-100">
-                        <div className="w-16 h-16 rounded-full bg-blue-100 text-[#155DFC] flex items-center justify-center font-bold text-2xl">
-                          👨‍⚕️
+                      <div className="flex items-center gap-4">
+                        <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center font-black text-xs">
+                          {idx + 1}
                         </div>
                         <div>
-                          <h4 className="font-black text-[#1E2939] text-base">{selectedDoctor.name}</h4>
-                          <p className="text-xs text-neutral-500 font-bold">{selectedDoctor.specialty}</p>
+                          <h4 className="font-extrabold text-base tracking-tight">{spec.name}</h4>
+                          <p className="text-[11px] text-neutral-400 font-semibold mt-0.5">
+                            Chẩn đoán ưu tiên cao nhất dựa trên thuật toán AI
+                          </p>
                         </div>
-                        <div className="w-full border-t border-neutral-200 pt-3 text-xs space-y-1">
-                          <div className="flex justify-between"><span className="text-neutral-400">Phòng:</span> <span className="font-bold text-[#1E2939]">{selectedDoctor.room}</span></div>
-                          <div className="flex justify-between"><span className="text-neutral-400">Vị trí:</span> <span className="font-bold text-[#1E2939]">{selectedDoctor.location}</span></div>
-                        </div>
-                        <span className="text-xs font-bold bg-blue-50 text-[#155DFC] px-3.5 py-1 rounded-full border border-blue-100">
-                          {selectedDoctor.specialty}
-                        </span>
                       </div>
-                    )}
+                      <span className="text-xs font-bold px-4 py-1.5 bg-white text-emerald-700 rounded-full border border-emerald-100 shadow-2xs">
+                        {spec.specialty_code || 'Chuyên khoa'}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-5 rounded-2xl bg-blue-50 border border-blue-200 text-blue-900 flex items-center gap-3">
+                    <span className="text-xl">👨‍⚕️</span>
+                    <div>
+                      <h4 className="font-extrabold text-base">Nội Tổng Quát</h4>
+                      <p className="text-[11px] text-blue-500 font-bold mt-0.5">Hệ thống tự động điều hướng sang chuyên khoa Nội Tổng Quát</p>
+                    </div>
                   </div>
-
-                  <PrimaryButton onClick={confirmRegistration} className="w-full">
-                    Xác nhận →
-                  </PrimaryButton>
-                </div>
-              </div>
-            )}
-
-          </div>
-        </div>
-      ) : (
-        /* STEP 6: XÁC NHẬN THÔNG TIN & THANH TOÁN (Full Width) */
-        <div className="space-y-6 animate-in fade-in duration-300">
-          {/* Banner Đăng ký thành công */}
-          <div className="bg-[#4F80E1] text-white rounded-[28px] p-6 shadow-xl flex items-center justify-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white backdrop-blur-md">
-              <CheckCircle2 className="w-6 h-6" />
-            </div>
-            <h3 className="text-2xl font-black tracking-tight">Đăng ký thành công!</h3>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Left Info Card */}
-            <div className="bg-white rounded-[28px] p-6 shadow-md border border-neutral-100 space-y-4">
-              <span className="inline-block text-xs font-bold bg-blue-50 text-[#155DFC] px-3.5 py-1.5 rounded-full border border-blue-100">
-                Chuyên khoa đề xuất: <strong className="font-black">Nội Tổng Quát</strong>
-              </span>
-
-              <div className="flex items-center gap-4 pt-2">
-                <div className="w-14 h-14 rounded-full bg-blue-100 text-[#155DFC] flex items-center justify-center text-2xl font-bold">
-                  👨‍⚕️
-                </div>
-                <div>
-                  <h4 className="font-black text-[#1E2939] text-base">{selectedDoctor?.name || 'BS. Nguyễn Minh Tuấn'}</h4>
-                  <p className="text-xs text-neutral-500 font-bold">{selectedDoctor?.specialty || 'Nội Tổng Quát'}</p>
-                </div>
-              </div>
-
-              <div className="space-y-2 pt-2 border-t border-neutral-100 text-xs font-semibold text-neutral-700">
-                <div className="flex items-center gap-2"><MapPin className="w-4 h-4 text-[#155DFC]" /> Phòng khám: {selectedDoctor?.room || 'P.204'} - {selectedDoctor?.location || 'Tầng 2 - Khu B'}</div>
-                <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-[#155DFC]" /> Thời gian chờ dự kiến: ~15 phút</div>
-                <div className="flex items-center gap-2"><Activity className="w-4 h-4 text-[#155DFC]" /> Ngày khám: Hôm nay - {new Date().toLocaleDateString('vi-VN')}</div>
-              </div>
-
-              <div className="pt-4">
-                <PrimaryButton variant="outline" onClick={() => setAIRegisterStep('doctor_select')} className="w-full">
-                  ← Chọn lại bác sĩ
-                </PrimaryButton>
+                )}
               </div>
             </div>
 
-            {/* Right Payment Card */}
-            <div className="bg-white rounded-[28px] p-6 shadow-md border border-neutral-100 flex flex-col justify-between space-y-6">
+            {/* 2 LỰA CHỌN: XẾP PHÒNG TỰ ĐỘNG HOẶC TỰ CHỌN BÁC SĨ */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <button
+                type="button"
+                onClick={executeAutoBooking}
+                disabled={isBookingProcessing}
+                className="w-full py-4 rounded-full bg-[#155DFC] hover:bg-blue-700 text-white font-extrabold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {isBookingProcessing ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" /> Đang xếp phòng tự động...
+                  </>
+                ) : (
+                  <>
+                    ⚡ Xếp phòng tự động (Khuyên dùng)
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleGoToDoctorSelect}
+                disabled={isBookingProcessing}
+                className="w-full py-4 rounded-full bg-white text-[#155DFC] border border-blue-200 font-extrabold text-sm shadow-sm hover:bg-blue-50 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                👨‍⚕️ Tự chọn Bác sĩ & Khung giờ
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 4: CHỌN BÁC SĨ & KHUNG GIỜ ĐỘNG TỪ API */}
+        {aiRegisterStep === 'doctor_select' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
+            {/* Cột trái: Danh sách Bác sĩ thực tế */}
+            <div className="lg:col-span-7 space-y-4 overflow-y-auto max-h-[500px] pr-1">
+              <h3 className="font-extrabold text-[#1E2939] text-base">Danh sách Bác sĩ sẵn sàng</h3>
+              
+              {isDoctorLoading && availableDoctors.length === 0 ? (
+                <div className="flex items-center justify-center p-12 bg-white rounded-3xl border border-neutral-100">
+                  <Loader2 className="w-8 h-8 text-[#155DFC] animate-spin" />
+                  <span className="text-xs font-bold text-neutral-500 ml-2">Đang tải danh sách Bác sĩ...</span>
+                </div>
+              ) : availableDoctors.length > 0 ? (
+                availableDoctors.map((doc) => {
+                  const isSelected = selectedDoctorObj?.doctor_id === doc.doctor_id;
+                  return (
+                    <button
+                      key={doc.doctor_id}
+                      onClick={() => handleSelectDoctor(doc)}
+                      className={cn(
+                        "w-full p-5 rounded-[24px] border text-left flex items-start gap-4 transition-all cursor-pointer",
+                        isSelected
+                          ? "bg-blue-50/80 border-[#74A4F6] ring-2 ring-blue-200 shadow-md"
+                          : "bg-white border-neutral-100 hover:border-neutral-200"
+                      )}
+                    >
+                      <div className="w-12 h-12 rounded-full bg-blue-100 text-[#74A4F6] flex items-center justify-center font-bold text-lg shrink-0">👨‍⚕️</div>
+                      <div className="space-y-1">
+                        <h4 className="font-extrabold text-[#1E2939] text-sm">{doc.full_name}</h4>
+                        <p className="text-xs text-neutral-500 font-medium">{doc.specialty_name || 'Chuyên khoa'}</p>
+                        <p className="text-[11px] text-neutral-400">Phòng {doc.room_name || 'Đang xếp'} • Giấy phép: {doc.license_number || '--'}</p>
+                      </div>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="p-8 bg-neutral-50 rounded-3xl border border-neutral-100 text-center text-xs font-bold text-neutral-500">
+                  Không tìm thấy bác sĩ khả dụng cho chuyên khoa này. Bạn có thể sử dụng tính năng Xếp phòng tự động.
+                  <button
+                    onClick={executeAutoBooking}
+                    className="mt-3 block mx-auto px-4 py-2 bg-[#155DFC] text-white rounded-xl font-bold text-xs"
+                  >
+                    ⚡ Xếp phòng tự động ngay
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Cột phải: Bác sĩ đã chọn & Khung giờ trống */}
+            <div className="lg:col-span-5 bg-white rounded-[36px] p-6 shadow-sm border border-neutral-100 flex flex-col justify-between space-y-6">
               <div className="space-y-4">
-                <h3 className="font-extrabold text-[#1E2939] text-base border-b border-neutral-100 pb-3">Thông tin thanh toán</h3>
-                <div className="space-y-3 text-xs font-semibold text-neutral-600">
-                  <div className="flex justify-between"><span>Phí khám bệnh:</span> <span className="font-bold text-[#1E2939]">150.000 đ</span></div>
-                  <div className="flex justify-between"><span>Phí dịch vụ:</span> <span className="font-bold text-[#1E2939]">50.000 đ</span></div>
-                  <div className="flex justify-between border-t border-neutral-200 pt-3 text-base font-black text-[#1E2939]">
-                    <span>Tổng cộng:</span>
-                    <span className="text-xl text-[#155DFC]">200.000 đ</span>
+                <h3 className="font-extrabold text-[#1E2939] text-sm">Bác sĩ & Khung giờ đã chọn</h3>
+
+                {selectedDoctorObj ? (
+                  <div className="space-y-4">
+                    <div className="flex flex-col items-center text-center space-y-2 p-4 bg-neutral-50 rounded-2xl border border-neutral-100">
+                      <div className="w-12 h-12 rounded-full bg-blue-100 text-[#74A4F6] flex items-center justify-center font-bold text-xl">👨‍⚕️</div>
+                      <div>
+                        <h4 className="font-black text-[#1E2939] text-sm">{selectedDoctorObj.full_name}</h4>
+                        <p className="text-xs text-neutral-500 font-bold">{selectedDoctorObj.specialty_name || 'Chuyên khoa'}</p>
+                      </div>
+                    </div>
+
+                    {/* Danh sách Khung giờ trống của Bác sĩ */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-neutral-600 block">Chọn khung giờ khám:</label>
+                      
+                      {isDoctorLoading ? (
+                        <div className="text-center py-4 text-xs font-bold text-neutral-400">Đang tải khung giờ...</div>
+                      ) : availableSlots.length > 0 ? (
+                        <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto p-1">
+                          {availableSlots.map((slot) => {
+                            const isSlotSelected = selectedSlotObj?.slot_id === slot.slot_id;
+                            return (
+                              <button
+                                key={slot.slot_id}
+                                onClick={() => setSelectedSlotObj(slot)}
+                                className={cn(
+                                  "py-2 px-3 rounded-xl text-xs font-bold border transition-all text-center flex items-center justify-center gap-1 cursor-pointer",
+                                  isSlotSelected
+                                    ? "bg-[#155DFC] text-white border-[#155DFC]"
+                                    : "bg-white border-neutral-200 text-neutral-700 hover:bg-blue-50"
+                                )}
+                              >
+                                <Clock className="w-3.5 h-3.5" /> {slot.start_time || '08:00'}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-neutral-400 italic p-3 bg-neutral-50 rounded-xl text-center">
+                          Vẫn còn suất khám mặc định cho ngày hôm nay.
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="text-xs text-neutral-400 italic p-6 bg-neutral-50 rounded-2xl text-center border border-neutral-100">
+                    Vui lòng chọn một bác sĩ từ danh sách bên trái.
+                  </div>
+                )}
               </div>
 
-              <PrimaryButton onClick={() => navigateToView('payment')} className="w-full">
-                Tiếp tục thanh toán →
-              </PrimaryButton>
+              <button
+                onClick={() => {
+                  if (selectedSlotObj?.slot_id) {
+                    executeManualBooking(selectedSlotObj.slot_id);
+                  } else {
+                    executeAutoBooking();
+                  }
+                }}
+                disabled={!selectedDoctorObj || isBookingProcessing}
+                className={cn(
+                  "w-full py-4 rounded-full text-white font-bold text-base shadow-md transition-all cursor-pointer flex items-center justify-center gap-2",
+                  selectedDoctorObj && !isBookingProcessing ? "bg-[#74A4F6] hover:bg-[#2563EB]" : "bg-neutral-300 cursor-not-allowed"
+                )}
+              >
+                {isBookingProcessing ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" /> Đang đăng ký...
+                  </>
+                ) : (
+                  "Xác nhận đặt lịch →"
+                )}
+              </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
+
+      <SymptomSelectorModal
+        isOpen={isSymptomModalOpen}
+        onClose={() => setIsSymptomModalOpen(false)}
+        bodyPartIdOrName={modalBodyPart}
+        gender={selectedGender}
+      />
     </div>
   );
 };
