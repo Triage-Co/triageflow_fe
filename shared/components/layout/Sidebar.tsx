@@ -4,11 +4,17 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
+    Activity,
     BarChart3,
     Bell,
+    CalendarClock,
     ChevronLeft,
     ChevronRight,
+    Cpu,
+    Home,
     LayoutDashboard,
+    ListOrdered,
+    Map,
     Settings,
     UserCheck,
     Users,
@@ -144,7 +150,10 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
     }, []);
 
     useEffect(() => {
-        setAvatarBroken(false);
+        const timer = window.setTimeout(() => {
+            setAvatarBroken(false);
+        }, 0);
+        return () => window.clearTimeout(timer);
     }, [user?.avatar]);
 
     const handleLogout = () => {

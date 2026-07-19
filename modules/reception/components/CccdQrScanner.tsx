@@ -602,10 +602,10 @@ export function CccdQrScanner({ open, onClose, onSuccess, onManualInput }: CccdQ
                                 {loadingCredentials
                                     ? 'Đang tải cấu hình eKYC...'
                                     : phase === 'starting'
-                                      ? mode === 'ekyc'
-                                          ? 'Đang khởi động VNPT eKYC...'
-                                          : 'Đang mở camera...'
-                                      : 'Đang xử lý kết quả...'}
+                                        ? mode === 'ekyc'
+                                            ? 'Đang khởi động VNPT eKYC...'
+                                            : 'Đang mở camera...'
+                                        : 'Đang xử lý kết quả...'}
                             </p>
                         </div>
                     )}

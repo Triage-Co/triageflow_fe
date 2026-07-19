@@ -303,7 +303,10 @@ export function SymptomTriageStep({
         if (!departmentId || specialtyCatalog.length === 0) return;
         const item = resolveCatalogSpecialty(departmentId, specialtyCatalog);
         if (!item) return;
-        void loadDoctorsForSpecialty(item);
+        const timer = window.setTimeout(() => {
+            void loadDoctorsForSpecialty(item);
+        }, 0);
+        return () => window.clearTimeout(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ reload khi đổi chuyên khoa
     }, [departmentId, specialtyCatalog]);
 
@@ -512,8 +515,8 @@ export function SymptomTriageStep({
                                     {questionType === 'group_single'
                                         ? 'Chọn 1 mức án'
                                         : questionType === 'group_multiple'
-                                          ? 'Trả lời từng mục'
-                                          : 'Có / Không / Không rõ'}
+                                            ? 'Trả lời từng mục'
+                                            : 'Có / Không / Không rõ'}
                                 </span>
                             )}
                         </div>
@@ -527,7 +530,7 @@ export function SymptomTriageStep({
                                     100,
                                     ((triageSession.questions_answered + 1) /
                                         Math.max(triageSession.required_questions || 1, 1)) *
-                                        100,
+                                    100,
                                 )}%`,
                             }}
                         />
@@ -676,8 +679,8 @@ export function SymptomTriageStep({
                                             isSelected
                                                 ? 'bg-[#8B7CF6] text-white shadow-[0_2px_8px_rgba(139,124,246,0.25)]'
                                                 : isAiReference
-                                                  ? 'bg-[#FAFAFF] text-[#5B21B6] border border-dashed border-[#C4B5FD]'
-                                                  : 'bg-[#F9FAFB] text-[#374151] border border-[#E5E7EB] hover:border-[#C4B5FD] hover:bg-[#F5F3FF]',
+                                                    ? 'bg-[#FAFAFF] text-[#5B21B6] border border-dashed border-[#C4B5FD]'
+                                                    : 'bg-[#F9FAFB] text-[#374151] border border-[#E5E7EB] hover:border-[#C4B5FD] hover:bg-[#F5F3FF]',
                                         )}
                                     >
                                         {item.specialty_name}
@@ -804,8 +807,8 @@ export function SymptomTriageStep({
                             {!departmentId
                                 ? 'Chọn chuyên khoa trước để xem danh sách bác sĩ.'
                                 : isLoadingDoctors
-                                  ? 'Đang tải bác sĩ theo chuyên khoa...'
-                                  : 'Chưa có bác sĩ trực cho chuyên khoa này hôm nay.'}
+                                    ? 'Đang tải bác sĩ theo chuyên khoa...'
+                                    : 'Chưa có bác sĩ trực cho chuyên khoa này hôm nay.'}
                         </p>
                     )}
                 </div>
@@ -932,8 +935,8 @@ export function SymptomTriageStep({
                                                         isSelected
                                                             ? 'border-[#16A34A] bg-[#16A34A] text-white shadow-[0_4px_12px_rgba(22,163,74,0.3)]'
                                                             : isFull
-                                                              ? 'border-[#FCA5A5] bg-[#FEE2E2] text-[#B91C1C]'
-                                                              : 'border-[#E5E7EB] bg-white text-[#374151] hover:border-[#86EFAC] hover:bg-[#F0FDF4]',
+                                                                ? 'border-[#FCA5A5] bg-[#FEE2E2] text-[#B91C1C]'
+                                                                : 'border-[#E5E7EB] bg-white text-[#374151] hover:border-[#86EFAC] hover:bg-[#F0FDF4]',
                                                     )}
                                                 >
                                                     <span className="text-[13px] font-bold block">
@@ -946,8 +949,8 @@ export function SymptomTriageStep({
                                                                 isSelected
                                                                     ? 'text-white/80'
                                                                     : isFull
-                                                                      ? 'text-[#DC2626]'
-                                                                      : 'text-[#9CA3AF]',
+                                                                        ? 'text-[#DC2626]'
+                                                                        : 'text-[#9CA3AF]',
                                                             )}
                                                         >
                                                             đến {slot.end_time.slice(0, 5)}
@@ -959,15 +962,15 @@ export function SymptomTriageStep({
                                                             isSelected
                                                                 ? 'text-white'
                                                                 : isFull
-                                                                  ? 'text-[#B91C1C]'
-                                                                  : 'text-[#16A34A]',
+                                                                    ? 'text-[#B91C1C]'
+                                                                    : 'text-[#16A34A]',
                                                         )}
                                                     >
                                                         {isFull
                                                             ? 'Đã đầy'
                                                             : slot.capacity !== undefined
-                                                              ? `Còn ${slot.capacity} chỗ`
-                                                              : 'Còn chỗ'}
+                                                                ? `Còn ${slot.capacity} chỗ`
+                                                                : 'Còn chỗ'}
                                                     </span>
                                                     {isSelected && (
                                                         <Check

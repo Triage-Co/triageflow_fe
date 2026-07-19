@@ -22,4 +22,15 @@ export interface RegistrationResult { ticketNo: string; queueNumber?: string; bo
 export interface ReceptionFlow { flow_id: string; name: string; status: string; }
 export interface CreateTransactionRequest { booking_id: string; amount: number; payment_method: string; }
 export interface TransactionQrResponse { qr_code: string; transaction_id: string; amount: number; }
-export interface ReceptionStatsSummary { waiting: number; registered: number; queues: number; payment: number; emergency: number; avgTime: string; walkin: number; reissue: number; }
+export interface ReceptionStatsSummary {
+    totalQueue: number;
+    waiting: number;
+    inExam: number;
+    paymentPending: number;
+    paid: number;
+    bookings: number;
+    flows: number;
+    transactions: number;
+    emergency: number;
+    avgWaitMinutes: number;
+}

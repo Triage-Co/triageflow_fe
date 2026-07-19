@@ -1,4 +1,5 @@
 import type { VnptCredentials, VnptKeyPayload } from '@/modules/reception/types/vnpt.types';
+import type { DocumentType } from '@ultranomic/vnpt-ekyc-sdk';
 
 const DEFAULT_BACKEND_URL = 'https://api.idg.vnpt.vn';
 const SANDBOX_BACKEND_URL = 'https://sandbox-idg.vnpt.vn';
@@ -138,7 +139,7 @@ export function buildVnptSdkLaunchConfig(creds: VnptCredentials) {
         CHALLENGE_CODE: '00000',
         HAS_BACKGROUND_IMAGE: true,
         HAS_QR_SCAN: true,
-        LIST_TYPE_DOCUMENT: [9] as const,
+        LIST_TYPE_DOCUMENT: [9 as DocumentType],
         DEFAULT_LANGUAGE: 'vi' as const,
         HAS_RESULT_SCREEN: false,
         SHOW_STEP: true,

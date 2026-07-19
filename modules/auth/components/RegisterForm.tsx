@@ -7,8 +7,7 @@ import {
     Eye, EyeOff, Cross, AlertCircle, Loader2, CheckCircle2,
 } from 'lucide-react';
 import { authService } from '@/modules/auth/services/authService';
-import { buildUserNameFromFullName } from '@/shared/utils/userName';
-import type { Gender, StaffRole } from '@/shared/types/auth.types';
+import type { Gender } from '@/shared/types/auth.types';
 
 interface FormState {
     email: string;
@@ -70,10 +69,7 @@ export function RegisterForm() {
         startTransition(async () => {
             try {
                 await authService.register({
-                    user_name: buildUserNameFromFullName(
-                        form.fullName,
-                        form.email.split('@')[0] || 'user',
-                    ),
+                    user_name: form.userName.trim(),
                     email: form.email,
                     password: form.password,
                     gender: form.gender,

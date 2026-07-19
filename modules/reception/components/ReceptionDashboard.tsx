@@ -194,16 +194,21 @@ export function ReceptionDashboard() {
                 ]);
 
                 const mapped = queueRes.map(mapBackendToQueuePatient);
-                const bookingCount = bookingRes.data?.length ?? 0;
+                const bookingCount = Array.isArray(bookingRes.data) ? bookingRes.data.length : 0;
 
                 setQueuePatients(mapped);
-                setStats(buildReceptionStats(mapped, bookingCount));
+                const statsBase = buildReceptionStats(mapped);
+                setStats(statsBase.map((s) =>
+                    s.icon === 'registered'
+                        ? { ...s, value: bookingCount }
+                        : s
+                ));
                 setHighPriority(extractHighPriorityPatients(mapped));
-                setActivities(buildRecentActivities(queueRes));
+                setActivities(buildRecentActivities(mapped));
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'Không thể tải dữ liệu hàng đợi.');
                 setQueuePatients([]);
-                setStats(buildReceptionStats([], 0));
+                setStats(buildReceptionStats([]));
                 setHighPriority([]);
                 setActivities([]);
             } finally {
@@ -218,250 +223,250 @@ export function ReceptionDashboard() {
         <div className="flex-1 flex flex-col overflow-hidden bg-[#F5F2FF] py-6">
             <div className="flex-1 flex flex-col min-h-0 bg-white rounded-tl-[48px] rounded-bl-[48px] overflow-hidden shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
                 <div className="flex-1 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden px-5 py-5 md:px-6 md:py-6">
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
-                    <div>
-                        <h1 className="text-[20px] font-bold text-[#1F2937] tracking-tight leading-tight">
-                            Tổng quan hôm nay
-                        </h1>
-                        <p className="text-[12px] text-[#9CA3AF] mt-1 font-medium">{subtitle}</p>
-                    </div>
-                    <Link
-                        href="/reception/register"
-                        className="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-lg bg-[#8B7CF6] hover:bg-[#7C6FE0] text-white text-[12px] font-bold shadow-[0_2px_8px_rgba(139,124,246,0.35)] transition-colors shrink-0"
-                    >
-                        <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
-                        Đăng ký bệnh nhân mới
-                    </Link>
-                </div>
-
-                {error && (
-                    <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 p-4 mb-5">
-                        <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                    {/* Header */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
                         <div>
-                            <p className="text-sm text-red-800 font-bold">Lỗi tải dữ liệu</p>
-                            <p className="text-xs text-red-700 font-medium mt-1">{error}</p>
+                            <h1 className="text-[20px] font-bold text-[#1F2937] tracking-tight leading-tight">
+                                Tổng quan hôm nay
+                            </h1>
+                            <p className="text-[12px] text-[#9CA3AF] mt-1 font-medium">{subtitle}</p>
                         </div>
-                    </div>
-                )}
-
-                {isLoading ? (
-                    <div className="flex flex-col items-center justify-center py-24 text-neutral-400 gap-3">
-                        <Loader2 className="w-8 h-8 animate-spin text-[#8B7CF6]" />
-                        <p className="text-sm font-semibold">Đang tải tổng quan...</p>
-                    </div>
-                ) : (
-                <>
-                {/* Stats — 8 cột full width như design */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 2xl:grid-cols-8 gap-2.5 mb-5">
-                    {stats.map((stat) => (
-                        <StatCard key={stat.label} stat={stat} />
-                    ))}
-                </div>
-
-                {/* Main grid */}
-                <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-5">
-                    {/* Left column */}
-                    <div className="space-y-5 min-w-0">
-                        {/* Queue table */}
-                        <div className="rounded-[12px] border border-[#EBEBEB] bg-white shadow-[0_1px_6px_rgba(0,0,0,0.04)] overflow-hidden">
-                            <div className="flex items-center justify-between px-5 py-4 border-b border-[#F3F4F6]">
-                                <div className="flex items-center gap-2">
-                                    <ListOrdered className="w-4 h-4 text-[#10B981] shrink-0" strokeWidth={2.25} />
-                                    <h2 className="text-[15px] font-bold text-[#374151]">Hàng đợi hiện tại</h2>
-                                    <span className="text-[11px] font-semibold text-[#059669] bg-[#D1FAE5] px-2.5 py-0.5 rounded-full">
-                                        {queuePatients.length} bệnh nhân
-                                    </span>
-                                </div>
-                                <button
-                                    type="button"
-                                    className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#10B981] hover:text-[#059669] transition-colors"
-                                >
-                                    Xem tất cả
-                                    <ArrowRight className="w-3.5 h-3.5" />
-                                </button>
-                            </div>
-                            <div className="overflow-x-auto">
-                                <table className="w-full min-w-[680px]">
-                                    <thead>
-                                        <tr className="border-b border-[#F3F4F6] bg-[#FAFAFA]">
-                                            {['Số vé', 'Bệnh nhân', 'Chuyên khoa', 'Ưu tiên', 'Trạng thái', 'Chờ', 'Thao tác'].map((col) => (
-                                                <th
-                                                    key={col}
-                                                    className="text-left text-[11px] font-medium text-[#9CA3AF] px-5 py-3"
-                                                >
-                                                    {col}
-                                                </th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {queuePatients.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={7} className="px-5 py-12 text-center">
-                                                    <p className="text-[13px] font-semibold text-[#9CA3AF]">
-                                                        Chưa có bệnh nhân trong hàng đợi hôm nay
-                                                    </p>
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                        queuePatients.map((patient, idx) => (
-                                            <tr
-                                                key={patient.id}
-                                                className={cn(
-                                                    'hover:bg-[#FAFAFF] transition-colors',
-                                                    idx < queuePatients.length - 1 && 'border-b border-[#F9FAFB]',
-                                                )}
-                                            >
-                                                <td className="px-5 py-3">
-                                                    <span className="text-[12px] font-bold text-[#1F2937] font-mono tracking-tight">
-                                                        {patient.ticketNo}
-                                                    </span>
-                                                </td>
-                                                <td className="px-5 py-3">
-                                                    <span className="text-[12px] font-semibold text-[#374151]">{patient.name}</span>
-                                                </td>
-                                                <td className="px-5 py-3">
-                                                    <SpecialtyCell patient={patient} />
-                                                </td>
-                                                <td className="px-5 py-3">
-                                                    <PriorityBadge priority={patient.priority} />
-                                                </td>
-                                                <td className="px-5 py-3">
-                                                    <StatusBadge status={patient.status} />
-                                                </td>
-                                                <td className="px-5 py-3">
-                                                    <span className="text-[12px] font-medium text-[#6B7280]">
-                                                        {patient.waitMinutes} phút
-                                                    </span>
-                                                </td>
-                                                <td className="px-5 py-3">
-                                                    <Link
-                                                        href={`/reception/${patient.id}`}
-                                                        className="text-[11px] font-bold text-[#8B7CF6] hover:text-[#7C3AED] hover:underline transition-colors"
-                                                    >
-                                                        Chi tiết
-                                                    </Link>
-                                                </td>
-                                            </tr>
-                                        ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        {/* Quick actions */}
-                        <div className="w-[40%] min-w-[240px] rounded-[12px] border border-[#EBEBEB] bg-white p-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
-                            <h2 className="text-[14px] font-bold text-[#1F2937] mb-3">Thao tác nhanh</h2>
-                            <div className="grid grid-cols-2 gap-2">
-                                {QUICK_ACTIONS.map((action) => {
-                                    const Icon = action.icon;
-                                    const href =
-                                        action.id === 'register'
-                                            ? '/reception/register'
-                                            : action.id === 'search'
-                                              ? '/reception/search'
-                                              : action.id === 'payment'
-                                                ? '/reception/payment'
-                                                : undefined;
-                                    const className = cn(
-                                        'flex items-center gap-2.5 px-3 py-2.5 rounded-[12px] transition-opacity hover:opacity-90',
-                                        action.bg,
-                                    );
-                                    if (href) {
-                                        return (
-                                            <Link key={action.id} href={href} className={className}>
-                                                <Icon className={cn('w-4 h-4 shrink-0', action.color)} strokeWidth={2.25} />
-                                                <span className={cn('text-[12px] font-bold', action.color)}>{action.label}</span>
-                                            </Link>
-                                        );
-                                    }
-                                    return (
-                                        <button
-                                            key={action.id}
-                                            type="button"
-                                            className={className}
-                                        >
-                                            <Icon className={cn('w-4 h-4 shrink-0', action.color)} strokeWidth={2.25} />
-                                            <span className={cn('text-[12px] font-bold', action.color)}>{action.label}</span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                        <Link
+                            href="/reception/register"
+                            className="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-lg bg-[#8B7CF6] hover:bg-[#7C6FE0] text-white text-[12px] font-bold shadow-[0_2px_8px_rgba(139,124,246,0.35)] transition-colors shrink-0"
+                        >
+                            <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
+                            Đăng ký bệnh nhân mới
+                        </Link>
                     </div>
 
-                    {/* Right column — fixed 300px như design */}
-                    <div className="space-y-4">
-                        {/* High priority */}
-                        <div className="rounded-[12px] border border-[#FECACA] bg-[#FFF5F5] shadow-[0_1px_4px_rgba(239,68,68,0.06)] overflow-hidden">
-                            <div className="px-4 py-3 border-b border-[#FECACA]/50">
-                                <h2 className="text-[14px] font-bold text-[#DC2626]">Ưu tiên cao</h2>
-                            </div>
-                            <div className="p-2 space-y-1.5">
-                                {highPriority.length === 0 ? (
-                                    <p className="text-[11px] text-[#9CA3AF] font-medium px-3 py-4 text-center">
-                                        Không có ca ưu tiên
-                                    </p>
-                                ) : (
-                                highPriority.map((patient) => (
-                                    <div
-                                        key={patient.id}
-                                        className="flex items-center justify-between gap-2 bg-white rounded-[8px] px-3 py-2 border border-[#FECACA]/30"
-                                    >
-                                        <div className="min-w-0">
-                                            <p className="text-[12px] font-bold text-[#1F2937] truncate">{patient.name}</p>
-                                            <p className="text-[10px] text-[#9CA3AF] font-medium mt-0.5 truncate">
-                                                {patient.ticketNo} · {patient.specialty}
-                                            </p>
-                                        </div>
-                                        <PriorityBadge priority={patient.priority} />
-                                    </div>
-                                ))
-                                )}
+                    {error && (
+                        <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 p-4 mb-5">
+                            <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                            <div>
+                                <p className="text-sm text-red-800 font-bold">Lỗi tải dữ liệu</p>
+                                <p className="text-xs text-red-700 font-medium mt-1">{error}</p>
                             </div>
                         </div>
+                    )}
 
-                        {/* Recent activity */}
-                        <div className="rounded-[12px] border border-[#EBEBEB] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)] overflow-hidden">
-                            <div className="px-4 py-3 border-b border-[#F3F4F6]">
-                                <h2 className="text-[14px] font-bold text-[#1F2937]">Hoạt động gần đây</h2>
+                    {isLoading ? (
+                        <div className="flex flex-col items-center justify-center py-24 text-neutral-400 gap-3">
+                            <Loader2 className="w-8 h-8 animate-spin text-[#8B7CF6]" />
+                            <p className="text-sm font-semibold">Đang tải tổng quan...</p>
+                        </div>
+                    ) : (
+                        <>
+                            {/* Stats — 8 cột full width như design */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 2xl:grid-cols-8 gap-2.5 mb-5">
+                                {stats.map((stat) => (
+                                    <StatCard key={stat.label} stat={stat} />
+                                ))}
                             </div>
-                            <div className="px-4 py-3">
-                                {activities.length === 0 ? (
-                                    <p className="text-[11px] text-[#9CA3AF] font-medium text-center py-4">
-                                        Chưa có hoạt động gần đây
-                                    </p>
-                                ) : (
-                                activities.map((activity, idx) => (
-                                    <div key={activity.id} className="flex gap-2.5">
-                                        <div className="flex flex-col items-center shrink-0 w-3">
-                                            <div className={cn('w-2 h-2 rounded-full shrink-0 mt-1', ACTIVITY_DOT[activity.type])} />
-                                            {idx < activities.length - 1 && (
-                                                <div className="w-px flex-1 bg-[#E5E7EB] my-1" />
-                                            )}
-                                        </div>
-                                        <div className={cn('flex-1 min-w-0', idx < activities.length - 1 && 'pb-3')}>
-                                            <div className="flex items-start justify-between gap-2">
-                                                <p className="text-[11px] font-bold text-[#374151] leading-snug">{activity.title}</p>
-                                                <span className="text-[10px] font-semibold text-[#9CA3AF] shrink-0 tabular-nums">
-                                                    {activity.time}
+
+                            {/* Main grid */}
+                            <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-5">
+                                {/* Left column */}
+                                <div className="space-y-5 min-w-0">
+                                    {/* Queue table */}
+                                    <div className="rounded-[12px] border border-[#EBEBEB] bg-white shadow-[0_1px_6px_rgba(0,0,0,0.04)] overflow-hidden">
+                                        <div className="flex items-center justify-between px-5 py-4 border-b border-[#F3F4F6]">
+                                            <div className="flex items-center gap-2">
+                                                <ListOrdered className="w-4 h-4 text-[#10B981] shrink-0" strokeWidth={2.25} />
+                                                <h2 className="text-[15px] font-bold text-[#374151]">Hàng đợi hiện tại</h2>
+                                                <span className="text-[11px] font-semibold text-[#059669] bg-[#D1FAE5] px-2.5 py-0.5 rounded-full">
+                                                    {queuePatients.length} bệnh nhân
                                                 </span>
                                             </div>
-                                            <p className="text-[10px] text-[#9CA3AF] font-medium mt-0.5">
-                                                {activity.ticketNo} · {activity.patientName}
-                                            </p>
+                                            <button
+                                                type="button"
+                                                className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#10B981] hover:text-[#059669] transition-colors"
+                                            >
+                                                Xem tất cả
+                                                <ArrowRight className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full min-w-[680px]">
+                                                <thead>
+                                                    <tr className="border-b border-[#F3F4F6] bg-[#FAFAFA]">
+                                                        {['Số vé', 'Bệnh nhân', 'Chuyên khoa', 'Ưu tiên', 'Trạng thái', 'Chờ', 'Thao tác'].map((col) => (
+                                                            <th
+                                                                key={col}
+                                                                className="text-left text-[11px] font-medium text-[#9CA3AF] px-5 py-3"
+                                                            >
+                                                                {col}
+                                                            </th>
+                                                        ))}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {queuePatients.length === 0 ? (
+                                                        <tr>
+                                                            <td colSpan={7} className="px-5 py-12 text-center">
+                                                                <p className="text-[13px] font-semibold text-[#9CA3AF]">
+                                                                    Chưa có bệnh nhân trong hàng đợi hôm nay
+                                                                </p>
+                                                            </td>
+                                                        </tr>
+                                                    ) : (
+                                                        queuePatients.map((patient, idx) => (
+                                                            <tr
+                                                                key={patient.id}
+                                                                className={cn(
+                                                                    'hover:bg-[#FAFAFF] transition-colors',
+                                                                    idx < queuePatients.length - 1 && 'border-b border-[#F9FAFB]',
+                                                                )}
+                                                            >
+                                                                <td className="px-5 py-3">
+                                                                    <span className="text-[12px] font-bold text-[#1F2937] font-mono tracking-tight">
+                                                                        {patient.ticketNo}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-5 py-3">
+                                                                    <span className="text-[12px] font-semibold text-[#374151]">{patient.name}</span>
+                                                                </td>
+                                                                <td className="px-5 py-3">
+                                                                    <SpecialtyCell patient={patient} />
+                                                                </td>
+                                                                <td className="px-5 py-3">
+                                                                    <PriorityBadge priority={patient.priority} />
+                                                                </td>
+                                                                <td className="px-5 py-3">
+                                                                    <StatusBadge status={patient.status} />
+                                                                </td>
+                                                                <td className="px-5 py-3">
+                                                                    <span className="text-[12px] font-medium text-[#6B7280]">
+                                                                        {patient.waitMinutes} phút
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-5 py-3">
+                                                                    <Link
+                                                                        href={`/reception/${patient.id}`}
+                                                                        className="text-[11px] font-bold text-[#8B7CF6] hover:text-[#7C3AED] hover:underline transition-colors"
+                                                                    >
+                                                                        Chi tiết
+                                                                    </Link>
+                                                                </td>
+                                                            </tr>
+                                                        ))
+                                                    )}
+                                                </tbody>
+                                            </table>
                                         </div>
                                     </div>
-                                ))
-                                )}
+
+                                    {/* Quick actions */}
+                                    <div className="w-[40%] min-w-[240px] rounded-[12px] border border-[#EBEBEB] bg-white p-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+                                        <h2 className="text-[14px] font-bold text-[#1F2937] mb-3">Thao tác nhanh</h2>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {QUICK_ACTIONS.map((action) => {
+                                                const Icon = action.icon;
+                                                const href =
+                                                    action.id === 'register'
+                                                        ? '/reception/register'
+                                                        : action.id === 'search'
+                                                            ? '/reception/search'
+                                                            : action.id === 'payment'
+                                                                ? '/reception/payment'
+                                                                : undefined;
+                                                const className = cn(
+                                                    'flex items-center gap-2.5 px-3 py-2.5 rounded-[12px] transition-opacity hover:opacity-90',
+                                                    action.bg,
+                                                );
+                                                if (href) {
+                                                    return (
+                                                        <Link key={action.id} href={href} className={className}>
+                                                            <Icon className={cn('w-4 h-4 shrink-0', action.color)} strokeWidth={2.25} />
+                                                            <span className={cn('text-[12px] font-bold', action.color)}>{action.label}</span>
+                                                        </Link>
+                                                    );
+                                                }
+                                                return (
+                                                    <button
+                                                        key={action.id}
+                                                        type="button"
+                                                        className={className}
+                                                    >
+                                                        <Icon className={cn('w-4 h-4 shrink-0', action.color)} strokeWidth={2.25} />
+                                                        <span className={cn('text-[12px] font-bold', action.color)}>{action.label}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Right column — fixed 300px như design */}
+                                <div className="space-y-4">
+                                    {/* High priority */}
+                                    <div className="rounded-[12px] border border-[#FECACA] bg-[#FFF5F5] shadow-[0_1px_4px_rgba(239,68,68,0.06)] overflow-hidden">
+                                        <div className="px-4 py-3 border-b border-[#FECACA]/50">
+                                            <h2 className="text-[14px] font-bold text-[#DC2626]">Ưu tiên cao</h2>
+                                        </div>
+                                        <div className="p-2 space-y-1.5">
+                                            {highPriority.length === 0 ? (
+                                                <p className="text-[11px] text-[#9CA3AF] font-medium px-3 py-4 text-center">
+                                                    Không có ca ưu tiên
+                                                </p>
+                                            ) : (
+                                                highPriority.map((patient) => (
+                                                    <div
+                                                        key={patient.id}
+                                                        className="flex items-center justify-between gap-2 bg-white rounded-[8px] px-3 py-2 border border-[#FECACA]/30"
+                                                    >
+                                                        <div className="min-w-0">
+                                                            <p className="text-[12px] font-bold text-[#1F2937] truncate">{patient.name}</p>
+                                                            <p className="text-[10px] text-[#9CA3AF] font-medium mt-0.5 truncate">
+                                                                {patient.ticketNo} · {patient.specialty}
+                                                            </p>
+                                                        </div>
+                                                        <PriorityBadge priority={patient.priority} />
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Recent activity */}
+                                    <div className="rounded-[12px] border border-[#EBEBEB] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.04)] overflow-hidden">
+                                        <div className="px-4 py-3 border-b border-[#F3F4F6]">
+                                            <h2 className="text-[14px] font-bold text-[#1F2937]">Hoạt động gần đây</h2>
+                                        </div>
+                                        <div className="px-4 py-3">
+                                            {activities.length === 0 ? (
+                                                <p className="text-[11px] text-[#9CA3AF] font-medium text-center py-4">
+                                                    Chưa có hoạt động gần đây
+                                                </p>
+                                            ) : (
+                                                activities.map((activity, idx) => (
+                                                    <div key={activity.id} className="flex gap-2.5">
+                                                        <div className="flex flex-col items-center shrink-0 w-3">
+                                                            <div className={cn('w-2 h-2 rounded-full shrink-0 mt-1', ACTIVITY_DOT[activity.type])} />
+                                                            {idx < activities.length - 1 && (
+                                                                <div className="w-px flex-1 bg-[#E5E7EB] my-1" />
+                                                            )}
+                                                        </div>
+                                                        <div className={cn('flex-1 min-w-0', idx < activities.length - 1 && 'pb-3')}>
+                                                            <div className="flex items-start justify-between gap-2">
+                                                                <p className="text-[11px] font-bold text-[#374151] leading-snug">{activity.title}</p>
+                                                                <span className="text-[10px] font-semibold text-[#9CA3AF] shrink-0 tabular-nums">
+                                                                    {activity.time}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-[10px] text-[#9CA3AF] font-medium mt-0.5">
+                                                                {activity.ticketNo} · {activity.patientName}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    </div>
-                </div>
-                </>
-                )}
+                        </>
+                    )}
                 </div>
             </div>
         </div>

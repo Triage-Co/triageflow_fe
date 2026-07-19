@@ -26,6 +26,30 @@ interface Toast {
     type: 'success' | 'error' | 'info';
 }
 
+const toUpdateDobFormat = (dob?: string): string => {
+    if (!dob) return '';
+    const trimmed = dob.trim();
+
+    if (/^\d{2}-\d{2}-\d{4}$/.test(trimmed)) {
+        return trimmed;
+    }
+
+    const isoLikeMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoLikeMatch) {
+        return `${isoLikeMatch[3]}-${isoLikeMatch[2]}-${isoLikeMatch[1]}`;
+    }
+
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) {
+        const dd = String(parsed.getDate()).padStart(2, '0');
+        const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+        const yyyy = parsed.getFullYear();
+        return `${dd}-${mm}-${yyyy}`;
+    }
+
+    return '';
+};
+
 // ── Extracted Settings Form Component ─────────────────────────────────────
 function SettingsForm({
     profile,
@@ -36,7 +60,7 @@ function SettingsForm({
     onSave: (data: { userName: string; gender: Gender; extPhone: string; defaultPrinter: string; paperSize: string }) => Promise<void>;
     isSaving: boolean;
 }) {
-    const [userName, setUserName] = useState(profile.user_name || '');
+    const [userName, setUserName] = useState(profile.full_name || '');
     const [email] = useState(profile.email || '');
     const [gender, setGender] = useState<Gender>(profile.gender || 'MALE');
 
@@ -254,8 +278,15 @@ export default function SettingsPage() {
 
         try {
             setIsSaving(true);
+            const dob = toUpdateDobFormat(profile?.dob);
+            if (!dob) {
+                showToast('Thiếu hoặc sai định dạng ngày sinh trong hồ sơ. Vui lòng cập nhật lại hồ sơ.', 'error');
+                return;
+            }
+
             await updateProfile({
-                user_name: data.userName,
+                full_name: data.userName,
+                dob,
                 gender: data.gender,
                 phone: data.extPhone || undefined
             }, accessToken);

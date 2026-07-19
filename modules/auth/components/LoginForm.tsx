@@ -31,7 +31,7 @@ export function LoginForm() {
     /** Persist login data into the auth store */
     async function completeLogin(token: string, refreshToken: string, username: string, role: string) {
         storeRememberMe(rememberMe);
-        
+
         let displayFullName = username;
         let userId = email;
         const localAvatar = typeof window !== 'undefined' ? localStorage.getItem('tfopd_avatar') || undefined : undefined;
@@ -42,15 +42,11 @@ export function LoginForm() {
             const profileRes = await authService.getProfile(token);
             if (profileRes && profileRes.data) {
                 profileData = profileRes.data;
-                if (profileRes.data.user_name) {
-                    displayFullName = profileRes.data.user_name;
-                } else if (profileRes.data.full_name) {
+                if (profileRes.data.full_name) {
                     displayFullName = profileRes.data.full_name;
                 }
                 if (profileRes.data.id) {
                     userId = profileRes.data.id;
-                } else if (profileRes.data.account_id) {
-                    userId = profileRes.data.account_id;
                 }
             }
         } catch (err) {
@@ -58,12 +54,12 @@ export function LoginForm() {
         }
 
         loginSuccess({
-            user: { 
-                id: userId, 
-                email, 
-                fullName: displayFullName, 
-                role, 
-                avatar: localAvatar 
+            user: {
+                id: userId,
+                email,
+                fullName: displayFullName,
+                role,
+                avatar: localAvatar
             },
             accessToken: token,
             refreshToken,
