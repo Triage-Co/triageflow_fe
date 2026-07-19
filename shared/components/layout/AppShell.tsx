@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { usePathname } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { BottomNav } from './BottomNav';
 import { useUIStore } from '@/store/uiStore';
@@ -13,6 +14,8 @@ interface AppShellProps {
 
 export function AppShell({ children, user, bare }: AppShellProps) {
     const { sidebarOpen, toggleSidebar } = useUIStore();
+    const pathname = usePathname();
+    const showBottomNav = !pathname.startsWith('/reception');
 
     // Map user properties safely
     const displayUser = user
@@ -31,12 +34,14 @@ export function AppShell({ children, user, bare }: AppShellProps) {
             </div>
 
             {/* Main Content Area - fills remaining space */}
-            <div className="flex-1 flex flex-col h-full overflow-hidden">
+            <div
+                className={`flex-1 flex flex-col h-full overflow-hidden ${showBottomNav ? 'pb-20 md:pb-0' : ''}`}
+            >
                 {children}
             </div>
 
-            {/* Mobile Bottom Nav (disabled for bare layouts such as staff/doctor) */}
-            {!bare && (
+            {/* Mobile Bottom Nav (hidden on bare layouts or reception flow) */}
+            {!bare && showBottomNav && (
                 <div className="md:hidden">
                     <BottomNav />
                 </div>
