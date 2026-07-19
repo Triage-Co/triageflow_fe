@@ -498,7 +498,7 @@ export function mapBackendToQueuePatient(item: BackendQueuePatient): QueuePatien
     return {
         id: item.queue_id,
         ticketNo: formatTicketNo(item.queue_number),
-        name: account.full_name,
+        name: account.full_name || '',
         specialty,
         specialtyIcon: mapSpecialtyIcon(specialty),
         priority: mapPriority(account.dob, item.step.flow.status),
@@ -527,14 +527,14 @@ export function buildRecentActivities(patients: QueuePatient[]): RecentActivity[
     }));
 }
 
-export function buildReceptionStats(patients: QueuePatient[]): ReceptionStat[] {
+export function buildReceptionStats(patients: QueuePatient[], bookingCount = 0): ReceptionStat[] {
     const waiting = patients.filter((p) => p.status === 'Chờ khám').length;
     const payment = patients.filter((p) => p.status === 'Chờ TT').length;
     const emergency = patients.filter((p) => p.priority === 'Khẩn cấp').length;
     const avgWait = patients.length ? Math.round(patients.reduce((s, p) => s + p.waitMinutes, 0) / patients.length) : 0;
     return [
         { value: waiting, label: 'Đang chờ khám', icon: 'waiting', iconBg: 'bg-[#E8F2FF]', iconColor: 'text-[#3B82F6]' },
-        { value: patients.length, label: 'Đăng ký hôm nay', icon: 'registered', iconBg: 'bg-[#E2F7EB]', iconColor: 'text-[#10B981]' },
+        { value: bookingCount || patients.length, label: 'Đăng ký hôm nay', icon: 'registered', iconBg: 'bg-[#E2F7EB]', iconColor: 'text-[#10B981]' },
         { value: Math.max(1, Math.ceil(patients.length / 8)), label: 'Hàng đợi đang hoạt động', icon: 'queues', iconBg: 'bg-[#E2F7EB]', iconColor: 'text-[#10B981]' },
         { value: payment, label: 'Chờ thanh toán', icon: 'payment', iconBg: 'bg-[#FFF4E5]', iconColor: 'text-[#F59E0B]' },
         { value: emergency, label: 'Ca khẩn cấp', icon: 'emergency', iconBg: 'bg-[#FEE2E2]', iconColor: 'text-[#EF4444]' },
@@ -601,9 +601,9 @@ export function mapBackendToReceptionDetail(item: BackendQueuePatient): Receptio
     return {
         queueId: item.queue_id,
         ticketNo: formatTicketNo(item.queue_number),
-        name: account.full_name,
-        citizenId: account.citizen_id,
-        email: account.email,
+        name: account.full_name || '',
+        citizenId: account.citizen_id || '',
+        email: account.email || '',
         phone: account.phone,
         dob: formatDobDisplay(account.dob),
         gender: formatGender(account.gender),

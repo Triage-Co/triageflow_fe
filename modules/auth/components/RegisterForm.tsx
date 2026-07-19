@@ -71,7 +71,7 @@ export function RegisterForm() {
             try {
                 await authService.register({
                     user_name: buildUserNameFromFullName(
-                        form.fullName,
+                        form.userName,
                         form.email.split('@')[0] || 'user',
                     ),
                     email: form.email,

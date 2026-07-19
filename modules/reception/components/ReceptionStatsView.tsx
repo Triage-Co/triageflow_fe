@@ -67,9 +67,9 @@ export function ReceptionStatsView() {
                 setSummary(
                     buildStatsSummary(
                         queue,
-                        bookingRes.data?.length ?? 0,
-                        flowRes.data?.length ?? 0,
-                        txRes.data?.length ?? 0,
+                        (bookingRes.data as unknown[])?.length ?? 0,
+                        (flowRes.data as unknown[])?.length ?? 0,
+                        (txRes.data as unknown[])?.length ?? 0,
                     ),
                 );
             } catch (err) {

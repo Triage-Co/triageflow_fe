@@ -125,15 +125,16 @@ async function resolveCameraId(Html5Qrcode: typeof import('html5-qrcode').Html5Q
         throw new Error('No camera found');
     }
 
-    const backCamera = cameras.find((cam) =>
+    type CameraDevice = { id: string; label: string };
+    const backCamera = cameras.find((cam: CameraDevice) =>
         /back|rear|environment|sau/i.test(cam.label),
     );
-    if (backCamera) return backCamera.id;
+    if (backCamera) return (backCamera as CameraDevice).id;
 
-    const frontCamera = cameras.find((cam) =>
+    const frontCamera = cameras.find((cam: CameraDevice) =>
         /front|user|trước|facetime|integrated/i.test(cam.label),
     );
-    if (frontCamera) return frontCamera.id;
+    if (frontCamera) return (frontCamera as CameraDevice).id;
 
     return cameras[0].id;
 }
@@ -280,25 +281,26 @@ export function CccdQrScanner({ open, onClose, onSuccess, onManualInput }: CccdQ
                     BACKGROUND_COLOR: '#FFFFFF',
                 },
                 CALL_BACK_END_FLOW: handleEkycResult,
-                CALL_BACK_DOCUMENT_RESULT: async (result) => {
+                CALL_BACK_DOCUMENT_RESULT: async (result: unknown) => {
+                    const r = result as Record<string, unknown> & { qr_code?: string; dataBase64?: string; ocr?: Record<string, unknown> };
                     const qrRaw =
-                        (typeof result.qr_code === 'string' && result.qr_code) ||
-                        (typeof result.dataBase64 === 'string' && result.dataBase64) ||
+                        (typeof r.qr_code === 'string' && r.qr_code) ||
+                        (typeof r.dataBase64 === 'string' && r.dataBase64) ||
                         '';
                     if (qrRaw) {
                         const parsed = parseCccdQr(qrRaw);
                         if (parsed.ok) {
                             handleEkycResult({
-                                ...result,
+                                ...r,
                                 ocr: {
-                                    ...result.ocr,
-                                    id: result.ocr?.id || parsed.data.citizen_id,
-                                    name: result.ocr?.name || parsed.data.full_name,
-                                    birth_day: result.ocr?.birth_day || parsed.data.dob,
-                                    gender: result.ocr?.gender || parsed.data.gender,
+                                    ...r.ocr,
+                                    id: r.ocr?.id || parsed.data.citizen_id,
+                                    name: r.ocr?.name || parsed.data.full_name,
+                                    birth_day: r.ocr?.birth_day || parsed.data.dob,
+                                    gender: r.ocr?.gender || parsed.data.gender,
                                     recent_location:
-                                        result.ocr?.recent_location || parsed.data.address,
-                                    origin_location: result.ocr?.origin_location || parsed.data.address,
+                                        r.ocr?.recent_location || parsed.data.address,
+                                    origin_location: r.ocr?.origin_location || parsed.data.address,
                                 },
                             });
                         }
@@ -367,7 +369,7 @@ export function CccdQrScanner({ open, onClose, onSuccess, onManualInput }: CccdQ
                         height: { min: 480, ideal: 1080, max: 2160 },
                     },
                 },
-                (text) => {
+                (text: string) => {
                     void handleDecoded(text);
                 },
                 () => {

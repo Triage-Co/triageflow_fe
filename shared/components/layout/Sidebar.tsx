@@ -20,6 +20,12 @@ import {
     UserPlus,
     Search,
     Stethoscope,
+    Activity,
+    Map,
+    ListOrdered,
+    Cpu,
+    Home,
+    CalendarClock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { authService } from '@/shared/services/authService';

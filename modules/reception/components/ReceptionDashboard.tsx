@@ -194,12 +194,12 @@ export function ReceptionDashboard() {
                 ]);
 
                 const mapped = queueRes.map(mapBackendToQueuePatient);
-                const bookingCount = bookingRes.data?.length ?? 0;
+                const bookingCount = (bookingRes.data as unknown[])?.length ?? 0;
 
                 setQueuePatients(mapped);
                 setStats(buildReceptionStats(mapped, bookingCount));
                 setHighPriority(extractHighPriorityPatients(mapped));
-                setActivities(buildRecentActivities(queueRes));
+                setActivities(buildRecentActivities(mapped));
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'Không thể tải dữ liệu hàng đợi.');
                 setQueuePatients([]);

@@ -61,8 +61,8 @@ function mapQueueItem(item: BackendQueuePatient): PatientSearchResult {
     return {
         accountId: item.step.flow.booking.patient.patient_id,
         queueId: item.queue_id,
-        name: account.full_name,
-        citizenId: account.citizen_id,
+        name: account.full_name || '',
+        citizenId: account.citizen_id || '',
         phone: account.phone,
         email: account.email,
         ticketNo: queue.ticketNo,
