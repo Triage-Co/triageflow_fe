@@ -1,16 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Patient } from '@/modules/clinical/types/clinical.types';
-import { Heart, Activity, Thermometer, Gauge, AlertTriangle, User } from 'lucide-react';
+import { Heart, Activity, Thermometer, Gauge, AlertTriangle, User, Loader2, ListTodo } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/store/authStore';
+import { processService } from '@/modules/admin/services/processService';
+import type { Flow } from '@/modules/admin/types/process.types';
 
 type SidePanelTab = 'process' | 'info';
-
-const PROCESS_STEPS = [
-    'Tiếp nhận', 'Phân loại ưu tiên', 'Đo sinh hiệu',
-    'Chờ khám', 'Đang khám', 'Thanh toán & Dược', 'Hoàn tất',
-];
 
 const VITALS = [
     { key: 'heartRate' as const, label: 'Nhịp tim', unit: 'bpm', Icon: Heart, color: '#EF4444' },
@@ -33,7 +31,46 @@ interface LeftPanelProps {
 }
 
 export function LeftPatientPanel({ patient, isOpen }: LeftPanelProps) {
-    const [tab, setTab] = useState<SidePanelTab>('info');
+    const [tab, setTab] = useState<SidePanelTab>('process'); // Default to 'process' as requested
+    const { accessToken } = useAuthStore();
+
+    const [flowData, setFlowData] = useState<Flow | null>(null);
+    const [isLoadingFlow, setIsLoadingFlow] = useState(false);
+
+    // Fetch patient flow dynamically if flowId or stepId exists
+    useEffect(() => {
+        if (!accessToken || tab !== 'process') return;
+        if (!patient.flowId && !patient.stepId) return;
+
+        const fetchPatientFlow = async () => {
+            try {
+                setIsLoadingFlow(true);
+                let response = null;
+
+                // 1. Try to fetch by flowId first
+                if (patient.flowId) {
+                    response = await processService.getFlowById(patient.flowId, accessToken);
+                } 
+                // 2. Fallback to fetch by stepId
+                else if (patient.stepId) {
+                    response = await processService.getFlowByStepId(patient.stepId, accessToken);
+                }
+
+                if (response && response.data) {
+                    setFlowData(response.data);
+                } else {
+                    setFlowData(null);
+                }
+            } catch (err) {
+                console.error('Failed to load patient flow:', err);
+                setFlowData(null);
+            } finally {
+                setIsLoadingFlow(false);
+            }
+        };
+
+        fetchPatientFlow();
+    }, [patient.id, patient.flowId, patient.stepId, accessToken, tab]);
 
     return (
         <div
@@ -90,28 +127,49 @@ export function LeftPatientPanel({ patient, isOpen }: LeftPanelProps) {
                         {/* ── Process tab ── */}
                         {tab === 'process' && (
                             <div className="bg-neutral-50/70 border border-neutral-100 rounded-[16px] p-4 space-y-1">
-                                {PROCESS_STEPS.map((step, i) => {
-                                    const done = patient.status === 'Đã khám'
-                                        ? true
-                                        : patient.status === 'Đang khám'
-                                            ? i <= 4
-                                            : i <= 2;
-                                    return (
-                                        <div key={i} className="flex items-center gap-3 py-1.5">
-                                            <div className={cn(
-                                                'w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 border',
-                                                done
-                                                    ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white'
-                                                    : 'bg-white border-[#DCDCDC] text-[#ADADAD]'
-                                            )}>
-                                                {done ? '✓' : i + 1}
+                                {isLoadingFlow ? (
+                                    <div className="flex flex-col items-center justify-center py-8 text-neutral-400 gap-2">
+                                        <Loader2 className="w-5 h-5 animate-spin text-[#8B7CF6]" />
+                                        <span className="text-[11px] font-semibold">Đang tải quy trình...</span>
+                                    </div>
+                                ) : flowData && flowData.steps && flowData.steps.length > 0 ? (
+                                    /* ── Render Dynamic Steps from API ── */
+                                    flowData.steps.map((step, i) => {
+                                        const statusUpper = step.step_status?.toUpperCase();
+                                        const isFinished = statusUpper === 'FINISHED' || statusUpper === 'SUCCESS' || statusUpper === 'COMPLETED';
+                                        const isRunning = statusUpper === 'RUNNING' || statusUpper === 'PROCESSING' || statusUpper === 'IN_PROGRESS';
+                                        
+                                        return (
+                                            <div key={step.step_id} className="flex items-center gap-3 py-1.5">
+                                                <div className={cn(
+                                                    'w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 border transition-all duration-200',
+                                                    isFinished
+                                                        ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white'
+                                                        : isRunning
+                                                        ? 'bg-white border-[#8B7CF6] text-[#8B7CF6] ring-2 ring-[#8B7CF6]/20'
+                                                        : 'bg-white border-[#DCDCDC] text-[#ADADAD]'
+                                                )}>
+                                                    {isFinished ? '✓' : i + 1}
+                                                </div>
+                                                <span className={cn(
+                                                    'text-[12px] font-semibold transition-colors duration-200',
+                                                    isFinished ? 'text-[#2D2D2D]' : isRunning ? 'text-[#8B7CF6] font-bold' : 'text-[#ADADAD]'
+                                                )}>
+                                                    {step.room_info?.room_name || step.room?.room_name || 'Khám bệnh'}
+                                                </span>
                                             </div>
-                                            <span className={cn('text-[12px] font-semibold', done ? 'text-[#2D2D2D]' : 'text-[#ADADAD]')}>
-                                                {step}
-                                            </span>
-                                        </div>
-                                    );
-                                })}
+                                        );
+                                    })
+                                ) : (
+                                    /* ── Empty State (Only API data display) ── */
+                                    <div className="flex flex-col items-center justify-center py-8 text-center text-neutral-400 gap-2">
+                                        <ListTodo className="w-8 h-8 stroke-[1.5] text-neutral-300" />
+                                        <p className="text-[11px] font-bold text-neutral-700">Không có quy trình khám</p>
+                                        <p className="text-[10px] text-neutral-400 font-semibold leading-normal">
+                                            Bệnh nhân này chưa được thiết lập quy trình khám bệnh.
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         )}
 

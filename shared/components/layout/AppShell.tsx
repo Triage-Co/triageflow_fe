@@ -35,10 +35,12 @@ export function AppShell({ children, user, bare }: AppShellProps) {
                 {children}
             </div>
 
-            {/* Mobile Bottom Nav */}
-            <div className="md:hidden">
-                <BottomNav />
-            </div>
+            {/* Mobile Bottom Nav (disabled for bare layouts such as staff/doctor) */}
+            {!bare && (
+                <div className="md:hidden">
+                    <BottomNav />
+                </div>
+            )}
         </div>
     );
 }

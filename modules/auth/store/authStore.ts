@@ -130,7 +130,11 @@ export const useAuthStore = create<AuthStore>()(
                         if (res && res.data) {
                             const currentUser = get().user;
                             const updatedUser = currentUser && res.data.user_name
-                                ? { ...currentUser, fullName: res.data.user_name }
+                                ? {
+                                      ...currentUser,
+                                      fullName: res.data.user_name,
+                                      avatar: res.data.avatar || undefined,
+                                  }
                                 : currentUser;
                             set({ profile: res.data, user: updatedUser, isLoading: false }, false, 'fetchProfile/success');
                         } else {
@@ -153,7 +157,11 @@ export const useAuthStore = create<AuthStore>()(
                             // Update profile and user info in state
                             const currentUser = get().user;
                             const updatedUser = currentUser && res.data.user_name
-                                ? { ...currentUser, fullName: res.data.user_name }
+                                ? {
+                                      ...currentUser,
+                                      fullName: res.data.user_name,
+                                      avatar: res.data.avatar || undefined,
+                                  }
                                 : currentUser;
                             set({
                                 profile: res.data,

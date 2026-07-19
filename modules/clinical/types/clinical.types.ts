@@ -48,6 +48,8 @@ export interface Patient {
     // EMR-specific fields
     medicalRecord?: MedicalRecord;
     department?: string;
+    flowId?: string;
+    stepId?: string;
 }
 
 // ── Stat Card ──────────────────────────────────────────────────────────────

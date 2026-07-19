@@ -11,8 +11,6 @@ import {
     Filter,
     UserCheck,
     Pencil,
-    Trash2,
-    AlertTriangle,
     Eye,
     Mail,
     Phone,
@@ -52,6 +50,16 @@ const getCompactPages = (totalPages: number): Array<number | 'ellipsis'> => {
     return [1, 2, 'ellipsis', totalPages - 1, totalPages];
 };
 
+const normalizeRole = (role: string): CreateStaffDto['role'] => {
+    const value = role.trim().toUpperCase() as CreateStaffDto['role'];
+    return value;
+};
+
+const normalizeGender = (gender: string): CreateStaffDto['gender'] => {
+    const value = gender.trim().toUpperCase() as CreateStaffDto['gender'];
+    return value;
+};
+
 /* ─── Component ──────────────────────────────────────────────────────────── */
 
 export function AdminStaffPage() {
@@ -64,7 +72,6 @@ export function AdminStaffPage() {
         fetchStaffs,
         createStaff,
         updateStaff,
-        deleteStaff,
         clearError,
     } = useStaffStore();
     const { specialties, fetchSpecialties } = useRoomStore();
@@ -110,11 +117,6 @@ export function AdminStaffPage() {
         specialty_id: '',
     });
 
-    // Delete Confirm states
-    const [deletingStaff, setDeletingStaff] = useState<Staff | null>(null);
-    const [isDeleting, setIsDeleting] = useState(false);
-    const [deleteError, setDeleteError] = useState<string | null>(null);
-
     useEffect(() => {
         if (accessToken) {
             fetchStaffs(accessToken);
@@ -141,11 +143,6 @@ export function AdminStaffPage() {
         setEditingStaff(staff);
     };
 
-    const openDeleteModal = (staff: Staff) => {
-        setDeleteError(null);
-        setDeletingStaff(staff);
-    };
-
     /* ── Handlers ────────────────────────────────────────────── */
 
     const handleCreateStaff = async () => {
@@ -158,6 +155,11 @@ export function AdminStaffPage() {
             return;
         }
 
+        if (normalizeRole(createForm.role) === 'DOCTOR' && !createForm.specialty_id.trim()) {
+            setCreateError('Vui lòng chọn chuyên khoa cho bác sĩ.');
+            return;
+        }
+
         setIsCreating(true);
         setCreateError(null);
 
@@ -166,22 +168,22 @@ export function AdminStaffPage() {
             password: createForm.password,
             full_name: createForm.full_name.trim(),
             email: createForm.email.trim(),
-            role: createForm.role,
-            gender: createForm.gender,
+            role: normalizeRole(createForm.role),
+            gender: normalizeGender(createForm.gender),
             phone: createForm.phone.trim(),
         };
 
-        if (createForm.role === 'DOCTOR' || createForm.role === 'NURSE') {
+        if (data.role === 'DOCTOR' || data.role === 'NURSE') {
             if (createForm.license_number.trim()) {
                 data.license_number = createForm.license_number.trim();
             }
             if (createForm.experience_years.trim()) {
-                data.experience_years = Number(createForm.experience_years);
+                data.experience_years = createForm.experience_years.trim();
             }
         }
 
-        if (createForm.role === 'DOCTOR' && createForm.specialty_id) {
-            data.specialty_id = createForm.specialty_id;
+        if (data.role === 'DOCTOR' && createForm.specialty_id.trim()) {
+            data.specialty_id = createForm.specialty_id.trim();
         }
 
         try {
@@ -227,8 +229,8 @@ export function AdminStaffPage() {
             user_name: editForm.user_name.trim(),
             full_name: editForm.full_name.trim(),
             email: editForm.email.trim(),
-            role: editForm.role,
-            gender: editForm.gender,
+            role: normalizeRole(editForm.role),
+            gender: normalizeGender(editForm.gender),
             phone: editForm.phone.trim(),
         };
 
@@ -236,16 +238,16 @@ export function AdminStaffPage() {
             data.password = editForm.password;
         }
 
-        if (editForm.role === 'DOCTOR' || editForm.role === 'NURSE') {
+        if (data.role === 'DOCTOR' || data.role === 'NURSE') {
             data.license_number = editForm.license_number.trim() || undefined;
-            data.experience_years = editForm.experience_years.trim() ? Number(editForm.experience_years) : undefined;
+            data.experience_years = editForm.experience_years.trim() || undefined;
         } else {
             data.license_number = undefined;
             data.experience_years = undefined;
         }
 
-        if (editForm.role === 'DOCTOR') {
-            data.specialty_id = editForm.specialty_id || undefined;
+        if (data.role === 'DOCTOR') {
+            data.specialty_id = editForm.specialty_id.trim() || undefined;
         } else {
             data.specialty_id = undefined;
         }
@@ -263,38 +265,23 @@ export function AdminStaffPage() {
         }
     };
 
-    const handleDeleteStaff = async () => {
-        if (!deletingStaff) return;
-
-        setIsDeleting(true);
-        setDeleteError(null);
-        try {
-            await deleteStaff(deletingStaff.staff_id, accessToken || '');
-            setDeletingStaff(null);
-            const newTotal = filteredStaffs.length - 1;
-            const newTotalPages = Math.ceil(newTotal / ITEMS_PER_PAGE);
-            if (currentPage > newTotalPages && newTotalPages > 0) {
-                setCurrentPage(newTotalPages);
-            }
-        } catch (err) {
-            setDeleteError(err instanceof Error ? err.message : 'Xóa nhân viên thất bại.');
-        } finally {
-            setIsDeleting(false);
-        }
-    };
-
     /* ── Computed ─────────────────────────────────────────────── */
 
     const filteredStaffs = staffs.filter((staff) => {
-        const matchesSearch = staff.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            staff.account?.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            staff.account?.user_name?.toLowerCase().includes(searchQuery.toLowerCase());
+        const searchLower = searchQuery.toLowerCase();
+        const fullName = String(staff.full_name || '').toLowerCase();
+        const email = String(staff.account?.email || '').toLowerCase();
+        const userName = String(staff.account?.user_name || '').toLowerCase();
+        const matchesSearch =
+            fullName.includes(searchLower) ||
+            email.includes(searchLower) ||
+            userName.includes(searchLower);
         const matchesRole = roleFilter === 'ALL' || staff.account?.role === roleFilter;
         return matchesSearch && matchesRole;
     });
 
     const sortedStaffs = [...filteredStaffs].sort((a, b) =>
-        a.full_name.localeCompare(b.full_name, undefined, { sensitivity: 'base' })
+        String(a.full_name || '').localeCompare(String(b.full_name || ''), undefined, { sensitivity: 'base' })
     );
 
     const totalPages = Math.ceil(sortedStaffs.length / ITEMS_PER_PAGE);
@@ -466,13 +453,6 @@ export function AdminStaffPage() {
                                                         >
                                                             <Pencil className="w-3.5 h-3.5" />
                                                         </button>
-                                                        <button
-                                                            onClick={() => openDeleteModal(staff)}
-                                                            title="Xóa nhân viên"
-                                                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition cursor-pointer"
-                                                        >
-                                                            <Trash2 className="w-3.5 h-3.5" />
-                                                        </button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -539,13 +519,12 @@ export function AdminStaffPage() {
             {/* ════════════════════════════════════════════════════════ */}
             {/* ── Backdrops ────────────────────────────────────────── */}
             {/* ════════════════════════════════════════════════════════ */}
-            {(isCreateModalOpen || !!editingStaff || !!deletingStaff) && (
+            {(isCreateModalOpen || !!editingStaff) && (
                 <div
                     className="fixed inset-0 bg-neutral-900/40 backdrop-blur-[2px] z-50"
                     onClick={() => {
                         setIsCreateModalOpen(false);
                         setEditingStaff(null);
-                        setDeletingStaff(null);
                     }}
                 />
             )}
@@ -885,51 +864,6 @@ export function AdminStaffPage() {
                 </div>
             )}
 
-            {/* ════════════════════════════════════════════════════════ */}
-            {/* ── Dialog: Xác nhận xóa ─────────────────────────────── */}
-            {/* ════════════════════════════════════════════════════════ */}
-            {deletingStaff && (
-                <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] bg-white rounded-3xl shadow-2xl p-6 z-[60] flex flex-col gap-4">
-                    <div className="flex items-start gap-4">
-                        <div className="w-11 h-11 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center shrink-0">
-                            <AlertTriangle className="w-5 h-5 text-red-500" />
-                        </div>
-                        <div className="flex-1">
-                            <h2 className="text-[16px] font-bold text-[#2D2D2D]">Xác nhận xóa nhân viên</h2>
-                            <p className="text-[13px] text-[#7B7B7B] mt-1 leading-relaxed">
-                                Bạn có chắc chắn muốn xóa nhân viên{' '}
-                                <span className="font-bold text-[#2D2D2D]">{deletingStaff.full_name}</span> ra khỏi hệ thống?
-                                Hành động này sẽ vô hiệu hóa hoàn toàn tài khoản của nhân viên đó.
-                            </p>
-                        </div>
-                    </div>
-
-                    {deleteError && (
-                        <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 p-3">
-                            <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                            <span className="text-[12px] text-red-700 font-semibold">{deleteError}</span>
-                        </div>
-                    )}
-
-                    <div className="flex gap-3">
-                        <button
-                            onClick={() => setDeletingStaff(null)}
-                            disabled={isDeleting}
-                            className="flex-1 py-2.5 border border-neutral-200 hover:bg-neutral-50 rounded-xl text-xs font-bold text-neutral-500 transition cursor-pointer"
-                        >
-                            Hủy
-                        </button>
-                        <button
-                            onClick={handleDeleteStaff}
-                            disabled={isDeleting}
-                            className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer flex items-center justify-center gap-1.5"
-                        >
-                            {isDeleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                            Xóa nhân viên
-                        </button>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

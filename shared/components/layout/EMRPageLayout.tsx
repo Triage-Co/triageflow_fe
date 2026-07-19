@@ -27,6 +27,7 @@ export function EMRPageLayout({ patient: initialPatient }: EMRPageLayoutProps) {
                 {/* 1. Collapsible patient info panel */}
                 <div className="relative shrink-0 border-r border-neutral-200/60 bg-[#FDFDFD]">
                     <LeftPatientPanel
+                        key={patient.id}
                         patient={patient}
                         isOpen={true}
                     />

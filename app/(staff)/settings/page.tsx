@@ -8,9 +8,11 @@ import {
     CheckCircle2,
     AlertCircle,
     Lock,
-    Info,
     Save,
-    Loader2
+    Loader2,
+    Image as ImageIcon,
+    Upload,
+    Trash2
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { Card } from '@/shared/components/ui/Card';
@@ -30,15 +32,18 @@ interface Toast {
 function SettingsForm({
     profile,
     onSave,
-    isSaving
+    isSaving,
+    onShowToast
 }: {
     profile: UserProfile;
-    onSave: (data: { userName: string; gender: Gender; extPhone: string; defaultPrinter: string; paperSize: string }) => Promise<void>;
+    onSave: (data: { userName: string; gender: Gender; extPhone: string; defaultPrinter: string; paperSize: string; avatar: string }) => Promise<void>;
     isSaving: boolean;
+    onShowToast: (message: string, type: 'success' | 'error' | 'info') => void;
 }) {
     const [userName, setUserName] = useState(profile.user_name || '');
     const [email] = useState(profile.email || '');
     const [gender, setGender] = useState<Gender>(profile.gender || 'MALE');
+    const [avatar, setAvatar] = useState(profile.avatar || '');
 
     const [extPhone, setExtPhone] = useState(() => {
         if (typeof window !== 'undefined') {
@@ -61,9 +66,31 @@ function SettingsForm({
         return 'Khổ nhiệt 80mm';
     });
 
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            // Validate size (limit to 2MB for DB safe base64 storage)
+            if (file.size > 2 * 1024 * 1024) {
+                onShowToast('Kích thước ảnh không được vượt quá 2MB.', 'error');
+                return;
+            }
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                if (typeof reader.result === 'string') {
+                    setAvatar(reader.result);
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleRemoveAvatar = () => {
+        setAvatar('');
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onSave({ userName, gender, extPhone, defaultPrinter, paperSize });
+        onSave({ userName, gender, extPhone, defaultPrinter, paperSize, avatar });
     };
 
     return (
@@ -78,6 +105,44 @@ function SettingsForm({
                     <h3 className="font-bold text-neutral-800 text-[15px] tracking-wide">
                         Thông tin nhân viên
                     </h3>
+                </div>
+
+                {/* Local File Upload Section */}
+                <div className="flex flex-col sm:flex-row items-center gap-5 pb-6 border-b border-neutral-100 mb-6">
+                    <div className="w-20 h-20 rounded-2xl bg-neutral-100 border border-neutral-200 flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
+                        {avatar ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={avatar} alt="Avatar Preview" className="w-full h-full object-cover" />
+                        ) : (
+                            <ImageIcon className="w-8 h-8 text-neutral-400" />
+                        )}
+                    </div>
+                    <div className="flex flex-col items-center sm:items-start gap-2">
+                        <p className="text-[12px] font-bold text-neutral-700">Ảnh đại diện nhân viên</p>
+                        <p className="text-[10px] text-neutral-400 font-medium">Hỗ trợ JPG, PNG. Dung lượng tối đa 2MB.</p>
+                        <div className="flex items-center gap-2 mt-1">
+                            <label className="flex items-center gap-1.5 px-3 py-1.5 bg-[#8B7CF6] hover:bg-[#7a6ae5] text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer">
+                                <Upload className="w-3.5 h-3.5" />
+                                Tải ảnh lên
+                                <input
+                                    type="file"
+                                    className="hidden"
+                                    accept="image/*"
+                                    onChange={handleFileChange}
+                                />
+                            </label>
+                            {avatar && (
+                                <button
+                                    type="button"
+                                    onClick={handleRemoveAvatar}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 border border-red-200 hover:bg-red-50 text-red-600 rounded-xl text-xs font-bold transition cursor-pointer"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    Gỡ bỏ
+                                </button>
+                            )}
+                        </div>
+                    </div>
                 </div>
 
                 {/* Input Form Fields */}
@@ -244,6 +309,7 @@ export default function SettingsPage() {
         extPhone: string;
         defaultPrinter: string;
         paperSize: string;
+        avatar: string;
     }) => {
         if (!accessToken) return;
 
@@ -257,7 +323,8 @@ export default function SettingsPage() {
             await updateProfile({
                 user_name: data.userName,
                 gender: data.gender,
-                phone: data.extPhone || undefined
+                phone: data.extPhone || undefined,
+                avatar: data.avatar || null
             }, accessToken);
 
             localStorage.setItem('tfopd_default_printer', data.defaultPrinter);
@@ -328,7 +395,6 @@ export default function SettingsPage() {
                                 >
                                     {toast.type === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />}
                                     {toast.type === 'error' && <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />}
-                                    {toast.type === 'info' && <Info className="w-5 h-5 text-indigo-500 shrink-0 mt-0.5" />}
                                     <span className="flex-1 leading-snug">{toast.message}</span>
                                 </div>
                             ))}
@@ -351,6 +417,7 @@ export default function SettingsPage() {
                                     profile={profile}
                                     onSave={handleSave}
                                     isSaving={isSaving}
+                                    onShowToast={showToast}
                                 />
                             ) : (
                                 <div className="flex flex-col items-center justify-center py-20 text-neutral-400 gap-3">

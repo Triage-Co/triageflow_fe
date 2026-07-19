@@ -13,7 +13,6 @@ export interface StaffActions {
     fetchStaffs: (token: string) => Promise<void>;
     createStaff: (data: CreateStaffDto, token: string) => Promise<void>;
     updateStaff: (id: string, data: UpdateStaffDto, token: string) => Promise<void>;
-    deleteStaff: (id: string, token: string) => Promise<void>;
     clearError: () => void;
 }
 
@@ -71,21 +70,6 @@ export const useStaffStore = create<StaffStore>()(
                         error: err instanceof Error ? err.message : 'Không thể cập nhật thông tin nhân viên.',
                         isLoading: false,
                     }, false, 'updateStaff/failure');
-                    throw err;
-                }
-            },
-
-            deleteStaff: async (id: string, token: string) => {
-                set({ isLoading: true, error: null }, false, 'deleteStaff/pending');
-                try {
-                    await staffService.deleteStaff(id, token);
-                    const updatedStaffs = get().staffs.filter((s) => s.staff_id !== id);
-                    set({ staffs: updatedStaffs, isLoading: false }, false, 'deleteStaff/success');
-                } catch (err) {
-                    set({
-                        error: err instanceof Error ? err.message : 'Không thể xóa nhân viên khỏi hệ thống.',
-                        isLoading: false,
-                    }, false, 'deleteStaff/failure');
                     throw err;
                 }
             },

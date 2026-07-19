@@ -25,10 +25,4 @@ export const staffService = {
             headers: { Authorization: `Bearer ${token}` },
         });
     },
-
-    deleteStaff: async (id: string, token: string) => {
-        return apiClient.delete<void>(`/api/staff/${id}`, {
-            headers: { Authorization: `Bearer ${token}` },
-        });
-    },
 };

@@ -72,12 +72,14 @@ export interface UserProfile {
     updatedAt: string;
     phone?: string;
     full_name?: string;
+    avatar?: string | null;
 }
 
 export interface UpdateProfileRequest {
     user_name: string;
     gender: Gender;
     phone?: string;
+    avatar?: string | null;
 }
 
 export interface ForgotPasswordRequest {

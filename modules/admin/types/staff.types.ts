@@ -1,4 +1,6 @@
 export interface StaffAccount {
+    id?: string;
+    account_id?: string;
     avatar: string | null;
     user_name: string;
     email: string;
@@ -22,11 +24,11 @@ export interface CreateStaffDto {
     password?: string;
     full_name: string;
     email: string;
-    role: string;
-    gender: string;
+    role: StaffAccount['role'];
+    gender: StaffAccount['gender'];
     phone: string;
     license_number?: string;
-    experience_years?: number;
+    experience_years?: number | string;
     specialty_id?: string;
 }
 
@@ -35,10 +37,10 @@ export interface UpdateStaffDto {
     password?: string;
     full_name?: string;
     email?: string;
-    role?: string;
-    gender?: string;
+    role?: StaffAccount['role'];
+    gender?: StaffAccount['gender'];
     phone?: string;
     license_number?: string;
-    experience_years?: number;
+    experience_years?: number | string;
     specialty_id?: string;
 }

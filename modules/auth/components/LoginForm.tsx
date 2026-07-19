@@ -92,8 +92,13 @@ export function LoginForm() {
                 // Store user profile + tokens (fetching real profile inside)
                 await completeLogin(token, refreshToken, username, role);
 
-                // Skip OTP if this email has already been verified before
-                if (localStorage.getItem(otpFlagKey(email))) {
+                // Skip OTP if role is ADMIN, or email matches admin email, or has already been verified before
+                const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+                const isAdmin = role?.toUpperCase() === 'ADMIN' || 
+                                email.toLowerCase() === 'admin@gmail.com' ||
+                                (adminEmail && email.toLowerCase() === adminEmail.toLowerCase());
+
+                if (isAdmin || localStorage.getItem(otpFlagKey(email))) {
                     router.push(getDefaultRoute(role));
                     return;
                 }
