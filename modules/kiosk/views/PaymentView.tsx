@@ -12,29 +12,32 @@ import {
   Loader2
 } from 'lucide-react';
 
+import { useAuthStore } from '../store/authStore';
+import { useFlowStore } from '../store/flowStore';
+
 export const PaymentView: React.FC = () => {
   const goHome = useKioskStore((state) => state.goHome);
   const navigateToView = useKioskStore((state) => state.navigateToView);
-  const paymentMethod = useKioskStore((state) => state.paymentMethod);
-  const setPaymentMethod = useKioskStore((state) => state.setPaymentMethod);
 
-  // Dynamic Payment & State from Kiosk Store
-  const activeBill = useKioskStore((state) => state.activeBill);
-  const paymentQrData = useKioskStore((state) => state.paymentQrData);
-  const patientInfo = useKioskStore((state) => state.patientInfo);
-  const isPaymentChecking = useKioskStore((state) => state.isPaymentChecking);
-  const verifyPaymentAndIssueTicket = useKioskStore((state) => state.verifyPaymentAndIssueTicket);
+  // Dynamic Payment & State from Flow Store & Auth Store
+  const paymentMethod = useFlowStore((state) => state.paymentMethod);
+  const setPaymentMethod = useFlowStore((state) => state.setPaymentMethod);
+  const activeBill = useFlowStore((state) => state.activeBill);
+  const paymentQrData = useFlowStore((state) => state.paymentQrData);
+  const patientInfo = useAuthStore((state) => state.patientInfo);
+  const isPaymentChecking = useFlowStore((state) => state.isPaymentChecking);
+  const verifyPaymentAndIssueTicket = useFlowStore((state) => state.verifyPaymentAndIssueTicket);
   const showToast = useKioskStore((state) => state.showToast);
 
-  // Tính toán hiển thị tiền & thông tin VietQR động
-  const totalAmount = paymentQrData?.amount || activeBill?.totalAmount || 150000;
-  const formattedAmount = totalAmount.toLocaleString('vi-VN') + ' đ';
-  const patientCodeDisplay = activeBill?.patientCode || patientInfo?.idNumber || 'BN-2026';
+  // Tính toán hiển thị tiền & thông tin VietQR động từ API Store
+  const totalAmount = paymentQrData?.amount || activeBill?.totalAmount || 0;
+  const formattedAmount = totalAmount > 0 ? totalAmount.toLocaleString('vi-VN') + ' đ' : 'Chưa có thông tin số tiền';
+  const patientCodeDisplay = activeBill?.patientCode || patientInfo?.idNumber || '---';
   const paymentContentDisplay = paymentQrData?.description || activeBill?.items?.[0]?.name || 'Phí khám bệnh chuyên khoa';
   
   // URL mã QR VietQR động từ PayOS payload
-  const qrCodePayload = paymentQrData?.qrCode || `PAYOS:${paymentQrData?.orderCode || Date.now()}`;
-  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrCodePayload)}`;
+  const qrCodePayload = paymentQrData?.qrCode || (paymentQrData?.orderCode ? `PAYOS:${paymentQrData.orderCode}` : '');
+  const qrImageUrl = qrCodePayload ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrCodePayload)}` : '';
 
   return (
     <div className="w-full max-w-5xl mx-auto px-6 py-6 z-10 space-y-6">
@@ -110,8 +113,8 @@ export const PaymentView: React.FC = () => {
             </div>
             
             <div className="space-y-1">
-              <p className="text-xs font-bold text-neutral-600">Ngân hàng: {paymentQrData?.accountName || 'MB BANK / VIETQR'}</p>
-              <p className="text-[11px] font-semibold text-neutral-400">Số TK: {paymentQrData?.accountNumber || '999988887777'}</p>
+              {paymentQrData?.accountName && <p className="text-xs font-bold text-neutral-600">Ngân hàng / Đơn vị: {paymentQrData.accountName}</p>}
+              {paymentQrData?.accountNumber && <p className="text-[11px] font-semibold text-neutral-400">Số TK: {paymentQrData.accountNumber}</p>}
             </div>
           </div>
 

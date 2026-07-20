@@ -1,51 +1,63 @@
 import { apiClient } from '@/shared/services/apiClient';
 import {
   BookingResponseData,
-  BookingGenerateResponseData,
-  StepDetailResponseData,
   DoctorItem,
-  DoctorSlotItem
-} from '../types/kiosk.types';
+  DoctorSlotItem,
+} from '../types/booking.types';
+import { useAuthStore } from '../store/authStore';
+
+const getAuthHeaders = (explicitToken?: string): Record<string, string> => {
+  const token = explicitToken || useAuthStore.getState().authToken;
+  if (!token) return {};
+  let cleanToken = token.trim();
+  if ((cleanToken.startsWith('"') && cleanToken.endsWith('"')) || (cleanToken.startsWith("'") && cleanToken.endsWith("'"))) {
+    cleanToken = cleanToken.slice(1, -1).trim();
+  }
+  if (cleanToken.toLowerCase().startsWith('bearer ')) {
+    cleanToken = cleanToken.substring(7).trim();
+  }
+  return { Authorization: `Bearer ${cleanToken}` };
+};
 
 export const bookingService = {
-  // 1. Tự động xếp phòng khám từ kết quả gợi ý chuyên khoa AI
-  createAutoBooking: async (patientId: string, interviewToken: string) => {
-    return apiClient.post<BookingResponseData>('/api/booking/recommend', {
-      patient_id: patientId,
-      interview_token: interviewToken,
-    });
+  createAutoBooking: async (patientId: string, interviewToken: string, token?: string) => {
+    return apiClient.post<BookingResponseData>(
+      '/api/booking/recommend',
+      {
+        patient_id: patientId,
+        interview_token: interviewToken,
+      },
+      { headers: getAuthHeaders(token) }
+    );
   },
 
-  // 2. Lấy danh sách Bác sĩ thực tế theo mã chuyên khoa
-  getDoctorsBySpecialty: async (specialtyCode: string, dateTime?: string) => {
+  getDoctorsBySpecialty: async (specialtyCode: string, dateTime?: string, token?: string) => {
     const params = new URLSearchParams();
     if (specialtyCode) params.append('specialty_code', specialtyCode);
     if (dateTime) params.append('date_time', dateTime);
-    return apiClient.get<DoctorItem[]>(`/api/doctor/specialty?${params.toString()}`);
+    return apiClient.get<DoctorItem[]>(
+      `/api/doctor/specialty?${params.toString()}`,
+      { headers: getAuthHeaders(token) }
+    );
   },
 
-  // 3. Lấy các khung giờ trống của Bác sĩ
-  getDoctorSlots: async (doctorId: string, date: string) => {
+  getDoctorSlots: async (doctorId: string, date: string, token?: string) => {
     const params = new URLSearchParams();
     if (date) params.append('date', date);
-    return apiClient.get<DoctorSlotItem[]>(`/api/doctor/${doctorId}/slot?${params.toString()}`);
+    return apiClient.get<DoctorSlotItem[]>(
+      `/api/doctor/${doctorId}/slot?${params.toString()}`,
+      { headers: getAuthHeaders(token) }
+    );
   },
 
-  // 4. Đặt lịch với Bác sĩ & khung giờ cụ thể
-  createBooking: async (patientId: string, slotId: string) => {
-    return apiClient.post<BookingResponseData>('/api/booking', {
-      patient_id: patientId,
-      slot_id: slotId,
-    });
+  createBooking: async (patientId: string, slotId: string, token?: string) => {
+    return apiClient.post<BookingResponseData>(
+      '/api/booking',
+      {
+        patient_id: patientId,
+        slot_id: slotId,
+      },
+      { headers: getAuthHeaders(token) }
+    );
   },
-
-  // 5. Xác nhận thanh toán & Sinh số thứ tự (STT) chính thức
-  fetchBookingGenerate: async (stepId: string) => {
-    return apiClient.get<BookingGenerateResponseData>(`/api/booking/generate?step-id=${encodeURIComponent(stepId)}`);
-  },
-
-  // 6. Lấy chi tiết lịch khám & thông tin phòng khám đầy đủ
-  fetchStepDetail: async (stepId: string) => {
-    return apiClient.get<StepDetailResponseData>(`/api/step/account/${encodeURIComponent(stepId)}`);
-  }
 };

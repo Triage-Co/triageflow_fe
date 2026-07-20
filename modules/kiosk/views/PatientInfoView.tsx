@@ -1,31 +1,32 @@
 import React from 'react';
 import { useKioskStore } from '../store/kioskStore';
+import { useAuthStore } from '../store/authStore';
+import { useFlowStore } from '../store/flowStore';
 import { ArrowLeft, Clock, MapPin, Navigation, QrCode, Printer, Users } from 'lucide-react';
 
 export const PatientInfoView: React.FC = () => {
   const goHome = useKioskStore((state) => state.goHome);
   const navigateToView = useKioskStore((state) => state.navigateToView);
 
-  // Dynamic ticket state from Kiosk Store
-  const activeTicket = useKioskStore((state) => state.activeTicket);
+  // Dynamic ticket state from Flow Store & Auth Store
+  const activeTicket = useFlowStore((state) => state.activeTicket);
   const selectedDoctor = useKioskStore((state) => state.selectedDoctor);
-  const patientInfo = useKioskStore((state) => state.patientInfo);
+  const patientInfo = useAuthStore((state) => state.patientInfo);
   const showToast = useKioskStore((state) => state.showToast);
 
   const handlePrintTicket = () => {
     showToast('Đang phát lệnh in phiếu khám bệnh...', 'info');
   };
 
-  // Dynamic values
-  const ticketNo = activeTicket?.ticketNumber || 'A01';
-  const roomName = activeTicket?.roomNumber || selectedDoctor?.room || 'Phòng khám';
-  const specialtyName = activeTicket?.clinicName || selectedDoctor?.specialty || 'Chuyên khoa';
-  const locationName = activeTicket?.location || selectedDoctor?.location || 'Tầng 2 - Khu B';
-  const doctorName = activeTicket?.doctorName || selectedDoctor?.name || 'BS. Chuyên khoa phụ trách';
-  const patientName = activeTicket?.patientName || patientInfo?.fullName || 'Bệnh nhân Khám Kiosk';
+  // Dynamic values từ API Store (Không hardcode fallback giả định)
+  const ticketNo = activeTicket?.ticketNumber || (selectedDoctor ? '---' : '');
+  const roomName = activeTicket?.roomNumber || selectedDoctor?.room || '';
+  const specialtyName = activeTicket?.clinicName || selectedDoctor?.specialty || '';
+  const doctorName = activeTicket?.doctorName || selectedDoctor?.name || '';
+  const patientName = activeTicket?.patientName || patientInfo?.fullName || '';
   
   // Dynamic QR Code for Ticket
-  const qrTicketUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(ticketNo)}`;
+  const qrTicketUrl = ticketNo !== '---' ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(ticketNo)}` : '';
 
   return (
     <div className="w-full max-w-5xl mx-auto px-6 py-6 z-10 space-y-6">
@@ -71,11 +72,6 @@ export const PatientInfoView: React.FC = () => {
               <p className="text-sm font-semibold text-blue-100">{specialtyName}</p>
             </div>
 
-            <div className="flex items-center gap-2 text-xs font-bold text-blue-100">
-              <MapPin className="w-4 h-4 shrink-0" />
-              <span>{locationName}</span>
-            </div>
-
             <button
               onClick={() => navigateToView('map')}
               className="w-full py-3 bg-white text-[#155DFC] rounded-2xl font-extrabold text-xs flex items-center justify-center gap-2 shadow-md hover:bg-blue-50 transition-all cursor-pointer"
@@ -101,7 +97,7 @@ export const PatientInfoView: React.FC = () => {
                 <h3 className="text-4xl font-black text-[#155DFC] tracking-wider">{ticketNo}</h3>
               </div>
               <div className="text-xs font-bold text-neutral-600">
-                {roomName} • {locationName}
+                {roomName}
               </div>
               <div className="text-[11px] font-bold text-neutral-400">
                 Bệnh nhân: {patientName}
@@ -195,8 +191,8 @@ export const PatientInfoView: React.FC = () => {
                 <span className="font-bold text-[#1E2939] text-sm">{roomName}</span>
               </div>
               <div>
-                <span className="text-neutral-400 block mb-1">Vị trí phòng khám</span>
-                <span className="font-bold text-[#1E2939] text-sm">{locationName}</span>
+                <span className="text-neutral-400 block mb-1">Chuyên khoa</span>
+                <span className="font-bold text-[#1E2939] text-sm">{specialtyName}</span>
               </div>
             </div>
           </div>

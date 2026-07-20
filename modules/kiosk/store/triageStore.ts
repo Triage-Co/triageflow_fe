@@ -55,6 +55,7 @@ interface TriageStoreState {
     // ĐỔI: Chuyển sang nhận một mảng danh sách câu trả lời cùng lúc
     submitAnswersBatch: (answers: InfermedicaEvidence[]) => Promise<void>;
     clearTriage: () => void;
+    resetTriageFlow: () => void;
 }
 
 export const useTriageStore = create<TriageStoreState>((set, get) => ({
@@ -84,6 +85,9 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
             currentQuestion: null,
             recommendedSpecialists: []
         });
+    },
+    resetTriageFlow: () => {
+        get().clearTriage();
     },
 
     fetchAndMergeSymptoms: async (regionId: string, dob?: string) => {
@@ -187,7 +191,7 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
 
         set({ isApiLoading: true });
 
-        const realCitizenId = authState.citizenId || kioskState.patientInfo?.idNumber;
+        const realCitizenId = authState.citizenId || authState.patientInfo?.idNumber;
 
         if (!realCitizenId) {
             console.error("Không tìm thấy thông tin định danh CCCD/CMND.");
@@ -203,7 +207,7 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
         set({ accumulatedEvidence: initialEvidence });
 
         let patientAge = 30;
-        const dob = kioskState.patientInfo?.dob;
+        const dob = authState.patientInfo?.dob;
         if (dob) {
             const dobParts = dob.split('/');
             if (dobParts.length === 3) {
@@ -272,7 +276,7 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
         set({ accumulatedEvidence: updatedEvidence });
 
         let patientAge = 30;
-        const dob = kioskState.patientInfo?.dob;
+        const dob = authState.patientInfo?.dob;
         if (dob) {
             const dobParts = dob.split('/');
             if (dobParts.length === 3) {
@@ -287,7 +291,7 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
             evidence: updatedEvidence
         };
 
-        const realCitizenId = authState.citizenId || kioskState.patientInfo?.idNumber;
+        const realCitizenId = authState.citizenId || authState.patientInfo?.idNumber;
 
         if (!realCitizenId) {
             set({ isApiLoading: false });

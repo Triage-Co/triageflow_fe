@@ -2,21 +2,22 @@ import React from 'react';
 import { useKioskStore } from '../store/kioskStore';
 import { ArrowLeft, Clock, MapPin } from 'lucide-react';
 
+import { useFlowStore } from '../store/flowStore';
+
 export const QueueView: React.FC = () => {
   const goHome = useKioskStore((state) => state.goHome);
   const navigateToView = useKioskStore((state) => state.navigateToView);
 
-  // Dynamic ticket state from Kiosk Store
-  const activeTicket = useKioskStore((state) => state.activeTicket);
+  // Dynamic ticket state from Flow Store
+  const activeTicket = useFlowStore((state) => state.activeTicket);
   const selectedDoctor = useKioskStore((state) => state.selectedDoctor);
 
-  const roomName = activeTicket?.roomNumber || selectedDoctor?.room || 'Phòng khám';
-  const specialtyName = activeTicket?.clinicName || selectedDoctor?.specialty || 'Nội Tổng Quát';
-  const locationName = activeTicket?.location || selectedDoctor?.location || 'Tầng 2 - Khu B';
-  const ticketNo = activeTicket?.ticketNumber || 'A01';
-  const callingNo = activeTicket?.currentCallingNo || 'A01';
-  const waitingCount = activeTicket?.waitingCount || 3;
-  const estimatedWait = activeTicket?.estimatedWaitMinutes || 10;
+  const roomName = activeTicket?.roomNumber || selectedDoctor?.room || '';
+  const specialtyName = activeTicket?.clinicName || selectedDoctor?.specialty || '';
+  const ticketNo = activeTicket?.ticketNumber || '';
+  const callingNo = activeTicket?.currentCallingNo || ticketNo;
+  const waitingCount = activeTicket?.waitingCount ?? 0;
+  const estimatedWait = activeTicket?.estimatedWaitMinutes ?? 5;
 
   return (
     <div className="w-full max-w-5xl mx-auto px-6 py-6 z-10 space-y-6">
@@ -70,8 +71,8 @@ export const QueueView: React.FC = () => {
                 <MapPin className="w-6 h-6" />
               </div>
               <div>
-                <h4 className="font-extrabold text-[#1E2939] text-sm">Vị trí phòng khám</h4>
-                <p className="text-xs text-neutral-500 font-semibold">{locationName}</p>
+                <h4 className="font-extrabold text-[#1E2939] text-sm">Phòng khám</h4>
+                <p className="text-xs text-neutral-500 font-semibold">{roomName} {specialtyName ? `(${specialtyName})` : ''}</p>
               </div>
             </div>
 

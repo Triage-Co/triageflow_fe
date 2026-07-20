@@ -1,11 +1,11 @@
 import React from 'react';
 import { useKioskStore } from '../store/kioskStore';
-import { PrimaryButton } from '../components/PrimaryButton';
+import { useFlowStore } from '../store/flowStore';
 import { ArrowLeft, MapPin, Navigation, Compass, Layers } from 'lucide-react';
 
 export const MapView: React.FC = () => {
   const goHome = useKioskStore((state) => state.goHome);
-  const activeTicket = useKioskStore((state) => state.activeTicket);
+  const activeTicket = useFlowStore((state) => state.activeTicket);
 
   const stepsList = [
     { num: 1, text: 'Đi thẳng về phía trước', sub: '50m' },
