@@ -62,22 +62,24 @@ export interface AuthUser {
 export interface UserProfile {
     id?: string;
     account_id?: string;
-    user_name: string;
+    user_name?: string;
+    full_name?: string;
     email: string;
-    dob?: string;          // Made optional since it's no longer returned by the new profile update API
+    dob?: string;
     role: string;
     gender: Gender;
     citizen_id?: string;
-    createdAt: string;
-    updatedAt: string;
+    createdAt?: string;
+    updatedAt?: string;
     phone?: string;
-    full_name?: string;
+    avatar?: string | null;
 }
 
 export interface UpdateProfileRequest {
-    user_name: string;
-    gender: Gender;
+    user_name?: string;
+    gender?: Gender;
     phone?: string;
+    avatar?: string | null;
 }
 
 export interface ForgotPasswordRequest {

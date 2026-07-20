@@ -62,23 +62,26 @@ export interface AuthUser {
 }
 
 export interface UserProfile {
-    id: string;
-    full_name: string;
+    id?: string;
+    account_id?: string;
+    user_name?: string;
+    full_name?: string;
     email: string;
-    dob: string;          // ISO date: e.g. 2004-04-07T00:00:00.000Z
+    dob?: string;          // ISO date or DD-MM-YYYY
     role: string;
     gender: Gender;
-    citizen_id: string;
-    createdAt: string;
-    updatedAt: string;
+    citizen_id?: string;
+    createdAt?: string;
+    updatedAt?: string;
     phone?: string;
+    avatar?: string | null;
 }
 
 export interface UpdateProfileRequest {
-    full_name: string;
-    dob: string;          // Date format: DD-MM-YYYY
-    gender: Gender;
+    user_name?: string;
+    gender?: Gender;
     phone?: string;
+    avatar?: string | null;
 }
 
 export interface ForgotPasswordRequest {

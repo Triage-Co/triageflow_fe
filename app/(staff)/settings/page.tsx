@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
     User,
     Printer,
@@ -10,7 +11,9 @@ import {
     Lock,
     Info,
     Save,
-    Loader2
+    Loader2,
+    Upload,
+    Shield,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { Card } from '@/shared/components/ui/Card';
@@ -20,56 +23,40 @@ import type { Gender, UserProfile } from '@/shared/types/auth.types';
 import { cn } from '@/lib/utils';
 import { EMRWorkspaceLayout } from '@/shared/components/layout/EMRWorkspaceLayout';
 
+import { uploadImageToCloudinary } from '@/shared/services/cloudinaryService';
+
 interface Toast {
     id: string;
     message: string;
     type: 'success' | 'error' | 'info';
 }
 
-const toUpdateDobFormat = (dob?: string): string => {
-    if (!dob) return '';
-    const trimmed = dob.trim();
-
-    if (/^\d{2}-\d{2}-\d{4}$/.test(trimmed)) {
-        return trimmed;
-    }
-
-    const isoLikeMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (isoLikeMatch) {
-        return `${isoLikeMatch[3]}-${isoLikeMatch[2]}-${isoLikeMatch[1]}`;
-    }
-
-    const parsed = new Date(trimmed);
-    if (!Number.isNaN(parsed.getTime())) {
-        const dd = String(parsed.getDate()).padStart(2, '0');
-        const mm = String(parsed.getMonth() + 1).padStart(2, '0');
-        const yyyy = parsed.getFullYear();
-        return `${dd}-${mm}-${yyyy}`;
-    }
-
-    return '';
-};
-
-// ── Extracted Settings Form Component ─────────────────────────────────────
+// ── Settings Form Component ─────────────────────────────────────
 function SettingsForm({
     profile,
     onSave,
-    isSaving
+    isSaving,
 }: {
     profile: UserProfile;
-    onSave: (data: { userName: string; gender: Gender; extPhone: string; defaultPrinter: string; paperSize: string }) => Promise<void>;
+    onSave: (data: {
+        userName: string;
+        gender: Gender;
+        extPhone: string;
+        avatar: string | null;
+        defaultPrinter: string;
+        paperSize: string;
+    }) => Promise<void>;
     isSaving: boolean;
 }) {
-    const [userName, setUserName] = useState(profile.full_name || '');
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const [userName, setUserName] = useState(profile.user_name || profile.full_name || '');
     const [email] = useState(profile.email || '');
     const [gender, setGender] = useState<Gender>(profile.gender || 'MALE');
-
-    const [extPhone, setExtPhone] = useState(() => {
-        if (typeof window !== 'undefined') {
-            return localStorage.getItem('tfopd_ext_phone') || profile.phone || '1234567890';
-        }
-        return profile.phone || '1234567890';
-    });
+    const [extPhone, setExtPhone] = useState(profile.phone || '');
+    const [avatar, setAvatar] = useState<string | null>(profile.avatar || null);
+    const [isDragging, setIsDragging] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
 
     const [defaultPrinter, setDefaultPrinter] = useState(() => {
         if (typeof window !== 'undefined') {
@@ -85,69 +72,185 @@ function SettingsForm({
         return 'Khổ nhiệt 80mm';
     });
 
+    useEffect(() => {
+        if (profile.user_name || profile.full_name) {
+            setUserName(profile.user_name || profile.full_name || '');
+        }
+        if (profile.gender) {
+            setGender(profile.gender);
+        }
+        if (profile.phone) {
+            setExtPhone(profile.phone);
+        }
+        if (profile.avatar !== undefined) {
+            setAvatar(profile.avatar);
+        }
+    }, [profile]);
+
+    const handleFileSelect = async (file: File) => {
+        if (!file.type.startsWith('image/')) {
+            alert('Vui lòng chỉ chọn tệp hình ảnh (JPG, PNG, WebP).');
+            return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            alert('Kích thước ảnh tối đa là 5MB.');
+            return;
+        }
+
+        try {
+            setIsUploading(true);
+            const uploadedUrl = await uploadImageToCloudinary(file);
+            setAvatar(uploadedUrl);
+        } catch (err) {
+            console.error('Avatar upload failed:', err);
+            alert('Không thể tải ảnh lên. Vui lòng thử lại.');
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+            handleFileSelect(e.dataTransfer.files[0]);
+        }
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onSave({ userName, gender, extPhone, defaultPrinter, paperSize });
+        onSave({ userName, gender, extPhone, avatar, defaultPrinter, paperSize });
     };
 
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
-            {/* ── Card 1: Employee Info ── */}
-            <Card className="p-6 md:p-8 hover:shadow-[0_8px_30px_rgb(0,0,0,0.02)] transition-shadow duration-300">
+            {/* ── Card 1: Thông tin nhân viên ── */}
+            <Card className="p-6 md:p-8 hover:shadow-xs transition-shadow duration-300 border border-neutral-200/80 rounded-3xl">
                 {/* Header title */}
-                <div className="flex items-center gap-2 mb-6">
-                    <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100/50">
-                        <User className="w-4.5 h-4.5" />
+                <div className="flex items-center gap-2.5 mb-6">
+                    <div className="w-8 h-8 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 border border-purple-100">
+                        <User className="w-4 h-4" />
                     </div>
-                    <h3 className="font-bold text-neutral-800 text-[15px] tracking-wide">
+                    <h3 className="font-bold text-neutral-800 text-[15px] tracking-tight">
                         Thông tin nhân viên
                     </h3>
+                </div>
+
+                {/* Avatar Upload Block matching Figma */}
+                <div className="mb-8 p-4 md:p-6 rounded-2xl bg-neutral-50/50 border border-neutral-100 flex flex-col sm:flex-row items-center gap-6">
+                    {/* Circle Avatar Preview */}
+                    <div className="relative shrink-0">
+                        {isUploading ? (
+                            <div className="w-24 h-24 rounded-full border-2 border-purple-300 bg-purple-50 flex flex-col items-center justify-center text-purple-600 gap-1 shadow-2xs animate-pulse">
+                                <Loader2 className="w-6 h-6 animate-spin" />
+                                <span className="text-[10px] font-semibold">Đang tải...</span>
+                            </div>
+                        ) : avatar ? (
+                            <img
+                                src={avatar}
+                                alt="Avatar Preview"
+                                className="w-24 h-24 rounded-full object-cover border-2 border-purple-200 shadow-sm"
+                            />
+                        ) : (
+                            <div className="w-24 h-24 rounded-full border-2 border-dashed border-neutral-300 bg-white flex flex-col items-center justify-center text-neutral-400 gap-1 shadow-2xs">
+                                <User className="w-7 h-7 text-neutral-300" />
+                                <span className="text-[10px] font-medium text-neutral-400">Chưa có ảnh</span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Dropzone Container */}
+                    <div className="flex-1 w-full space-y-2">
+                        <div>
+                            <h4 className="text-sm font-bold text-neutral-800">Ảnh đại diện</h4>
+                            <p className="text-xs text-neutral-400 mt-0.5">
+                                Định dạng JPG, PNG hoặc WebP. Tối đa 5MB. Khuyến nghị kích thước 200×200px.
+                            </p>
+                        </div>
+
+                        <div
+                            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                            onDragLeave={() => setIsDragging(false)}
+                            onDrop={handleDrop}
+                            onClick={() => !isUploading && fileInputRef.current?.click()}
+                            className={cn(
+                                "border-2 border-dashed rounded-2xl p-4 md:p-6 text-center transition cursor-pointer relative group flex flex-col items-center justify-center gap-2",
+                                isUploading && "opacity-50 cursor-wait",
+                                isDragging
+                                    ? "border-purple-500 bg-purple-50/30"
+                                    : "border-neutral-200 hover:border-purple-300 bg-white hover:bg-purple-50/10"
+                            )}
+                        >
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/png, image/jpeg, image/webp"
+                                className="hidden"
+                                disabled={isUploading}
+                                onChange={(e) => {
+                                    if (e.target.files && e.target.files[0]) {
+                                        handleFileSelect(e.target.files[0]);
+                                    }
+                                }}
+                            />
+                            <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                {isUploading ? <Loader2 className="w-4.5 h-4.5 animate-spin" /> : <Upload className="w-4.5 h-4.5" />}
+                            </div>
+                            <p className="text-xs text-neutral-600">
+                                <span className="font-semibold text-neutral-800">
+                                    {isUploading ? 'Đang tải ảnh lên...' : 'Kéo thả ảnh vào đây'}
+                                </span>{' '}
+                                {!isUploading && (
+                                    <>hoặc <span className="font-semibold text-purple-600 hover:underline">nhấp để chọn file</span></>
+                                )}
+                            </p>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Input Form Fields */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     {/* Fullname */}
-                    <div className="md:col-span-2 space-y-2">
-                        <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Họ và tên</label>
+                    <div className="md:col-span-2 space-y-1.5">
+                        <label className="text-xs font-semibold text-neutral-600">Họ và tên</label>
                         <Input
                             value={userName}
                             onChange={(e) => setUserName(e.target.value)}
                             placeholder="Nhập họ và tên của bạn"
-                            className="h-11 shadow-sm"
+                            className="h-11 rounded-xl shadow-2xs text-sm"
                         />
                     </div>
 
                     {/* Email (Disabled) */}
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Email</label>
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-neutral-600">Email</label>
                         <Input
                             value={email}
                             disabled
                             placeholder="email@hospital.vn"
-                            className="bg-neutral-50 text-neutral-400 border-neutral-200/80 cursor-not-allowed select-none h-11"
+                            className="bg-neutral-50 text-neutral-400 border-neutral-200/80 cursor-not-allowed select-none h-11 rounded-xl text-sm"
                             startIcon={<Lock className="w-4 h-4 text-neutral-300 shrink-0" />}
                         />
                     </div>
 
                     {/* Ext Phone */}
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Số điện thoại nội bộ</label>
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-neutral-600">Số điện thoại nội bộ</label>
                         <Input
                             value={extPhone}
-                            onChange={(e) => setExtPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                            placeholder="Ví dụ: 0912345678"
-                            maxLength={10}
-                            className="h-11 shadow-sm"
+                            onChange={(e) => setExtPhone(e.target.value)}
+                            placeholder="Ví dụ: 1234 hoặc 0947900432"
+                            className="h-11 rounded-xl shadow-2xs text-sm"
                         />
                     </div>
 
                     {/* Gender Select */}
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Giới tính</label>
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-neutral-600">Giới tính</label>
                         <select
                             value={gender}
                             onChange={(e) => setGender(e.target.value as Gender)}
-                            className="flex h-11 w-full rounded-[24px] border border-neutral-200 bg-white px-4 py-2 text-sm text-neutral-900 shadow-sm transition-all focus-visible:outline-none focus-visible:border-brand-400 focus-visible:ring-2 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="flex h-11 w-full rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm text-neutral-900 shadow-2xs transition-all focus-visible:outline-none focus-visible:border-purple-500 focus-visible:ring-2 focus-visible:ring-purple-500/20"
                         >
                             <option value="MALE">Nam</option>
                             <option value="FEMALE">Nữ</option>
@@ -157,41 +260,59 @@ function SettingsForm({
                 </div>
             </Card>
 
-            {/* ── Card 2: Printer configuration ── */}
-            <Card className="p-6 md:p-8 hover:shadow-[0_8px_30px_rgb(0,0,0,0.02)] transition-shadow duration-300">
-                {/* Header title */}
-                <div className="flex items-center gap-2 mb-6">
-                    <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100/50">
-                        <Printer className="w-4.5 h-4.5" />
+            {/* ── Card 2: Cấu hình máy in ── */}
+            <Card className="p-6 md:p-8 hover:shadow-xs transition-shadow duration-300 border border-neutral-200/80 rounded-3xl">
+                <div className="flex items-center gap-2.5 mb-6">
+                    <div className="w-8 h-8 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 border border-purple-100">
+                        <Printer className="w-4 h-4" />
                     </div>
-                    <h3 className="font-bold text-neutral-800 text-[15px] tracking-wide">
+                    <h3 className="font-bold text-neutral-800 text-[15px] tracking-tight">
                         Cấu hình máy in
                     </h3>
                 </div>
 
-                {/* Fields */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    {/* Default Printer name */}
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Máy in mặc định</label>
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-neutral-600">Máy in mặc định</label>
                         <Input
                             value={defaultPrinter}
                             onChange={(e) => setDefaultPrinter(e.target.value)}
                             placeholder="Ví dụ: Máy in nhiệt – Quầy 3"
-                            className="h-11 shadow-sm"
+                            className="h-11 rounded-xl shadow-2xs text-sm"
                         />
                     </div>
 
-                    {/* Paper size */}
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Khổ giấy</label>
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-neutral-600">Khổ giấy</label>
                         <Input
                             value={paperSize}
                             onChange={(e) => setPaperSize(e.target.value)}
                             placeholder="Ví dụ: Khổ nhiệt 80mm"
-                            className="h-11 shadow-sm"
+                            className="h-11 rounded-xl shadow-2xs text-sm"
                         />
                     </div>
+                </div>
+            </Card>
+
+            {/* ── Card 3: Bảo mật (Matching Figma) ── */}
+            <Card className="p-6 md:p-8 hover:shadow-xs transition-shadow duration-300 border border-neutral-200/80 rounded-3xl space-y-4">
+                <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 border border-purple-100">
+                        <Shield className="w-4 h-4" />
+                    </div>
+                    <h3 className="font-bold text-neutral-800 text-[15px] tracking-tight">
+                        Bảo mật
+                    </h3>
+                </div>
+
+                <div>
+                    <Link
+                        href="/forgot-password"
+                        className="inline-flex items-center gap-1 text-sm font-semibold text-purple-600 hover:text-purple-700 transition-colors"
+                    >
+                        <span>Đổi mật khẩu</span>
+                        <span>→</span>
+                    </Link>
                 </div>
             </Card>
 
@@ -201,9 +322,8 @@ function SettingsForm({
                     type="submit"
                     isLoading={isSaving}
                     size="lg"
-                    variant="brand"
-                    className="w-full sm:w-auto shadow-md hover:shadow-lg transition-all duration-200"
-                    startIcon={<Save className="w-4.5 h-4.5" />}
+                    className="w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow-sm transition-all"
+                    startIcon={<Save className="w-4 h-4" />}
                 >
                     Lưu thay đổi
                 </Button>
@@ -234,10 +354,7 @@ export default function SettingsPage() {
     };
 
     useEffect(() => {
-        const timer = setTimeout(() => {
-            setMounted(true);
-        }, 0);
-        return () => clearTimeout(timer);
+        setMounted(true);
     }, []);
 
     useEffect(() => {
@@ -266,6 +383,7 @@ export default function SettingsPage() {
         userName: string;
         gender: Gender;
         extPhone: string;
+        avatar: string | null;
         defaultPrinter: string;
         paperSize: string;
     }) => {
@@ -278,28 +396,26 @@ export default function SettingsPage() {
 
         try {
             setIsSaving(true);
-            const dob = toUpdateDobFormat(profile?.dob);
-            if (!dob) {
-                showToast('Thiếu hoặc sai định dạng ngày sinh trong hồ sơ. Vui lòng cập nhật lại hồ sơ.', 'error');
-                return;
-            }
 
             await updateProfile({
-                full_name: data.userName,
-                dob,
+                user_name: data.userName.trim(),
                 gender: data.gender,
-                phone: data.extPhone || undefined
+                phone: data.extPhone ? data.extPhone.trim() : undefined,
+                avatar: data.avatar || undefined,
             }, accessToken);
 
             localStorage.setItem('tfopd_default_printer', data.defaultPrinter);
             localStorage.setItem('tfopd_paper_size', data.paperSize);
-            localStorage.setItem('tfopd_ext_phone', data.extPhone);
+            if (data.avatar) {
+                localStorage.setItem('tfopd_avatar', data.avatar);
+            }
 
             showToast('Lưu cấu hình và thông tin cá nhân thành công!', 'success');
         } catch (err) {
             let errorMsg = 'Có lỗi xảy ra khi lưu cấu hình.';
             if (err instanceof Error) {
-                const errData = err as unknown as Record<string, unknown>;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const errData = err as any;
                 errorMsg = Array.isArray(errData.message)
                     ? errData.message.join(', ')
                     : err.message;
@@ -315,23 +431,14 @@ export default function SettingsPage() {
             <div className="flex-1 overflow-y-auto p-6 md:p-8 bg-neutral-50/50">
                 <div className="max-w-4xl mx-auto space-y-6">
                     <div className="animate-pulse space-y-4">
-                        <div className="h-9 bg-neutral-200 rounded-[12px] w-1/4" />
-                        <div className="h-4 bg-neutral-200 rounded-[12px] w-2/5 mb-8" />
-
-                        <Card className="p-6 md:p-8 space-y-8">
+                        <div className="h-9 bg-neutral-200 rounded-xl w-1/4" />
+                        <div className="h-4 bg-neutral-200 rounded-xl w-2/5 mb-8" />
+                        <Card className="p-6 md:p-8 space-y-8 rounded-3xl">
+                            <div className="h-24 bg-neutral-200 rounded-2xl w-full" />
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4">
-                                <div className="md:col-span-2 space-y-2">
-                                    <div className="h-3.5 bg-neutral-200 rounded-[12px] w-16" />
-                                    <div className="h-11 bg-neutral-200 rounded-[24px] w-full" />
-                                </div>
-                                <div className="space-y-2">
-                                    <div className="h-3.5 bg-neutral-200 rounded-[12px] w-12" />
-                                    <div className="h-11 bg-neutral-200 rounded-[24px] w-full" />
-                                </div>
-                                <div className="space-y-2">
-                                    <div className="h-3.5 bg-neutral-200 rounded-[12px] w-24" />
-                                    <div className="h-11 bg-neutral-200 rounded-[24px] w-full" />
-                                </div>
+                                <div className="md:col-span-2 h-11 bg-neutral-200 rounded-xl w-full" />
+                                <div className="h-11 bg-neutral-200 rounded-xl w-full" />
+                                <div className="h-11 bg-neutral-200 rounded-xl w-full" />
                             </div>
                         </Card>
                     </div>
@@ -343,9 +450,9 @@ export default function SettingsPage() {
     return (
         <EMRWorkspaceLayout activeTabId="settings">
             <div className="flex-1 flex flex-col p-4 pb-6 overflow-hidden">
-                <div className="h-fit max-h-full flex flex-col bg-white rounded-[24px] border border-neutral-200/50 shadow-[0_4px_24px_-4px_rgba(139,124,246,0.02)] overflow-hidden">
+                <div className="h-fit max-h-full flex flex-col bg-white rounded-3xl border border-neutral-200/50 shadow-xs overflow-hidden">
                     <div className="flex-1 overflow-y-auto p-6 md:p-8">
-                        {/* ── Toast notifications portal ── */}
+                        {/* Toast portal */}
                         <div className="fixed top-5 right-5 z-50 flex flex-col gap-2.5 max-w-sm w-full">
                             {toasts.map((toast) => (
                                 <div
@@ -366,7 +473,7 @@ export default function SettingsPage() {
                         </div>
 
                         <div className="max-w-4xl mx-auto">
-                            {/* ── Header ── */}
+                            {/* Header */}
                             <div className="mb-8">
                                 <h1 className="text-[28px] font-bold text-neutral-900 tracking-tight leading-snug">
                                     Cài đặt
@@ -376,7 +483,7 @@ export default function SettingsPage() {
                                 </p>
                             </div>
 
-                            {/* ── Main Form ── */}
+                            {/* Main Form */}
                             {profile ? (
                                 <SettingsForm
                                     profile={profile}
@@ -385,7 +492,7 @@ export default function SettingsPage() {
                                 />
                             ) : (
                                 <div className="flex flex-col items-center justify-center py-20 text-neutral-400 gap-3">
-                                    <Loader2 className="w-8 h-8 animate-spin text-[#8B7CF6]" />
+                                    <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
                                     <p className="text-sm font-semibold">Đang tải thông tin...</p>
                                 </div>
                             )}

@@ -5,6 +5,7 @@ import type { Patient } from '@/modules/clinical/types/clinical.types';
 export interface PatientTab {
     id: string;
     name: string;
+    stt?: string;
 }
 
 interface PatientTabsState {
@@ -30,9 +31,9 @@ export const usePatientTabsStore = create<PatientTabsState>()(
                     set({ openTabs: [...openTabs, tab] });
                 } else {
                     const idx = openTabs.findIndex((t) => t.id === tab.id);
-                    if (idx >= 0 && openTabs[idx].name !== tab.name) {
+                    if (idx >= 0 && (openTabs[idx].name !== tab.name || openTabs[idx].stt !== tab.stt)) {
                         const updated = [...openTabs];
-                        updated[idx] = tab;
+                        updated[idx] = { ...updated[idx], ...tab };
                         set({ openTabs: updated });
                     }
                 }

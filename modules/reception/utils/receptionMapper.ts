@@ -493,15 +493,15 @@ function mapSpecialtyIcon(specialty: string): QueuePatient['specialtyIcon'] {
 }
 
 export function mapBackendToQueuePatient(item: BackendQueuePatient): QueuePatient {
-    const account = item.step.flow.booking.patient.account;
+    const patientObj = item.step.flow.booking.patient;
     const specialty = 'Khám bệnh';
     return {
         id: item.queue_id,
         ticketNo: formatTicketNo(item.queue_number),
-        name: account.full_name,
+        name: patientObj.full_name || patientObj.account.user_name || 'Bệnh nhân',
         specialty,
         specialtyIcon: mapSpecialtyIcon(specialty),
-        priority: mapPriority(account.dob, item.step.flow.status),
+        priority: mapPriority(patientObj.dob, item.step.flow.status),
         status: mapReceptionStatus(item),
         waitMinutes: calcWaitMinutes(item.step.flow.booking.slot.start_time),
         bookingId: item.step.flow.booking.booking_id,
@@ -596,17 +596,17 @@ function formatDobDisplay(dob?: string): string {
 }
 
 export function mapBackendToReceptionDetail(item: BackendQueuePatient): ReceptionPatientDetail {
-    const account = item.step.flow.booking.patient.account;
+    const patientObj = item.step.flow.booking.patient;
     const slot = item.step.flow.booking.slot;
     return {
         queueId: item.queue_id,
         ticketNo: formatTicketNo(item.queue_number),
-        name: account.full_name,
-        citizenId: account.citizen_id,
-        email: account.email,
-        phone: account.phone,
-        dob: formatDobDisplay(account.dob),
-        gender: formatGender(account.gender),
+        name: patientObj.full_name || patientObj.account.user_name || 'Bệnh nhân',
+        citizenId: patientObj.citizen_id || '',
+        email: patientObj.account.email || '',
+        phone: patientObj.account.phone || '',
+        dob: formatDobDisplay(patientObj.dob),
+        gender: formatGender(patientObj.gender || patientObj.account.gender),
         queueStatus: item.status,
         paymentStatus: item.step.payment_status,
         stepStatus: item.step.step_status,
@@ -615,7 +615,7 @@ export function mapBackendToReceptionDetail(item: BackendQueuePatient): Receptio
         bookingStatus: item.step.flow.booking.status,
         bookingId: item.step.flow.booking.booking_id,
         waitMinutes: calcWaitMinutes(slot.start_time),
-        priority: mapPriority(account.dob, item.step.flow.status),
+        priority: mapPriority(patientObj.dob, item.step.flow.status),
         status: mapReceptionStatus(item),
     };
 }

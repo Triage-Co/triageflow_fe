@@ -78,7 +78,9 @@ export function PatientDetailPage({
                                 <User className="w-5 h-5 text-brand-500" />
                             </div>
                             <div className="flex-1 min-w-0">
-                                <p className="font-bold text-neutral-900 text-base leading-snug">{patient.name}</p>
+                                <p className="font-bold text-neutral-900 text-base leading-snug">
+                                    {patient.name} {patient.stt ? `(${patient.stt})` : ''}
+                                </p>
                                 <p className="text-xs text-neutral-400 font-medium mt-0.5">Mã BN: {patient.code}</p>
                                 <div className="mt-3 space-y-1.5">
                                     <div className="flex items-center justify-between text-xs">

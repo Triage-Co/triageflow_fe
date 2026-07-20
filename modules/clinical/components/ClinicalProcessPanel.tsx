@@ -62,7 +62,9 @@ export function ClinicalProcessPanel({
                         </div>
                         <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                                <h2 className="text-base font-bold text-neutral-900">{patient.name}</h2>
+                                <h2 className="text-base font-bold text-neutral-900">
+                                    {patient.name} {patient.stt ? `(${patient.stt})` : ''}
+                                </h2>
                                 {patient.insurance.hasInsurance && (
                                     <Badge variant="success" size="sm">
                                         BHYT {patient.insurance.coverage}

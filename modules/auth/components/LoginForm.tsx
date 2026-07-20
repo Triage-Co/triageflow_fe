@@ -6,13 +6,11 @@ import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Cross, AlertCircle, Loader2 } from 'lucide-react';
 import { authService } from '@/modules/auth/services/authService';
 import { useAuthStore } from '@/store/authStore';
-import { OtpStep } from './OtpStep';
-
-// Flag stored in localStorage after first successful OTP verify
-const otpFlagKey = (email: string) => `tfopd_otp_verified_${email}`;
 
 function getPostLoginPath(role: string) {
-    return role.toUpperCase() === 'RECEPTIONIST' ? '/reception' : '/doctor';
+    const upperRole = role.toUpperCase();
+    if (upperRole === 'ADMIN') return '/dashboard';
+    return upperRole === 'RECEPTIONIST' ? '/reception' : '/doctor';
 }
 
 export function LoginForm() {
@@ -20,9 +18,7 @@ export function LoginForm() {
     const [isPending, startTransition] = useTransition();
     const { loginSuccess, setRememberMe: storeRememberMe } = useAuthStore();
 
-    const [step, setStep] = useState<'credentials' | 'otp'>('credentials');
     const [email, setEmail] = useState('');
-    const [loginToken, setLoginToken] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [rememberMe, setRememberMe] = useState(false);
@@ -38,12 +34,13 @@ export function LoginForm() {
         let profileData = null;
 
         try {
-            // Fetch the user's actual profile using the new token to get the real user_name and user ID from DB
             const profileRes = await authService.getProfile(token);
             if (profileRes && profileRes.data) {
                 profileData = profileRes.data;
                 if (profileRes.data.full_name) {
                     displayFullName = profileRes.data.full_name;
+                } else if (profileRes.data.user_name) {
+                    displayFullName = profileRes.data.user_name;
                 }
                 if (profileRes.data.id) {
                     userId = profileRes.data.id;
@@ -83,42 +80,12 @@ export function LoginForm() {
                 const loginRes = await authService.login({ email: trimmedEmail, password: trimmedPassword });
                 const { token, refreshToken, username, role } = loginRes.data;
 
-                // Store user profile + tokens (fetching real profile inside)
                 await completeLogin(token, refreshToken, username, role);
-
-                // Skip OTP if this email has already been verified before
-                if (localStorage.getItem(otpFlagKey(email))) {
-                    router.push(getPostLoginPath(role));
-                    return;
-                }
-
-                await authService.sendOtp({ email }, token);
-                setLoginToken(token);
-                setStep('otp');
+                router.push(getPostLoginPath(role));
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'Đăng nhập thất bại. Vui lòng thử lại.');
             }
         });
-    }
-
-    async function handleOtpVerified(data: { token: string; refreshToken: string; username?: string; role?: string }) {
-        // Mark this email as OTP-verified so future logins skip OTP
-        localStorage.setItem(otpFlagKey(email), '1');
-        if (data.username && data.role) {
-            await completeLogin(data.token, data.refreshToken, data.username, data.role);
-        }
-        router.push(getPostLoginPath(data.role ?? ''));
-    }
-
-    if (step === 'otp') {
-        return (
-            <OtpStep
-                email={email}
-                authToken={loginToken}
-                onVerified={handleOtpVerified}
-                onBack={() => { setStep('credentials'); setError(null); }}
-            />
-        );
     }
 
     return (
@@ -208,7 +175,7 @@ export function LoginForm() {
                     className="mt-1 flex w-full min-h-[48px] items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-3 text-base sm:text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 active:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 touch-manipulation cursor-pointer relative z-10"
                 >
                     {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                    {isPending ? 'Đang xác thực...' : 'Tiếp tục'}
+                    {isPending ? 'Đang đăng nhập...' : 'Đăng nhập'}
                 </button>
             </form>
 

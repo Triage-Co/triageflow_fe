@@ -77,7 +77,8 @@ export function EMRHeader({ activeTabId, activeTabName }: EMRHeaderProps) {
                     const showSeparatorAfter = !isActive && (i === tabsToRender.length - 1 || tabsToRender[i + 1].id !== activeTabId);
 
                     const isUuid = (str: string) => /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(str);
-                    const displayName = !tab.name || isUuid(tab.name) || tab.name === `Bệnh nhân ${tab.id}` || tab.name.includes(tab.id) ? 'Bệnh nhân' : tab.name;
+                    const baseName = !tab.name || isUuid(tab.name) || tab.name === `Bệnh nhân ${tab.id}` || tab.name.includes(tab.id) ? 'Bệnh nhân' : tab.name;
+                    const displayName = baseName + (tab.stt ? ` (${tab.stt})` : '');
 
                     return (
                         <div key={tab.id} className="flex items-end h-full">

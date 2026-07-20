@@ -258,7 +258,7 @@ export function PatientTable({ patients, onSelectPatient }: PatientTableProps) {
                                         >
                                             <button
                                                 onClick={() => {
-                                                    openTab({ id: patient.id, name: patient.name });
+                                                    openTab({ id: patient.id, name: patient.name, stt: patient.stt });
                                                     router.push(`/doctor/${patient.id}`);
                                                 }}
                                                 className={cn(

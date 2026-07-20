@@ -19,6 +19,11 @@ export interface BackendQueuePatient {
         flow: {
             flow_id: string;
             status: string;
+            steps?: {
+                queues?: {
+                    queue_number: string;
+                }[];
+            }[];
             booking: {
                 booking_id: string;
                 status: string;
@@ -33,14 +38,16 @@ export interface BackendQueuePatient {
                 patient: {
                     patient_id: string;
                     medical_coverage_id: string | null;
+                    full_name?: string;
+                    dob?: string;
+                    gender?: string;
+                    citizen_id?: string;
                     account: {
-                        full_name: string;
-                        citizen_id: string;
-                        email: string;
-                        dob: string;
-                        gender: string;
-                        role: string;
-                        phone: string | null;
+                        user_name?: string;
+                        email?: string;
+                        role?: string;
+                        gender?: string;
+                        phone?: string | null;
                     };
                 };
             };
@@ -81,15 +88,26 @@ export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient 
     };
 
     const booking = item.step.flow.booking;
-    const account = booking.patient.account;
+    const patientObj = booking.patient;
+
+    // Extract queue_number safely
+    let qNum = item.queue_number;
+    if (!qNum && item.step?.flow?.steps) {
+        for (const s of item.step.flow.steps) {
+            if (s.queues && s.queues.length > 0 && s.queues[0].queue_number) {
+                qNum = s.queues[0].queue_number;
+                break;
+            }
+        }
+    }
 
     return {
         id: item.queue_id,   // use queue_id for routing to /api/doctor/patients/queue/{id}
-        stt: String(item.queue_number).padStart(2, '0'),
-        name: account.full_name,
-        age: calculateAge(account.dob),
-        gender: mapGender(account.gender),
-        code: account.citizen_id || `BN-${booking.patient.patient_id.slice(0, 8)}`,
+        stt: String(qNum || '').padStart(2, '0'),
+        name: patientObj.full_name || patientObj.account.user_name || `Bệnh nhân ${patientObj.patient_id.slice(0, 6)}`,
+        age: calculateAge(patientObj.dob),
+        gender: mapGender(patientObj.gender),
+        code: patientObj.citizen_id || `BN-${patientObj.patient_id.slice(0, 8)}`,
         priority: 'Bình thường',
         time: booking.slot.start_time,
         status: mapStatus(item.status, item.step.step_status),
@@ -103,8 +121,8 @@ export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient 
             spO2: 98
         },
         insurance: {
-            hasInsurance: !!booking.patient.medical_coverage_id,
-            coverage: booking.patient.medical_coverage_id ? '80%' : '0%'
+            hasInsurance: !!patientObj.medical_coverage_id,
+            coverage: patientObj.medical_coverage_id ? '80%' : '0%'
         },
         visitType: 'Khám mới',
         medicalRecord: {

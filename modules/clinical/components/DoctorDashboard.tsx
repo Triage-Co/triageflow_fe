@@ -96,7 +96,7 @@ export function DoctorDashboard() {
     }, [patients]);
 
     const handleSelectPatient = (patient: Patient) => {
-        openTab({ id: patient.id, name: patient.name });
+        openTab({ id: patient.id, name: patient.name, stt: patient.stt });
         router.push(`/doctor/${patient.id}`);
     };
 

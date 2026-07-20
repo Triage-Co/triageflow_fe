@@ -65,7 +65,9 @@ export function DoctorHeader() {
                                     : 'text-white/70 hover:text-white hover:bg-white/15'
                             )}
                         >
-                            <span className="truncate">{tab.name}</span>
+                            <span className="truncate">
+                                {tab.name} {tab.stt ? `(${tab.stt})` : ''}
+                            </span>
                             <span
                                 role="button"
                                 onClick={(e) => handleCloseTab(e, tab.id)}

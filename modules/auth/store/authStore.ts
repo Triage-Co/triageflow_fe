@@ -113,6 +113,15 @@ export const useAuthStore = create<AuthStore>()(
                     localStorage.removeItem('refreshToken');
                     sessionStorage.removeItem('accessToken');
                     sessionStorage.removeItem('refreshToken');
+                    localStorage.removeItem('emr_patient_tabs_persist');
+
+                    // Dynamically import and clear the patient tabs store to prevent circular dependencies or eager loading issues
+                    try {
+                        const { usePatientTabsStore } = require('@/modules/clinical/store/clinicalStore');
+                        usePatientTabsStore.getState().clearAll();
+                    } catch (e) {
+                        console.warn('Failed to clear patient tabs store during logout:', e);
+                    }
 
                     set(
                         { user: null, accessToken: null, refreshToken: null, error: null, profile: null },
