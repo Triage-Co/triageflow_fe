@@ -1,9 +1,4 @@
 // Global state types
-export interface AuthState {
-    user: unknown | null;
-    isLoading: boolean;
-    error: string | null;
-}
 
 export interface UIState {
     sidebarOpen: boolean;
