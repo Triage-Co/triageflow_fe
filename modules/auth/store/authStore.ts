@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import type { AuthUser, StaffRole, UserProfile, UpdateProfileRequest } from '@/shared/types/auth.types';
 import { authService } from '../services/authService';
+import { usePatientTabsStore } from '@/modules/clinical/store/clinicalStore';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -115,9 +116,7 @@ export const useAuthStore = create<AuthStore>()(
                     sessionStorage.removeItem('refreshToken');
                     localStorage.removeItem('emr_patient_tabs_persist');
 
-                    // Dynamically import and clear the patient tabs store to prevent circular dependencies or eager loading issues
                     try {
-                        const { usePatientTabsStore } = require('@/modules/clinical/store/clinicalStore');
                         usePatientTabsStore.getState().clearAll();
                     } catch (e) {
                         console.warn('Failed to clear patient tabs store during logout:', e);
