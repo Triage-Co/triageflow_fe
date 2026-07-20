@@ -4,13 +4,11 @@ import { useState } from 'react';
 import type { Patient } from '@/modules/clinical/types/clinical.types';
 import { Heart, Activity, Thermometer, Gauge, AlertTriangle, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { WorkflowDiagram } from '@/modules/clinical/components/WorkflowDiagram';
 
 type SidePanelTab = 'process' | 'info';
 
-const PROCESS_STEPS = [
-    'Tiếp nhận', 'Phân loại ưu tiên', 'Đo sinh hiệu',
-    'Chờ khám', 'Đang khám', 'Thanh toán & Dược', 'Hoàn tất',
-];
+
 
 const VITALS = [
     { key: 'heartRate' as const, label: 'Nhịp tim', unit: 'bpm', Icon: Heart, color: '#EF4444' },
@@ -34,6 +32,7 @@ interface LeftPanelProps {
 
 export function LeftPatientPanel({ patient, isOpen }: LeftPanelProps) {
     const [tab, setTab] = useState<SidePanelTab>('info');
+
 
     return (
         <div
@@ -89,30 +88,7 @@ export function LeftPatientPanel({ patient, isOpen }: LeftPanelProps) {
                     <div className="flex-1 overflow-y-auto px-5 pb-5 space-y-3">
                         {/* ── Process tab ── */}
                         {tab === 'process' && (
-                            <div className="bg-neutral-50/70 border border-neutral-100 rounded-[16px] p-4 space-y-1">
-                                {PROCESS_STEPS.map((step, i) => {
-                                    const done = patient.status === 'Đã khám'
-                                        ? true
-                                        : patient.status === 'Đang khám'
-                                            ? i <= 4
-                                            : i <= 2;
-                                    return (
-                                        <div key={i} className="flex items-center gap-3 py-1.5">
-                                            <div className={cn(
-                                                'w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 border',
-                                                done
-                                                    ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white'
-                                                    : 'bg-white border-[#DCDCDC] text-[#ADADAD]'
-                                            )}>
-                                                {done ? '✓' : i + 1}
-                                            </div>
-                                            <span className={cn('text-[12px] font-semibold', done ? 'text-[#2D2D2D]' : 'text-[#ADADAD]')}>
-                                                {step}
-                                            </span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                            <WorkflowDiagram patientId={patient.patientId || patient.id} />
                         )}
 
                         {/* ── Info tab ── */}

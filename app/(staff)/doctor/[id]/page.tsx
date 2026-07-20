@@ -3,7 +3,12 @@
 import { use, useEffect, useState } from 'react';
 import { EMRPageLayout } from '@/shared/components/layout/EMRPageLayout';
 import { notFound } from 'next/navigation';
-import { clinicalService, mapBackendPatientToFrontend } from '@/modules/clinical/services/clinicalService';
+import {
+    clinicalService,
+    extractWorkflowStepsFromResponse,
+    mapBackendPatientToFrontend,
+    pickFirstTemplateId,
+} from '@/modules/clinical/services/clinicalService';
 import { useAuthStore } from '@/modules/auth/store/authStore';
 import { usePatientTabsStore } from '@/modules/clinical/store/clinicalStore';
 import type { Patient } from '@/modules/clinical/types/clinical.types';
@@ -43,8 +48,36 @@ export default function DoctorPatientPage({ params }: { params: Promise<{ id: st
                 const res = await clinicalService.getPatientByQueueId(id, accessToken);
                 if (res?.data) {
                     const mapped = mapBackendPatientToFrontend(res.data);
-                    setPatient(mapped);
-                    setPatientData(id, mapped);
+                    let finalPatient = mapped;
+
+                    if (mapped.flowId) {
+                        let templateId = mapped.templateId;
+
+                        if (!templateId) {
+                            const templatesRes = await clinicalService.getProcessTemplates(accessToken);
+                            templateId = pickFirstTemplateId(templatesRes.data);
+                        }
+
+                        if (templateId) {
+                            try {
+                                const assignRes = await clinicalService.assignTemplateToFlow(mapped.flowId, templateId, accessToken);
+                                const workflowSteps = extractWorkflowStepsFromResponse(assignRes.data);
+                                finalPatient = {
+                                    ...mapped,
+                                    templateId,
+                                    workflowSteps: workflowSteps.length > 0 ? workflowSteps : mapped.workflowSteps,
+                                };
+                            } catch {
+                                finalPatient = {
+                                    ...mapped,
+                                    templateId,
+                                };
+                            }
+                        }
+                    }
+
+                    setPatient(finalPatient);
+                    setPatientData(id, finalPatient);
                 } else {
                     setError('Không tìm thấy thông tin bệnh nhân.');
                 }
