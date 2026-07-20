@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import type { ProcessTemplate, CreateTemplateDto, UpdateTemplateDto } from '../types/process.types';
+import type { ProcessTemplate, CreateTemplateDto, UpdateTemplateDto, TemplateStep } from '../types/process.types';
 import { processService } from '../services/processService';
 
 export interface ProcessState {
@@ -31,20 +31,25 @@ function getTemplateKey(t: ProcessTemplate): string {
     return String(t.template_id || t.id || (t as any).flow_id || t.name || '');
 }
 
-function normalizeTemplate(raw: ProcessTemplate): ProcessTemplate {
-    const record = raw as unknown as Record<string, unknown>;
-    const rawSteps = (raw.steps || record.template_steps || record.flow_steps || []) as TemplateStep[];
+function normalizeTemplate(raw: unknown): ProcessTemplate {
+    const record = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+    const rawSteps = (record.steps || record.template_steps || record.flow_steps || []) as unknown;
+    const normalizedSteps = Array.isArray(rawSteps) ? (rawSteps as TemplateStep[]) : [];
 
     return {
-        ...raw,
-        template_id: raw.template_id || (record.id as string | undefined) || raw.id,
+        ...(record as Partial<ProcessTemplate>),
+        template_id:
+            (record.template_id as string | undefined) ||
+            (record.id as string | undefined) ||
+            (record.flow_id as string | undefined),
+        id: (record.id as string | undefined) || (record.template_id as string | undefined),
         name:
-            raw.name ||
+            (record.name as string | undefined) ||
             (record.template_name as string | undefined) ||
             (record.flow_name as string | undefined) ||
             (record.title as string | undefined) ||
             'Quy trình chưa đặt tên',
-        steps: Array.isArray(rawSteps) ? rawSteps : [],
+        steps: normalizedSteps,
     };
 }
 
@@ -62,7 +67,7 @@ function extractTemplateList(rawData: unknown): ProcessTemplate[] {
         if (record.data && typeof record.data === 'object') {
             return [normalizeTemplate(record.data as ProcessTemplate)];
         }
-        return [normalizeTemplate(record as ProcessTemplate)];
+        return [normalizeTemplate(record)];
     }
 
     return [];
