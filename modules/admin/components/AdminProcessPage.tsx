@@ -19,7 +19,6 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useProcessStore } from '../store/processStore';
-import { processService } from '../services/processService';
 import {
     ProcessTemplate,
     TemplateStep,
@@ -113,9 +112,9 @@ export function AdminProcessPage() {
         setFormSteps(
             template.steps && template.steps.length > 0
                 ? template.steps.map((s, idx) => ({
-                      ...s,
-                      template_step_id: s.template_step_id || `step_${idx + 1}`,
-                  }))
+                    ...s,
+                    template_step_id: s.template_step_id || `step_${idx + 1}`,
+                }))
                 : [createDefaultStep(0)]
         );
         const isActive =
@@ -191,11 +190,7 @@ export function AdminProcessPage() {
                 const templateId = editingTemplate.template_id || editingTemplate.id || '';
                 await updateTemplate(
                     templateId,
-                    {
-                        ...payload,
-                        is_active: formActive,
-                        status: formActive ? 'ACTIVE' : 'INACTIVE',
-                    },
+                    payload,
                     accessToken
                 );
             } else {
@@ -230,32 +225,6 @@ export function AdminProcessPage() {
     useEffect(() => {
         setCurrentPage(1);
     }, [searchQuery, statusFilter]);
-
-    // Debounced search query via API if user types search term
-    const addOrUpdateTemplate = useProcessStore((s) => s.addOrUpdateTemplate);
-    useEffect(() => {
-        if (!searchQuery.trim() || !accessToken) return;
-        const timer = setTimeout(async () => {
-            try {
-                const res = await processService.getTemplateByName(searchQuery.trim(), accessToken);
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const raw = res.data as any;
-                const found = (raw && typeof raw === 'object' && raw.data) ? raw.data : raw;
-                if (found) {
-                    const foundList = Array.isArray(found) ? found : [found];
-                    foundList.forEach((item) => {
-                        if (item && (item.name || item.id || item.template_id)) {
-                            addOrUpdateTemplate(item);
-                        }
-                    });
-                }
-            } catch {
-                // Ignore search API error
-            }
-        }, 400);
-
-        return () => clearTimeout(timer);
-    }, [searchQuery, accessToken, addOrUpdateTemplate]);
 
     // Filter templates safely
     const filteredTemplates = templates.filter((t) => {
@@ -353,17 +322,16 @@ export function AdminProcessPage() {
                         <button
                             key={st}
                             onClick={() => setStatusFilter(st)}
-                            className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer whitespace-nowrap ${
-                                statusFilter === st
+                            className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer whitespace-nowrap ${statusFilter === st
                                     ? 'bg-purple-100 text-purple-700 font-semibold border border-purple-200'
                                     : 'bg-neutral-50 text-neutral-600 hover:bg-neutral-100 border border-neutral-200'
-                            }`}
+                                }`}
                         >
                             {st === 'ALL'
                                 ? 'Tất cả'
                                 : st === 'ACTIVE'
-                                ? 'Hoạt động'
-                                : 'Không hoạt động'}
+                                    ? 'Hoạt động'
+                                    : 'Không hoạt động'}
                         </button>
                     ))}
                 </div>
@@ -425,11 +393,10 @@ export function AdminProcessPage() {
                                     </div>
 
                                     <span
-                                        className={`px-3 py-1 text-xs font-semibold rounded-full border ${
-                                            isActive
+                                        className={`px-3 py-1 text-xs font-semibold rounded-full border ${isActive
                                                 ? 'bg-purple-50 text-purple-600 border-purple-100'
                                                 : 'bg-neutral-100 text-neutral-500 border-neutral-200'
-                                        }`}
+                                            }`}
                                     >
                                         {isActive ? 'Hoạt động' : 'Không hoạt động'}
                                     </span>
@@ -545,11 +512,10 @@ export function AdminProcessPage() {
                                         <button
                                             key={page}
                                             onClick={() => setCurrentPage(page)}
-                                            className={`w-9 h-9 rounded-xl text-xs font-semibold transition cursor-pointer ${
-                                                currentPage === page
+                                            className={`w-9 h-9 rounded-xl text-xs font-semibold transition cursor-pointer ${currentPage === page
                                                     ? 'bg-purple-600 text-white shadow-xs'
                                                     : 'bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-50'
-                                            }`}
+                                                }`}
                                         >
                                             {page}
                                         </button>
