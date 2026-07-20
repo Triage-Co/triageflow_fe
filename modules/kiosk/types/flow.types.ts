@@ -2,8 +2,8 @@ export interface RouteStepItem {
   id: number;
   title: string;
   subtitle: string;
-  room: string;
-  location: string;
+  room?: string;
+  location?: string;
   queueNo?: string;
   estimatedWait?: string;
   status: 'completed' | 'in_progress' | 'waiting' | 'pending';

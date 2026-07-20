@@ -20,16 +20,16 @@ export const QueueView: React.FC = () => {
   const estimatedWait = activeTicket?.estimatedWaitMinutes ?? 5;
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-6 py-6 z-10 space-y-6">
+    <div className="flex-1 min-h-0 px-8 py-6 z-10 flex flex-col gap-5">
       {/* Header bar */}
       <div className="flex items-center gap-4">
         <button 
           onClick={goHome} 
-          className="flex items-center gap-2 px-4 py-2 bg-white/90 rounded-full text-xs font-bold text-neutral-700 shadow-sm border border-neutral-200 hover:bg-neutral-50 transition-colors cursor-pointer"
+          className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-neutral-50 rounded-2xl shadow-sm border border-neutral-200 text-sm font-extrabold text-neutral-800 transition-all cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" /> Quay lại
         </button>
-        <h2 className="text-2xl font-black text-[#1E2939] tracking-tight">
+        <h2 className="text-3xl font-black text-[#1E2939] tracking-tight">
           Theo dõi hàng đợi khám bệnh
         </h2>
       </div>

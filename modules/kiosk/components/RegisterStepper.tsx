@@ -36,26 +36,29 @@ export const RegisterStepper: React.FC<RegisterStepperProps> = ({ currentStep })
 
         return (
           <div key={step.id} className="relative flex items-center gap-4 py-2">
-            {/* Connecting vertical line (Matching Figma thin soft blue) */}
-            {!isLast && (
+            {/* Circle Badge & Stepper Line Wrapper */}
+            <div className="relative flex items-center justify-center shrink-0 w-10 h-10">
+              {/* Connecting vertical line (Connecting edge to edge between circles) */}
+              {!isLast && (
+                <div
+                  className={cn(
+                    "absolute top-[44px] bottom-[-150px] left-1/2 -translate-x-1/2 w-0.5 transition-colors duration-300 z-0",
+                    (isCompleted || isActive) ? "bg-[#A0C2F9]" : "bg-neutral-200"
+                  )}
+                />
+              )}
+
+              {/* Circle Badge */}
               <div
                 className={cn(
-                  "absolute left-5 top-12 w-0.5 h-16 transition-colors duration-300",
-                  (isCompleted || isActive) ? "bg-[#A0C2F9]" : "bg-neutral-200"
+                  "w-10 h-10 rounded-full flex items-center justify-center text-sm font-extrabold transition-all duration-300 shrink-0 z-10",
+                  (isCompleted || isActive)
+                    ? "bg-[#5E96F6] text-white shadow-sm shadow-blue-400/30 ring-4 ring-[#D8E6FE]"
+                    : "bg-[#8D95A5] text-white font-extrabold"
                 )}
-              />
-            )}
-
-            {/* Circle Badge (Matching Figma double blue ring icon for step 1) */}
-            <div
-              className={cn(
-                "w-10 h-10 rounded-full flex items-center justify-center text-sm font-extrabold transition-all duration-300 shrink-0 z-10",
-                (isCompleted || isActive)
-                  ? "bg-[#5E96F6] text-white shadow-sm shadow-blue-400/30 ring-4 ring-[#D8E6FE]"
-                  : "bg-[#8D95A5] text-white font-extrabold"
-              )}
-            >
-              {(isCompleted || isActive) ? <Check className="w-5 h-5 stroke-[3]" /> : step.stepNo}
+              >
+                {(isCompleted || isActive) ? <Check className="w-5 h-5 stroke-[3]" /> : step.stepNo}
+              </div>
             </div>
 
             {/* Step Label */}

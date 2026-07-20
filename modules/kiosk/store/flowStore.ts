@@ -71,7 +71,7 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
     });
   },
 
-  // Nạp mảng các bước chỉ định (routeSteps) từ API GET /api/flow/patient/{patient_id}/active/kiosk
+  // Nạp mảng các bước chỉ định (routeSteps) từ API flow & gọi API step chi tiết cho từng bước
   fetchDoctorRouteSteps: async (patientId: string) => {
     try {
       let rawRes: any = null;
@@ -99,10 +99,39 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
         stepsArray = Array.isArray(rawRes.steps) ? rawRes.steps : (rawRes.step_id ? [rawRes] : []);
       }
 
-      const mappedRouteSteps: RouteStepItem[] = stepsArray.map((step: any, index: number) => {
-        const roomName = step.room_info?.room_name || step.room?.room_name || step.flow?.booking?.slot?.shift?.room?.room_name || '';
-        const specialtyName = step.specialty_info?.specialty_name || step.specialty?.specialty_name || step.flow?.booking?.slot?.shift?.room?.specialty?.specialty_name || '';
-        const staffName = step.staff_info?.full_name || step.staff?.full_name || '';
+      if (stepsArray.length === 0) {
+        set({ routeSteps: [] });
+        return true;
+      }
+
+      // Gọi API chi tiết GET /api/step/{step_id}/patient/{patient_id} cho từng step để nạp STT thật
+      const detailedSteps = await Promise.allSettled(
+        stepsArray.map(async (step: any) => {
+          const stepId = step.step_id || step.id;
+          if (!stepId) return step;
+
+          try {
+            const stepRes = await flowService.getStepDetailByPatient(stepId, patientId);
+            const stepDetail: any = (stepRes as any)?.data || stepRes;
+            return { ...step, ...stepDetail };
+          } catch (e) {
+            console.warn(`Không thể lấy chi tiết step ${stepId}:`, e);
+            return step;
+          }
+        })
+      );
+
+      const mappedRouteSteps: RouteStepItem[] = detailedSteps.map((result, index: number) => {
+        const step = result.status === 'fulfilled' ? result.value : stepsArray[index];
+
+        const roomObj = step.room_info || step.room || step.flow?.booking?.slot?.shift?.room;
+        const roomName = roomObj?.room_name || '';
+
+        const specialtyObj = step.specialty_info || step.specialty || roomObj?.specialty;
+        const specialtyName = specialtyObj?.specialty_name || '';
+
+        const staffObj = step.staff_info || step.staff;
+        const staffName = staffObj?.full_name || '';
 
         let status: 'completed' | 'in_progress' | 'waiting' | 'pending' = 'pending';
         if (step.step_status === 'COMPLETED') status = 'completed';
@@ -110,16 +139,16 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
         else if (step.step_status === 'PENDING') status = 'pending';
         else if (step.step_status === 'WAITING') status = 'waiting';
 
-        const queueNoStr = step.docNo
-          ? `${step.docNo}`
-          : (Array.isArray(step.queues) && step.queues[0]?.queue_number ? `${step.queues[0].queue_number}` : undefined);
+        // Lấy queue_number thật từ mảng queues (TUYỆT ĐỐI KHÔNG DÙNG docNo)
+        const queueObj = Array.isArray(step.queues) && step.queues.length > 0 ? step.queues[0] : null;
+        const queueNoStr = queueObj?.queue_number ? `${queueObj.queue_number}` : undefined;
 
         return {
           id: index + 1,
           title: specialtyName || roomName || `Bước ${index + 1}`,
           subtitle: staffName || specialtyName || '',
-          room: roomName,
-          location: '',
+          room: roomName || undefined,
+          location: undefined,
           queueNo: queueNoStr,
           status: status
         };

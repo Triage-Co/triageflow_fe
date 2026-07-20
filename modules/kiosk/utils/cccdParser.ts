@@ -26,7 +26,7 @@ export const parseCCCDQrCode = (qrText: string): CCCDParsedResult => {
 
     const citizenId = parts[0]?.trim() || '';
     const oldIdNumber = parts[1]?.trim() || '';
-    const fullName = parts[2]?.trim() || 'BỆNH NHÂN KHÁM KIOSK';
+    const fullName = parts[2]?.trim() || 'BỆNH NHÂN';
     const dobRaw = parts[3]?.trim() || '';
     const gender = parts[4]?.trim() || '';
     const address = parts[5]?.trim() || '';
@@ -48,7 +48,7 @@ export const parseCCCDQrCode = (qrText: string): CCCDParsedResult => {
   const numericOnly = cleanText.replace(/\D/g, '');
   return {
     citizenId: numericOnly,
-    fullName: 'BỆNH NHÂN KHÁM KIOSK',
+    fullName: 'BỆNH NHÂN',
     dob: '',
     gender: '',
     address: '',

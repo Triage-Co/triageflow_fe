@@ -26,7 +26,7 @@ export const KioskRoot: React.FC = () => {
 
   return (
     <div
-      className="min-h-screen w-full flex flex-col font-sans select-none overflow-hidden relative"
+      className="h-screen w-full flex flex-col font-sans select-none overflow-hidden relative"
       style={{
         background: 'linear-gradient(145deg, #DFE1FF 0%, #DFE1FF 50%, #F0D2C1 100%)'
       }}
@@ -60,7 +60,7 @@ export const KioskRoot: React.FC = () => {
       )}
 
       {/* Dynamic Main Views */}
-      <main className="flex-1 w-full flex flex-col justify-center items-center relative z-10 overflow-y-auto">
+      <main className="flex-1 min-h-0 w-full flex flex-col relative z-10 overflow-y-auto">
         {currentView === 'home' && <HomeMenuView />}
         {currentView === 'register' && <RegisterView />}
         {currentView === 'patient_info' && <PatientInfoView />}

@@ -44,7 +44,7 @@ export const useAuthStore = create<AuthStoreState>((set) => ({
           citizenId: resCitizenId,
           patientInfo: {
             idNumber: citizenId,
-            fullName: 'BỆNH NHÂN KHÁM KIOSK',
+            fullName: 'BỆNH NHÂN',
             dob: '',
             gender: '',
             address: '',
@@ -74,7 +74,7 @@ export const useAuthStore = create<AuthStoreState>((set) => ({
           citizenId: resCitizenId,
           patientInfo: {
             idNumber: parsedCCCD.citizenId,
-            fullName: parsedCCCD.fullName || 'BỆNH NHÂN KHÁM KIOSK',
+            fullName: parsedCCCD.fullName || 'BỆNH NHÂN',
             dob: parsedCCCD.dob || '',
             gender: parsedCCCD.gender || '',
             address: parsedCCCD.address || '',

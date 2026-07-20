@@ -1,16 +1,21 @@
 import React from 'react';
 import { useKioskStore } from '../store/kioskStore';
+import { 
+  ArrowLeft, 
+  MapPin, 
+  Navigation, 
+  Printer, 
+  Clock, 
+  User
+} from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useFlowStore } from '../store/flowStore';
-import { ArrowLeft, Clock, MapPin, Navigation, QrCode, Printer, Users } from 'lucide-react';
 
 export const PatientInfoView: React.FC = () => {
   const goHome = useKioskStore((state) => state.goHome);
   const navigateToView = useKioskStore((state) => state.navigateToView);
-
-  // Dynamic ticket state from Flow Store & Auth Store
-  const activeTicket = useFlowStore((state) => state.activeTicket);
   const selectedDoctor = useKioskStore((state) => state.selectedDoctor);
+  const activeTicket = useFlowStore((state) => state.activeTicket);
   const patientInfo = useAuthStore((state) => state.patientInfo);
   const showToast = useKioskStore((state) => state.showToast);
 
@@ -24,176 +29,173 @@ export const PatientInfoView: React.FC = () => {
   const specialtyName = activeTicket?.clinicName || selectedDoctor?.specialty || '';
   const doctorName = activeTicket?.doctorName || selectedDoctor?.name || '';
   const patientName = activeTicket?.patientName || patientInfo?.fullName || '';
+  const currentCallingNo = activeTicket?.currentCallingNo || ticketNo;
+  const waitingCount = activeTicket?.waitingCount ?? 3;
+  const estimatedWait = activeTicket?.estimatedWaitMinutes ?? 10;
   
   // Dynamic QR Code for Ticket
-  const qrTicketUrl = ticketNo !== '---' ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(ticketNo)}` : '';
+  const qrTicketUrl = ticketNo && ticketNo !== '---' 
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(ticketNo)}` 
+    : '';
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-6 py-6 z-10 space-y-6">
-      {/* Header bar */}
+    <div className="flex-1 min-h-0 px-8 py-6 z-10 flex flex-col gap-5">
+      {/* Top Header bar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button 
             onClick={goHome} 
-            className="flex items-center gap-2 px-4 py-2 bg-white/90 rounded-full text-xs font-bold text-neutral-700 shadow-sm border border-neutral-200 hover:bg-neutral-50 transition-colors cursor-pointer"
+            className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-neutral-50 rounded-2xl shadow-sm border border-neutral-200 text-sm font-extrabold text-neutral-800 transition-all cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" /> Trang chủ
           </button>
-          <h2 className="text-2xl font-black text-[#1E2939] tracking-tight">
-            Thông tin phiếu khám
+          <h2 className="text-3xl font-black text-[#1E2939] tracking-tight">
+            Thông tin khám bệnh
           </h2>
         </div>
 
-        {/* 2 Main Action Buttons inside Header */}
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handlePrintTicket}
-            className="flex items-center gap-2 px-4 py-2 bg-white text-[#155DFC] rounded-2xl font-extrabold text-xs border border-blue-200 shadow-sm hover:bg-blue-50 transition-all cursor-pointer"
-          >
-            <Printer className="w-4 h-4" /> In phiếu khám
-          </button>
-          <button
-            onClick={() => navigateToView('queue')}
-            className="flex items-center gap-2 px-4 py-2 bg-[#155DFC] text-white rounded-2xl font-extrabold text-xs shadow-md hover:bg-blue-700 transition-all cursor-pointer"
-          >
-            <Users className="w-4 h-4" /> Xem hàng đợi
-          </button>
-        </div>
+        <button
+          onClick={handlePrintTicket}
+          className="flex items-center gap-2 px-5 py-2.5 bg-white text-[#155DFC] rounded-2xl font-extrabold text-xs lg:text-sm border border-blue-200 shadow-sm hover:bg-blue-50 transition-all cursor-pointer"
+        >
+          <Printer className="w-4 h-4" /> In phiếu khám
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column (5 cols) */}
-        <div className="lg:col-span-5 space-y-6">
-          {/* Top-left Blue Card: Điểm đến phòng khám */}
-          <div className="bg-[#4F80E1] text-white rounded-[28px] p-6 shadow-xl space-y-4 relative overflow-hidden">
-            <div className="space-y-1">
-              <span className="text-xs font-bold text-blue-100 uppercase tracking-wider">Điểm đến phòng khám</span>
-              <h3 className="text-3xl font-black">{roomName}</h3>
-              <p className="text-sm font-semibold text-blue-100">{specialtyName}</p>
+      {/* Main Grid (fills remaining height) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
+        {/* LEFT COLUMN (4 Cols) */}
+        <div className="lg:col-span-4 flex flex-col min-h-0 gap-6">
+          {/* Card 1: Điểm đến hiện tại (Solid Blue Gradient Card) */}
+          <div className="bg-gradient-to-br from-[#77A5F8] to-[#5588EC] text-white rounded-[28px] p-6 shadow-xl flex flex-col justify-between flex-1 space-y-4">
+            <div className="space-y-2">
+              <span className="text-xs font-black text-blue-100 uppercase tracking-wider block">Điểm đến hiện tại</span>
+              <h3 className="text-3xl lg:text-4xl font-black text-white">{roomName || '---'}</h3>
+              {specialtyName && (
+                <p className="text-base font-bold text-blue-100">{specialtyName}</p>
+              )}
             </div>
 
             <button
               onClick={() => navigateToView('map')}
-              className="w-full py-3 bg-white text-[#155DFC] rounded-2xl font-extrabold text-xs flex items-center justify-center gap-2 shadow-md hover:bg-blue-50 transition-all cursor-pointer"
+              className="w-full py-3.5 bg-white text-[#155DFC] rounded-2xl font-black text-xs lg:text-sm flex items-center justify-center gap-2 shadow-md hover:bg-blue-50 transition-all cursor-pointer mt-4"
             >
-              <Navigation className="w-4 h-4 rotate-45" /> Xem đường đi trên sơ đồ
+              <Navigation className="w-4 h-4 rotate-45" /> Xem đường đi
             </button>
           </div>
 
-          {/* Bottom-left White Card: Thẻ Số Thứ Tự */}
-          <div className="bg-white rounded-[28px] p-6 shadow-md border border-neutral-100 flex flex-col items-center text-center space-y-4">
-            <h4 className="font-extrabold text-[#1E2939] text-sm">Phiếu khám bệnh của bạn</h4>
-            <div className="w-full bg-[#E8F0FE]/60 rounded-2xl p-6 border border-blue-100/60 flex flex-col items-center space-y-3">
-              <div className="w-32 h-32 bg-white rounded-xl p-2 flex items-center justify-center border border-blue-200 shadow-sm">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={qrTicketUrl}
-                  alt="Mã QR Phiếu khám"
-                  className="w-24 h-24 object-contain"
-                />
+          {/* Card 2: Phiếu khám bệnh (White Card with Inner Light Blue QR Container) */}
+          <div className="bg-white rounded-[28px] p-6 shadow-md border border-neutral-100 flex flex-col justify-between flex-1 items-center text-center space-y-4">
+            <h4 className="font-black text-[#1E2939] text-base">Phiếu khám bệnh</h4>
+            
+            <div className="w-full bg-[#E8F1FE] rounded-[24px] p-6 border border-blue-200/60 flex flex-col items-center justify-between flex-1 space-y-4">
+              <div className="w-40 h-40 bg-white rounded-2xl p-3 flex items-center justify-center border-2 border-[#A4C8FF] shadow-sm">
+                {qrTicketUrl ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={qrTicketUrl}
+                    alt="Mã QR Phiếu khám"
+                    className="w-32 h-32 object-contain"
+                  />
+                ) : (
+                  <div className="text-xs text-neutral-400 font-bold">Mã QR Phiếu</div>
+                )}
               </div>
-              <div className="space-y-1">
-                <span className="text-[10px] font-bold text-neutral-400 uppercase">Số thứ tự (STT)</span>
-                <h3 className="text-4xl font-black text-[#155DFC] tracking-wider">{ticketNo}</h3>
-              </div>
-              <div className="text-xs font-bold text-neutral-600">
-                {roomName}
-              </div>
-              <div className="text-[11px] font-bold text-neutral-400">
-                Bệnh nhân: {patientName}
-              </div>
-            </div>
 
-            {/* 2 Action Buttons */}
-            <div className="w-full grid grid-cols-2 gap-3 pt-1">
-              <button
-                onClick={handlePrintTicket}
-                className="py-2.5 px-3 bg-neutral-50 hover:bg-neutral-100 border border-neutral-200 rounded-xl font-bold text-xs text-neutral-700 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-              >
-                <Printer className="w-4 h-4 text-[#155DFC]" /> In phiếu khám
-              </button>
-              <button
-                onClick={() => navigateToView('queue')}
-                className="py-2.5 px-3 bg-[#155DFC] hover:bg-blue-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer"
-              >
-                <Clock className="w-4 h-4" /> Tra cứu hàng đợi
-              </button>
+              <div className="space-y-1">
+                <span className="text-xs font-bold text-neutral-500 uppercase">Số thứ tự</span>
+                <h3 className="text-4xl lg:text-5xl font-black text-[#0F2C59] tracking-wider">{ticketNo || '---'}</h3>
+              </div>
+
+              <div className="w-full border-t border-blue-200/80 my-1" />
+
+              <div className="text-sm font-black text-[#1E2939]">
+                {roomName || '---'}
+              </div>
+
+              {patientName && (
+                <div className="text-xs font-bold text-neutral-500">
+                  Bệnh nhân: {patientName}
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Right Column (7 cols) */}
-        <div className="lg:col-span-7 space-y-6">
-          {/* Top-right Card: Thông tin hàng đợi */}
-          <div className="bg-white rounded-[28px] p-6 shadow-md border border-neutral-100 space-y-4">
+        {/* RIGHT COLUMN (8 Cols) */}
+        <div className="lg:col-span-8 flex flex-col min-h-0 gap-6">
+          {/* Card 3: Thông tin hàng đợi */}
+          <div className="bg-white rounded-[28px] p-6 shadow-md border border-neutral-100 flex flex-col justify-between flex-1 space-y-5">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 font-extrabold text-[#1E2939]">
-                <div className="w-8 h-8 rounded-full bg-blue-50 text-[#155DFC] flex items-center justify-center">
-                  <Clock className="w-4 h-4" />
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-[#D6E6FE] text-[#155DFC] flex items-center justify-center shrink-0">
+                  <Clock className="w-6 h-6" />
                 </div>
-                <span>Trạng thái hàng đợi hiện tại</span>
+                <h3 className="text-xl font-black text-[#1E2939]">Thông tin hàng đợi</h3>
               </div>
-              <button 
-                onClick={() => navigateToView('queue')}
-                className="text-xs font-bold text-[#155DFC] bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-full border border-blue-200 transition-colors cursor-pointer"
-              >
-                Xem chi tiết hàng đợi →
-              </button>
+              <span className="px-3.5 py-1.5 bg-[#FFF4DF] text-[#D98200] rounded-xl text-xs font-extrabold border border-amber-200/60">
+                Đang chờ khám
+              </span>
             </div>
 
-            {/* 3 Stat Columns */}
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <div className="bg-neutral-50 p-3.5 rounded-2xl border border-neutral-100">
-                <span className="text-[11px] font-semibold text-neutral-400 block mb-1">Số đang gọi</span>
-                <span className="text-2xl font-black text-[#1E2939]">{activeTicket?.currentCallingNo || 'A01'}</span>
+            {/* 3 Metric Cards */}
+            <div className="grid grid-cols-3 gap-4">
+              {/* Metric 1 */}
+              <div className="bg-[#F8FAFC] rounded-2xl p-5 border border-neutral-100 text-center space-y-1">
+                <span className="text-xs font-bold text-neutral-400 block">Số đang gọi</span>
+                <span className="text-3xl lg:text-4xl font-black text-[#1E2939] block">{currentCallingNo || '---'}</span>
               </div>
-              <div className="bg-blue-50 p-3.5 rounded-2xl border border-[#155DFC]/30 shadow-sm">
-                <span className="text-[11px] font-semibold text-[#155DFC] block mb-1">Số của bạn</span>
-                <span className="text-2xl font-black text-[#155DFC]">{ticketNo}</span>
+
+              {/* Metric 2 (Highlighted Blue) */}
+              <div className="bg-[#D6E6FE] rounded-2xl p-5 border-2 border-[#A4C8FF] text-center space-y-1 shadow-sm">
+                <span className="text-xs font-bold text-[#155DFC] block">Số của bạn</span>
+                <span className="text-3xl lg:text-4xl font-black text-[#0F2C59] block">{ticketNo || '---'}</span>
               </div>
-              <div className="bg-neutral-50 p-3.5 rounded-2xl border border-neutral-100">
-                <span className="text-[11px] font-semibold text-neutral-400 block mb-1">Dự kiến chờ</span>
-                <span className="text-xl font-black text-[#1E2939]">{activeTicket?.estimatedWaitMinutes || 10} <span className="text-xs font-normal">phút</span></span>
+
+              {/* Metric 3 */}
+              <div className="bg-[#F8FAFC] rounded-2xl p-5 border border-neutral-100 text-center space-y-1">
+                <span className="text-xs font-bold text-neutral-400 block">Thời gian chờ</span>
+                <div className="flex items-baseline justify-center gap-1">
+                  <span className="text-3xl lg:text-4xl font-black text-[#1E2939]">{estimatedWait}</span>
+                  <span className="text-xs font-bold text-neutral-500">phút</span>
+                </div>
               </div>
             </div>
 
-            {/* Status notification bar */}
-            <div className="bg-amber-50/80 border border-amber-200/80 text-amber-900 rounded-2xl p-3 text-center text-xs font-bold">
-              Còn <span className="text-amber-700 font-extrabold text-sm">{activeTicket?.waitingCount || 3}</span> bệnh nhân trước bạn
+            {/* Bottom Yellow Banner */}
+            <div className="w-full bg-[#FFF9EE] border border-[#FFE8C2] rounded-2xl p-4 text-center text-sm font-bold text-[#8F5B00]">
+              Còn <strong className="text-lg font-black text-[#D98200] mx-1">{waitingCount}</strong> người trước bạn
             </div>
           </div>
 
-          {/* Bottom-right Card: Thông tin bác sĩ phụ trách */}
-          <div className="bg-white rounded-[28px] p-6 shadow-md border border-neutral-100 space-y-6">
+          {/* Card 4: Thông tin bác sĩ */}
+          <div className="bg-white rounded-[28px] p-6 shadow-md border border-neutral-100 flex flex-col justify-between flex-1 space-y-5">
             <div className="flex items-center justify-between">
-              <h4 className="font-extrabold text-[#1E2939] text-base">Thông tin Bác sĩ phụ trách</h4>
+              <h3 className="text-xl font-black text-[#1E2939]">Thông tin bác sĩ</h3>
+              
               <button
                 onClick={() => navigateToView('doctor_route')}
-                className="px-4 py-2 bg-[#4F80E1] text-white rounded-xl font-bold text-xs shadow-md hover:bg-blue-600 transition-all cursor-pointer"
+                className="px-5 py-3 bg-[#77A5F8] hover:bg-blue-600 text-white rounded-2xl text-xs lg:text-sm font-black shadow-md transition-all cursor-pointer flex items-center gap-2"
               >
-                Xem lộ trình khám chi tiết
+                Xem lộ trình bác sĩ chỉ định
               </button>
             </div>
 
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-full bg-blue-100 text-[#155DFC] flex items-center justify-center text-2xl font-bold">
-                👨‍⚕️
+              <div className="w-16 h-16 rounded-full bg-[#D6E6FE] text-[#155DFC] flex items-center justify-center shrink-0">
+                <User className="w-8 h-8" />
               </div>
-              <div>
-                <h4 className="font-black text-[#1E2939] text-base">{doctorName}</h4>
-                <p className="text-xs text-neutral-500 font-bold">{specialtyName}</p>
+              <div className="space-y-1">
+                <h4 className="text-xl font-black text-[#1E2939]">{doctorName || 'BS. Chuyên khoa phụ trách'}</h4>
+                {specialtyName && (
+                  <p className="text-sm font-bold text-neutral-500">{specialtyName}</p>
+                )}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 border-t border-neutral-100 pt-4 text-xs font-semibold text-neutral-600">
-              <div>
-                <span className="text-neutral-400 block mb-1">Phòng khám</span>
-                <span className="font-bold text-[#1E2939] text-sm">{roomName}</span>
-              </div>
-              <div>
-                <span className="text-neutral-400 block mb-1">Chuyên khoa</span>
-                <span className="font-bold text-[#1E2939] text-sm">{specialtyName}</span>
-              </div>
+            <div className="border-t border-neutral-100 pt-4">
+              <span className="text-xs font-bold text-neutral-400 block mb-1">Phòng khám</span>
+              <span className="text-base font-black text-[#1E2939]">{roomName || '---'}</span>
             </div>
           </div>
         </div>
