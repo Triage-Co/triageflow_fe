@@ -25,7 +25,7 @@ export function AppShell({ children, user, bare }: AppShellProps) {
     return (
         <div className="flex h-screen w-screen overflow-hidden bg-[#F8F8FB] font-sans text-[#2D2D2D]">
             {/* Desktop Sidebar */}
-            <div className="hidden md:flex h-full shrink-0">
+            <div className="hidden lg:flex h-full shrink-0">
                 <Sidebar
                     user={displayUser}
                     collapsed={!sidebarOpen}
@@ -35,14 +35,14 @@ export function AppShell({ children, user, bare }: AppShellProps) {
 
             {/* Main Content Area - fills remaining space */}
             <div
-                className={`flex-1 flex flex-col h-full overflow-hidden ${showBottomNav ? 'pb-20 md:pb-0' : ''}`}
+                className={`flex-1 flex flex-col h-full overflow-hidden ${showBottomNav ? 'pb-20 lg:pb-0' : ''}`}
             >
                 {children}
             </div>
 
             {/* Mobile Bottom Nav — hidden on reception (dedicated mobile flow) */}
             {showBottomNav && (
-                <div className="md:hidden">
+                <div className="lg:hidden">
                     <BottomNav />
                 </div>
             )}

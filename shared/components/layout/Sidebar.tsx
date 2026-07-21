@@ -167,13 +167,18 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
         <aside
             className={cn(
                 'relative flex flex-col h-full bg-[#F5F2FF] shrink-0 select-none transition-all duration-300 ease-in-out overflow-hidden',
-                isCollapsed ? 'w-[56px]' : 'w-[248px]',
+                isCollapsed ? 'w-14' : 'w-62',
             )}
         >
             {/* ── Logo ──────────────────────────────────── */}
-            <div className="flex items-center gap-3 px-4 pt-6 pb-6 shrink-0">
+            <div
+                className={cn(
+                    'flex items-center pt-6 pb-6 shrink-0 transition-all duration-300 ease-in-out',
+                    isCollapsed ? 'justify-center px-0' : 'gap-3 px-3',
+                )}
+            >
                 <div className="w-10 h-10 rounded-[12px] bg-[#8B7CF6] flex items-center justify-center shadow-[0_4px_12px_rgba(139,124,246,0.35)] shrink-0">
-                    <Stethoscope className="w-[18px] h-[18px] text-white" strokeWidth={2.25} />
+                    <Stethoscope className="w-4.5 h-4.5 text-white" strokeWidth={2.25} />
                 </div>
                 {!isCollapsed && (
                     <div className="overflow-hidden min-w-0">
@@ -186,7 +191,7 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
             </div>
 
             {/* ── Nav ───────────────────────────────────── */}
-            <nav className="flex-1 flex flex-col gap-1.5 px-3 overflow-y-auto overflow-x-hidden">
+            <nav className="flex-1 flex flex-col gap-1.5 px-2 overflow-y-auto overflow-x-hidden">
                 {navItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = isNavItemActive(item.href);
@@ -196,7 +201,7 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
                             key={item.href}
                             href={item.href}
                             className={cn(
-                                'flex items-center gap-3 h-10 rounded-[12px] px-3 transition-all duration-200 text-[13px]',
+                                'flex items-center gap-2.5 h-10 rounded-[12px] px-2.5 transition-all duration-200 text-[13px]',
                                 isCollapsed && 'justify-center px-0 w-10 mx-auto',
                                 isActive
                                     ? 'bg-[#EDE9FE] text-[#8B7CF6] font-semibold shadow-[inset_0_0_0_1px_rgba(139,124,246,0.08)]'
@@ -204,7 +209,7 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
                             )}
                         >
                             <Icon
-                                className={cn('w-[18px] h-[18px] shrink-0', isActive ? 'text-[#8B7CF6]' : 'text-[#6B7280]')}
+                                className={cn('w-4.5 h-4.5 shrink-0', isActive ? 'text-[#8B7CF6]' : 'text-[#6B7280]')}
                                 strokeWidth={isActive ? 2.25 : 2}
                             />
                             {!isCollapsed && (
