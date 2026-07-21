@@ -8,20 +8,16 @@ export const QuizDetailStep: React.FC = () => {
   const currentQuestion = useTriageStore((state) => state.currentQuestion);
   const submitAnswersBatch = useTriageStore((state) => state.submitAnswersBatch);
 
-  // Trạng thái lưu trữ cục bộ các câu trả lời trên màn hình hiện tại
   const [localAnswers, setLocalAnswers] = useState<Record<string, 'present' | 'absent' | 'unknown'>>({});
 
-  // Tự động làm sạch form câu trả lời cũ mỗi khi máy chủ trả về nhóm câu hỏi mới
   useEffect(() => {
     setLocalAnswers({});
   }, [currentQuestion]);
 
-  // Kiểm tra xem tất cả câu hỏi con hiển thị trên màn hình đã được tích chọn hay chưa
   const isAllAnswered = currentQuestion?.items
     ? currentQuestion.items.every((item: any) => localAnswers[item.id])
     : false;
 
-  // Thực hiện đóng gói dữ liệu và đẩy lên API khi nhấn nút "Tiếp tục"
   const handleNextQuestion = () => {
     const formattedAnswers = Object.entries(localAnswers).map(([id, choiceId]) => ({
       id,
@@ -44,17 +40,17 @@ export const QuizDetailStep: React.FC = () => {
         )}
 
         {currentQuestion ? (
-          <div className="w-full max-w-2xl space-y-6 text-center animate-in fade-in duration-300 flex-1 flex flex-col justify-center">
+          <div className="w-full max-w-4xl space-y-6 text-center animate-in fade-in duration-300 flex-1 flex flex-col justify-center">
             <div className="w-16 h-16 rounded-full bg-blue-50 text-[#74A4F6] flex items-center justify-center mx-auto shadow-sm mb-2">
               <HelpCircle className="w-8 h-8" />
             </div>
 
-            <h3 className="text-xl sm:text-2xl font-black text-[#1E2939] leading-snug tracking-tight px-4 mb-4">
+            <h3 className="text-2xl sm:text-3xl font-black text-[#1E2939] leading-snug tracking-tight px-4 mb-4">
               {currentQuestion.text}
             </h3>
 
             {currentQuestion.items && currentQuestion.items.length === 1 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 px-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 px-4 max-w-2xl mx-auto w-full">
                 {currentQuestion.items[0].choices.map((choice: any) => {
                   const isSelected = localAnswers[currentQuestion.items[0].id] === choice.id;
                   return (
@@ -63,9 +59,9 @@ export const QuizDetailStep: React.FC = () => {
                       type="button"
                       onClick={() => setLocalAnswers({ [currentQuestion.items[0].id]: choice.id })}
                       className={cn(
-                        "py-4 px-6 rounded-2xl text-sm font-extrabold border shadow-sm transition-all cursor-pointer active:scale-98 text-center",
+                        "py-4 px-6 rounded-2xl text-base font-extrabold border shadow-sm transition-all cursor-pointer active:scale-98 text-center",
                         isSelected
-                          ? "bg-[#2563EB] border-[#2563EB] text-white hover:bg-blue-700"
+                          ? "bg-[#2563EB] border-[#2563EB] text-white hover:bg-blue-700 shadow-blue-200"
                           : "bg-white border-neutral-200 text-neutral-700 hover:bg-blue-50 hover:border-[#74A4F6] hover:text-[#2563EB]"
                       )}
                     >
@@ -75,16 +71,16 @@ export const QuizDetailStep: React.FC = () => {
                 })}
               </div>
             ) : (
-              <div className="space-y-3 max-h-[300px] overflow-y-auto pt-2 px-2 custom-scrollbar">
+              <div className="space-y-3.5 max-h-[420px] overflow-y-auto pt-2 px-4 custom-scrollbar">
                 {currentQuestion.items && currentQuestion.items.map((item: any) => (
                   <div
                     key={item.id}
-                    className="bg-neutral-50/70 p-4 rounded-2xl border border-neutral-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition-all hover:bg-neutral-50 hover:border-neutral-200"
+                    className="bg-neutral-50/80 p-5 rounded-2xl border border-neutral-200/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition-all hover:bg-white hover:border-[#74A4F6]/40 hover:shadow-sm"
                   >
-                    <span className="font-extrabold text-neutral-700 text-sm text-left leading-snug flex-1">
+                    <span className="font-extrabold text-neutral-800 text-base text-left leading-relaxed flex-1">
                       {item.name}
                     </span>
-                    <div className="grid grid-cols-3 gap-2 shrink-0 w-full sm:w-auto">
+                    <div className="grid grid-cols-3 gap-3 shrink-0 w-full sm:w-auto">
                       {item.choices.map((choice: any) => {
                         const isSelected = localAnswers[item.id] === choice.id;
                         return (
@@ -93,9 +89,9 @@ export const QuizDetailStep: React.FC = () => {
                             type="button"
                             onClick={() => setLocalAnswers(prev => ({ ...prev, [item.id]: choice.id }))}
                             className={cn(
-                              "py-2.5 px-3 rounded-xl text-xs font-black border shadow-sm transition-all cursor-pointer active:scale-95 text-center min-w-[75px]",
+                              "py-3 px-5 rounded-xl text-sm font-black border shadow-sm transition-all cursor-pointer active:scale-95 text-center min-w-[90px]",
                               isSelected
-                                ? "bg-[#2563EB] border-[#2563EB] text-white hover:bg-blue-700"
+                                ? "bg-[#2563EB] border-[#2563EB] text-white hover:bg-blue-700 shadow-md shadow-blue-200"
                                 : "bg-white border-neutral-200 text-neutral-600 hover:bg-blue-50 hover:border-[#74A4F6] hover:text-[#2563EB]"
                             )}
                           >
@@ -116,14 +112,14 @@ export const QuizDetailStep: React.FC = () => {
         )}
 
         {currentQuestion && (
-          <div className="w-full max-w-md pt-4 shrink-0">
+          <div className="w-full max-w-lg pt-4 shrink-0">
             <button
               type="button"
               onClick={handleNextQuestion}
               disabled={!isAllAnswered || isApiLoading}
               className={cn(
-                "w-full py-3.5 rounded-full text-white font-bold text-base shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer",
-                isAllAnswered && !isApiLoading ? "bg-[#74A4F6] hover:bg-[#2563EB]" : "bg-neutral-300 cursor-not-allowed"
+                "w-full py-4 rounded-full text-white font-black text-lg shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer",
+                isAllAnswered && !isApiLoading ? "bg-[#2563EB] hover:bg-blue-700 shadow-blue-200" : "bg-neutral-300 cursor-not-allowed shadow-none"
               )}
             >
               {isApiLoading ? (

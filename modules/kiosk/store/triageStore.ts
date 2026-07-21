@@ -10,6 +10,7 @@ import {
     InfermedicaQuestion,
     InfermedicaRecommendedSpecialist
 } from '../types/triage.types';
+import { deepseekTranslationService } from '../services/deepseekTranslationService';
 
 const compileGlobalStaticSymptomMap = (): Record<string, string> => {
     const map: Record<string, string> = {};
@@ -227,7 +228,7 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
 
             if (res && res.status === 'success' && res.data) {
                 const { question, interview_token, should_stop } = res.data;
-                set({ interviewToken: interview_token, currentQuestion: question });
+                set({ interviewToken: interview_token });
 
                 if (should_stop === true || !question) {
                     const finalRes = await triageService.recommendSpecialist(payload, interview_token);
@@ -246,6 +247,14 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
                     }
                     kioskState.setAIRegisterStep('ai_result');
                 } else {
+                    let finalQuestion = question;
+                    try {
+                        finalQuestion = await deepseekTranslationService.translateQuestion(question);
+                    } catch (err: any) {
+                        console.error("DeepSeek Translation error:", err);
+                        kioskState.showToast(`Dịch AI thất bại (${err.message || 'Lỗi hệ thống'}). Hiển thị tiếng Anh gốc.`, 'error');
+                    }
+                    set({ currentQuestion: finalQuestion });
                     kioskState.setAIRegisterStep('quiz_detail');
                 }
             }
@@ -271,7 +280,7 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
 
         set({ isApiLoading: true });
 
-        // Cộng dồn toàn bộ mảng câu trả lời mới vào kho dữ liệu cũ[cite: 1, 2]
+        // Cộng dồn toàn bộ mảng câu trả lời mới vào kho dữ liệu cũ
         const updatedEvidence = [...get().accumulatedEvidence, ...answers];
         set({ accumulatedEvidence: updatedEvidence });
 
@@ -321,7 +330,14 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
                     }
                     kioskState.setAIRegisterStep('ai_result');
                 } else {
-                    set({ currentQuestion: question });
+                    let finalQuestion = question;
+                    try {
+                        finalQuestion = await deepseekTranslationService.translateQuestion(question);
+                    } catch (err: any) {
+                        console.error("DeepSeek Translation error:", err);
+                        kioskState.showToast(`Dịch AI thất bại (${err.message || 'Lỗi hệ thống'}). Hiển thị tiếng Anh gốc.`, 'error');
+                    }
+                    set({ currentQuestion: finalQuestion });
                 }
             }
         } catch (error) {
