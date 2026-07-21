@@ -398,7 +398,7 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
                         <div className="space-y-3">
                             {/* Dynamic rows */}
                             <div className="space-y-2">
-                                {editPhysicalExamRows.map((row, idx) => (
+                                {editPhysicalExamRows.map((row) => (
                                     <div key={row.id} className="flex gap-2 items-start">
                                         <input
                                             type="text"

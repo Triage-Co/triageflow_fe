@@ -151,9 +151,7 @@ export function LeftPatientPanel({ patient, isOpen }: LeftPanelProps) {
         spO2: sessionData?.spo2 !== undefined && sessionData?.spo2 !== null ? sessionData.spo2 : '—',
     };
 
-    const displayHistory = sessionData?.pmh
-        ? [sessionData.pmh]
-        : (patient.medicalHistory && patient.medicalHistory.length > 0 ? patient.medicalHistory : []);
+
 
     const realAllergies = (patient.allergies || []).filter(
         (a) => a && !a.toLowerCase().includes('penicillin')
@@ -219,7 +217,7 @@ export function LeftPatientPanel({ patient, isOpen }: LeftPanelProps) {
         setEditingField(null);
     };
 
-    const EditActions = ({ field }: { field: EditingField }) => (
+    const renderEditActions = (field: EditingField) => (
         <div className="flex gap-1">
             <button
                 onClick={() => handleSave(field)}
@@ -344,7 +342,7 @@ export function LeftPatientPanel({ patient, isOpen }: LeftPanelProps) {
                                                 <Pencil className="w-3 h-3" />
                                             </button>
                                         )}
-                                        {editingField === 'visitReason' && <EditActions field="visitReason" />}
+                                        {editingField === 'visitReason' && renderEditActions('visitReason')}
                                     </div>
                                     {editingField === 'visitReason' ? (
                                         <textarea
@@ -387,7 +385,7 @@ export function LeftPatientPanel({ patient, isOpen }: LeftPanelProps) {
                                                 <Pencil className="w-3 h-3" />
                                             </button>
                                         )}
-                                        {editingField === 'vitals' && <EditActions field="vitals" />}
+                                        {editingField === 'vitals' && renderEditActions('vitals')}
                                     </div>
 
                                     {editingField === 'vitals' ? (
