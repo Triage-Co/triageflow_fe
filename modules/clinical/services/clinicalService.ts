@@ -8,12 +8,7 @@ import type {
 // ── API Services & DTOs ──────────────────────────────────────────────────────
 import { apiClient } from '@/shared/services/apiClient';
 
-const MOCK_VITALS = {
-    heartRate: 80,
-    bloodPressure: '120/80',
-    temperature: 37.0,
-    spO2: 98,
-};
+
 
 const MOCK_PHYSICAL_EXAM = {
     throat: 'Chưa cập nhật',
@@ -267,12 +262,12 @@ export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient 
         asRecord(stepRecord?.physical_exam) ||
         asRecord(stepRecord?.clinical_exam);
 
-    const heartRate = pickNumber(vitalsRecord, ['heartRate', 'heart_rate', 'pulse']) ?? MOCK_VITALS.heartRate;
+    const heartRate = pickNumber(vitalsRecord, ['heartRate', 'heart_rate', 'pulse']);
     const bloodPressure =
-        pickString(vitalsRecord, ['bloodPressure', 'blood_pressure', 'bp']) ?? MOCK_VITALS.bloodPressure;
+        pickString(vitalsRecord, ['bloodPressure', 'blood_pressure', 'bp']);
     const temperature =
-        pickNumber(vitalsRecord, ['temperature', 'temp']) ?? MOCK_VITALS.temperature;
-    const spO2 = pickNumber(vitalsRecord, ['spO2', 'spo2', 'oxygen_saturation']) ?? MOCK_VITALS.spO2;
+        pickNumber(vitalsRecord, ['temperature', 'temp']);
+    const spO2 = pickNumber(vitalsRecord, ['spO2', 'spo2', 'oxygen_saturation']);
 
     const throat = pickString(physicalExamRecord, ['throat']) ?? MOCK_PHYSICAL_EXAM.throat;
     const lungs = pickString(physicalExamRecord, ['lungs', 'lung']) ?? MOCK_PHYSICAL_EXAM.lungs;
@@ -304,10 +299,10 @@ export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient 
         allergies: splitList(allergyNotes),
         medicalHistory: splitList(medicalHistoryFromApiRaw),
         vitals: {
-            heartRate,
-            bloodPressure,
-            temperature,
-            spO2,
+            heartRate: heartRate ?? 0,
+            bloodPressure: bloodPressure || '—',
+            temperature: temperature ?? 0,
+            spO2: spO2 ?? 0,
         },
         insurance: {
             hasInsurance: !!patientObj.medical_coverage_id,
@@ -362,6 +357,16 @@ export const clinicalService = {
 
     getFlowHistoryByPatientId: (patientId: string, token: string) =>
         apiClient.get<unknown>(`/api/flow/patient/${patientId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+        }),
+
+    getVisitSessionByPatientId: (patientId: string, token: string) =>
+        apiClient.get<unknown>(`/api/visit-session?patient_id=${patientId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+        }),
+
+    updateVisitSession: (visitSessionId: string, body: Record<string, unknown>, token: string) =>
+        apiClient.patch<unknown>(`/api/visit-session/${visitSessionId}`, body, {
             headers: { Authorization: `Bearer ${token}` },
         }),
 };

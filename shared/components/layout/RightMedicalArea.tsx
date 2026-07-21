@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Patient } from '@/modules/clinical/types/clinical.types';
-import { 
-    Search, 
-    Settings, 
+import {
+    Search,
+    Settings,
     Pencil,
     Stethoscope,
     Microscope,
@@ -13,9 +13,28 @@ import {
     Pill
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { clinicalService } from '@/modules/clinical/services/clinicalService';
+import { useAuthStore } from '@/store/authStore';
 
 type MedTab = 'kham-benh' | 'can-lam-sang' | 'chan-doan' | 'thu-thuat' | 'don-thuoc';
 type EditingSection = 'visitReason' | 'clinicalProgression' | 'medicalHistory' | 'physicalExam' | null;
+
+interface VisitSessionData {
+    visit_session_id?: string;
+    patient_id?: string;
+    visit_date?: string;
+    chief_complaint?: string;
+    heart_rate?: number;
+    blood_pressure_sys?: number;
+    blood_pressure_dia?: number;
+    temperature?: number;
+    spo2?: number;
+    diagnosis?: string;
+    final_diagnosis?: string;
+    hpi?: string;
+    pmh?: string;
+    pe?: Record<string, string>;
+}
 
 const MED_TABS: { id: MedTab; label: string; icon: React.ElementType }[] = [
     { id: 'kham-benh', label: 'Khám bệnh', icon: Stethoscope },
@@ -48,7 +67,7 @@ function SectionCard({
                     {subtitle && <p className="text-[11px] text-[#9C9C9C] mt-0.5">{subtitle}</p>}
                 </div>
                 {onEdit && (
-                    <button 
+                    <button
                         onClick={onEdit}
                         className="w-7 h-7 rounded-lg flex items-center justify-center text-[#ADADAD] hover:text-[#8B7CF6] hover:bg-[#F5F2FF] transition-colors cursor-pointer"
                     >
@@ -68,6 +87,11 @@ interface MedicalRecordContentProps {
 
 function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContentProps) {
     const record = patient.medicalRecord;
+    const accessToken = useAuthStore((s) => s.accessToken);
+    const [sessionData, setSessionData] = useState<VisitSessionData | null>(null);
+
+    const initialPatientId = patient.patientId || (patient as unknown as Record<string, unknown>).patient_id as string | undefined;
+    const patientQueueId = patient.id;
 
     const [editingSection, setEditingSection] = useState<EditingSection>(null);
 
@@ -75,16 +99,90 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
     const [editVisitReason, setEditVisitReason] = useState(record?.visitReason || '');
     const [editClinicalProgression, setEditClinicalProgression] = useState(record?.clinicalProgression || '');
     const [editMedicalHistory, setEditMedicalHistory] = useState(record?.medicalHistory.join('\n') || '');
-    const [editPhysicalExam, setEditPhysicalExam] = useState({
-        throat: record?.physicalExam.throat || '',
-        lungs: record?.physicalExam.lungs || '',
-        heart: record?.physicalExam.heart || '',
-        abdomen: record?.physicalExam.abdomen || '',
-    });
+    // Dynamic physical exam rows: [{id, label, value}]
+    const [editPhysicalExamRows, setEditPhysicalExamRows] = useState<{ id: string; label: string; value: string }[]>([]);
+
+    useEffect(() => {
+        if (!accessToken) return;
+
+        let isMounted = true;
+        const fetchVisitSession = async () => {
+            try {
+                let resolvedPatientId = initialPatientId;
+
+                if (!resolvedPatientId && patientQueueId) {
+                    try {
+                        const queueRes = await clinicalService.getPatientByQueueId(patientQueueId, accessToken) as unknown as Record<string, unknown>;
+                        const queueData = (queueRes?.data || queueRes) as Record<string, unknown>;
+                        const booking = queueData?.booking as Record<string, unknown> | undefined;
+                        const patientObj = booking?.patient as Record<string, unknown> | undefined;
+                        if (patientObj?.patient_id) {
+                            resolvedPatientId = patientObj.patient_id as string;
+                        }
+                    } catch {
+                        // ignore queue lookup error
+                    }
+                }
+
+                const searchId = resolvedPatientId || patientQueueId;
+                if (!searchId) return;
+
+                const res = await clinicalService.getVisitSessionByPatientId(searchId, accessToken);
+                const raw = res as unknown;
+
+                let list: VisitSessionData[] = [];
+                if (Array.isArray(raw)) {
+                    list = raw as VisitSessionData[];
+                } else if (raw && typeof raw === 'object') {
+                    const rawObj = raw as Record<string, unknown>;
+                    if (Array.isArray(rawObj.data)) {
+                        list = rawObj.data as VisitSessionData[];
+                    } else if (rawObj.data && typeof rawObj.data === 'object' && Array.isArray((rawObj.data as Record<string, unknown>).data)) {
+                        list = (rawObj.data as Record<string, unknown>).data as VisitSessionData[];
+                    }
+                }
+
+                if (isMounted && list.length > 0) {
+                    const session = list[0];
+                    setSessionData(session);
+                    if (session.chief_complaint) setEditVisitReason(session.chief_complaint);
+                    if (session.hpi) setEditClinicalProgression(session.hpi);
+                    if (session.pmh) setEditMedicalHistory(session.pmh);
+                    if (session.pe) {
+                        setEditPhysicalExamRows(
+                            Object.entries(session.pe)
+                                .filter(([, v]) => v)
+                                .map(([k, v], idx) => ({ id: `pe-${idx}`, label: k, value: v }))
+                        );
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to fetch visit session for right area:', err);
+            }
+        };
+
+        fetchVisitSession();
+        return () => {
+            isMounted = false;
+        };
+    }, [initialPatientId, patientQueueId, accessToken, record]);
 
     if (!record) return null;
 
-    const handleSave = (section: EditingSection) => {
+    const displayVisitReason = sessionData?.chief_complaint || record.visitReason;
+    const displayClinicalProgression = sessionData?.hpi || record.clinicalProgression;
+    const displayMedicalHistory = sessionData?.pmh
+        ? [sessionData.pmh]
+        : (record.medicalHistory && record.medicalHistory.length > 0 ? record.medicalHistory : []);
+
+    // Build display rows from sessionData.pe or fallback to record.physicalExam
+    const displayPhysicalExamRows: { label: string; value: string }[] = sessionData?.pe
+        ? Object.entries(sessionData.pe).filter(([, v]) => v).map(([k, v]) => ({ label: k, value: v }))
+        : Object.entries(record.physicalExam)
+            .filter(([, v]) => v)
+            .map(([k, v]) => ({ label: k, value: v as string }));
+
+    const handleSave = async (section: EditingSection) => {
         if (!patient.medicalRecord) return;
         const updatedRecord = { ...patient.medicalRecord };
 
@@ -98,12 +196,11 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
                 .map((line) => line.trim())
                 .filter((line) => line.length > 0);
         } else if (section === 'physicalExam') {
-            updatedRecord.physicalExam = {
-                throat: editPhysicalExam.throat,
-                lungs: editPhysicalExam.lungs,
-                heart: editPhysicalExam.heart,
-                abdomen: editPhysicalExam.abdomen,
-            };
+            const peObj = editPhysicalExamRows.reduce<Record<string, string>>((acc, row) => {
+                if (row.label.trim()) acc[row.label.trim()] = row.value;
+                return acc;
+            }, {});
+            updatedRecord.physicalExam = peObj as typeof updatedRecord.physicalExam;
         }
 
         // Trigger updates in parent state
@@ -114,20 +211,62 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
             medicalRecord: updatedRecord,
         });
 
+        // Call PATCH API to persist the changes
+        if (sessionData?.visit_session_id && accessToken) {
+            try {
+                let patchBody: Record<string, unknown> = {};
+
+                if (section === 'visitReason') {
+                    patchBody = { chief_complaint: editVisitReason };
+                } else if (section === 'clinicalProgression') {
+                    patchBody = { hpi: editClinicalProgression };
+                } else if (section === 'medicalHistory') {
+                    patchBody = { pmh: editMedicalHistory.trim() };
+                } else if (section === 'physicalExam') {
+                    const peObj = editPhysicalExamRows.reduce<Record<string, string>>((acc, row) => {
+                        if (row.label.trim()) acc[row.label.trim()] = row.value;
+                        return acc;
+                    }, {});
+                    patchBody = { pe: peObj };
+                }
+
+                await clinicalService.updateVisitSession(
+                    sessionData.visit_session_id,
+                    patchBody,
+                    accessToken,
+                );
+
+                // Update local session data after successful patch
+                setSessionData((prev) => {
+                    if (!prev) return prev;
+                    if (section === 'visitReason') return { ...prev, chief_complaint: editVisitReason };
+                    if (section === 'clinicalProgression') return { ...prev, hpi: editClinicalProgression };
+                    if (section === 'medicalHistory') return { ...prev, pmh: editMedicalHistory.trim() };
+                    if (section === 'physicalExam') {
+                        const peObj = editPhysicalExamRows.reduce<Record<string, string>>((acc, row) => {
+                            if (row.label.trim()) acc[row.label.trim()] = row.value;
+                            return acc;
+                        }, {});
+                        return { ...prev, pe: peObj };
+                    }
+                    return prev;
+                });
+            } catch (err) {
+                console.error('Failed to update visit session:', err);
+            }
+        }
+
         setEditingSection(null);
     };
 
     const handleCancel = (section: EditingSection) => {
-        if (section === 'visitReason') setEditVisitReason(record.visitReason);
-        else if (section === 'clinicalProgression') setEditClinicalProgression(record.clinicalProgression || '');
-        else if (section === 'medicalHistory') setEditMedicalHistory(record.medicalHistory.join('\n'));
+        if (section === 'visitReason') setEditVisitReason(displayVisitReason);
+        else if (section === 'clinicalProgression') setEditClinicalProgression(displayClinicalProgression || '');
+        else if (section === 'medicalHistory') setEditMedicalHistory(displayMedicalHistory.join('\n'));
         else if (section === 'physicalExam') {
-            setEditPhysicalExam({
-                throat: record.physicalExam.throat || '',
-                lungs: record.physicalExam.lungs || '',
-                heart: record.physicalExam.heart || '',
-                abdomen: record.physicalExam.abdomen || '',
-            });
+            setEditPhysicalExamRows(
+                displayPhysicalExamRows.map((r, idx) => ({ id: `pe-${idx}`, label: r.label, value: r.value }))
+            );
         }
         setEditingSection(null);
     };
@@ -135,9 +274,9 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
     return (
         <div className="space-y-4">
             {/* Lý do khám */}
-            <SectionCard 
-                title="Lý do khám" 
-                subtitle="Mô tả ngắn gọn triệu chứng chính" 
+            <SectionCard
+                title="Lý do khám"
+                subtitle="Mô tả ngắn gọn triệu chứng chính"
                 onEdit={() => setEditingSection('visitReason')}
             >
                 {editingSection === 'visitReason' ? (
@@ -145,7 +284,7 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
                         <textarea
                             value={editVisitReason}
                             onChange={(e) => setEditVisitReason(e.target.value)}
-                            className="w-full text-[13px] text-[#2D2D2D] border border-neutral-200 rounded-xl p-3 focus:border-[#8B7CF6] outline-none min-h-[80px]"
+                            className="w-full text-[13px] text-[#2D2D2D] border border-neutral-200 rounded-xl p-3 focus:border-[#8B7CF6] outline-none min-h-20"
                         />
                         <div className="flex gap-2 justify-end">
                             <button
@@ -163,14 +302,14 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
                         </div>
                     </div>
                 ) : (
-                    <p className="text-[13px] text-[#555] leading-relaxed">{record.visitReason}</p>
+                    <p className="text-[13px] text-[#555] leading-relaxed">{displayVisitReason}</p>
                 )}
             </SectionCard>
 
             {/* Quá trình bệnh lý */}
-            <SectionCard 
-                title="Quá trình bệnh lý và diễn biến lâm sàng" 
-                subtitle="Mô tả chi tiết diễn biến bệnh" 
+            <SectionCard
+                title="Quá trình bệnh lý và diễn biến lâm sàng"
+                subtitle="Mô tả chi tiết diễn biến bệnh"
                 minH="110px"
                 onEdit={() => setEditingSection('clinicalProgression')}
             >
@@ -180,7 +319,7 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
                             value={editClinicalProgression}
                             onChange={(e) => setEditClinicalProgression(e.target.value)}
                             placeholder="Nhập quá trình bệnh lý..."
-                            className="w-full text-[13px] text-[#2D2D2D] border border-neutral-200 rounded-xl p-3 focus:border-[#8B7CF6] outline-none min-h-[80px]"
+                            className="w-full text-[13px] text-[#2D2D2D] border border-neutral-200 rounded-xl p-3 focus:border-[#8B7CF6] outline-none min-h-20"
                         />
                         <div className="flex gap-2 justify-end">
                             <button
@@ -197,8 +336,8 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
                             </button>
                         </div>
                     </div>
-                ) : record.clinicalProgression ? (
-                    <p className="text-[13px] text-[#555] leading-relaxed">{record.clinicalProgression}</p>
+                ) : displayClinicalProgression ? (
+                    <p className="text-[13px] text-[#555] leading-relaxed">{displayClinicalProgression}</p>
                 ) : (
                     <p className="text-[13px] text-[#ADADAD] italic">Nhập quá trình bệnh lý...</p>
                 )}
@@ -213,7 +352,7 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
                                 value={editMedicalHistory}
                                 onChange={(e) => setEditMedicalHistory(e.target.value)}
                                 placeholder="Nhập mỗi tiền sử trên một dòng..."
-                                className="w-full text-[13px] text-[#2D2D2D] border border-neutral-200 rounded-xl p-3 focus:border-[#8B7CF6] outline-none min-h-[80px]"
+                                className="w-full text-[13px] text-[#2D2D2D] border border-neutral-200 rounded-xl p-3 focus:border-[#8B7CF6] outline-none min-h-20"
                             />
                             <div className="flex gap-2 justify-end">
                                 <button
@@ -230,9 +369,9 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
                                 </button>
                             </div>
                         </div>
-                    ) : record.medicalHistory.length > 0 ? (
+                    ) : displayMedicalHistory.length > 0 ? (
                         <ul className="space-y-1.5">
-                            {record.medicalHistory.map((h, i) => (
+                            {displayMedicalHistory.map((h, i) => (
                                 <li key={i} className="flex items-start gap-2 text-[13px] text-[#555]">
                                     <span className="w-1.5 h-1.5 rounded-full bg-[#8B7CF6] shrink-0 mt-1.5" />
                                     {h}
@@ -244,33 +383,73 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
                     )}
                 </SectionCard>
 
-                <SectionCard title="Khám lâm sàng" onEdit={() => setEditingSection('physicalExam')}>
+                <SectionCard
+                    title="Khám lâm sàng"
+                    onEdit={() => {
+                        setEditPhysicalExamRows(
+                            displayPhysicalExamRows.length > 0
+                                ? displayPhysicalExamRows.map((r, idx) => ({ id: `pe-${idx}`, label: r.label, value: r.value }))
+                                : [{ id: 'pe-0', label: '', value: '' }]
+                        );
+                        setEditingSection('physicalExam');
+                    }}
+                >
                     {editingSection === 'physicalExam' ? (
                         <div className="space-y-3">
-                            <div className="grid grid-cols-2 gap-3">
-                                {[
-                                    { key: 'throat', label: 'Họng' },
-                                    { key: 'lungs', label: 'Phổi' },
-                                    { key: 'heart', label: 'Tim' },
-                                    { key: 'abdomen', label: 'Bụng' },
-                                ].map(({ key, label }) => (
-                                    <div key={key} className="space-y-1">
-                                        <label className="text-[11px] text-[#9C9C9C] font-semibold">{label}</label>
+                            {/* Dynamic rows */}
+                            <div className="space-y-2">
+                                {editPhysicalExamRows.map((row, idx) => (
+                                    <div key={row.id} className="flex gap-2 items-start">
                                         <input
                                             type="text"
-                                            value={editPhysicalExam[key as keyof typeof editPhysicalExam]}
+                                            value={row.label}
                                             onChange={(e) =>
-                                                setEditPhysicalExam((prev) => ({
-                                                    ...prev,
-                                                    [key]: e.target.value,
-                                                }))
+                                                setEditPhysicalExamRows((prev) =>
+                                                    prev.map((r) => r.id === row.id ? { ...r, label: e.target.value } : r)
+                                                )
                                             }
-                                            className="w-full text-xs text-[#2D2D2D] border border-neutral-200 rounded-lg px-2.5 py-1.5 focus:border-[#8B7CF6] outline-none"
+                                            placeholder="Vùng khám (VD: Họng)"
+                                            className="w-28 shrink-0 text-xs text-[#2D2D2D] border border-neutral-200 rounded-lg px-2.5 py-1.5 focus:border-[#8B7CF6] outline-none"
                                         />
+                                        <input
+                                            type="text"
+                                            value={row.value}
+                                            onChange={(e) =>
+                                                setEditPhysicalExamRows((prev) =>
+                                                    prev.map((r) => r.id === row.id ? { ...r, value: e.target.value } : r)
+                                                )
+                                            }
+                                            placeholder="Kết quả khám..."
+                                            className="flex-1 text-xs text-[#2D2D2D] border border-neutral-200 rounded-lg px-2.5 py-1.5 focus:border-[#8B7CF6] outline-none"
+                                        />
+                                        <button
+                                            onClick={() =>
+                                                setEditPhysicalExamRows((prev) => prev.filter((r) => r.id !== row.id))
+                                            }
+                                            className="w-7 h-7 mt-0.5 shrink-0 flex items-center justify-center text-neutral-300 hover:text-red-400 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                            title="Xóa dòng"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                        </button>
                                     </div>
                                 ))}
                             </div>
-                            <div className="flex gap-2 justify-end">
+
+                            {/* Add row button */}
+                            <button
+                                onClick={() =>
+                                    setEditPhysicalExamRows((prev) => [
+                                        ...prev,
+                                        { id: `pe-${Date.now()}`, label: '', value: '' },
+                                    ])
+                                }
+                                className="flex items-center gap-1.5 text-[11px] font-semibold text-[#8B7CF6] hover:text-[#7a6ae5] transition-colors cursor-pointer"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                Thêm vùng khám
+                            </button>
+
+                            <div className="flex gap-2 justify-end pt-1">
                                 <button
                                     onClick={() => handleCancel('physicalExam')}
                                     className="px-3 py-1.5 text-xs font-semibold text-neutral-500 hover:bg-neutral-100 rounded-lg transition-colors cursor-pointer"
@@ -285,27 +464,17 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
                                 </button>
                             </div>
                         </div>
-                    ) : (
+                    ) : displayPhysicalExamRows.length > 0 ? (
                         <div className="space-y-2">
-                            {record.physicalExam.throat && (
-                                <div className="flex gap-2 text-[13px]">
-                                    <span className="text-[#9C9C9C] w-14 shrink-0">Họng:</span>
-                                    <span className="text-[#2D2D2D] font-medium">{record.physicalExam.throat}</span>
+                            {displayPhysicalExamRows.map((row, i) => (
+                                <div key={i} className="flex gap-2 text-[13px]">
+                                    <span className="text-[#9C9C9C] shrink-0 capitalize min-w-[56px]">{row.label}:</span>
+                                    <span className="text-[#2D2D2D] font-medium">{row.value}</span>
                                 </div>
-                            )}
-                            <div className="flex gap-2 text-[13px]">
-                                <span className="text-[#9C9C9C] w-14 shrink-0">Phổi:</span>
-                                <span className="text-[#2D2D2D] font-medium">{record.physicalExam.lungs}</span>
-                            </div>
-                            <div className="flex gap-2 text-[13px]">
-                                <span className="text-[#9C9C9C] w-14 shrink-0">Tim:</span>
-                                <span className="text-[#2D2D2D] font-medium">{record.physicalExam.heart}</span>
-                            </div>
-                            <div className="flex gap-2 text-[13px]">
-                                <span className="text-[#9C9C9C] w-14 shrink-0">Bụng:</span>
-                                <span className="text-[#2D2D2D] font-medium">{record.physicalExam.abdomen}</span>
-                            </div>
+                            ))}
                         </div>
+                    ) : (
+                        <p className="text-[13px] text-[#ADADAD] italic">Chưa có dữ liệu khám lâm sàng</p>
                     )}
                 </SectionCard>
             </div>
@@ -611,12 +780,12 @@ export function RightMedicalArea({ patient, onUpdatePatient }: RightMedicalAreaP
                         <span className="text-[14px] font-bold text-[#2D2D2D]">{patient.name ?? 'Bệnh nhân'}</span>
                         {patient.insurance?.hasInsurance && (
                             <span className="text-[10px] font-bold text-[#22C55E] bg-[#F0FDF4] border border-[#BBF7D0] px-2 py-0.5 rounded-full">
-                                BHYT {patient.insurance.coverage}
+                                {patient.insurance.coverage}
                             </span>
                         )}
                     </div>
                     <p className="text-[11px] text-[#9C9C9C] mt-0.5 truncate">
-                        {patient.gender} · {patient.age} tuổi · Mã BN: {patient.code} · {patient.visitType}
+                        {patient.gender} · {patient.age} tuổi · CCCD: {patient.code} · {patient.visitType}
                         {patient.shortDiagnosis && (
                             <span className="text-[#555] ml-2">· {patient.shortDiagnosis}</span>
                         )}
@@ -624,9 +793,13 @@ export function RightMedicalArea({ patient, onUpdatePatient }: RightMedicalAreaP
                 </div>
 
                 {/* Search */}
-                <div className="flex items-center gap-2 bg-[#F5F5F8] rounded-xl px-3 py-1.5 text-[12px] text-[#ADADAD] w-44 shrink-0">
+                <div className="hidden lg:flex items-center gap-2 bg-[#F5F5F8] rounded-xl px-3 py-1.5 text-[12px] text-[#ADADAD] w-40 xl:w-56 shrink-0 transition-all">
                     <Search className="w-3.5 h-3.5 shrink-0" />
-                    Tìm trong hồ sơ...
+                    <input 
+                        type="text"
+                        placeholder="Tìm trong hồ sơ..."
+                        className="bg-transparent border-none outline-none w-full text-neutral-800 placeholder:text-[#ADADAD]"
+                    />
                 </div>
                 <button className="w-8 h-8 rounded-lg flex items-center justify-center text-[#ADADAD] hover:text-[#8B7CF6] hover:bg-[#F5F2FF] transition-colors shrink-0 cursor-pointer">
                     <Settings className="w-4 h-4" />
