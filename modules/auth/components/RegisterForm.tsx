@@ -53,15 +53,11 @@ export function RegisterForm() {
             setError('Vui lòng nhập email.');
             return;
         }
-        if (!form.phone.trim()) {
-            setError('Vui lòng nhập số điện thoại.');
-            return;
-        }
         if (form.password !== form.confirmPassword) {
             setError('Mật khẩu xác nhận không khớp.');
             return;
         }
-        if (!form.phone.trim() || form.phone.replace(/\D/g, '').length < 9) {
+        if (form.phone.trim() && form.phone.replace(/\D/g, '').length < 9) {
             setError('Vui lòng nhập số điện thoại hợp lệ.');
             return;
         }
@@ -116,7 +112,7 @@ export function RegisterForm() {
     }
 
     return (
-        <div className="w-full max-w-105 mx-auto">
+        <div className="w-full max-w-100 mx-auto">
             <div className="mb-8">
                 <div className="inline-flex items-center justify-center w-11 h-11 rounded-xl bg-brand-500 mb-5 shadow-md">
                     <Cross className="w-5 h-5 text-white" strokeWidth={2.5} />
@@ -136,25 +132,26 @@ export function RegisterForm() {
                 </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+            <form onSubmit={handleSubmit} className="space-y-5" noValidate>
                 <div className="space-y-1.5">
                     <label htmlFor="userName" className="block text-sm font-medium text-neutral-700">
+                        <span className="mr-1 text-xs text-red-500" aria-hidden="true">*</span>
                         Tên người dùng
                     </label>
                     <input
                         id="userName"
                         type="text"
                         required
-                        placeholder="DuongMinh"
                         value={form.userName}
                         onChange={(e) => update('userName', e.target.value)}
                         disabled={isPending}
-                        className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-neutral-900 placeholder-neutral-400 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
+                        className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-3 text-base sm:text-sm sm:py-2.5 text-neutral-900 placeholder-neutral-400 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
                     />
                 </div>
 
                 <div className="space-y-1.5">
                     <label htmlFor="reg-email" className="block text-sm font-medium text-neutral-700">
+                        <span className="mr-1 text-xs text-red-500" aria-hidden="true">*</span>
                         Email
                     </label>
                     <input
@@ -162,11 +159,10 @@ export function RegisterForm() {
                         type="email"
                         autoComplete="email"
                         required
-                        placeholder="you@example.com"
                         value={form.email}
                         onChange={(e) => update('email', e.target.value)}
                         disabled={isPending}
-                        className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-neutral-900 placeholder-neutral-400 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
+                        className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-3 text-base sm:text-sm sm:py-2.5 text-neutral-900 placeholder-neutral-400 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
                     />
                 </div>
 
@@ -177,11 +173,10 @@ export function RegisterForm() {
                         </label>
                         <select
                             id="gender"
-                            required
                             value={form.gender}
                             onChange={(e) => update('gender', e.target.value)}
                             disabled={isPending}
-                            className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-neutral-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
+                            className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-3 text-base sm:text-sm sm:py-2.5 text-neutral-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
                         >
                             <option value="MALE">Nam</option>
                             <option value="FEMALE">Nữ</option>
@@ -197,18 +192,17 @@ export function RegisterForm() {
                             type="text"
                             inputMode="tel"
                             maxLength={10}
-                            required
-                            placeholder="0947900432"
                             value={form.phone}
                             onChange={(e) => update('phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
                             disabled={isPending}
-                            className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-neutral-900 placeholder-neutral-400 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
+                            className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-3 text-base sm:text-sm sm:py-2.5 text-neutral-900 placeholder-neutral-400 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
                         />
                     </div>
                 </div>
 
                 <div className="space-y-1.5">
                     <label htmlFor="reg-password" className="block text-sm font-medium text-neutral-700">
+                        <span className="mr-1 text-xs text-red-500" aria-hidden="true">*</span>
                         Mật khẩu
                     </label>
                     <div className="relative">
@@ -217,14 +211,17 @@ export function RegisterForm() {
                             type={showPw ? 'text' : 'password'}
                             autoComplete="new-password"
                             required
-                            placeholder="..."
                             value={form.password}
                             onChange={(e) => update('password', e.target.value)}
                             disabled={isPending}
-                            className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 pr-11 text-sm text-neutral-900 placeholder-neutral-400 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
+                            className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-3 pr-12 text-base sm:text-sm sm:py-2.5 text-neutral-900 placeholder-neutral-400 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
                         />
-                        <button type="button" tabIndex={-1} onClick={() => setShowPw((v) => !v)}
-                            className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-neutral-400 hover:text-neutral-600">
+                        <button
+                            type="button"
+                            tabIndex={-1}
+                            onClick={() => setShowPw((v) => !v)}
+                            className="absolute inset-y-0 right-0 flex min-w-11 items-center justify-center text-neutral-400 hover:text-neutral-600 touch-manipulation"
+                        >
                             {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
                     </div>
@@ -232,6 +229,7 @@ export function RegisterForm() {
 
                 <div className="space-y-1.5">
                     <label htmlFor="confirmPassword" className="block text-sm font-medium text-neutral-700">
+                        <span className="mr-1 text-xs text-red-500" aria-hidden="true">*</span>
                         Xác nhận mật khẩu
                     </label>
                     <div className="relative">
@@ -240,14 +238,17 @@ export function RegisterForm() {
                             type={showConfirm ? 'text' : 'password'}
                             autoComplete="new-password"
                             required
-                            placeholder="..."
                             value={form.confirmPassword}
                             onChange={(e) => update('confirmPassword', e.target.value)}
                             disabled={isPending}
-                            className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 pr-11 text-sm text-neutral-900 placeholder-neutral-400 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
+                            className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-3 pr-12 text-base sm:text-sm sm:py-2.5 text-neutral-900 placeholder-neutral-400 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
                         />
-                        <button type="button" tabIndex={-1} onClick={() => setShowConfirm((v) => !v)}
-                            className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-neutral-400 hover:text-neutral-600">
+                        <button
+                            type="button"
+                            tabIndex={-1}
+                            onClick={() => setShowConfirm((v) => !v)}
+                            className="absolute inset-y-0 right-0 flex min-w-11 items-center justify-center text-neutral-400 hover:text-neutral-600 touch-manipulation"
+                        >
                             {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
                     </div>
@@ -256,14 +257,14 @@ export function RegisterForm() {
                 <button
                     type="submit"
                     disabled={isPending}
-                    className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="mt-1 flex w-full min-h-12 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-3 text-base sm:text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 active:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 touch-manipulation"
                 >
                     {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                     {isPending ? 'Đang đăng ký...' : 'Đăng ký'}
                 </button>
             </form>
 
-            <p className="mt-6 text-center text-xs text-neutral-400">
+            <p className="mt-8 text-center text-xs text-neutral-400 leading-relaxed">
                 Đã có tài khoản?{' '}
                 <Link href="/login" className="font-medium text-brand-500 hover:text-brand-600 transition-colors">
                     Đăng nhập

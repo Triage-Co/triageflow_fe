@@ -130,12 +130,11 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
 
     const navItems = NAV_BY_ROLE[user?.role?.toUpperCase() ?? ''] ?? NAV_BY_ROLE.default;
 
-    const isNavItemActive = (href: string) => {
-        if (href === '/reception') {
-            return pathname === '/reception';
-        }
-        return pathname === href || pathname.startsWith(`${href}/`);
-    };
+    const activeNavHref = navItems
+        .filter(({ href }) => pathname === href || pathname.startsWith(`${href}/`))
+        .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+
+    const isNavItemActive = (href: string) => href === activeNavHref;
 
     // Handle click outside dropdown
     useEffect(() => {
@@ -205,7 +204,7 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
                                 isCollapsed && 'justify-center px-0 w-10 mx-auto',
                                 isActive
                                     ? 'bg-[#EDE9FE] text-[#8B7CF6] font-semibold shadow-[inset_0_0_0_1px_rgba(139,124,246,0.08)]'
-                                    : 'text-[#4B5563] font-medium hover:bg-[#8B7CF6]/10 hover:text-[#7C3AED]',
+                                    : 'text-[#4B5563] font-medium hover:bg-[#ECECF3] hover:text-[#4B5563]',
                             )}
                         >
                             <Icon
