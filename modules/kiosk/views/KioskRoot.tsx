@@ -6,6 +6,7 @@ import { BlurBlob } from '../components/BlurBlob';
 import { Toast } from '../components/Toast';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { QRScannerModal } from '../modals/QRScannerModal';
+import { PaymentQRModal } from '../modals/PaymentQRModal';
 
 import { HomeMenuView } from './HomeMenuView';
 import { RegisterView } from './RegisterView';
@@ -15,6 +16,7 @@ import { QueueView } from './QueueView';
 import { MapView } from './MapView';
 import { PaymentView } from './PaymentView';
 import { SupportView } from './SupportView';
+import { PendingBillsView } from './PendingBillsView';
 
 export const KioskRoot: React.FC = () => {
   const currentView = useKioskStore((state) => state.currentView);
@@ -69,9 +71,11 @@ export const KioskRoot: React.FC = () => {
         {currentView === 'map' && <MapView />}
         {currentView === 'payment' && <PaymentView />}
         {currentView === 'support' && <SupportView />}
+        {currentView === 'pending_bills' && <PendingBillsView />}
       </main>
       {/* Global Modals */}
       <QRScannerModal />
+      <PaymentQRModal />
     </div>
   );
 };

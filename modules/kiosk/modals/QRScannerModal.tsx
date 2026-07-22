@@ -98,11 +98,19 @@ export const QRScannerModal: React.FC = () => {
         const patientId = authState.patientId || authState.citizenId;
         const target = targetViewAfterScan ?? 'register';
 
+        closeModal();
+
+        if (target === 'pending_bills') {
+          if (patientId) {
+            await useFlowStore.getState().fetchPendingPaymentSteps(patientId);
+          }
+          return;
+        }
+
         if (patientId && (target === 'patient_info' || target === 'queue' || target === 'doctor_route')) {
           await useFlowStore.getState().fetchActiveTicketForPatient(patientId);
         }
 
-        closeModal();
         navigateToView(target);
       } else {
         showToast('Xác thực căn cước công dân thất bại!', 'error');
@@ -224,11 +232,19 @@ export const QRScannerModal: React.FC = () => {
         const patientId = authState.patientId || authState.citizenId;
         const target = targetViewAfterScan ?? 'register';
 
+        closeModal();
+
+        if (target === 'pending_bills') {
+          if (patientId) {
+            await useFlowStore.getState().fetchPendingPaymentSteps(patientId);
+          }
+          return;
+        }
+
         if (patientId && (target === 'patient_info' || target === 'queue' || target === 'doctor_route')) {
           await useFlowStore.getState().fetchActiveTicketForPatient(patientId);
         }
 
-        closeModal();
         navigateToView(target);
       } else {
         setError('Xác thực căn cước thất bại. Vui lòng kiểm tra lại!');

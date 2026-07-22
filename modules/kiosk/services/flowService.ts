@@ -5,6 +5,7 @@ import {
   StepDetailResponseData,
   PatientFlowItem,
   StepDetailPatientResponseData,
+  PendingPaymentStep,
 } from '../types/flow.types';
 import { useAuthStore } from '../store/authStore';
 
@@ -55,6 +56,14 @@ export const flowService = {
   fetchStepDetail: async (stepId: string, token?: string) => {
     return apiClient.get<StepDetailResponseData>(
       `/api/step/account/${encodeURIComponent(stepId)}`,
+      { headers: getAuthHeaders(token) }
+    );
+  },
+
+  // Lấy danh sách các bước chưa thanh toán của bệnh nhân (GET /api/step?patient_id={patient_id})
+  getPendingPaymentSteps: async (patientId: string, token?: string) => {
+    return apiClient.get<PendingPaymentStep[]>(
+      `/api/step?patient_id=${encodeURIComponent(patientId)}`,
       { headers: getAuthHeaders(token) }
     );
   },

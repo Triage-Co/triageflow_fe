@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { TicketData, PaymentBill, PaymentMethod, RouteStepItem } from '../types/kiosk.types';
 import { BookingPaymentData } from '../types/booking.types';
+import { PendingPaymentStep } from '../types/flow.types';
 import { flowService } from '../services/flowService';
 import { useAuthStore } from './authStore';
 import { useKioskStore } from './kioskStore';
@@ -14,11 +15,17 @@ interface FlowStoreState {
   activeTicket: TicketData | null;
   routeSteps: RouteStepItem[];
   isPaymentChecking: boolean;
+  pendingPaymentSteps: PendingPaymentStep[];
+  isFetchingPendingSteps: boolean;
+  selectedPendingStep: PendingPaymentStep | null;
 
   setBookingPaymentState: (stepId: string, bookingId: string, paymentData: BookingPaymentData, patientId: string) => void;
   setPaymentMethod: (method: PaymentMethod | null) => void;
   fetchActiveTicketForPatient: (patientId: string) => Promise<boolean>;
   fetchDoctorRouteSteps: (patientId: string) => Promise<boolean>;
+  fetchPendingPaymentSteps: (patientId: string) => Promise<boolean>;
+  selectPendingStep: (step: PendingPaymentStep) => void;
+  setSelectedPendingStep: (step: PendingPaymentStep | null) => void;
   verifyPaymentAndIssueTicket: () => Promise<boolean>;
   payBill: () => Promise<void>;
   resetFlow: () => void;
@@ -33,6 +40,9 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
   activeTicket: null,
   routeSteps: [],
   isPaymentChecking: false,
+  pendingPaymentSteps: [],
+  isFetchingPendingSteps: false,
+  selectedPendingStep: null,
 
   resetFlow: () => {
     set({
@@ -44,10 +54,46 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
       activeTicket: null,
       routeSteps: [],
       isPaymentChecking: false,
+      pendingPaymentSteps: [],
+      isFetchingPendingSteps: false,
+      selectedPendingStep: null,
     });
   },
 
   setPaymentMethod: (method) => set({ paymentMethod: method }),
+
+  setSelectedPendingStep: (step) => set({ selectedPendingStep: step }),
+
+  selectPendingStep: (step) => {
+    set({
+      selectedPendingStep: step,
+      activeStepId: step.step_id,
+      activeBookingId: step.flow_id,
+    });
+  },
+
+  fetchPendingPaymentSteps: async (patientId: string) => {
+    const kioskState = useKioskStore.getState();
+    set({ isFetchingPendingSteps: true });
+    kioskState.navigateToView('pending_bills');
+
+    try {
+      const response = await flowService.getPendingPaymentSteps(patientId);
+      const data: any = (response as any)?.data || response || [];
+      const stepsArray: PendingPaymentStep[] = Array.isArray(data) ? data : [];
+      const pending = stepsArray.filter((s) => s.payment_status === 'PENDING');
+
+      set({ pendingPaymentSteps: pending });
+      return true;
+    } catch (error: any) {
+      console.warn('Lỗi khi lấy danh sách bước chưa thanh toán:', error?.message || error);
+      kioskState.showToast(error?.message || 'Lỗi khi tải danh sách bước thanh toán!', 'error');
+      set({ pendingPaymentSteps: [] });
+      return false;
+    } finally {
+      set({ isFetchingPendingSteps: false });
+    }
+  },
 
   setBookingPaymentState: (stepId, bookingId, paymentData, patientId) => {
     const authPatientInfo = useAuthStore.getState().patientInfo;
@@ -171,37 +217,35 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
     kioskState.setLoading(true, 'Đang tra cứu phiếu khám...');
 
     try {
-      get().fetchDoctorRouteSteps(patientId).catch(() => {});
-
-      // 1. Gọi Bước 1 lấy step_id từ flow active
-      let stepId: string | null = null;
+      // 1. Gọi Bước 1 lấy active flow kiosk của bệnh nhân
+      let flowRes: any = null;
       try {
-        const flowRes = await flowService.getActivePatientFlowKiosk(patientId);
-        const flowData: any = (flowRes as any)?.data || flowRes;
-        stepId = flowData?.step_id || (Array.isArray(flowData) ? flowData[0]?.steps?.[0]?.step_id : null);
-      } catch (e) {
-        console.warn('Thử lấy step_id từ active kiosk flow không thành công, thử getPatientFlows:', e);
+        flowRes = await flowService.getActivePatientFlowKiosk(patientId);
+      } catch (e: any) {
+        console.warn('Lỗi khi lấy active kiosk flow:', e?.message || e);
       }
 
-      if (!stepId) {
-        try {
-          const flowsRes = await flowService.getPatientFlows(patientId);
-          const flowsData: any = (flowsRes as any)?.data || flowsRes;
-          if (Array.isArray(flowsData) && flowsData.length > 0) {
-            const activeFlow = flowsData.find((f: any) => f.status === 'IN_PROGRESS') || flowsData[0];
-            if (activeFlow && Array.isArray(activeFlow.steps) && activeFlow.steps.length > 0) {
-              stepId = activeFlow.steps[0].step_id;
-            }
-          }
-        } catch (e) {
-          console.warn('Lỗi lấy patient flows:', e);
-        }
-      }
+      const flowData: any = flowRes && (flowRes as any)?.data !== undefined ? (flowRes as any).data : flowRes;
 
-      if (!stepId) {
-        kioskState.showToast('Bệnh nhân chưa có lượt khám nào đang diễn ra!', 'info');
+      // Nếu API trả về thành công nhưng data rỗng [] -> Bệnh nhân chưa có phiếu khám hôm nay -> DỪNG NGAY
+      const isEmpty = !flowData || (Array.isArray(flowData) && flowData.length === 0);
+      if (isEmpty) {
+        set({ activeTicket: null, routeSteps: [] });
+        kioskState.showToast('Bạn chưa có phiếu khám hôm nay!', 'info');
         return false;
       }
+
+      // Lấy stepId từ flowData
+      let stepId: string | null = flowData?.step_id || (Array.isArray(flowData) ? flowData[0]?.steps?.[0]?.step_id : null);
+
+      if (!stepId) {
+        set({ activeTicket: null, routeSteps: [] });
+        kioskState.showToast('Bạn chưa có phiếu khám hôm nay!', 'info');
+        return false;
+      }
+
+      // Nạp lộ trình bác sĩ chỉ định nếu có lượt khám active
+      get().fetchDoctorRouteSteps(patientId).catch(() => {});
 
       // 2. Gọi Bước 2 lấy chi tiết step theo GET /api/step/{step_id}/patient/{patient_id}
       const stepRes = await flowService.getStepDetailByPatient(stepId, patientId);

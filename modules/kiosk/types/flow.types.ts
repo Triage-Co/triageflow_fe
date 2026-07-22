@@ -162,3 +162,19 @@ export interface StepDetailPatientResponseData {
 }
 
 export interface ActiveFlowKioskResponseData extends StepDetailPatientResponseData {}
+
+export interface PendingPaymentStep {
+  step_id: string;
+  step_name: string;
+  flow_id: string;
+  room_id: string;
+  staff_id: string;
+  step_status: string;
+  qr_text: string;
+  docNo: number;
+  payment_status: string;
+  created_at: string;
+  updated_at: string;
+  parent_step_id?: string | null;
+  physicalRoomId?: string | null;
+}

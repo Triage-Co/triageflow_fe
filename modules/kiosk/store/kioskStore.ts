@@ -109,9 +109,13 @@ export const useKioskStore = create<KioskStoreState>((set, get) => ({
       case 'payment':
       case 'pay':
         if (!authState.citizenId && !authState.authToken) {
-          get().openModal('scan_cccd', 'payment');
+          get().openModal('scan_cccd', 'pending_bills');
         } else {
-          get().navigateToView('payment');
+          if (patientId) {
+            useFlowStore.getState().fetchPendingPaymentSteps(patientId);
+          } else {
+            get().openModal('scan_cccd', 'pending_bills');
+          }
         }
         break;
       case 'support':

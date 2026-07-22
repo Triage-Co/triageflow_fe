@@ -6,7 +6,8 @@ export type ActiveView =
   | 'queue'
   | 'map'
   | 'payment'
-  | 'support';
+  | 'support'
+  | 'pending_bills';
 
 export type ActiveModal =
   | null

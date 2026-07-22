@@ -101,8 +101,18 @@ export const useBookingStore = create<BookingStoreState>((set, get) => ({
         return false;
       }
     } catch (error: any) {
-      console.error('Lỗi khi thực hiện Auto Booking:', error);
-      kioskState.showToast(error.message || 'Lỗi kết nối khi tự động xếp phòng!', 'error');
+      console.warn('Lỗi khi thực hiện Auto Booking:', error?.message || error);
+      const errorMsg = error?.message || 'Lỗi kết nối khi tự động xếp phòng!';
+      kioskState.showToast(errorMsg, 'error');
+
+      // Tự động chuyển sang bước chọn Bác sĩ thủ công nếu không xếp slot tự động được
+      try {
+        const mainSpecialtyCode = useTriageStore.getState().recommendedSpecialists[0]?.specialty_code || 'SP_20';
+        get().fetchDoctorsAndSlots(mainSpecialtyCode);
+        kioskState.setAIRegisterStep('doctor_select');
+      } catch (e) {
+        // ignore fallback error
+      }
       return false;
     } finally {
       set({ isBookingProcessing: false });
@@ -143,8 +153,8 @@ export const useBookingStore = create<BookingStoreState>((set, get) => ({
         return false;
       }
     } catch (error: any) {
-      console.error('Lỗi khi Đặt lịch thủ công:', error);
-      kioskState.showToast(error.message || 'Lỗi máy chủ khi đặt lịch khám!', 'error');
+      console.warn('Lỗi khi Đặt lịch thủ công:', error?.message || error);
+      kioskState.showToast(error?.message || 'Lỗi máy chủ khi đặt lịch khám!', 'error');
       return false;
     } finally {
       set({ isBookingProcessing: false });

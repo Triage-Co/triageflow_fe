@@ -8,7 +8,9 @@ import {
   Clock, 
   User,
   X,
-  CheckCircle2
+  CheckCircle2,
+  QrCode,
+  FileText
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useFlowStore } from '../store/flowStore';
@@ -243,10 +245,42 @@ export const PatientInfoView: React.FC = () => {
         </button>
       </div>
 
-      {/* Main Grid (fills remaining height) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
-        {/* LEFT COLUMN (4 Cols) */}
-        <div className="lg:col-span-4 flex flex-col min-h-0 gap-6">
+      {/* Empty State when no active ticket */}
+      {!activeTicket && !selectedDoctor ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-14 bg-white/90 backdrop-blur-xl rounded-[36px] border border-neutral-100 shadow-2xl space-y-6 text-center max-w-2xl mx-auto w-full my-auto">
+          <div className="w-24 h-24 rounded-3xl bg-blue-50 text-[#155DFC] flex items-center justify-center shadow-inner">
+            <FileText className="w-12 h-12" strokeWidth={2.2} />
+          </div>
+
+          <div className="space-y-2 max-w-lg">
+            <h3 className="text-2xl sm:text-3xl font-black text-[#1E2939] tracking-tight">
+              Bạn chưa có phiếu khám hôm nay
+            </h3>
+            <p className="text-sm sm:text-base text-neutral-500 font-bold leading-relaxed">
+              Hệ thống không tìm thấy lượt khám nào đang diễn ra của bạn. Vui lòng đăng ký khám bệnh mới để nhận phiếu khám.
+            </p>
+          </div>
+
+          <div className="flex gap-4 pt-2">
+            <button
+              onClick={goHome}
+              className="px-8 py-4 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-2xl font-extrabold text-base transition-all cursor-pointer"
+            >
+              Về trang chủ Kiosk
+            </button>
+            <button
+              onClick={() => navigateToView('register')}
+              className="px-8 py-4 bg-[#155DFC] hover:bg-blue-700 active:scale-95 text-white rounded-2xl font-black text-base shadow-xl shadow-blue-500/25 transition-all cursor-pointer"
+            >
+              Đăng ký khám ngay →
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* Main Grid (fills remaining height) */
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
+          {/* LEFT COLUMN (4 Cols) */}
+          <div className="lg:col-span-4 flex flex-col min-h-0 gap-6">
           {/* Card 1: Điểm đến hiện tại (Solid Blue Gradient Card) */}
           <div className="bg-gradient-to-br from-[#77A5F8] to-[#5588EC] text-white rounded-[28px] p-6 shadow-xl flex flex-col justify-between flex-1 space-y-4">
             <div className="space-y-2">
@@ -381,6 +415,7 @@ export const PatientInfoView: React.FC = () => {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 };
