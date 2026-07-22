@@ -87,7 +87,9 @@ interface MedicalRecordContentProps {
 
 function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContentProps) {
     const record = patient.medicalRecord;
+    const user = useAuthStore((s) => s.user);
     const accessToken = useAuthStore((s) => s.accessToken);
+    const isReadOnly = user?.role === 'NURSE';
     const [sessionData, setSessionData] = useState<VisitSessionData | null>(null);
 
     const initialPatientId = patient.patientId || (patient as unknown as Record<string, unknown>).patient_id as string | undefined;
@@ -275,9 +277,8 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
         <div className="space-y-4">
             {/* Lý do khám */}
             <SectionCard
-                title="Lý do khám"
-                subtitle="Mô tả ngắn gọn triệu chứng chính"
-                onEdit={() => setEditingSection('visitReason')}
+                title="Lý do khám bệnh"
+                onEdit={!isReadOnly ? () => setEditingSection('visitReason') : undefined}
             >
                 {editingSection === 'visitReason' ? (
                     <div className="space-y-3">
@@ -311,7 +312,7 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
                 title="Quá trình bệnh lý và diễn biến lâm sàng"
                 subtitle="Mô tả chi tiết diễn biến bệnh"
                 minH="110px"
-                onEdit={() => setEditingSection('clinicalProgression')}
+                onEdit={!isReadOnly ? () => setEditingSection('clinicalProgression') : undefined}
             >
                 {editingSection === 'clinicalProgression' ? (
                     <div className="space-y-3">
@@ -345,7 +346,7 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
 
             {/* Two-column: Tiểu sử & Khám lâm sàng */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <SectionCard title="Tiểu sử bệnh" onEdit={() => setEditingSection('medicalHistory')}>
+                <SectionCard title="Tiểu sử bệnh" onEdit={!isReadOnly ? () => setEditingSection('medicalHistory') : undefined}>
                     {editingSection === 'medicalHistory' ? (
                         <div className="space-y-3">
                             <textarea
@@ -385,14 +386,14 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
 
                 <SectionCard
                     title="Khám lâm sàng"
-                    onEdit={() => {
+                    onEdit={!isReadOnly ? () => {
                         setEditPhysicalExamRows(
                             displayPhysicalExamRows.length > 0
                                 ? displayPhysicalExamRows.map((r, idx) => ({ id: `pe-${idx}`, label: r.label, value: r.value }))
                                 : [{ id: 'pe-0', label: '', value: '' }]
                         );
                         setEditingSection('physicalExam');
-                    }}
+                    } : undefined}
                 >
                     {editingSection === 'physicalExam' ? (
                         <div className="space-y-3">

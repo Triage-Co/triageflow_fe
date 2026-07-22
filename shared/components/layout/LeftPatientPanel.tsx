@@ -53,8 +53,10 @@ interface LeftPanelProps {
 }
 
 export function LeftPatientPanel({ patient, isOpen }: LeftPanelProps) {
-    const [tab, setTab] = useState<SidePanelTab>('info');
+    const user = useAuthStore((s) => s.user);
     const accessToken = useAuthStore((s) => s.accessToken);
+    const isReadOnly = user?.role === 'NURSE';
+    const [tab, setTab] = useState<SidePanelTab>('info');
     const [sessionData, setSessionData] = useState<VisitSessionData | null>(null);
     const [editingField, setEditingField] = useState<EditingField>(null);
     const [isSaving, setIsSaving] = useState(false);
@@ -334,7 +336,7 @@ export function LeftPatientPanel({ patient, isOpen }: LeftPanelProps) {
                                 <div className="bg-neutral-50/70 border border-neutral-100 rounded-[16px] p-4">
                                     <div className="flex items-center justify-between mb-1">
                                         <SectionLabel>Lý do đến khám</SectionLabel>
-                                        {sessionData?.visit_session_id && editingField !== 'visitReason' && (
+                                        {sessionData?.visit_session_id && editingField !== 'visitReason' && !isReadOnly && (
                                             <button
                                                 onClick={() => { setEditVisitReason(sessionData?.chief_complaint || displayVisitReason); setEditingField('visitReason'); }}
                                                 className="w-5 h-5 flex items-center justify-center text-neutral-300 hover:text-[#8B7CF6] transition-colors cursor-pointer"
@@ -377,7 +379,7 @@ export function LeftPatientPanel({ patient, isOpen }: LeftPanelProps) {
                                 <div className="bg-neutral-50/70 border border-neutral-100 rounded-[16px] p-4">
                                     <div className="flex items-center justify-between mb-2">
                                         <SectionLabel>Sinh hiệu</SectionLabel>
-                                        {sessionData?.visit_session_id && editingField !== 'vitals' && (
+                                        {sessionData?.visit_session_id && editingField !== 'vitals' && !isReadOnly && (
                                             <button
                                                 onClick={() => setEditingField('vitals')}
                                                 className="w-5 h-5 flex items-center justify-center text-neutral-300 hover:text-[#8B7CF6] transition-colors cursor-pointer"

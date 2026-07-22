@@ -147,12 +147,7 @@ export function AdminStaffDetailPage() {
                             {/* Header Icon */}
                             <div className="flex flex-col items-center justify-center gap-2 mb-8">
                                 <div className="w-20 h-20 rounded-3xl bg-[#F5F2FF] border-2 border-white flex items-center justify-center shadow-sm select-none overflow-hidden">
-                                    {staff.account?.avatar ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img src={staff.account.avatar} alt="Avatar" className="w-full h-full object-cover" />
-                                    ) : (
-                                        <UserCheck className="w-9 h-9 text-[#8B7CF6]" />
-                                    )}
+                                    <UserCheck className="w-9 h-9 text-[#8B7CF6]" />
                                 </div>
                                 <h2 className="text-[18px] font-bold text-[#2D2D2D] mt-2">{staff.full_name}</h2>
                                 <div className="flex gap-2 items-center">

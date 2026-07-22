@@ -22,14 +22,14 @@ import type { HospitalRoom, Specialty } from '../types/room.types';
 
 /* ─── Specialty Helpers ─────────────────────────────────────────────────────── */
 
-/** Trả về tên chuyên khoa từ nested specialty object, fallback lookup trong danh sách chuyên khoa */
 const getSpecialtyName = (room: HospitalRoom, specialties: Specialty[]): string => {
     if (room.specialty?.specialty_name) return room.specialty.specialty_name;
     const found = specialties.find((s) => s.specialty_id === room.specialty_id);
     if (found?.specialty_name) return found.specialty_name;
     if (room.specialty?.specialty_code) return room.specialty.specialty_code;
     if (found?.specialty_code) return found.specialty_code;
-    return `ID: ${room.specialty_id.slice(0, 8)}…`;
+    if (room.specialty_id) return `ID: ${room.specialty_id.slice(0, 8)}…`;
+    return 'Chưa xác định';
 };
 
 /** Trả về mã chuyên khoa từ nested specialty object, fallback lookup trong danh sách chuyên khoa */
@@ -326,11 +326,21 @@ export function AdminRoomsPage() {
                                                     {(currentPage - 1) * ITEMS_PER_PAGE + index + 1}
                                                 </td>
                                                 <td className="px-5 py-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-9 h-9 rounded-xl bg-[#F5F2FF] border border-[#E0DCFB] flex items-center justify-center shrink-0">
-                                                            <Home className="w-4 h-4 text-[#8B7CF6]" />
+                                                    <div
+                                                        onClick={() => router.push(`/admin/rooms/${room.room_id}`)}
+                                                        className="flex items-center gap-3 cursor-pointer group/room"
+                                                    >
+                                                        <div className="w-9 h-9 rounded-xl bg-[#F5F2FF] border border-[#E0DCFB] flex items-center justify-center shrink-0 group-hover/room:bg-[#8B7CF6] transition-colors">
+                                                            <Home className="w-4 h-4 text-[#8B7CF6] group-hover/room:text-white transition-colors" />
                                                         </div>
-                                                        <span className="text-[13px] font-bold text-[#2D2D2D]">{room.room_name}</span>
+                                                        <div>
+                                                            <span className="text-[13px] font-bold text-[#2D2D2D] group-hover/room:text-[#8B7CF6] transition-colors block">
+                                                                {room.room_name}
+                                                            </span>
+                                                            <span className="text-[10px] text-[#8B7CF6] font-semibold opacity-0 group-hover/room:opacity-100 transition-opacity">
+                                                                Xem chi tiết & Ca trực →
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                 </td>
                                                 <td className="px-5 py-4">

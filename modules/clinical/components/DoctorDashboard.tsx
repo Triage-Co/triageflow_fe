@@ -14,7 +14,9 @@ import { Loader2, AlertCircle } from 'lucide-react';
 export function DoctorDashboard() {
     const router = useRouter();
     const { openTab } = usePatientTabsStore();
+    const user = useAuthStore((s) => s.user);
     const accessToken = useAuthStore((s) => s.accessToken);
+    const basePath = user?.role === 'NURSE' ? '/nurse' : '/doctor';
 
     // Generate tabs: 3 past days + today + 3 future days — timezone-safe
     const dateTabs = useMemo(() => {
@@ -97,7 +99,7 @@ export function DoctorDashboard() {
 
     const handleSelectPatient = (patient: Patient) => {
         openTab({ id: patient.id, name: patient.name, stt: patient.stt });
-        router.push(`/doctor/${patient.id}`);
+        router.push(`${basePath}/${patient.id}`);
     };
 
     return (

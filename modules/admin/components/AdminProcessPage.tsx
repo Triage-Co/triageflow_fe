@@ -259,7 +259,7 @@ export function AdminProcessPage() {
     };
 
     return (
-        <div className="min-h-screen bg-[#F8FAFC] p-6 lg:p-8 space-y-6">
+        <div className="flex-1 h-full overflow-y-auto bg-[#F8FAFC] p-6 lg:p-8 space-y-6">
             {/* Header section matching Figma */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-6 rounded-2xl border border-neutral-200/80 shadow-xs">
                 <div>
@@ -364,7 +364,7 @@ export function AdminProcessPage() {
                 </div>
             ) : (
                 <div className="space-y-4">
-                    {paginatedTemplates.map((template) => {
+                    {filteredTemplates.map((template) => {
                         const templateId = template.template_id || template.id || '';
                         const tRecord = template as unknown as Record<string, unknown>;
                         const templateName = template.name || (tRecord.template_name as string) || (tRecord.flow_name as string) || 'Quy trình chưa đặt tên';
@@ -374,9 +374,6 @@ export function AdminProcessPage() {
                                 ? template.is_active
                                 : (template.status === 'INACTIVE' || template.status === false ? false : true);
                         const stepsCount = steps.length;
-                        const usageText = template.usage_count
-                            ? `Được sử dụng ${template.usage_count} lần`
-                            : 'Được sử dụng 245 lần';
 
                         return (
                             <div
@@ -389,7 +386,6 @@ export function AdminProcessPage() {
                                         <h3 className="text-lg font-bold text-neutral-900 tracking-tight">
                                             {templateName}
                                         </h3>
-                                        <p className="text-xs text-neutral-400 mt-0.5">{usageText}</p>
                                     </div>
 
                                     <span
@@ -491,47 +487,6 @@ export function AdminProcessPage() {
                             </div>
                         );
                     })}
-
-                    {/* Pagination Bar */}
-                    {filteredTemplates.length > 0 && (
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-neutral-200/80 shadow-xs">
-                            <p className="text-xs text-neutral-500">
-                                Hiển thị <span className="font-semibold text-neutral-900">{startIndex + 1}</span> - <span className="font-semibold text-neutral-900">{endIndex}</span> trên tổng số <span className="font-semibold text-neutral-900">{filteredTemplates.length}</span> quy trình
-                            </p>
-                            {totalPages > 1 && (
-                                <div className="flex items-center gap-1.5">
-                                    <button
-                                        disabled={currentPage === 1}
-                                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                                        className="p-2 rounded-xl border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
-                                    >
-                                        <ChevronLeft className="w-4 h-4" />
-                                    </button>
-
-                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                                        <button
-                                            key={page}
-                                            onClick={() => setCurrentPage(page)}
-                                            className={`w-9 h-9 rounded-xl text-xs font-semibold transition cursor-pointer ${currentPage === page
-                                                    ? 'bg-purple-600 text-white shadow-xs'
-                                                    : 'bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-50'
-                                                }`}
-                                        >
-                                            {page}
-                                        </button>
-                                    ))}
-
-                                    <button
-                                        disabled={currentPage === totalPages}
-                                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                                        className="p-2 rounded-xl border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
-                                    >
-                                        <ChevronRight className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    )}
                 </div>
             )}
 

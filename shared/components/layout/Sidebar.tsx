@@ -39,15 +39,15 @@ interface NavItem {
 
 const NAV_BY_ROLE: Record<string, NavItem[]> = {
     DOCTOR: [
-        { label: 'Danh sách bệnh nhân', href: '/doctor', icon: LayoutDashboard },
+        { label: 'Danh sách bệnh nhân', href: '/doctor/dashboard', icon: LayoutDashboard },
         { label: 'Thông báo', href: '/doctor/notification', icon: Bell },
         { label: 'Cài đặt', href: '/doctor/setting', icon: Settings },
     ],
     NURSE: [
-        { label: 'Danh sách bệnh nhân', href: '/doctor', icon: LayoutDashboard },
+        { label: 'Danh sách bệnh nhân', href: '/nurse/dashboard', icon: LayoutDashboard },
         { label: 'Tiếp nhận', href: '/reception', icon: UserCheck },
-        { label: 'Thông báo', href: '/doctor/notification', icon: Bell },
-        { label: 'Cài đặt', href: '/doctor/setting', icon: Settings },
+        { label: 'Thông báo', href: '/nurse/notification', icon: Bell },
+        { label: 'Cài đặt', href: '/nurse/setting', icon: Settings },
     ],
     RECEPTIONIST: [
         { label: 'Tổng quan', href: '/reception', icon: LayoutDashboard },
@@ -72,8 +72,15 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
         { label: 'Thông báo', href: '/notifications', icon: Bell },
         { label: 'Cài đặt', href: '/settings', icon: Settings },
     ],
+    USER: [
+        { label: 'Hàng chờ', href: '/queue', icon: LayoutDashboard },
+        { label: 'Điều hướng', href: '/navigation', icon: Map },
+        { label: 'Thanh toán', href: '/payment', icon: CreditCard },
+        { label: 'Kết quả', href: '/results', icon: FlaskConical },
+        { label: 'Cài đặt', href: '/settings', icon: Settings },
+    ],
     ADMIN: [
-        { label: 'Tổng quan', href: '/dashboard', icon: LayoutDashboard },
+        { label: 'Tổng quan', href: '/admin/dashboard', icon: LayoutDashboard },
         { label: 'Biểu đồ nhiệt', href: '/admin/heatmap', icon: Activity },
         { label: 'Cấu hình bản đồ', href: '/admin/map', icon: Map },
         { label: 'Hàng chờ bệnh nhân', href: '/admin/queue', icon: ListOrdered },
@@ -82,15 +89,19 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
         { label: 'Quản lý người dùng', href: '/admin/users', icon: Users },
         { label: 'Quản lý phòng khám', href: '/admin/rooms', icon: Home },
         { label: 'Quản lý nhân viên', href: '/admin/staff', icon: UserCheck },
-        { label: 'Ca trực', href: '/admin/shift', icon: CalendarClock },
         { label: 'Cài đặt', href: '/admin/settings', icon: Settings },
     ],
     default: [
-        { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+        { label: 'Danh sách bệnh nhân', href: '/doctor/dashboard', icon: LayoutDashboard },
         { label: 'Thông báo', href: '/notifications', icon: Bell },
         { label: 'Cài đặt', href: '/settings', icon: Settings },
     ],
 };
+
+function normalizeRoleKey(role?: string): string {
+    if (!role) return '';
+    return role.trim().toUpperCase().replace(/^ROLE_/, '');
+}
 
 const ROLE_LABELS: Record<string, string> = {
     RECEPTIONIST: 'Lễ tân',
@@ -128,7 +139,8 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
     const isCollapsed = collapsed !== undefined ? collapsed : internalCollapsed;
     const handleToggle = onToggle ?? (() => setInternalCollapsed(v => !v));
 
-    const navItems = NAV_BY_ROLE[user?.role?.toUpperCase() ?? ''] ?? NAV_BY_ROLE.default;
+    const roleKey = normalizeRoleKey(user?.role);
+    const navItems = NAV_BY_ROLE[roleKey] ?? NAV_BY_ROLE.default;
 
     const activeNavHref = navItems
         .filter(({ href }) => pathname === href || pathname.startsWith(`${href}/`))

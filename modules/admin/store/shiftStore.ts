@@ -12,6 +12,7 @@ export interface ShiftState {
 export interface ShiftActions {
     fetchShifts: (token: string) => Promise<void>;
     createShift: (data: CreateShiftDto, token: string) => Promise<void>;
+    updateShift: (id: string, data: Partial<CreateShiftDto>, token: string) => Promise<void>;
     deleteShift: (id: string, token: string) => Promise<void>;
     clearError: () => void;
 }
@@ -53,6 +54,22 @@ export const useShiftStore = create<ShiftStore>()(
                         error: err instanceof Error ? err.message : 'Không thể tạo ca trực mới.',
                         isLoading: false,
                     }, false, 'createShift/failure');
+                    throw err;
+                }
+            },
+
+            updateShift: async (id: string, data: Partial<CreateShiftDto>, token: string) => {
+                set({ isLoading: true, error: null }, false, 'updateShift/pending');
+                try {
+                    const res = await shiftService.updateShift(id, data, token);
+                    const current = get().shifts;
+                    const updated = current.map((s) => (s.shift_id === id ? { ...s, ...res.data } : s));
+                    set({ shifts: updated, isLoading: false }, false, 'updateShift/success');
+                } catch (err) {
+                    set({
+                        error: err instanceof Error ? err.message : 'Không thể cập nhật ca trực.',
+                        isLoading: false,
+                    }, false, 'updateShift/failure');
                     throw err;
                 }
             },
