@@ -34,7 +34,7 @@ export const PendingBillsView: React.FC = () => {
             Thanh toán viện phí & dịch vụ
           </h2>
           <p className="text-sm text-neutral-500 font-bold mt-1">
-            Vui lòng chọn dịch vụ chưa thanh toán bên dưới để mở mã VietQR
+            Vui lòng chọn dịch vụ chưa thanh toán bên dưới để mở mã QR thanh toán
           </p>
         </div>
       </div>

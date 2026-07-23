@@ -49,7 +49,7 @@ export const HomeMenuView: React.FC = () => {
             onClick={() => selectHomeOption('payment')}
             icon={<Wallet className="w-10 h-10 text-[#155DFC] group-active:text-white" strokeWidth={2.2} />}
             title="Thanh toán"
-            description="Quét mã VietQR thanh toán viện phí"
+            description="Quét mã QR thanh toán viện phí"
             className="w-full sm:w-[calc(50%-16px)] lg:w-[calc(33.333%-22px)]"
           />
 

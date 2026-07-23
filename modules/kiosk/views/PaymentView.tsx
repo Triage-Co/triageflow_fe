@@ -49,7 +49,7 @@ export const PaymentView: React.FC = () => {
         </button>
         <h2 className="text-3xl font-black text-[#1E2939] tracking-tight">
           {paymentMethod === null && 'Thanh toán viện phí'}
-          {paymentMethod === 'bank' && 'Thanh toán VietQR'}
+          {paymentMethod === 'bank' && 'Thanh toán chuyển khoản QR'}
           {paymentMethod === 'counter' && 'Hỗ trợ thanh toán tại quầy'}
         </h2>
       </div>
@@ -58,46 +58,46 @@ export const PaymentView: React.FC = () => {
       {paymentMethod === null && (
         <div className="bg-white/80 backdrop-blur-md rounded-[32px] p-10 shadow-xl border border-neutral-100 text-center space-y-8 max-w-3xl mx-auto my-auto w-full">
           <div className="space-y-2">
-            <h3 className="text-xl font-extrabold text-[#1E2939]">Chọn phương thức thanh toán</h3>
-            <p className="text-xs text-neutral-500 font-medium">Vui lòng chọn cách thanh toán phù hợp với bạn</p>
+            <h3 className="text-2xl sm:text-3xl font-black text-[#1E2939] tracking-tight">Chọn hình thức thanh toán</h3>
+            <p className="text-sm text-neutral-500 font-bold">Vui lòng chọn ngân hàng chuyển khoản hoặc đóng tại quầy</p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-xl mx-auto">
-            {/* Card 1: Ngân hàng VietQR */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-4">
+            {/* Card 1: Ngân hàng QR */}
             <button
               onClick={() => setPaymentMethod('bank')}
-              className="p-8 bg-white rounded-[32px] border border-neutral-200/80 shadow-md hover:shadow-xl hover:scale-[1.03] active:scale-[0.98] transition-all cursor-pointer flex flex-col items-center text-center space-y-4 group"
+              className="group bg-white hover:bg-gradient-to-br hover:from-white hover:to-blue-50/50 rounded-3xl p-6 border border-neutral-200/80 hover:border-blue-300 shadow-sm hover:shadow-lg transition-all text-left flex flex-col justify-between min-h-[160px] cursor-pointer"
             >
-              <div className="w-20 h-20 rounded-2xl bg-blue-50 text-[#155DFC] flex items-center justify-center group-hover:scale-110 transition-transform">
-                <QrCode className="w-10 h-10" />
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#155DFC] flex items-center justify-center">
+                <CreditCard className="w-6 h-6" />
               </div>
               <div className="space-y-1">
-                <h4 className="font-extrabold text-[#1E2939] text-base">Thanh toán bằng ngân hàng</h4>
-                <p className="text-xs text-neutral-400 font-medium">Quét mã </p>
+                <h4 className="font-extrabold text-[#1E2939] text-base">Chuyển khoản QR</h4>
+                <p className="text-xs text-neutral-400 font-medium">Quét mã QR bằng ứng dụng ngân hàng di động của bạn</p>
               </div>
             </button>
 
-            {/* Card 2: Tiền mặt tại quầy */}
+            {/* Card 2: Quầy */}
             <button
               onClick={() => setPaymentMethod('counter')}
-              className="p-8 bg-white rounded-[32px] border border-neutral-200/80 shadow-md hover:shadow-xl hover:scale-[1.03] active:scale-[0.98] transition-all cursor-pointer flex flex-col items-center text-center space-y-4 group"
+              className="group bg-white hover:bg-gradient-to-br hover:from-white hover:to-amber-50/50 rounded-3xl p-6 border border-neutral-200/80 hover:border-amber-300 shadow-sm hover:shadow-lg transition-all text-left flex flex-col justify-between min-h-[160px] cursor-pointer"
             >
-              <div className="w-20 h-20 rounded-2xl bg-blue-50 text-[#155DFC] flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Wallet className="w-10 h-10" />
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                <Wallet className="w-6 h-6" />
               </div>
               <div className="space-y-1">
                 <h4 className="font-extrabold text-[#1E2939] text-base">Thanh toán tại quầy</h4>
-                <p className="text-xs text-neutral-400 font-medium">Thanh toán tiền mặt tại quầy thu ngân</p>
+                <p className="text-xs text-neutral-400 font-medium">Nhận số thứ tự đóng tiền trực tiếp tại quầy thanh toán</p>
               </div>
             </button>
           </div>
         </div>
       )}
 
-      {/* STATE 2: THANH TOÁN VIETQR CHUẨN ĐỘNG */}
+      {/* STATE 2: THANH TOÁN QR CHUẨN ĐỘNG */}
       {paymentMethod === 'bank' && (
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 max-w-4xl mx-auto my-auto w-full">
-          {/* Cột trái: Khung mã VietQR thực tế */}
+          {/* Cột trái: Khung mã QR thực tế */}
           <div className="md:col-span-6 bg-white rounded-[28px] p-8 shadow-md border border-neutral-100 flex flex-col items-center text-center space-y-4 justify-center">
             <h4 className="font-extrabold text-[#1E2939] text-base">Quét mã để thanh toán</h4>
 
@@ -106,7 +106,7 @@ export const PaymentView: React.FC = () => {
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
                   src={qrImageUrl}
-                  alt="Mã QR Thanh toán VietQR"
+                  alt="Mã QR Thanh toán"
                   className="w-56 h-56 object-contain rounded-xl"
                 />
               ) : (

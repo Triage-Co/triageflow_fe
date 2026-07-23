@@ -1,6 +1,8 @@
 export type ActiveView =
   | 'home'
   | 'register'
+  | 'booking_mode'
+  | 'specialty_select'
   | 'patient_info'
   | 'doctor_route'
   | 'queue'

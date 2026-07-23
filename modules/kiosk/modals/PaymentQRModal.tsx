@@ -36,7 +36,7 @@ export const PaymentQRModal: React.FC = () => {
         {/* Title */}
         <div className="space-y-1.5 pt-2">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-blue-50 text-[#155DFC] rounded-full text-xs font-black mb-1 border border-blue-100">
-            <QrCode className="w-4 h-4" /> Quét mã VietQR
+            <QrCode className="w-4 h-4" /> Quét mã QR
           </div>
           <h3 className="text-2xl sm:text-3xl font-black text-[#1E2939] tracking-tight">
             {selectedPendingStep.step_name || 'Thanh toán dịch vụ'}
@@ -52,7 +52,7 @@ export const PaymentQRModal: React.FC = () => {
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
               src={qrImageUrl}
-              alt="Mã QR Thanh toán VietQR"
+              alt="Mã QR Thanh toán"
               className="w-60 h-60 sm:w-64 sm:h-64 object-contain rounded-2xl"
             />
           ) : (

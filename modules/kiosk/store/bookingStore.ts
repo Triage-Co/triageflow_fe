@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { DoctorItem, DoctorSlotItem, BookingPaymentData } from '../types/booking.types';
+import { DoctorItem, DoctorSlotItem, BookingPaymentData, SpecialtyItem } from '../types/booking.types';
 import { bookingService } from '../services/bookingService';
 import { useAuthStore } from './authStore';
 import { useTriageStore } from './triageStore';
@@ -7,13 +7,16 @@ import { useKioskStore } from './kioskStore';
 import { useFlowStore } from '@/modules/kiosk/store/flowStore';
 
 interface BookingStoreState {
+  specialties: SpecialtyItem[];
+  isFetchingSpecialties: boolean;
   availableDoctors: DoctorItem[];
   availableSlots: DoctorSlotItem[];
   selectedSlotId: string | null;
   isDoctorLoading: boolean;
   isBookingProcessing: boolean;
 
-  fetchDoctorsAndSlots: (specialtyCode: string) => Promise<void>;
+  fetchSpecialties: () => Promise<void>;
+  fetchDoctorsAndSlots: (specialtyCode: string, dateTime?: string) => Promise<void>;
   fetchSlotsForDoctor: (doctorId: string, date?: string) => Promise<void>;
   executeAutoBooking: () => Promise<boolean>;
   executeManualBooking: (slotId: string) => Promise<boolean>;
@@ -21,6 +24,8 @@ interface BookingStoreState {
 }
 
 export const useBookingStore = create<BookingStoreState>((set, get) => ({
+  specialties: [],
+  isFetchingSpecialties: false,
   availableDoctors: [],
   availableSlots: [],
   selectedSlotId: null,
@@ -29,6 +34,8 @@ export const useBookingStore = create<BookingStoreState>((set, get) => ({
 
   resetBooking: () => {
     set({
+      specialties: [],
+      isFetchingSpecialties: false,
       availableDoctors: [],
       availableSlots: [],
       selectedSlotId: null,
@@ -37,10 +44,25 @@ export const useBookingStore = create<BookingStoreState>((set, get) => ({
     });
   },
 
-  fetchDoctorsAndSlots: async (specialtyCode: string) => {
-    set({ isDoctorLoading: true });
+  fetchSpecialties: async () => {
+    set({ isFetchingSpecialties: true });
     try {
-      const response = await bookingService.getDoctorsBySpecialty(specialtyCode);
+      const response = await bookingService.getAllSpecialties();
+      const list = (response as any)?.data || response || [];
+      set({ specialties: Array.isArray(list) ? list : [] });
+    } catch (error) {
+      console.warn('Lỗi lấy danh sách chuyên khoa:', error);
+      set({ specialties: [] });
+    } finally {
+      set({ isFetchingSpecialties: false });
+    }
+  },
+
+  fetchDoctorsAndSlots: async (specialtyCode: string, dateTime?: string) => {
+    set({ isDoctorLoading: true });
+    const targetDate = dateTime || new Date().toISOString().split('T')[0];
+    try {
+      const response = await bookingService.getDoctorsBySpecialty(specialtyCode, targetDate);
       const doctorsList = (response as any)?.data || response || [];
       set({ availableDoctors: doctorsList });
     } catch (error) {

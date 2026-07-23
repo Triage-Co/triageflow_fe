@@ -3,6 +3,7 @@ import {
   BookingResponseData,
   DoctorItem,
   DoctorSlotItem,
+  SpecialtyItem,
 } from '../types/booking.types';
 import { useAuthStore } from '../store/authStore';
 
@@ -20,6 +21,9 @@ const getAuthHeaders = (explicitToken?: string): Record<string, string> => {
 };
 
 export const bookingService = {
+  getAllSpecialties: async () => {
+    return apiClient.get<SpecialtyItem[]>('/api/specialty');
+  },
   createAutoBooking: async (patientId: string, interviewToken: string, token?: string) => {
     return apiClient.post<BookingResponseData>(
       '/api/booking/recommend',

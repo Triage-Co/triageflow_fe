@@ -260,6 +260,7 @@ export const QRScannerModal: React.FC = () => {
 
   const getTargetTitle = () => {
     switch (targetViewAfterScan) {
+      case 'booking_mode':
       case 'register': return 'Đăng ký khám bệnh';
       case 'patient_info': return 'Xem thông tin khám bệnh';
       case 'doctor_route': return 'In phiếu / Lộ trình khám';

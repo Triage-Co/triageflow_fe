@@ -16,6 +16,7 @@ export interface KioskStoreState {
   activeModal: ActiveModal;
   targetViewAfterScan: ActiveView | null;
   aiRegisterStep: AIRegisterStep;
+  bookingFlowMode: 'direct' | 'ai';
   selectedGender: 'male' | 'female';
   selectedBodyPart: string | null;
   selectedBodyParts: string[];
@@ -31,6 +32,7 @@ export interface KioskStoreState {
   closeModal: () => void;
   setLoading: (isLoading: boolean, message?: string) => void;
   setAIRegisterStep: (step: AIRegisterStep) => void;
+  setBookingFlowMode: (mode: 'direct' | 'ai') => void;
   setGender: (gender: 'male' | 'female') => void;
   setSelectedBodyPart: (part: string | null) => void;
   toggleBodyPart: (part: string) => void;
@@ -47,6 +49,7 @@ export const useKioskStore = create<KioskStoreState>((set, get) => ({
   activeModal: null,
   targetViewAfterScan: null,
   aiRegisterStep: 'body_select',
+  bookingFlowMode: 'ai',
   selectedGender: 'male',
   selectedBodyPart: null,
   selectedBodyParts: [],
@@ -66,9 +69,9 @@ export const useKioskStore = create<KioskStoreState>((set, get) => ({
     switch (optionId) {
       case 'register':
         if (!authState.citizenId && !authState.authToken) {
-          get().openModal('scan_cccd', 'register');
+          get().openModal('scan_cccd', 'booking_mode');
         } else {
-          get().navigateToView('register');
+          get().navigateToView('booking_mode');
         }
         break;
       case 'patient_info':
@@ -141,6 +144,7 @@ export const useKioskStore = create<KioskStoreState>((set, get) => ({
   }),
 
   setAIRegisterStep: (step) => set({ aiRegisterStep: step as AIRegisterStep }),
+  setBookingFlowMode: (mode) => set({ bookingFlowMode: mode }),
   setGender: (gender) => set({ selectedGender: gender }),
   setSelectedBodyPart: (part) => set({ selectedBodyPart: part, selectedBodyParts: part ? [part] : [] }),
   toggleBodyPart: (part) => set((s) => ({
@@ -162,6 +166,7 @@ export const useKioskStore = create<KioskStoreState>((set, get) => ({
       activeModal: null,
       targetViewAfterScan: null,
       aiRegisterStep: 'body_select',
+      bookingFlowMode: 'ai',
       isLoading: false,
     });
   },
