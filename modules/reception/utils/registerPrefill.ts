@@ -12,6 +12,8 @@ export interface RegisterPrefill {
     insurance_id?: string;
     account_id?: string;
     patient_id?: string;
+    dob?: string;
+    gender?: string;
 }
 
 /** Bản nháp bước 1 — giữ qua refresh trang. */
@@ -21,7 +23,7 @@ export interface RegisterStep1Draft {
     email: string;
     dob: string;
     gender: Gender;
-    phone: string;
+    phone?: string;
     address: string;
     insurance_id: string;
     existing_patient_id?: string | null;
@@ -39,6 +41,8 @@ export function buildRegisterPrefill(result: PatientSearchResult): RegisterPrefi
         insurance_id: bhyt && bhyt !== 'N/A' ? bhyt : '',
         account_id: result.accountId,
         patient_id: result.patient_id ?? undefined,
+        dob: result.dob ? result.dob.slice(0, 10) : undefined,
+        gender: result.gender,
     };
 }
 
@@ -59,16 +63,10 @@ export function consumeRegisterPrefill(): RegisterPrefill | null {
     }
 }
 
-export function applyRegisterPrefillToForm(
-    prev: {
-        citizen_id: string;
-        full_name: string;
-        email: string;
-        phone: string;
-        insurance_id: string;
-    },
+export function applyRegisterPrefillToForm<T extends Record<string, any>>(
+    prev: T,
     prefill: RegisterPrefill,
-) {
+): T {
     return {
         ...prev,
         citizen_id: prefill.citizen_id || prev.citizen_id,
@@ -76,6 +74,8 @@ export function applyRegisterPrefillToForm(
         phone: prefill.phone || prev.phone,
         email: prefill.email || prev.email,
         insurance_id: prefill.insurance_id || prev.insurance_id,
+        dob: prefill.dob || prev.dob,
+        gender: (prefill.gender as any) || prev.gender,
     };
 }
 
@@ -84,7 +84,7 @@ export function saveRegisterStep1Draft(draft: RegisterStep1Draft): void {
     const hasContent =
         draft.citizen_id.trim().length > 0 ||
         draft.full_name.trim().length > 0 ||
-        draft.phone.trim().length > 0 ||
+        (draft.phone || '').trim().length > 0 ||
         draft.dob.length > 0;
     if (!hasContent) {
         localStorage.removeItem(DRAFT_KEY);

@@ -1,33 +1,26 @@
 import type {
-
     InfermedicaQuestion,
-
     InfermedicaQuestionItem,
-
 } from '@/modules/reception/types/infermedica.types';
-
-
+import { translateQuestionWithDeepSeek } from '@/modules/reception/services/deepseekTranslationService';
 
 export type InfermedicaQuestionType = 'single' | 'group_single' | 'group_multiple' | 'duration' | string;
 
-
-
-/** Giữ nguyên câu hỏi/lựa chọn tiếng Anh từ Infermedica. */
-
 export function localizeInfermedicaQuestion(question: InfermedicaQuestion): InfermedicaQuestion {
-
     if (question.text?.trim()) return question;
 
-
-
     const fallbackText = question.items[0]?.name?.trim();
-
     if (!fallbackText) return question;
 
-
-
     return { ...question, text: fallbackText };
+}
 
+/** Dịch câu hỏi y khoa sang tiếng Việt chuyên ngành thông qua DeepSeek AI */
+export async function localizeInfermedicaQuestionAsync(
+    question: InfermedicaQuestion,
+): Promise<InfermedicaQuestion> {
+    const base = localizeInfermedicaQuestion(question);
+    return await translateQuestionWithDeepSeek(base);
 }
 
 

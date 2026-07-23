@@ -81,5 +81,5 @@ export function formatCaughtError(err: unknown, fallback: string): string {
 }
 
 export function isPaymentLinkError(message: string): boolean {
-    return /thanh toán|link thanh toán|payos|đơn thanh toán/i.test(message);
+    return /tạo.*link|link.*thanh toán|payos.*lỗi|không tạo được.*giao dịch|tạo mã thanh toán/i.test(message);
 }

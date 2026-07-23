@@ -48,119 +48,128 @@ export function RegisterSuccessStep({ result, onRegisterNew }: RegisterSuccessSt
                 </p>
             </div>
 
-            <div className="rounded-[16px] border border-[#EBEBEB] bg-white shadow-[0_8px_30px_rgba(0,0,0,0.06)] overflow-hidden">
-                <div className="bg-[#8B7CF6] px-5 py-4 flex items-start justify-between gap-4">
-                    <div>
-                        <p className="text-[13px] font-bold text-white">TriageFlow OPD</p>
-                        <p className="text-[11px] text-white/80 mt-0.5">Bệnh viện Đa khoa Trung ương</p>
+            <div className="max-w-[440px] mx-auto rounded-3xl border border-neutral-100 bg-white p-6 md:p-8 shadow-[0_10px_30px_rgba(139,124,246,0.06)] relative overflow-hidden text-neutral-800">
+                {/* Decorative background glow */}
+                <div className="absolute top-0 right-0 w-32 h-32 bg-[#8B7CF6]/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
+                <div className="absolute bottom-0 left-0 w-32 h-32 bg-amber-500/5 rounded-full blur-3xl -ml-16 -mb-16 pointer-events-none" />
+
+                {/* Ticket Header */}
+                <div className="flex items-center justify-between gap-3 mb-6">
+                    <div className="space-y-1">
+                        <span className="text-[11px] font-bold tracking-widest text-[#8B7CF6] uppercase block">
+                            TriageFlow OPD
+                        </span>
+                        <h3 className="text-[15px] font-bold text-neutral-800 tracking-tight leading-tight">
+                            Phiếu Đăng Ký Khám
+                        </h3>
                     </div>
-                    <div className="text-right">
-                        <p className="text-[10px] font-semibold text-white/75 uppercase tracking-wide">Số thứ tự</p>
-                        <p className="text-[28px] font-extrabold text-white leading-none mt-1">{result.ticketNo}</p>
+                    {/* Priority Badge */}
+                    <span className={cn(
+                        "inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider",
+                        result.priority === 'Khẩn cấp' 
+                            ? 'bg-red-50 text-red-700 border border-red-100'
+                            : result.priority === 'Người cao tuổi'
+                            ? 'bg-blue-50 text-blue-700 border border-blue-100'
+                            : result.priority === 'Ưu tiên'
+                            ? 'bg-amber-50 text-amber-700 border border-amber-100'
+                            : 'bg-neutral-50 text-neutral-600 border border-neutral-200'
+                    )}>
+                        {result.priority}
+                    </span>
+                </div>
+
+                {/* Queue Number Panel */}
+                <div className="bg-[#F5F2FF] border border-[#8B7CF6]/15 rounded-2xl p-5 text-center mb-6 shadow-[inset_0_2px_4px_rgba(139,124,246,0.03)]">
+                    <span className="text-[11px] font-bold text-neutral-500 tracking-wider uppercase block mb-1">
+                        Số Thứ Tự Của Bạn
+                    </span>
+                    <div className="text-[52px] font-black text-[#8B7CF6] tracking-tight leading-none my-1">
+                        {result.ticketNo}
+                    </div>
+                    <span className="text-[11px] font-medium text-neutral-500 block mt-2">
+                        Bệnh viện Đa khoa Trung ương
+                    </span>
+                </div>
+
+                {/* Details Section */}
+                <div className="space-y-5">
+                    {/* Patient Information */}
+                    <div>
+                        <span className="text-[11px] font-bold text-neutral-400 tracking-widest uppercase block mb-2">
+                            Thông tin hành chính
+                        </span>
+                        <div className="bg-neutral-50 border border-neutral-100 rounded-2xl p-4 space-y-2.5 text-[13px]">
+                            <div className="flex justify-between items-center py-0.5">
+                                <span className="text-neutral-500 font-medium">Họ và tên</span>
+                                <span className="font-bold text-neutral-800">{result.fullName.toUpperCase()}</span>
+                            </div>
+                            <div className="flex justify-between items-center py-0.5 border-t border-neutral-200/50 pt-2.5">
+                                <span className="text-neutral-500 font-medium">CCCD/CMND</span>
+                                <span className="font-semibold text-neutral-800 font-mono">{result.citizenId}</span>
+                            </div>
+                            <div className="flex justify-between items-center py-0.5 border-t border-neutral-200/50 pt-2.5">
+                                <span className="text-neutral-500 font-medium">Số điện thoại</span>
+                                <span className="font-semibold text-neutral-800 font-mono">{formatPhoneDisplay(result.phone)}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Examination Details */}
+                    <div>
+                        <span className="text-[11px] font-bold text-neutral-400 tracking-widest uppercase block mb-2">
+                            Thông tin phòng khám
+                        </span>
+                        <div className="bg-[#FAF9FF] border border-[#8B7CF6]/5 rounded-2xl p-4 space-y-2.5 text-[13px]">
+                            <div className="flex justify-between items-center py-0.5">
+                                <span className="text-neutral-500 font-medium">Khoa khám</span>
+                                <span className="font-bold text-[#8B7CF6]">{result.specialty.toUpperCase()}</span>
+                            </div>
+                            <div className="flex justify-between items-center py-0.5 border-t border-neutral-200/50 pt-2.5">
+                                <span className="text-neutral-500 font-medium">Bác sĩ</span>
+                                <span className="font-bold text-neutral-800">{result.doctorLabel}</span>
+                            </div>
+                            <div className="flex justify-between items-center py-0.5 border-t border-neutral-200/50 pt-2.5">
+                                <span className="text-neutral-500 font-medium">Phòng khám</span>
+                                <span className="font-bold text-neutral-800">{result.roomLabel}</span>
+                            </div>
+                            <div className="flex justify-between items-center py-0.5 border-t border-neutral-200/50 pt-2.5">
+                                <span className="text-neutral-500 font-medium">Ngày & Giờ khám</span>
+                                <span className="font-bold text-neutral-800">{result.slotTimeLabel || '—'}</span>
+                            </div>
+                            <div className="flex justify-between items-center py-0.5 border-t border-neutral-200/50 pt-2.5">
+                                <span className="text-neutral-500 font-medium">Trạng thái thanh toán</span>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-[#ECFDF5] text-[#10B981] border border-[#A7F3D0]">
+                                    {result.paymentLabel}
+                                </span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <div className="p-5 md:p-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-[12px] mb-5">
-                        <div>
-                            <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wide mb-1">
-                                Thông tin bệnh nhân
-                            </p>
-                            <p className="text-[15px] font-bold text-[#1F2937]">{result.fullName}</p>
-                        </div>
-                        <div className="sm:text-right">
-                            <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wide mb-1">CCCD</p>
-                            <p className="text-[13px] font-semibold text-[#374151]">{result.citizenId}</p>
-                        </div>
-                        <div>
-                            <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wide mb-1">SĐT</p>
-                            <p className="text-[13px] font-semibold text-[#374151]">{formatPhoneDisplay(result.phone)}</p>
-                        </div>
-                        <div className="sm:text-right">
-                            <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-wide mb-1">Chuyên khoa</p>
-                            <p className="text-[13px] font-semibold text-[#374151]">{result.specialty}</p>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 mb-5">
-                        <span className="text-[11px] font-bold text-[#9CA3AF] uppercase">Ưu tiên</span>
-                        <span
-                            className={cn(
-                                'inline-flex items-center gap-1.5 text-[12px] font-bold px-3 py-1 rounded-full border',
-                                result.priority === 'Khẩn cấp'
-                                    ? 'bg-[#FEF2F2] text-[#DC2626] border-[#FECACA]'
-                                    : result.priority === 'Người cao tuổi'
-                                      ? 'bg-[#EFF6FF] text-[#2563EB] border-[#BFDBFE]'
-                                      : result.priority === 'Ưu tiên'
-                                        ? 'bg-[#FFFBEB] text-[#D97706] border-[#FDE68A]'
-                                        : 'bg-[#F9FAFB] text-[#6B7280] border-[#E5E7EB]',
-                            )}
-                        >
-                            <span className="w-2 h-2 rounded-full bg-current opacity-70" />
-                            {result.priority}
-                        </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-                        <div className="rounded-xl bg-[#F9FAFB] border border-[#F3F4F6] px-4 py-3">
-                            <div className="flex items-center gap-2 text-[#8B7CF6] mb-1.5">
-                                <Stethoscope className="w-4 h-4" />
-                                <span className="text-[11px] font-bold text-[#9CA3AF]">Bác sĩ</span>
-                            </div>
-                            <p className="text-[12px] font-semibold text-[#374151]">{result.doctorLabel}</p>
-                        </div>
-                        <div className="rounded-xl bg-[#F9FAFB] border border-[#F3F4F6] px-4 py-3">
-                            <div className="flex items-center gap-2 text-[#8B7CF6] mb-1.5">
-                                <Clock className="w-4 h-4" />
-                                <span className="text-[11px] font-bold text-[#9CA3AF]">Giờ khám</span>
-                            </div>
-                            <p className="text-[12px] font-semibold text-[#374151]">{result.slotTimeLabel || '—'}</p>
-                        </div>
-                        <div className="rounded-xl bg-[#F9FAFB] border border-[#F3F4F6] px-4 py-3">
-                            <div className="flex items-center gap-2 text-[#8B7CF6] mb-1.5">
-                                <MapPin className="w-4 h-4" />
-                                <span className="text-[11px] font-bold text-[#9CA3AF]">Phòng</span>
-                            </div>
-                            <p className="text-[12px] font-semibold text-[#374151]">{result.roomLabel}</p>
-                        </div>
-                        <div className="rounded-xl bg-[#F9FAFB] border border-[#F3F4F6] px-4 py-3">
-                            <div className="flex items-center gap-2 text-[#8B7CF6] mb-1.5">
-                                <Wallet className="w-4 h-4" />
-                                <span className="text-[11px] font-bold text-[#9CA3AF]">Thanh toán</span>
-                            </div>
-                            <p className="text-[12px] font-semibold text-[#374151]">{result.paymentLabel}</p>
-                        </div>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center rounded-xl border border-[#F3F4F6] bg-[#FAFAFA] p-4 mb-4">
+                {/* QR Code section */}
+                <div className="flex flex-col items-center justify-center my-6 py-4 border-t border-b border-dashed border-neutral-100">
+                    <div className="bg-white p-2.5 border border-neutral-150 rounded-2xl shadow-xs">
                         <img
                             src={qrUrl}
                             alt="Mã QR vé khám"
-                            width={112}
-                            height={112}
-                            className="rounded-lg border border-[#E5E7EB] bg-white shrink-0"
+                            width={130}
+                            height={130}
+                            className="block"
                         />
-                        <p className="text-[12px] text-[#6B7280] leading-relaxed">
-                            Quét mã QR để theo dõi lượt khám, xem hướng dẫn điều hướng và nhận thông báo khi đến
-                            lượt. Có vướng mắc quét mã QR để chat hỗ trợ.
-                        </p>
                     </div>
+                    <p className="text-[10px] text-neutral-400 font-semibold tracking-wide uppercase mt-3 text-center">
+                        Quét QR để theo dõi & dẫn đường trong bệnh viện
+                    </p>
+                </div>
 
-                    <div className="rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] px-4 py-3.5 mb-3">
-                        <p className="text-[13px] font-bold text-[#1E40AF] mb-2">Hướng dẫn đến phòng khám</p>
-                        <ol className="space-y-1.5 text-[12px] text-[#1D4ED8] list-decimal list-inside">
-                            {DIRECTIONS.map((item) => (
-                                <li key={item}>{item}</li>
-                            ))}
-                        </ol>
-                    </div>
-
-                    <div className="rounded-xl border border-[#FDE68A] bg-[#FFFBEB] px-4 py-3 flex items-center gap-2.5">
-                        <Clock className="w-4 h-4 text-[#D97706] shrink-0" />
-                        <p className="text-[12px] font-semibold text-[#92400E]">
-                            Thời gian chờ: Dự kiến {result.waitTimeLabel}
-                        </p>
-                    </div>
+                {/* Footer Notes */}
+                <div className="text-center text-[11px] text-neutral-400 space-y-1">
+                    <p className="font-bold text-neutral-500 uppercase">
+                        Vui lòng giữ phiếu này trong suốt quá trình khám
+                    </p>
+                    <p className="font-semibold text-neutral-400/80">
+                        In lúc: {new Date().toLocaleTimeString('vi-VN')} {new Date().toLocaleDateString('vi-VN')}
+                    </p>
                 </div>
             </div>
 

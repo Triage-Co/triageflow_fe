@@ -26,11 +26,15 @@ export class ApiError extends Error {
     }
 }
 
+export interface RequestOptions extends RequestInit {
+    suppressLogError?: boolean;
+}
+
 async function request<T>(
     path: string,
-    options?: RequestInit,
+    options?: RequestOptions,
 ): Promise<ApiResponse<T>> {
-    const { headers: extraHeaders, ...restOptions } = options ?? {};
+    const { headers: extraHeaders, suppressLogError, ...restOptions } = options ?? {};
     const res = await fetch(`${API_BASE_URL}${path}`, {
         headers: {
             'Content-Type': 'application/json',
@@ -39,9 +43,18 @@ async function request<T>(
         ...restOptions,
     });
 
-    const json = await res.json().catch(() => ({}));
+    const text = await res.text().catch(() => '');
+    let json: any = {};
+    try {
+        json = text ? JSON.parse(text) : {};
+    } catch {
+        json = text ? { message: text } : {};
+    }
 
     if (!res.ok) {
+        if (!suppressLogError) {
+            console.error(`[apiClient Error] ${options?.method || 'GET'} ${path} failed with status ${res.status}: ${JSON.stringify(json)}`);
+        }
         const fallback = `Request failed with status ${res.status}`;
         const { message, detail } = resolveApiError(json, fallback);
         throw new ApiError(res.status, message, detail);
@@ -51,17 +64,17 @@ async function request<T>(
 }
 
 export const apiClient = {
-    get: <T>(path: string, init?: RequestInit) =>
+    get: <T>(path: string, init?: RequestOptions) =>
         request<T>(path, { method: 'GET', ...init }),
 
-    post: <T>(path: string, body: unknown, init?: RequestInit) =>
+    post: <T>(path: string, body: unknown, init?: RequestOptions) =>
         request<T>(path, {
             method: 'POST',
             body: JSON.stringify(body),
             ...init,
         }),
 
-    patch: <T>(path: string, body: unknown, init?: RequestInit) =>
+    patch: <T>(path: string, body: unknown, init?: RequestOptions) =>
         request<T>(path, {
             method: 'PATCH',
             body: JSON.stringify(body),

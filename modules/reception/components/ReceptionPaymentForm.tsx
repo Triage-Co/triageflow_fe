@@ -1,5 +1,6 @@
 'use client';
 
+import { useAuthStore } from '@/modules/auth/store/authStore';
 import { useEffect, useState, useTransition } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Loader2, AlertCircle, CreditCard, ExternalLink, Copy, Check } from 'lucide-react';

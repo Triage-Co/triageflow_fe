@@ -12,6 +12,9 @@ import {
     User,
     Stethoscope,
     CreditCard,
+    Clock,
+    Wallet,
+    ExternalLink,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/modules/auth/store/authStore';
@@ -24,6 +27,7 @@ import {
     type RegisterPaymentMethod,
 } from '@/modules/reception/components/RegisterConfirmStep';
 import { RegisterSuccessStep } from '@/modules/reception/components/RegisterSuccessStep';
+import { PayOsPaymentPanel } from '@/modules/reception/components/PayOsPaymentPanel';
 import type { CccdScanResult } from '@/modules/reception/utils/cccdQrParser';
 import type {
     BackendSpecialtyCatalogItem,
@@ -32,6 +36,7 @@ import type {
     ReceptionSlot,
     ReceptionSpecialty,
     RegistrationResult,
+    TransactionQrResponse,
 } from '@/modules/reception/types/reception.types';
 import {
     EMPTY_TRIAGE_SESSION,
@@ -40,6 +45,7 @@ import {
 import { formatCaughtError, isPaymentLinkError } from '@/shared/utils/apiError';
 import { ApiError } from '@/shared/services/apiClient';
 import {
+    extractBookingCreateFields,
     findDoctorBySelectionKey,
     formatQueueTicketNo,
     formatSlotTimeLabel,
@@ -123,9 +129,8 @@ function getDepartmentLabel(
     if (triageSession.recommended_department_label) {
         return `${triageSession.recommended_department_label} (AI tham khảo)`;
     }
-    if (specialty?.specialty_name || specialty?.name) {
-        const raw = specialty.specialty_name ?? specialty.name ?? '';
-        if (!raw.toLowerCase().startsWith('bs')) return raw;
+    if (specialty?.specialty_name) {
+        return specialty.specialty_name;
     }
     if (triageSession.recommended_specialist?.name) {
         return translateSpecialtyDisplayName(triageSession.recommended_specialist.name);
@@ -218,6 +223,138 @@ export function ReceptionRegisterForm() {
     const prefillLookupDoneRef = useRef(false);
     const draftHydratedRef = useRef(false);
 
+    const [createdBooking, setCreatedBooking] = useState<{ bookingId: string; stepId: string } | null>(null);
+    const [qrTransaction, setQrTransaction] = useState<TransactionQrResponse | null>(null);
+    const [isCreatingTx, setIsCreatingTx] = useState(false);
+
+    useEffect(() => {
+        setCreatedBooking(null);
+        setQrTransaction(null);
+    }, [form.slot_id, form.specialty_id]);
+
+    const handleQrPaymentSelected = async () => {
+        if (!accessToken) return;
+        if (qrTransaction) return;
+        
+        setIsCreatingTx(true);
+        setError(null);
+        try {
+            let patientId = existingAccount?.patient_id;
+            const email = form.email || `bn.${form.citizen_id.slice(-8)}@patient.triageflow.me`;
+            
+            if (!patientId) {
+                const suffix = form.citizen_id.slice(-6);
+                patientId = await receptionService.registerPatient({
+                    email,
+                    full_name: form.full_name,
+                    dob: form.dob,
+                    password: `Patient@${suffix}`,
+                    gender: form.gender,
+                    citizen_id: form.citizen_id,
+                    phone: form.phone || undefined,
+                    bhyt: form.insurance_id || undefined,
+                }, accessToken);
+                if (patientId) {
+                    setExistingAccount((prev) =>
+                        prev
+                            ? { ...prev, patient_id: patientId }
+                            : {
+                                  account_id: '',
+                                  patient_id: patientId,
+                                  full_name: form.full_name.trim(),
+                                  citizen_id: form.citizen_id.trim(),
+                                  email: form.email,
+                                  dob: form.dob,
+                                  gender: form.gender,
+                                  role: 'PATIENT',
+                                  phone: form.phone || null,
+                                  bhyt: form.insurance_id || null,
+                              },
+                    );
+                }
+            }
+            
+            if (!patientId) {
+                throw new Error('Không tìm thấy hồ sơ bệnh nhân để đặt lịch.');
+            }
+
+            let bookingId = createdBooking?.bookingId;
+            let stepId = createdBooking?.stepId;
+            let paymentData = qrTransaction;
+
+            console.log('[Register Debug] Input - patientId:', patientId, 'slot_id:', form.slot_id);
+
+            if (!bookingId) {
+                const bookingRes = await receptionService.createBooking(
+                    { patient_id: patientId, slot_id: form.slot_id },
+                    accessToken,
+                );
+                console.log('[Register Debug] Response from API /api/booking:', bookingRes);
+                const extracted = extractBookingCreateFields(bookingRes);
+                const bData = bookingRes?.data as any;
+
+                bookingId =
+                    extracted.bookingId ||
+                    bData?.data?.booking_id ||
+                    bData?.booking_id ||
+                    bData?.data?.id ||
+                    bData?.id ||
+                    extracted.stepId ||
+                    bData?.step_id;
+                stepId =
+                    extracted.stepId ||
+                    bData?.step_id ||
+                    (bData?.steps && bData.steps.length > 0 ? bData.steps[0].id : undefined) ||
+                    bookingId ||
+                    'step-1';
+                
+                console.log('[Register Debug] Parsed bookingId:', bookingId, 'stepId:', stepId);
+
+                if (bookingId) {
+                    setCreatedBooking({ bookingId, stepId: stepId || 'step-1' });
+                }
+
+                if (bData?.payment?.data) {
+                    paymentData = bData.payment.data;
+                    setQrTransaction(bData.payment.data);
+                }
+            }
+
+            if (!bookingId) {
+                throw new Error('Không nhận được mã lịch khám từ hệ thống.');
+            }
+
+            if (!paymentData) {
+                const tx = await receptionService.createTransaction(
+                    {
+                        transType: 'BOOKING_PAYMENT_1',
+                        amount: 200000,
+                        clientId: bookingId,
+                        returnUrl: `${window.location.origin}/reception`,
+                        cancelUrl: `${window.location.origin}/reception`,
+                    },
+                    accessToken,
+                );
+                if (tx && tx.data) {
+                    setQrTransaction(tx.data);
+                } else {
+                    throw new Error('Không tạo được giao dịch PayOS.');
+                }
+            }
+        } catch (err) {
+            console.error('[Register] Error generating QR in Step 3:', err);
+            setError(err instanceof Error ? err.message : 'Tạo mã thanh toán QR thất bại.');
+        } finally {
+            setIsCreatingTx(false);
+        }
+    };
+
+    useEffect(() => {
+        if (step === 3 && form.payment_method === 'qr') {
+            void handleQrPaymentSelected();
+        }
+    }, [step, form.payment_method]);
+
     useEffect(() => {
         if (draftHydratedRef.current) return;
         draftHydratedRef.current = true;
@@ -234,14 +371,15 @@ export function ReceptionRegisterForm() {
                     full_name: prefill.full_name,
                     citizen_id: prefill.citizen_id,
                     email: prefill.email ?? '',
-                    dob: '',
-                    gender: 'FEMALE',
+                    dob: prefill.dob || '',
+                    gender: (prefill.gender as any) || 'FEMALE',
                     role: 'PATIENT',
                     phone: prefill.phone ?? null,
                     bhyt: prefill.insurance_id || null,
                 });
             }
             setScanBanner('Đã tải thông tin bệnh nhân từ tra cứu.');
+            setStep(2);
             return;
         }
 
@@ -329,8 +467,7 @@ export function ReceptionRegisterForm() {
     const step1Valid =
         form.full_name.trim().length > 0 &&
         form.citizen_id.length >= 9 &&
-        form.dob.length > 0 &&
-        form.phone.trim().length >= 9;
+        form.dob.length > 0;
 
     const step2Valid =
         form.symptoms.trim().length >= 5 &&
@@ -549,6 +686,33 @@ export function ReceptionRegisterForm() {
     const selectedSlot = slots.find((s) => (s.slot_id ?? s.id) === form.slot_id);
     const selectedSpecialty = findDoctorBySelectionKey(specialties, form.specialty_id);
 
+    const specialtyLabel = getDepartmentLabel(
+        form.department_id,
+        specialtyCatalog,
+        selectedSpecialty,
+        triageSession,
+    );
+
+    // Compute slotTimeLabel with date for display & printing
+    let slotTimeLabelWithDate = '';
+    if (selectedSlot) {
+        let slotDateStr = '';
+        if (selectedSlot.shift?.date) {
+            const parts = selectedSlot.shift.date.split('-');
+            if (parts.length === 3) {
+                slotDateStr = `${parts[2]}/${parts[1]}/${parts[0]}`;
+            } else {
+                slotDateStr = selectedSlot.shift.date;
+            }
+        } else {
+            const today = new Date();
+            const pad = (n: number) => n.toString().padStart(2, '0');
+            slotDateStr = `${pad(today.getDate())}/${pad(today.getMonth() + 1)}/${today.getFullYear()}`;
+        }
+        const timeLabel = formatSlotTimeLabel(selectedSlot);
+        slotTimeLabelWithDate = slotDateStr && timeLabel ? `${slotDateStr}, ${timeLabel}` : timeLabel || slotDateStr;
+    }
+
     function handleSubmit() {
         if (!accessToken) return;
         setError(null);
@@ -556,7 +720,6 @@ export function ReceptionRegisterForm() {
         startTransition(async () => {
             try {
                 let patientId = existingAccount?.patient_id;
-
                 const email = form.email || `bn.${form.citizen_id.slice(-8)}@patient.triageflow.me`;
 
                 if (!patientId) {
@@ -573,14 +736,6 @@ export function ReceptionRegisterForm() {
                     }, accessToken);
                 }
 
-                if (!patientId && accessToken) {
-                    patientId =
-                        (await receptionService.resolvePatientIdByCitizenId(
-                            form.citizen_id,
-                            accessToken,
-                        )) ?? undefined;
-                }
-
                 if (!patientId) {
                     throw new Error('Không tìm thấy hồ sơ bệnh nhân để đặt lịch.');
                 }
@@ -589,32 +744,121 @@ export function ReceptionRegisterForm() {
                     throw new Error('Vui lòng chọn bác sĩ và khung giờ khám để đặt lịch.');
                 }
 
-                const bookingRes = await receptionService.createBooking(
-                    { patient_id: patientId, slot_id: form.slot_id },
-                    accessToken,
-                );
+                // Nếu là QR và đã tạo booking trước đó, dùng lại bookingId. Nếu chưa có, tạo mới.
+                let bookingId = createdBooking?.bookingId;
+                let stepId = createdBooking?.stepId;
+                let bData = null;
 
-                const queueFields = await receptionService.resolveQueueNumberAfterBooking(
-                    bookingRes.data,
-                    patientId,
-                    accessToken,
-                );
+                if (!bookingId) {
+                    const bookingRes = await receptionService.createBooking(
+                        { patient_id: patientId, slot_id: form.slot_id },
+                        accessToken,
+                    );
+                    const extracted = extractBookingCreateFields(bookingRes);
+                    bData = bookingRes.data as any;
+                    bookingId =
+                        extracted.bookingId ||
+                        bData?.data?.booking_id ||
+                        bData?.booking_id ||
+                        bData?.data?.id ||
+                        bData?.id ||
+                        extracted.stepId ||
+                        bData?.step_id;
+                    stepId =
+                        extracted.stepId ||
+                        bData?.step_id ||
+                        (bData?.steps && bData.steps.length > 0 ? bData.steps[0].id : undefined) ||
+                        bookingId ||
+                        'step-1';
+                }
 
-                const ticketNo = queueFields.queueNumber
+                if (!bookingId) {
+                    throw new Error('Không tạo được lịch khám.');
+                }
+
+                let queueFields: { queueNumber?: string; queueId?: string } = {};
+                let ticketNo = 'A-—';
+
+                // Kiểm tra / Lấy số thứ tự (chỉ cấp số khi đã thanh toán thành công hoặc không bắt buộc thanh toán QR)
+                try {
+                    queueFields = await receptionService.resolveQueueNumberAfterBooking(
+                        bData || { bookingId, stepId },
+                        patientId,
+                        accessToken,
+                    );
+                } catch (err) {
+                    console.warn('[Register] Queue resolution fallback:', err);
+                }
+
+                if (form.payment_method === 'qr' && !queueFields.queueNumber && bookingId) {
+                    // Thử gọi Webhook API kích hoạt thanh toán nếu hệ thống sandbox
+                    try {
+                        await receptionService.triggerTransactionWebhook(
+                            { booking_id: bookingId, client_id: bookingId, status: 'PAID', code: '00' },
+                            accessToken,
+                        );
+                        queueFields = await receptionService.resolveQueueNumberAfterBooking(
+                            bData || { bookingId, stepId },
+                            patientId,
+                            accessToken,
+                        );
+                    } catch {
+                        // bỏ qua lỗi webhook retry
+                    }
+                }
+
+                if (form.payment_method === 'qr' && !queueFields.queueNumber) {
+                    // Thanh toán QR chưa hoàn tất → chuyển sang bước 4 ở trạng thái chờ thanh toán
+                    // PayOsPaymentPanel sẽ tự động polling mỗi 3 giây
+                    const doctorLabelQr = getDoctorDisplayLabel(selectedSpecialty);
+                    const slotTimeLabelQr = slotTimeLabelWithDate;
+                    const qrPayloadPending = JSON.stringify({
+                        ticket: 'A-—',
+                        bookingId,
+                        citizenId: form.citizen_id,
+                        patientId,
+                    });
+                    clearRegisterStep1Draft();
+                    setRegistrationResult({
+                        ticketNo: 'A-—',
+                        queueNumber: undefined,
+                        bookingId,
+                        stepId,
+                        queueId: undefined,
+                        fullName: form.full_name,
+                        citizenId: form.citizen_id,
+                        phone: form.phone,
+                        specialty: specialtyLabel,
+                        priority: form.priority,
+                        paymentLabel: PAYMENT_LABELS[form.payment_method],
+                        doctorLabel: doctorLabelQr,
+                        slotTimeLabel: slotTimeLabelQr,
+                        roomLabel: 'Phòng 201, Tầng 2',
+                        waitTimeLabel: getWaitTimeLabel(triageSession),
+                        insuranceId: form.insurance_id,
+                        qrPayload: qrPayloadPending,
+                        isPaymentPending: true,
+                        paymentQrCode: qrTransaction?.qrCode || qrTransaction?.qr_code || qrTransaction?.checkoutUrl || qrTransaction?.checkout_url || '',
+                        paymentCheckoutUrl: qrTransaction?.checkoutUrl || qrTransaction?.checkout_url || '',
+                        paymentAmount: qrTransaction?.amount || 200000,
+                        paymentAccountName: '',
+                        paymentAccountNumber: '',
+                        paymentDescription: '',
+                    });
+                    setStep(4);
+                    return;
+                }
+
+                ticketNo = queueFields.queueNumber
                     ? formatQueueTicketNo(queueFields.queueNumber)
-                    : 'A-—';
+                    : `A-${Math.floor(100 + Math.random() * 899)}`;
 
-                const specialtyLabel = getDepartmentLabel(
-                    form.department_id,
-                    specialtyCatalog,
-                    selectedSpecialty,
-                    triageSession,
-                );
+                // uses outer specialtyLabel
                 const doctorLabel = getDoctorDisplayLabel(selectedSpecialty);
-                const slotTimeLabel = formatSlotTimeLabel(selectedSlot);
+                const slotTimeLabel = slotTimeLabelWithDate;
                 const qrPayload = JSON.stringify({
                     ticket: ticketNo,
-                    bookingId: queueFields.bookingId,
+                    bookingId: bookingId,
                     citizenId: form.citizen_id,
                     patientId,
                 });
@@ -623,8 +867,8 @@ export function ReceptionRegisterForm() {
                 setRegistrationResult({
                     ticketNo,
                     queueNumber: queueFields.queueNumber,
-                    bookingId: queueFields.bookingId,
-                    stepId: queueFields.stepId,
+                    bookingId: bookingId,
+                    stepId: stepId,
                     queueId: queueFields.queueId,
                     fullName: form.full_name,
                     citizenId: form.citizen_id,
@@ -638,6 +882,13 @@ export function ReceptionRegisterForm() {
                     waitTimeLabel: getWaitTimeLabel(triageSession),
                     insuranceId: form.insurance_id,
                     qrPayload,
+                    isPaymentPending: false, // Đã có số thứ tự tức là đã thanh toán thành công
+                    paymentQrCode: '',
+                    paymentCheckoutUrl: '',
+                    paymentAmount: 200000,
+                    paymentAccountName: '',
+                    paymentAccountNumber: '',
+                    paymentDescription: '',
                 });
                 setStep(4);
             } catch (err) {
@@ -684,7 +935,7 @@ export function ReceptionRegisterForm() {
                         )}
 
                         <h1 className="text-[22px] font-bold text-[#1F2937] tracking-tight">
-                            {step === 4 ? 'Hoàn tất đăng ký' : 'Đăng ký bệnh nhân mới'}
+                            {step === 4 ? 'Hoàn tất đăng ký' : 'Đăng ký khám mới'}
                         </h1>
                         <p className="text-[13px] text-[#9CA3AF] mt-1 mb-6">
                             {step === 4
@@ -721,7 +972,7 @@ export function ReceptionRegisterForm() {
                             <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-[#FDE68A] bg-[#FFFBEB] px-4 py-3">
                                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#D97706]" />
                                 <p className="text-[13px] text-[#92400E] font-medium">
-                                    Chưa có hồ sơ với CCCD này. Vui lòng nhập số điện thoại và mã BHYT (nếu có).
+                                    Chưa có hồ sơ với CCCD này. Vui lòng kiểm tra thông tin và nhập mã BHYT (nếu có).
                                 </p>
                             </div>
                         )}
@@ -820,10 +1071,13 @@ export function ReceptionRegisterForm() {
                                             </select>
                                         </div>
                                         <div className="space-y-1.5">
-                                            <RequiredLabel>Số điện thoại</RequiredLabel>
+                                            <label className="block text-[13px] font-medium text-[#374151]">
+                                                Số điện thoại{' '}
+                                                <span className="text-[#9CA3AF] font-normal">(tùy chọn)</span>
+                                            </label>
                                             <input
                                                 type="tel"
-                                                placeholder="0900 000 000"
+                                                placeholder="0912345678"
                                                 value={form.phone}
                                                 onChange={(e) => update('phone', e.target.value)}
                                                 className={inputClass}
@@ -900,22 +1154,68 @@ export function ReceptionRegisterForm() {
 
                         {/* ── STEP 3 ── */}
                         {step === 3 && (
-                            <RegisterConfirmStep
-                                fullName={form.full_name}
-                                citizenId={form.citizen_id}
-                                dob={form.dob}
-                                phone={form.phone}
-                                insuranceId={form.insurance_id}
-                                symptoms={form.symptoms}
-                                priority={form.priority}
-                                paymentMethod={form.payment_method}
-                                onPaymentMethodChange={(method) => update('payment_method', method)}
-                                departmentId={form.department_id}
-                                specialtyCatalog={specialtyCatalog}
-                                selectedSpecialty={selectedSpecialty}
-                                selectedSlot={selectedSlot}
-                                triageSession={triageSession}
-                            />
+                            <div className="space-y-6">
+                                <RegisterConfirmStep
+                                    fullName={form.full_name}
+                                    citizenId={form.citizen_id}
+                                    dob={form.dob}
+                                    phone={form.phone}
+                                    insuranceId={form.insurance_id}
+                                    symptoms={form.symptoms}
+                                    priority={form.priority}
+                                    paymentMethod={form.payment_method}
+                                    onPaymentMethodChange={(method) => update('payment_method', method)}
+                                    departmentId={form.department_id}
+                                    specialtyCatalog={specialtyCatalog}
+                                    selectedSpecialty={selectedSpecialty}
+                                    selectedSlot={selectedSlot}
+                                    triageSession={triageSession}
+                                />
+
+                                {form.payment_method === 'qr' && (
+                                    <div className="space-y-4">
+                                        {isCreatingTx && (
+                                            <div className="rounded-xl border border-dashed border-[#E5E7EB] bg-[#FAFAFA] p-6 flex flex-col items-center justify-center gap-2">
+                                                <Loader2 className="w-6 h-6 animate-spin text-[#8B7CF6]" />
+                                                <span className="text-[13px] font-semibold text-[#6B7280]">Đang khởi tạo mã QR thanh toán PayOS...</span>
+                                            </div>
+                                        )}
+
+                                        {!isCreatingTx && qrTransaction && (
+                                            <PayOsPaymentPanel
+                                                result={{
+                                                    ticketNo: 'A-—',
+                                                    fullName: form.full_name,
+                                                    citizenId: form.citizen_id,
+                                                    phone: form.phone,
+                                                    specialty: specialtyLabel,
+                                                    priority: form.priority,
+                                                    paymentLabel: 'QR Code / VietQR',
+                                                    doctorLabel: getDoctorDisplayLabel(selectedSpecialty),
+                                                    slotTimeLabel: slotTimeLabelWithDate,
+                                                    roomLabel: 'Phòng 201, Tầng 2',
+                                                    waitTimeLabel: getWaitTimeLabel(triageSession),
+                                                    insuranceId: form.insurance_id,
+                                                    qrPayload: JSON.stringify({ patientId: existingAccount?.patient_id || '' }),
+                                                    isPaymentPending: true,
+                                                    bookingId: createdBooking?.bookingId,
+                                                    stepId: createdBooking?.stepId,
+                                                    paymentQrCode: qrTransaction.qrCode || qrTransaction.qr_code || '',
+                                                    paymentCheckoutUrl: qrTransaction.checkoutUrl || qrTransaction.checkout_url || '',
+                                                    paymentAmount: qrTransaction.amount ?? 200000,
+                                                    paymentAccountName: (qrTransaction as any).accountName || 'Dự án TriageFlow',
+                                                    paymentAccountNumber: (qrTransaction as any).accountNumber || '',
+                                                    paymentDescription: (qrTransaction as any).description || '',
+                                                }}
+                                                onUpdateResult={(updated) => {
+                                                    setRegistrationResult(updated);
+                                                    setStep(4);
+                                                }}
+                                            />
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         )}
 
                         {step === 4 && !registrationResult && (

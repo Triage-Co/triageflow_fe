@@ -438,32 +438,7 @@ export function SymptomTriageStep({
                     disabled={isPending}
                     className={cn(inputClass, 'resize-none min-h-[88px]')}
                 />
-                {(isSearching || searchResults.length > 0) && !triageSession.is_analyzed && (
-                    <div className="mt-2 rounded-lg border border-[#E5E7EB] bg-[#FAFAFA] p-2.5">
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-[#9CA3AF] mb-1.5">
-                            Gợi ý triệu chứng (Infermedica search)
-                        </p>
-                        {isSearching ? (
-                            <div className="flex items-center gap-2 text-[11px] text-[#9CA3AF]">
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                                Đang tìm...
-                            </div>
-                        ) : (
-                            <div className="flex flex-wrap gap-1.5">
-                                {searchResults.map((item) => (
-                                    <button
-                                        key={item.id}
-                                        type="button"
-                                        onClick={() => appendSymptomSuggestion(item.label)}
-                                        className="px-2.5 py-1 rounded-md border border-[#E5E7EB] bg-white text-[11px] text-[#374151] hover:border-[#C4B5FD] hover:bg-[#F5F3FF]"
-                                    >
-                                        {item.label}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                )}
+
                 <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3">
                     <button
                         type="button"
@@ -603,7 +578,7 @@ export function SymptomTriageStep({
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 mb-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-4">
                         <div className="rounded-xl border border-[#BBF7D0] bg-white/90 px-3.5 py-3">
                             <p className="text-[10px] font-bold uppercase tracking-wide text-[#65A30D]">Mức độ</p>
                             <p className="mt-1 text-[13px] font-bold text-[#14532D]">
@@ -614,18 +589,6 @@ export function SymptomTriageStep({
                             <p className="text-[10px] font-bold uppercase tracking-wide text-[#65A30D]">Khoa gợi ý</p>
                             <p className="mt-1 text-[13px] font-bold text-[#14532D]">
                                 {recommendedLabel || triageSession.recommended_department_label || '—'}
-                            </p>
-                        </div>
-                        <div className="rounded-xl border border-[#BBF7D0] bg-white/90 px-3.5 py-3">
-                            <p className="text-[10px] font-bold uppercase tracking-wide text-[#65A30D]">Câu đã trả lời</p>
-                            <p className="mt-1 text-[13px] font-bold text-[#14532D]">
-                                {triageSession.questions_answered}/{triageSession.required_questions || '—'}
-                            </p>
-                        </div>
-                        <div className="rounded-xl border border-[#BBF7D0] bg-white/90 px-3.5 py-3">
-                            <p className="text-[10px] font-bold uppercase tracking-wide text-[#65A30D]">Triệu chứng AI</p>
-                            <p className="mt-1 text-[13px] font-bold text-[#14532D]">
-                                {triageSession.evidence.length} mục
                             </p>
                         </div>
                     </div>
@@ -695,12 +658,26 @@ export function SymptomTriageStep({
                         </p>
                     )}
                     {recommendedLabel && triageSession.is_analyzed && (
-                        <div className="mt-4 rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] px-3.5 py-3 flex items-start gap-2">
-                            <Sparkles className="w-4 h-4 text-[#16A34A] shrink-0 mt-0.5" />
-                            <p className="text-[12px] text-[#166534]">
-                                AI gợi ý khoa: <strong className="text-[#14532D]">{recommendedLabel}</strong>
-                                {' — '}có thể chọn khác nếu cần.
-                            </p>
+                        <div className="mt-4 rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] px-3.5 py-3 flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                                <Sparkles className="w-4 h-4 text-[#16A34A] shrink-0" />
+                                <p className="text-[12px] text-[#166534]">
+                                    AI gợi ý khoa: <strong className="text-[#14532D]">{recommendedLabel}</strong>
+                                    {' — '}có thể chọn khác nếu cần.
+                                </p>
+                            </div>
+                            {aiReferenceSpecialtyId && departmentId !== aiReferenceSpecialtyId && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        userPickedDepartmentRef.current = false;
+                                        applyAiSuggestedDepartment(triageSession);
+                                    }}
+                                    className="px-2.5 py-1 text-[11px] font-bold text-[#15803D] bg-white border border-[#86EFAC] rounded-lg hover:bg-[#DCFCE7] shadow-sm transition shrink-0"
+                                >
+                                    Chọn khoa AI gợi ý
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>
@@ -919,21 +896,38 @@ export function SymptomTriageStep({
                                             const id = slot.slot_id ?? slot.id ?? String(i);
                                             const isSelected = slotId === id;
                                             const isFull = Boolean(slot.is_full);
+                                            
+                                            // Kiểm tra nếu là khung giờ đã qua so với thời gian hiện tại
+                                            let isPast = false;
+                                            if (selectedDate === getTodayDateString()) {
+                                                const now = new Date();
+                                                const currentHours = now.getHours();
+                                                const currentMinutes = now.getMinutes();
+                                                if (slot.start_time) {
+                                                    const [h, m] = slot.start_time.split(':').map(Number);
+                                                    if (h < currentHours || (h === currentHours && m <= currentMinutes)) {
+                                                        isPast = true;
+                                                    }
+                                                }
+                                            }
+
                                             return (
                                                 <button
                                                     key={id}
                                                     type="button"
-                                                    disabled={isFull}
+                                                    disabled={isFull || isPast}
                                                     onClick={() => {
-                                                        if (!isFull) onSlotChange(id);
+                                                        if (!isFull && !isPast) onSlotChange(id);
                                                     }}
                                                     className={cn(
                                                         'relative px-3 py-3 rounded-xl border text-center transition-all disabled:cursor-not-allowed',
                                                         isSelected
                                                             ? 'border-[#16A34A] bg-[#16A34A] text-white shadow-[0_4px_12px_rgba(22,163,74,0.3)]'
-                                                            : isFull
-                                                              ? 'border-[#FCA5A5] bg-[#FEE2E2] text-[#B91C1C]'
-                                                              : 'border-[#E5E7EB] bg-white text-[#374151] hover:border-[#86EFAC] hover:bg-[#F0FDF4]',
+                                                            : isPast
+                                                              ? 'border-neutral-200 bg-neutral-100 text-neutral-400 opacity-60'
+                                                              : isFull
+                                                                ? 'border-[#FCA5A5] bg-[#FEE2E2] text-[#B91C1C]'
+                                                                : 'border-[#E5E7EB] bg-white text-[#374151] hover:border-[#86EFAC] hover:bg-[#F0FDF4]',
                                                     )}
                                                 >
                                                     <span className="text-[13px] font-bold block">
@@ -945,9 +939,11 @@ export function SymptomTriageStep({
                                                                 'text-[10px] block mt-0.5',
                                                                 isSelected
                                                                     ? 'text-white/80'
-                                                                    : isFull
-                                                                      ? 'text-[#DC2626]'
-                                                                      : 'text-[#9CA3AF]',
+                                                                    : isPast
+                                                                      ? 'text-neutral-400'
+                                                                      : isFull
+                                                                        ? 'text-[#DC2626]'
+                                                                        : 'text-[#9CA3AF]',
                                                             )}
                                                         >
                                                             đến {slot.end_time.slice(0, 5)}
@@ -958,16 +954,20 @@ export function SymptomTriageStep({
                                                             'text-[9px] font-semibold block mt-1',
                                                             isSelected
                                                                 ? 'text-white'
-                                                                : isFull
-                                                                  ? 'text-[#B91C1C]'
-                                                                  : 'text-[#16A34A]',
+                                                                : isPast
+                                                                  ? 'text-neutral-400'
+                                                                  : isFull
+                                                                    ? 'text-[#B91C1C]'
+                                                                    : 'text-[#16A34A]',
                                                         )}
                                                     >
-                                                        {isFull
-                                                            ? 'Đã đầy'
-                                                            : slot.capacity !== undefined
-                                                              ? `Còn ${slot.capacity} chỗ`
-                                                              : 'Còn chỗ'}
+                                                        {isPast
+                                                            ? 'Đã qua'
+                                                            : isFull
+                                                              ? 'Đã đầy'
+                                                              : slot.capacity !== undefined
+                                                                ? `Còn ${slot.capacity} chỗ`
+                                                                : 'Còn chỗ'}
                                                     </span>
                                                     {isSelected && (
                                                         <Check

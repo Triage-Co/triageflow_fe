@@ -383,8 +383,8 @@ export function extractBookingCreateFields(raw: unknown): {
         queueNumber: asOptionalString(
             findValue(raw, ['queue_number', 'queueNumber', 'docNo', 'doc_no', 'order_number', 'orderNumber']),
         ),
-        bookingId: asOptionalString(findValue(raw, ['booking_id', 'bookingId'])),
-        stepId: asOptionalString(findValue(raw, ['step_id', 'stepId'])),
+        bookingId: asOptionalString(findValue(raw, ['booking_id', 'bookingId', 'id', 'id_booking', 'booking_number'])),
+        stepId: asOptionalString(findValue(raw, ['step_id', 'stepId', 'step'])),
         queueId: asOptionalString(findValue(raw, ['queue_id', 'queueId'])),
     };
 }

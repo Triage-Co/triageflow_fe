@@ -233,9 +233,11 @@ export function RegisterConfirmStep({
             </div>
 
             {paymentMethod === 'qr' && (
-                <div className="rounded-xl border border-[#E5E7EB] bg-[#FAFAFA] px-4 py-3 flex items-center gap-2 text-[12px] text-[#6B7280]">
-                    <WalletCards className="w-4 h-4 text-[#8B7CF6]" />
-                    Sau khi cấp số thứ tự, chuyển tới mục Thanh toán QR để quét VietQR.
+                <div className="rounded-xl border border-[#8B7CF6]/20 bg-[#F5F2FF] px-4 py-3 flex items-center gap-3 text-[12.5px] text-[#5B4EC9]">
+                    <WalletCards className="w-5 h-5 text-[#8B7CF6] shrink-0" />
+                    <span>
+                        Hệ thống sẽ tự động tạo giao dịch và hiển thị <strong>Mã QR thanh toán PayOS</strong> ở bước tiếp theo sau khi hoàn tất đăng ký.
+                    </span>
                 </div>
             )}
         </div>

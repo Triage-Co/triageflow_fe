@@ -290,10 +290,10 @@ export const receptionService = {
         return assertApiSuccess(res, 'Không tạo được lịch khám theo gợi ý AI.');
     },
 
-    generateBookingNumber: (stepId: string, token: string) =>
+    generateBookingNumber: (stepId: string, token: string, suppressLogError = true) =>
         apiClient.get<unknown>(
             `/api/booking/generate?step-id=${encodeURIComponent(stepId)}`,
-            { headers: { Authorization: `Bearer ${token}` } },
+            { headers: { Authorization: `Bearer ${token}` }, suppressLogError },
         ),
 
     async resolveQueueNumberAfterBooking(
@@ -305,6 +305,7 @@ export const receptionService = {
         bookingId?: string;
         stepId?: string;
         queueId?: string;
+        debugLogs?: string[];
     }> {
         let fields = extractBookingCreateFields(bookingData);
 
@@ -335,32 +336,40 @@ export const receptionService = {
             }
         }
 
-        if (!fields.queueNumber && fields.stepId) {
+        // 1. Ưu tiên kiểm tra hàng đợi hôm nay (nếu BE/Webhook đã tự động tạo queue)
+        if (!fields.queueNumber) {
             try {
-                const genRes = await receptionService.generateBookingNumber(fields.stepId, token);
-                const generated = extractBookingCreateFields(genRes.data);
-                mergeFields(generated);
+                const queueItems = await receptionService.getQueueByDate(getTodayDateString(), token);
+                const matched = queueItems.find(
+                    (item) =>
+                        item.step?.flow?.booking?.patient?.patient_id === patientId ||
+                        (fields.bookingId &&
+                            item.step?.flow?.booking?.booking_id === fields.bookingId),
+                );
+                if (matched) {
+                    fields = {
+                        ...fields,
+                        queueNumber: matched.queue_number,
+                        queueId: matched.queue_id,
+                        bookingId: fields.bookingId ?? matched.step?.flow?.booking?.booking_id,
+                        stepId: fields.stepId ?? matched.step?.step_id,
+                    };
+                }
             } catch {
-                // BE có thể đã trả queue_number trong response create
+                // bỏ qua lỗi fetch queue
             }
         }
 
-        if (!fields.queueNumber) {
-            const queueItems = await receptionService.getQueueByDate(getTodayDateString(), token);
-            const matched = queueItems.find(
-                (item) =>
-                    item.step?.flow?.booking?.patient?.patient_id === patientId ||
-                    (fields.bookingId &&
-                        item.step?.flow?.booking?.booking_id === fields.bookingId),
-            );
-            if (matched) {
-                fields = {
-                    ...fields,
-                    queueNumber: matched.queue_number,
-                    queueId: matched.queue_id,
-                    bookingId: fields.bookingId ?? matched.step?.flow?.booking?.booking_id,
-                    stepId: fields.stepId ?? matched.step?.step_id,
-                };
+        // 2. Nếu chưa có queueNumber, thử gọi API cấp số thứ tự
+        // Webhook PAID đã được gọi trước từ PayOsPaymentPanel nên BE đã ghi nhận thanh toán.
+        // Nếu BE chưa ghi nhận (trả 400), catch bỏ qua và polling tiếp theo sẽ thử lại.
+        if (!fields.queueNumber && fields.stepId) {
+            try {
+                const genRes = await receptionService.generateBookingNumber(fields.stepId, token, true);
+                const generated = extractBookingCreateFields(genRes.data);
+                mergeFields(generated);
+            } catch {
+                // BE trả 400 do chưa thanh toán — sẽ retry ở lần polling tiếp theo
             }
         }
 
@@ -373,6 +382,18 @@ export const receptionService = {
         });
         return assertApiSuccess(res, 'Tạo link thanh toán không thành công.');
     },
+
+    getTransactionById: (id: string, token: string) =>
+        apiClient.get<Record<string, unknown>>(`/api/transaction/${encodeURIComponent(id)}`, {
+            headers: { Authorization: `Bearer ${token}` },
+        }),
+
+    triggerTransactionWebhook: (payload?: unknown, token?: string) =>
+        apiClient.post<unknown>(
+            '/api/transaction/webhook',
+            payload ?? {},
+            token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
+        ),
 
     async findAccountByCitizenId(citizenId: string, token: string): Promise<ReceptionAccount | null> {
         const cleanId = citizenId.replace(/\D/g, '');
@@ -482,36 +503,111 @@ export const receptionService = {
             dob: string;
             gender: Gender;
             medical_coverage_id?: string;
+            phone?: string;
+            email?: string;
         },
         token: string,
-    ): Promise<string | null> {
-        // Swagger: POST /api/patient/me = [USER] tạo BN của chính user.
-        // Token lễ tân (STAFF) gọi endpoint này thường bị 401 — không dùng làm cách tạo chính.
-        const res = await apiClient.post<unknown>(
-            '/api/patient/me',
-            {
-                citizen_id: data.citizen_id,
-                full_name: data.full_name,
-                dob: data.dob,
+        debug?: (stage: string, data: unknown) => void,
+    ): Promise<string> {
+        const cleanCitizenId = data.citizen_id.replace(/\D/g, '');
+
+        // 1. Kiểm tra nếu bệnh nhân đã có patient_id trong DB
+        const existingPatientId = await resolvePatientIdByCitizenId(cleanCitizenId, token);
+        if (existingPatientId) return existingPatientId;
+
+        // 2. Tìm xem account_id đã tồn tại chưa
+        let accountId: string | undefined = undefined;
+        const existingAccounts = await fetchPatientAccounts(token).catch(() => []);
+        const matchedAccount = existingAccounts.find(
+            (a) => (a.citizen_id || '').replace(/\D/g, '') === cleanCitizenId,
+        );
+        if (matchedAccount?.account_id) {
+            accountId = matchedAccount.account_id;
+        }
+
+        // 3. Nếu chưa có, BẮT BUỘC gọi POST /api/auth/register trước để tạo account
+        if (!accountId) {
+            const baseUser = buildUserNameFromFullName(data.full_name, 'bn');
+            const user_name = `${baseUser}${cleanCitizenId.slice(-6)}`.toLowerCase();
+            const email = data.email?.trim() || `bn.${cleanCitizenId.slice(-8)}@patient.triageflow.me`;
+            const suffix = cleanCitizenId.slice(-6) || '000000';
+            const password = `Patient@${suffix}`;
+            const phone = data.phone?.trim() || (`09${cleanCitizenId.slice(-8)}`).padEnd(10, '0');
+
+            const registerPayload: RegisterRequest = {
+                user_name,
+                email,
+                password,
                 gender: data.gender,
-                medical_coverage_id: data.medical_coverage_id || 'N/A',
-            },
+                phone,
+            };
+
+            debug?.('auth.register.start', registerPayload);
+            console.log('[createPatientProfile] Step 1: POST /api/auth/register:', registerPayload);
+
+            try {
+                const regRes = await authService.register(registerPayload);
+                console.log('[createPatientProfile] Step 1 res:', regRes);
+                const resData = regRes.data as any;
+                accountId = resData?.id || resData?.account_id || resData?.data?.id || resData?.data?.account_id;
+                debug?.('auth.register.success', { account_id: accountId });
+            } catch (err) {
+                console.warn('[createPatientProfile] Step 1 register exception:', err);
+                debug?.('auth.register.failed_or_exists', { message: String(err) });
+                
+                // Nếu account đã tồn tại, tìm lại account_id từ danh sách bệnh nhân
+                const accountsAfter = await fetchPatientAccounts(token).catch(() => []);
+                const match = accountsAfter.find(
+                    (a) => (a.citizen_id || '').replace(/\D/g, '') === cleanCitizenId,
+                );
+                if (match?.account_id) {
+                    accountId = match.account_id;
+                }
+            }
+        }
+
+        // 4. Bước 2: Gọi POST /api/patient [STAFF - ADMIN] với account_id (không truyền phone vì BE báo property phone should not exist)
+        const payload: Record<string, unknown> = {
+            citizen_id: cleanCitizenId,
+            full_name: data.full_name,
+            dob: data.dob,
+            gender: data.gender,
+            medical_coverage_id: data.medical_coverage_id || 'N/A',
+        };
+        if (accountId) {
+            payload.account_id = accountId;
+        }
+
+        debug?.('patient.createStaff.start', payload);
+        console.log('[createPatientProfile] Step 2: POST /api/patient:', payload);
+
+        const res = await apiClient.post<unknown>(
+            '/api/patient',
+            payload,
             { headers: { Authorization: `Bearer ${token}` } },
         );
+
+        console.log('[createPatientProfile] Step 2 res:', res);
 
         if (res.status === 'error' || (typeof res.code === 'number' && res.code >= 400)) {
             const msg = (res.message || '').toLowerCase();
             if (msg.includes('exist') || msg.includes('tồn tại') || msg.includes('ton tai') || res.code === 409) {
-                return resolvePatientIdByCitizenId(data.citizen_id, token);
+                const existing = await resolvePatientIdByCitizenId(cleanCitizenId, token);
+                if (existing) return existing;
             }
             const { message, detail } = resolveApiError(res, res.message || 'Không tạo được hồ sơ bệnh nhân.');
             throw new ApiError(res.code ?? 500, message, detail);
         }
 
-        return (
+        const patientId =
             extractPatientIdFromCreateResponse(res) ??
-            (await resolvePatientIdByCitizenId(data.citizen_id, token))
-        );
+            (await resolvePatientIdByCitizenId(cleanCitizenId, token));
+
+        if (!patientId) {
+            throw new Error('Đã tạo bệnh nhân nhưng không nhận được patient_id từ DB.');
+        }
+
+        return patientId;
     },
 
     /**
@@ -539,65 +635,30 @@ export const receptionService = {
             known_patient_id: normalizedData.known_patient_id ?? null,
             full_name: normalizedData.full_name,
             dob: normalizedData.dob,
-            note: 'STAFF chỉ GET /api/patient; tạo BN phải register + login BN + POST /api/patient/me',
+            note: 'STAFF gọi POST /api/patient trực tiếp bằng token Lễ tân',
         });
 
-        const existingPatientId = await resolvePatientIdByCitizenId(normalizedData.citizen_id, token);
-        debug?.('patient.lookup-db', {
-            resolved_patient_id: existingPatientId,
-            known_patient_id: normalizedData.known_patient_id ?? null,
-        });
-        if (existingPatientId) return existingPatientId;
-
-        // Không gọi /patient/me bằng token STAFF — sẽ 401.
-        // Tạo account BN → login bằng account đó → POST /patient/me bằng token BN.
-        const email =
-            normalizedData.email?.trim() || `bn.${normalizedData.citizen_id.slice(-8)}@patient.triageflow.me`;
-        const suffix = normalizedData.citizen_id.slice(-6) || '000000';
-        const password = `Patient@${suffix}`;
-
-        try {
-            debug?.('patient.register+create-as-user.start', { email });
-            const patientId = await receptionService.registerPatient(
-                {
-                    email,
-                    full_name: normalizedData.full_name,
-                    dob: normalizedData.dob,
-                    password,
-                    gender: normalizedData.gender,
-                    citizen_id: normalizedData.citizen_id,
-                    phone: normalizedData.phone?.trim() || undefined,
-                    bhyt: normalizedData.medical_coverage_id,
-                },
-                token,
-                debug,
-            );
-            debug?.('patient.register+create-as-user.result', { patient_id: patientId });
-            if (patientId) return patientId;
-        } catch (err) {
-            debug?.('patient.register+create-as-user.error', {
-                message: err instanceof Error ? err.message : String(err),
-            });
-        }
-
-        const finalPatientId = await resolvePatientIdByCitizenId(normalizedData.citizen_id, token);
-        debug?.('patient.final-lookup', { resolved_patient_id: finalPatientId });
-        if (!finalPatientId) {
-            throw new Error(
-                `Không có patient_id trong DB cho CCCD ${cleanCitizenId}. ` +
-                    'Lễ tân không tạo được BN qua /api/patient/me (chỉ USER). ' +
-                    'Hãy chọn BN đã có trong Tra cứu, hoặc BE cần thêm API STAFF tạo patient.',
-            );
-        }
-        return finalPatientId;
+        return receptionService.createPatientProfile(
+            {
+                citizen_id: normalizedData.citizen_id,
+                full_name: normalizedData.full_name,
+                dob: normalizedData.dob,
+                gender: normalizedData.gender,
+                medical_coverage_id: normalizedData.medical_coverage_id,
+                phone: normalizedData.phone,
+                email: normalizedData.email,
+            },
+            token,
+            debug,
+        );
     },
 
     async registerPatient(
         data: {
-            email: string;
+            email?: string;
             full_name: string;
             dob: string;
-            password: string;
+            password?: string;
             gender: Gender;
             citizen_id: string;
             phone?: string;
@@ -606,78 +667,19 @@ export const receptionService = {
         token: string,
         debug?: (stage: string, data: unknown) => void,
     ): Promise<string> {
-        const citizenId = data.citizen_id.replace(/\D/g, '');
-        const payload: RegisterRequest = {
-            user_name: buildUserNameFromFullName(data.full_name, `bn${citizenId.slice(-6)}`),
-            email: data.email,
-            password: data.password,
-            gender: data.gender,
-            phone: data.phone?.trim() || '0000000000',
-        };
-
-        try {
-            const res = await authService.register(payload);
-            debug?.('auth.register', {
-                ok: true,
-                account_id:
-                    (res.data as { account_id?: string }).account_id ?? res.data.id ?? null,
-            });
-        } catch (err) {
-            // Account có thể đã tồn tại — vẫn login để tạo patient/me
-            debug?.('auth.register', {
-                ok: false,
-                message: err instanceof Error ? err.message : String(err),
-                next: 'thử login bằng email BN',
-            });
-        }
-
-        // Bắt buộc: POST /api/patient/me bằng token của USER bệnh nhân, không dùng token STAFF
-        const loginRes = await authService.login({
-            email: data.email,
-            password: data.password,
-        });
-        const patientToken = loginRes.data?.token;
-        if (!patientToken) {
-            throw new Error('Đăng ký được account nhưng không login được để tạo hồ sơ patient.');
-        }
-        debug?.('auth.login-as-patient', { email: data.email, has_token: true });
-
-        const createRes = await apiClient.post<unknown>(
-            '/api/patient/me',
+        return receptionService.createPatientProfile(
             {
-                citizen_id: citizenId,
+                citizen_id: data.citizen_id,
                 full_name: data.full_name,
                 dob: data.dob,
                 gender: data.gender,
-                medical_coverage_id: data.bhyt || 'N/A',
+                medical_coverage_id: data.bhyt,
+                phone: data.phone,
+                email: data.email,
             },
-            { headers: { Authorization: `Bearer ${patientToken}` } },
+            token,
+            debug,
         );
-
-        if (createRes.status === 'error' || (typeof createRes.code === 'number' && createRes.code >= 400)) {
-            const msg = (createRes.message || '').toLowerCase();
-            if (!(msg.includes('exist') || msg.includes('tồn tại') || msg.includes('ton tai') || createRes.code === 409)) {
-                const { message, detail } = resolveApiError(
-                    createRes,
-                    createRes.message || 'Không tạo được hồ sơ patient bằng token BN.',
-                );
-                throw new ApiError(createRes.code ?? 500, message, detail);
-            }
-            debug?.('patient.me.exists', { message: createRes.message });
-        } else {
-            debug?.('patient.me.created', {
-                patient_id: extractPatientIdFromCreateResponse(createRes),
-            });
-        }
-
-        // Staff token đọc lại danh sách để lấy patient_id
-        const patientId =
-            extractPatientIdFromCreateResponse(createRes) ??
-            (await resolvePatientIdByCitizenId(citizenId, token));
-        if (!patientId) {
-            throw new Error('Đã gọi /api/patient/me nhưng staff vẫn không thấy patient_id trong GET /api/patient.');
-        }
-        return patientId;
     },
 
     resolvePatientIdByCitizenId,
