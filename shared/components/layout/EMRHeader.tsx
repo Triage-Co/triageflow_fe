@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { X, List } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePatientTabsStore } from '@/modules/clinical/store/clinicalStore';
+import { useAuthStore } from '@/store/authStore';
 
 interface EMRHeaderProps {
     activeTabId: string; // 'dashboard' or patient.id
@@ -16,6 +17,8 @@ export function EMRHeader({ activeTabId, activeTabName }: EMRHeaderProps) {
     const router = useRouter();
     const { openTabs, openTab, closeTab } = usePatientTabsStore();
     const [mounted, setMounted] = useState(false);
+    const user = useAuthStore((s) => s.user);
+    const basePath = user?.role === 'NURSE' ? '/nurse' : '/doctor';
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -48,7 +51,7 @@ export function EMRHeader({ activeTabId, activeTabName }: EMRHeaderProps) {
         closeTab(tabId);
 
         if (tabId === activeTabId) {
-            router.push('/doctor');
+            router.push(basePath);
         }
     };
 
@@ -60,7 +63,7 @@ export function EMRHeader({ activeTabId, activeTabName }: EMRHeaderProps) {
             {/* Merged tabs container without gaps */}
             <div className="flex items-end h-full">
                 <Link
-                    href="/doctor"
+                    href={basePath}
                     className={cn(
                         'relative h-10 w-12 flex items-center justify-center rounded-t-[16px] transition-all duration-200',
                         isDashboardActive
@@ -91,7 +94,7 @@ export function EMRHeader({ activeTabId, activeTabName }: EMRHeaderProps) {
                                 )}
                             >
                                 <Link
-                                    href={`/doctor/${tab.id}`}
+                                    href={`${basePath}/${tab.id}`}
                                     className="h-full pl-5 pr-2 flex items-center"
                                 >
                                     <span>{displayName}</span>

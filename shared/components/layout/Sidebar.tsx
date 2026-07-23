@@ -39,15 +39,15 @@ interface NavItem {
 
 const NAV_BY_ROLE: Record<string, NavItem[]> = {
     DOCTOR: [
-        { label: 'Danh sách bệnh nhân', href: '/doctor', icon: LayoutDashboard },
+        { label: 'Danh sách bệnh nhân', href: '/doctor/dashboard', icon: LayoutDashboard },
         { label: 'Thông báo', href: '/doctor/notification', icon: Bell },
         { label: 'Cài đặt', href: '/doctor/setting', icon: Settings },
     ],
     NURSE: [
-        { label: 'Danh sách bệnh nhân', href: '/doctor', icon: LayoutDashboard },
+        { label: 'Danh sách bệnh nhân', href: '/nurse/dashboard', icon: LayoutDashboard },
         { label: 'Tiếp nhận', href: '/reception', icon: UserCheck },
-        { label: 'Thông báo', href: '/doctor/notification', icon: Bell },
-        { label: 'Cài đặt', href: '/doctor/setting', icon: Settings },
+        { label: 'Thông báo', href: '/nurse/notification', icon: Bell },
+        { label: 'Cài đặt', href: '/nurse/setting', icon: Settings },
     ],
     RECEPTIONIST: [
         { label: 'Tổng quan', href: '/reception', icon: LayoutDashboard },
@@ -72,8 +72,15 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
         { label: 'Thông báo', href: '/notifications', icon: Bell },
         { label: 'Cài đặt', href: '/settings', icon: Settings },
     ],
+    USER: [
+        { label: 'Hàng chờ', href: '/queue', icon: LayoutDashboard },
+        { label: 'Điều hướng', href: '/navigation', icon: Map },
+        { label: 'Thanh toán', href: '/payment', icon: CreditCard },
+        { label: 'Kết quả', href: '/results', icon: FlaskConical },
+        { label: 'Cài đặt', href: '/settings', icon: Settings },
+    ],
     ADMIN: [
-        { label: 'Tổng quan', href: '/dashboard', icon: LayoutDashboard },
+        { label: 'Tổng quan', href: '/admin/dashboard', icon: LayoutDashboard },
         { label: 'Biểu đồ nhiệt', href: '/admin/heatmap', icon: Activity },
         { label: 'Cấu hình bản đồ', href: '/admin/map', icon: Map },
         { label: 'Hàng chờ bệnh nhân', href: '/admin/queue', icon: ListOrdered },
@@ -82,15 +89,19 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
         { label: 'Quản lý người dùng', href: '/admin/users', icon: Users },
         { label: 'Quản lý phòng khám', href: '/admin/rooms', icon: Home },
         { label: 'Quản lý nhân viên', href: '/admin/staff', icon: UserCheck },
-        { label: 'Ca trực', href: '/admin/shift', icon: CalendarClock },
         { label: 'Cài đặt', href: '/admin/settings', icon: Settings },
     ],
     default: [
-        { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+        { label: 'Danh sách bệnh nhân', href: '/doctor/dashboard', icon: LayoutDashboard },
         { label: 'Thông báo', href: '/notifications', icon: Bell },
         { label: 'Cài đặt', href: '/settings', icon: Settings },
     ],
 };
+
+function normalizeRoleKey(role?: string): string {
+    if (!role) return '';
+    return role.trim().toUpperCase().replace(/^ROLE_/, '');
+}
 
 const ROLE_LABELS: Record<string, string> = {
     RECEPTIONIST: 'Lễ tân',
@@ -128,14 +139,14 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
     const isCollapsed = collapsed !== undefined ? collapsed : internalCollapsed;
     const handleToggle = onToggle ?? (() => setInternalCollapsed(v => !v));
 
-    const navItems = NAV_BY_ROLE[user?.role?.toUpperCase() ?? ''] ?? NAV_BY_ROLE.default;
+    const roleKey = normalizeRoleKey(user?.role);
+    const navItems = NAV_BY_ROLE[roleKey] ?? NAV_BY_ROLE.default;
 
-    const isNavItemActive = (href: string) => {
-        if (href === '/reception') {
-            return pathname === '/reception';
-        }
-        return pathname === href || pathname.startsWith(`${href}/`);
-    };
+    const activeNavHref = navItems
+        .filter(({ href }) => pathname === href || pathname.startsWith(`${href}/`))
+        .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+
+    const isNavItemActive = (href: string) => href === activeNavHref;
 
     // Handle click outside dropdown
     useEffect(() => {
@@ -167,13 +178,18 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
         <aside
             className={cn(
                 'relative flex flex-col h-full bg-[#F5F2FF] shrink-0 select-none transition-all duration-300 ease-in-out overflow-hidden',
-                isCollapsed ? 'w-[56px]' : 'w-[248px]',
+                isCollapsed ? 'w-14' : 'w-62',
             )}
         >
             {/* ── Logo ──────────────────────────────────── */}
-            <div className="flex items-center gap-3 px-4 pt-6 pb-6 shrink-0">
+            <div
+                className={cn(
+                    'flex items-center pt-6 pb-6 shrink-0 transition-all duration-300 ease-in-out',
+                    isCollapsed ? 'justify-center px-0' : 'gap-3 px-3',
+                )}
+            >
                 <div className="w-10 h-10 rounded-[12px] bg-[#8B7CF6] flex items-center justify-center shadow-[0_4px_12px_rgba(139,124,246,0.35)] shrink-0">
-                    <Stethoscope className="w-[18px] h-[18px] text-white" strokeWidth={2.25} />
+                    <Stethoscope className="w-4.5 h-4.5 text-white" strokeWidth={2.25} />
                 </div>
                 {!isCollapsed && (
                     <div className="overflow-hidden min-w-0">
@@ -186,7 +202,7 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
             </div>
 
             {/* ── Nav ───────────────────────────────────── */}
-            <nav className="flex-1 flex flex-col gap-1.5 px-3 overflow-y-auto overflow-x-hidden">
+            <nav className="flex-1 flex flex-col gap-1.5 px-2 overflow-y-auto overflow-x-hidden">
                 {navItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = isNavItemActive(item.href);
@@ -196,15 +212,15 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
                             key={item.href}
                             href={item.href}
                             className={cn(
-                                'flex items-center gap-3 h-10 rounded-[12px] px-3 transition-all duration-200 text-[13px]',
+                                'flex items-center gap-2.5 h-10 rounded-[12px] px-2.5 transition-all duration-200 text-[13px]',
                                 isCollapsed && 'justify-center px-0 w-10 mx-auto',
                                 isActive
                                     ? 'bg-[#EDE9FE] text-[#8B7CF6] font-semibold shadow-[inset_0_0_0_1px_rgba(139,124,246,0.08)]'
-                                    : 'text-[#4B5563] font-medium hover:bg-[#8B7CF6]/10 hover:text-[#7C3AED]',
+                                    : 'text-[#4B5563] font-medium hover:bg-[#ECECF3] hover:text-[#4B5563]',
                             )}
                         >
                             <Icon
-                                className={cn('w-[18px] h-[18px] shrink-0', isActive ? 'text-[#8B7CF6]' : 'text-[#6B7280]')}
+                                className={cn('w-4.5 h-4.5 shrink-0', isActive ? 'text-[#8B7CF6]' : 'text-[#6B7280]')}
                                 strokeWidth={isActive ? 2.25 : 2}
                             />
                             {!isCollapsed && (

@@ -1,9 +1,7 @@
 'use client';
 
 import React from 'react';
-import { usePathname } from 'next/navigation';
 import { Sidebar } from './Sidebar';
-import { BottomNav } from './BottomNav';
 import { useUIStore } from '@/store/uiStore';
 
 interface AppShellProps {
@@ -12,10 +10,8 @@ interface AppShellProps {
     bare?: boolean;
 }
 
-export function AppShell({ children, user, bare }: AppShellProps) {
+export function AppShell({ children, user }: AppShellProps) {
     const { sidebarOpen, toggleSidebar } = useUIStore();
-    const pathname = usePathname();
-    const showBottomNav = !pathname.startsWith('/reception');
 
     // Map user properties safely
     const displayUser = user
@@ -25,7 +21,7 @@ export function AppShell({ children, user, bare }: AppShellProps) {
     return (
         <div className="flex h-screen w-screen overflow-hidden bg-[#F8F8FB] font-sans text-[#2D2D2D]">
             {/* Desktop Sidebar */}
-            <div className="hidden md:flex h-full shrink-0">
+            <div className="hidden lg:flex h-full shrink-0">
                 <Sidebar
                     user={displayUser}
                     collapsed={!sidebarOpen}
@@ -34,18 +30,9 @@ export function AppShell({ children, user, bare }: AppShellProps) {
             </div>
 
             {/* Main Content Area - fills remaining space */}
-            <div
-                className={`flex-1 flex flex-col h-full overflow-hidden ${showBottomNav ? 'pb-20 md:pb-0' : ''}`}
-            >
+            <div className="flex-1 flex flex-col h-full overflow-hidden">
                 {children}
             </div>
-
-            {/* Mobile Bottom Nav — hidden on reception (dedicated mobile flow) */}
-            {showBottomNav && (
-                <div className="md:hidden">
-                    <BottomNav />
-                </div>
-            )}
         </div>
     );
 }

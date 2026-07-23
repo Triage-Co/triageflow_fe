@@ -109,7 +109,7 @@ export function PatientDetailPage({
 
                     {tabToggle}
 
-                    {activeTab === 'process' && <WorkflowDiagram />}
+                    {activeTab === 'process' && <WorkflowDiagram patientId={patient.patientId || patient.id} />}
                 </div>
 
                 {/* ── RIGHT CONTENT ─── */}
