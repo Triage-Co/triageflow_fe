@@ -129,12 +129,22 @@ export function AdminRoomDetailPage() {
     }, [accessToken, roomId, rooms]);
 
     /* ── Lookup Helper ── */
+    const isStaffsLoading = useStaffStore((s) => s.isLoading);
+
     const getStaffInfo = (staffId: string) => {
-        return staffs.find((s) => s.staff_id === staffId);
+        if (!staffId) return undefined;
+        return staffs.find(
+            (s) =>
+                s.staff_id === staffId ||
+                (s as any).id === staffId ||
+                (s as any).account_id === staffId ||
+                s.account?.email === staffId ||
+                s.account?.user_name === staffId
+        );
     };
 
     const getStaffSpecialtyName = (staffId: string) => {
-        const staff = staffs.find((s) => s.staff_id === staffId);
+        const staff = getStaffInfo(staffId);
         if (!staff || !staff.specialty_id) return 'Chưa phân loại';
         const found = specialties.find((s) => s.specialty_id === staff.specialty_id);
         return found?.specialty_name || found?.specialty_code || 'Chưa phân loại';
@@ -192,7 +202,6 @@ export function AdminRoomDetailPage() {
                 accessToken || ''
             );
             setIsCreateModalOpen(false);
-            if (accessToken) fetchShifts(accessToken);
         } catch (err) {
             setCreateError(err instanceof Error ? err.message : 'Tạo ca trực thất bại.');
         } finally {
@@ -373,13 +382,6 @@ export function AdminRoomDetailPage() {
                                     </div>
 
                                     <div className="space-y-1">
-                                        <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Mã phòng (Room ID)</label>
-                                        <div className="text-xs font-mono text-neutral-500 bg-[#F8F9FA] border border-neutral-100 rounded-xl px-3 py-2">
-                                            {room.room_id}
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-1">
                                         <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Liên kết bản đồ</label>
                                         <div className="text-xs font-semibold text-neutral-500 bg-[#F8F9FA] border border-neutral-100 rounded-xl px-3 py-2">
                                             {room.physical_room_id || 'Chưa liên kết'}
@@ -457,7 +459,13 @@ export function AdminRoomDetailPage() {
                                                                     <div>
                                                                         <div className="flex items-center gap-1.5">
                                                                             <span className="text-xs font-bold text-[#2D2D2D]">
-                                                                                {staff?.full_name || shift.staff_id}
+                                                                                {staff?.full_name ? (
+                                                                                    staff.full_name
+                                                                                ) : isStaffsLoading ? (
+                                                                                    <span className="inline-block w-20 h-3.5 bg-neutral-200/80 animate-pulse rounded align-middle" />
+                                                                                ) : (
+                                                                                    'Nhân viên trực'
+                                                                                )}
                                                                             </span>
                                                                             <span className={cn('text-[9px] font-bold px-2 py-0.5 rounded-full border', roleCfg.bg, roleCfg.text, roleCfg.border)}>
                                                                                 {roleCfg.label}

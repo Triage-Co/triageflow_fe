@@ -93,7 +93,27 @@ export function AdminShiftDetailPage() {
         load();
     }, [accessToken, shiftId]);
 
-    const getStaffName = (staffId: string) => staffs.find((s) => s.staff_id === staffId)?.full_name ?? staffId;
+    const isStaffsLoading = useStaffStore((s) => s.isLoading);
+
+    const getStaffInfo = (staffId: string) => {
+        if (!staffId) return undefined;
+        return staffs.find(
+            (s) =>
+                s.staff_id === staffId ||
+                (s as any).id === staffId ||
+                (s as any).account_id === staffId ||
+                s.account?.email === staffId ||
+                s.account?.user_name === staffId
+        );
+    };
+
+    const getStaffName = (staffId: string) => {
+        const staff = getStaffInfo(staffId);
+        if (staff?.full_name) return staff.full_name;
+        if (isStaffsLoading) return 'Đang tải...';
+        return 'Nhân viên trực';
+    };
+
     const getRoomName = (roomId: string) => rooms.find((r) => r.room_id === roomId)?.room_name ?? roomId;
 
     if (isLoading) {
@@ -130,8 +150,8 @@ export function AdminShiftDetailPage() {
         { label: 'Ngày trực', value: formatDate(shift.date) },
         { label: 'Giờ bắt đầu', value: shift.start_time },
         { label: 'Giờ kết thúc', value: shift.end_time },
-        { label: 'Ngày tạo', value: formatDateTime(shift.createdAt) },
-        { label: 'Cập nhật lần cuối', value: formatDateTime(shift.updatedAt) },
+        { label: 'Ngày tạo', value: shift.createdAt ? formatDateTime(shift.createdAt) : 'N/A' },
+        { label: 'Cập nhật lần cuối', value: shift.updatedAt ? formatDateTime(shift.updatedAt) : 'N/A' },
     ];
 
     return (

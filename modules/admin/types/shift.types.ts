@@ -5,9 +5,9 @@ export interface Shift {
     date: string;
     start_time: string;
     end_time: string;
-    createdAt: string;
-    updatedAt: string;
-    physicalRoomId: string | null;
+    createdAt?: string;
+    updatedAt?: string;
+    physicalRoomId?: string | null;
 }
 
 export interface CreateShiftDto {

@@ -37,7 +37,7 @@ export const useShiftStore = create<ShiftStore>()(
                     set({ shifts: res.data || [], isLoading: false }, false, 'fetchShifts/success');
                 } catch (err) {
                     set({
-                        error: err instanceof Error ? err.message : 'Không thể tải danh sách ca trực.',
+                        error: err instanceof Error ? err.message : 'Không thể tải danh sách ca trực từ DB.',
                         isLoading: false,
                     }, false, 'fetchShifts/failure');
                 }
@@ -45,15 +45,36 @@ export const useShiftStore = create<ShiftStore>()(
 
             createShift: async (data: CreateShiftDto, token: string) => {
                 set({ isLoading: true, error: null }, false, 'createShift/pending');
+                
+                // Swagger API spec format: "date": "YYYY-MM-DD"
+                const dateOnly = data.date ? data.date.slice(0, 10) : new Date().toISOString().slice(0, 10);
+                const payload: CreateShiftDto = {
+                    staff_id: data.staff_id,
+                    room_id: data.room_id,
+                    date: dateOnly,
+                    start_time: data.start_time,
+                    end_time: data.end_time,
+                };
+
                 try {
-                    const res = await shiftService.createShift(data, token);
+                    const res = await shiftService.createShift(payload, token);
+                    const newShift = res?.data || {
+                        shift_id: `shift-${Date.now()}`,
+                        ...payload,
+                    };
                     const current = get().shifts;
-                    set({ shifts: [...current, res.data], isLoading: false }, false, 'createShift/success');
+                    set({ shifts: [newShift, ...current], isLoading: false }, false, 'createShift/success');
+                    // Refresh from Backend Database
+                    await get().fetchShifts(token);
                 } catch (err) {
-                    set({
-                        error: err instanceof Error ? err.message : 'Không thể tạo ca trực mới.',
-                        isLoading: false,
-                    }, false, 'createShift/failure');
+                    set(
+                        {
+                            error: err instanceof Error ? err.message : 'Không thể lưu ca trực vào cơ sở dữ liệu.',
+                            isLoading: false,
+                        },
+                        false,
+                        'createShift/failure'
+                    );
                     throw err;
                 }
             },
@@ -65,11 +86,16 @@ export const useShiftStore = create<ShiftStore>()(
                     const current = get().shifts;
                     const updated = current.map((s) => (s.shift_id === id ? { ...s, ...res.data } : s));
                     set({ shifts: updated, isLoading: false }, false, 'updateShift/success');
+                    await get().fetchShifts(token);
                 } catch (err) {
-                    set({
-                        error: err instanceof Error ? err.message : 'Không thể cập nhật ca trực.',
-                        isLoading: false,
-                    }, false, 'updateShift/failure');
+                    set(
+                        {
+                            error: err instanceof Error ? err.message : 'Không thể cập nhật ca trực trong cơ sở dữ liệu.',
+                            isLoading: false,
+                        },
+                        false,
+                        'updateShift/failure'
+                    );
                     throw err;
                 }
             },
@@ -81,10 +107,14 @@ export const useShiftStore = create<ShiftStore>()(
                     const updated = get().shifts.filter((s) => s.shift_id !== id);
                     set({ shifts: updated, isLoading: false }, false, 'deleteShift/success');
                 } catch (err) {
-                    set({
-                        error: err instanceof Error ? err.message : 'Không thể xóa ca trực.',
-                        isLoading: false,
-                    }, false, 'deleteShift/failure');
+                    set(
+                        {
+                            error: err instanceof Error ? err.message : 'Không thể xóa ca trực khỏi cơ sở dữ liệu.',
+                            isLoading: false,
+                        },
+                        false,
+                        'deleteShift/failure'
+                    );
                     throw err;
                 }
             },

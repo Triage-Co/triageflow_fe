@@ -113,10 +113,25 @@ export function AdminShiftPage() {
     }, [accessToken, fetchShifts, fetchStaffs, fetchRooms]);
 
     /* ── Lookup helpers ── */
+    const isStaffsLoading = useStaffStore((s) => s.isLoading);
+
+    const getStaffInfo = (staffId: string) => {
+        if (!staffId) return undefined;
+        return staffs.find(
+            (s) =>
+                s.staff_id === staffId ||
+                (s as any).id === staffId ||
+                (s as any).account_id === staffId ||
+                s.account?.email === staffId ||
+                s.account?.user_name === staffId
+        );
+    };
 
     const getStaffName = (staffId: string) => {
-        const staff = staffs.find((s) => s.staff_id === staffId);
-        return staff?.full_name || staffId || '';
+        const staff = getStaffInfo(staffId);
+        if (staff?.full_name) return staff.full_name;
+        if (isStaffsLoading) return 'Đang tải...';
+        return 'Nhân viên trực';
     };
 
     const getRoomName = (roomId: string) => {
@@ -130,7 +145,12 @@ export function AdminShiftPage() {
             (s) => s.room_id === roomId && toDateKey(s.date) === shiftDateKey
         );
         const staffIds = new Set(matchingShifts.map((s) => s.staff_id));
-        return staffs.filter((st) => staffIds.has(st.staff_id));
+        return staffs.filter(
+            (st) =>
+                staffIds.has(st.staff_id) ||
+                staffIds.has((st as any).id) ||
+                staffIds.has((st as any).account_id)
+        );
     };
 
     /* ── Handlers ── */
@@ -176,7 +196,6 @@ export function AdminShiftPage() {
         try {
             await createShift(createForm, accessToken || '');
             setIsCreateModalOpen(false);
-            if (accessToken) await fetchShifts(accessToken);
         } catch (err) {
             setCreateError(err instanceof Error ? err.message : 'Tạo ca trực thất bại.');
         } finally {
