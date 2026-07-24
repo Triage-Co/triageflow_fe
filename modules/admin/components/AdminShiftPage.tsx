@@ -22,6 +22,7 @@ import { useRoomStore } from '../store/roomStore';
 import { useAuthStore } from '@/modules/auth/store/authStore';
 import { useRouter } from 'next/navigation';
 import type { Shift, CreateShiftDto } from '../types/shift.types';
+import { isPastOrCompletedShift, validateShiftAssignment, filterEligibleStaffForRoom } from '../utils/shiftValidation';
 
 /* ─── Role Badges Config ─────────────────────────────────────────────────── */
 
@@ -155,6 +156,21 @@ export function AdminShiftPage() {
             setCreateError('Giờ bắt đầu phải nhỏ hơn giờ kết thúc.');
             return;
         }
+
+        const valErr = validateShiftAssignment({
+            roomId: createForm.room_id,
+            staffId: createForm.staff_id,
+            date: createForm.date,
+            rooms,
+            staffs,
+            specialties: useRoomStore.getState().specialties,
+            shifts,
+        });
+        if (valErr) {
+            setCreateError(valErr);
+            return;
+        }
+
         setIsCreating(true);
         setCreateError(null);
         try {
@@ -185,6 +201,8 @@ export function AdminShiftPage() {
     /* ── Computed ── */
 
     const filteredShifts = shifts.filter((shift) => {
+        if (isPastOrCompletedShift(shift)) return false;
+
         const matchesRoom = roomFilter === 'ALL' || shift.room_id === roomFilter;
 
         const shiftDate = toDateKey(shift.date);
@@ -555,22 +573,6 @@ export function AdminShiftPage() {
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5 col-span-2">
-                            <label className="text-[11px] font-bold text-neutral-500 uppercase">Nhân viên trực *</label>
-                            <select
-                                value={createForm.staff_id}
-                                onChange={(e) => setCreateForm((prev) => ({ ...prev, staff_id: e.target.value }))}
-                                className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
-                            >
-                                <option value="">— Chọn nhân viên —</option>
-                                {staffs.map((staff) => (
-                                    <option key={staff.staff_id} value={staff.staff_id}>
-                                        {staff.full_name} ({staff.account?.role || ''})
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className="space-y-1.5 col-span-2">
                             <label className="text-[11px] font-bold text-neutral-500 uppercase">Phòng trực *</label>
                             <select
                                 value={createForm.room_id}
@@ -580,9 +582,32 @@ export function AdminShiftPage() {
                                 <option value="">— Chọn phòng khám —</option>
                                 {rooms.map((room) => (
                                     <option key={room.room_id} value={room.room_id}>
-                                        {room.room_name}
+                                        {room.room_name} ({room.specialty?.specialty_name || ''})
                                     </option>
                                 ))}
+                            </select>
+                        </div>
+
+                        <div className="space-y-1.5 col-span-2">
+                            <label className="text-[11px] font-bold text-neutral-500 uppercase">Nhân viên trực *</label>
+                            <select
+                                value={createForm.staff_id}
+                                onChange={(e) => setCreateForm((prev) => ({ ...prev, staff_id: e.target.value }))}
+                                className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
+                            >
+                                <option value="">— Chọn nhân viên —</option>
+                                {filterEligibleStaffForRoom(
+                                    staffs,
+                                    rooms.find((r) => r.room_id === createForm.room_id)
+                                ).map((staff) => {
+                                    const rKey = (staff.account?.role || '').toUpperCase().replace(/^ROLE_/, '');
+                                    const roleLabel = rKey === 'DOCTOR' ? 'Bác sĩ' : rKey === 'NURSE' ? 'Y tá' : rKey;
+                                    return (
+                                        <option key={staff.staff_id} value={staff.staff_id}>
+                                            {staff.full_name} — {roleLabel}
+                                        </option>
+                                    );
+                                })}
                             </select>
                         </div>
 

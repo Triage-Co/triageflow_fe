@@ -9,15 +9,14 @@ import {
     Syringe,
     RefreshCw,
     CheckCircle2,
-    Plus,
-    ChevronDown,
     Loader2,
     AlertCircle,
     Pill,
+    ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { WorkflowStepStatus } from '@/modules/clinical/types/clinical.types';
-import { Button } from '@/shared/components/ui/Button';
+import type { Patient, WorkflowStepStatus } from '@/modules/clinical/types/clinical.types';
+import type { ProcessTemplate, TemplateStep } from '@/modules/admin/types/process.types';
 import { clinicalService } from '@/modules/clinical/services/clinicalService';
 import { useAuthStore } from '@/store/authStore';
 
@@ -34,6 +33,28 @@ interface FlowNode {
 
 interface WorkflowDiagramProps {
     patientId: string;
+    patient?: Patient;
+}
+
+const DEFAULT_FULL_WORKFLOW: FlowNode[] = [
+    { id: 'reception', Icon: FileText, label: 'Đăng ký & Phân loại', status: 'completed' },
+    { id: 'consultation', Icon: Stethoscope, label: 'Khám chuyên khoa', status: 'current' },
+    { id: 'lab', Icon: Microscope, label: 'Xét nghiệm Cận lâm sàng', status: 'pending' },
+    { id: 'payment', Icon: CreditCard, label: 'Thanh toán viện phí', status: 'pending' },
+    { id: 'done', Icon: CheckCircle2, label: 'Hoàn tất khám', status: 'pending' },
+];
+
+function getTemplateName(tpl?: ProcessTemplate | Record<string, unknown> | null): string {
+    if (!tpl) return '';
+    const rec = tpl as Record<string, unknown>;
+    return (
+        (tpl as ProcessTemplate).name ||
+        (rec.template_name as string) ||
+        (rec.flow_name as string) ||
+        (rec.title as string) ||
+        (rec.name as string) ||
+        ''
+    );
 }
 
 function getIconForStep(specialtyName: string, roomName: string, label: string): NodeIcon {
@@ -41,19 +62,19 @@ function getIconForStep(specialtyName: string, roomName: string, label: string):
     const r = (roomName || '').toLowerCase();
     const l = (label || '').toLowerCase();
 
-    if (s.includes('tiếp đón') || s.includes('đăng ký') || l.includes('tiếp đón') || l.includes('đăng ký') || l.includes('tiếp nhận') || r.includes('tiếp đón')) {
+    if (s.includes('tiếp đón') || s.includes('đăng ký') || l.includes('tiếp đón') || l.includes('đăng ký') || l.includes('tiếp nhận') || r.includes('tiếp đón') || l.includes('reception')) {
         return FileText;
     }
-    if (s.includes('thanh toán') || s.includes('thu ngân') || l.includes('thanh toán') || l.includes('thu ngân') || l.includes('viện phí') || r.includes('thu ngân') || r.includes('thanh toán')) {
+    if (s.includes('thanh toán') || s.includes('thu ngân') || l.includes('thanh toán') || l.includes('thu ngân') || l.includes('viện phí') || r.includes('thu ngân') || r.includes('thanh toán') || l.includes('cashier')) {
         return CreditCard;
     }
-    if (s.includes('xét nghiệm') || s.includes('siêu âm') || s.includes('x-quang') || s.includes('chẩn đoán') || s.includes('phòng lab') || s.includes('cận lâm sàng') || l.includes('xét nghiệm') || l.includes('siêu âm') || l.includes('cận lâm sàng')) {
+    if (s.includes('xét nghiệm') || s.includes('siêu âm') || s.includes('x-quang') || s.includes('chẩn đoán') || s.includes('phòng lab') || s.includes('cận lâm sàng') || l.includes('xét nghiệm') || l.includes('siêu âm') || l.includes('cận lâm sàng') || l.includes('lab')) {
         return Microscope;
     }
     if (s.includes('thủ thuật') || s.includes('tiêm') || s.includes('truyền') || l.includes('thủ thuật') || l.includes('tiêm')) {
         return Syringe;
     }
-    if (s.includes('dược') || s.includes('thuốc') || l.includes('dược') || l.includes('thuốc') || l.includes('phát thuốc')) {
+    if (s.includes('dược') || s.includes('thuốc') || l.includes('dược') || l.includes('thuốc') || l.includes('phát thuốc') || l.includes('pharmacy')) {
         return Pill;
     }
     if (l.includes('tái khám') || l.includes('lịch hẹn')) {
@@ -65,10 +86,35 @@ function getIconForStep(specialtyName: string, roomName: string, label: string):
     return Stethoscope;
 }
 
-function mapStepStatus(status?: string): WorkflowStepStatus {
-    const s = (status || '').toUpperCase();
-    if (s === 'COMPLETED' || s === 'SUCCESSED') return 'completed';
-    if (s === 'IN_PROGRESS' || s === 'PROCESSING' || s === 'ONGOING') return 'current';
+function determineStepStatus(
+    index: number,
+    rawFlowSteps: unknown[],
+    templateStepsCount: number,
+    isPatientDone?: boolean
+): WorkflowStepStatus {
+    if (isPatientDone) return 'completed';
+
+    if (Array.isArray(rawFlowSteps) && rawFlowSteps.length > 0) {
+        const rawStep = rawFlowSteps[index] as Record<string, unknown> | undefined;
+        if (rawStep) {
+            const st = ((rawStep.step_status as string) || '').toUpperCase();
+            const paySt = ((rawStep.payment_status as string) || '').toUpperCase();
+
+            if (st === 'COMPLETED' || st === 'DONE' || st === 'SUCCESSED' || st === 'FINISHED' || paySt === 'SUCCESSED') {
+                return 'completed';
+            }
+            if (st === 'PROCESSING' || st === 'IN_PROGRESS' || st === 'CURRENT' || st === 'DOING' || st === 'EXAMINING' || st === 'ACTIVE') {
+                return 'current';
+            }
+        }
+    }
+
+    // Fallback theo vị trí thứ tự:
+    // Bước 0 (Đăng ký & Phân loại) → Xanh lá (Đã xong)
+    // Bước 1 (Khám chuyên khoa) → Xanh dương (Đang thực hiện)
+    // Bước còn lại (Làm xét nghiệm, Thanh toán...) → Xám (Chờ)
+    if (index === 0) return 'completed';
+    if (index === 1) return 'current';
     return 'pending';
 }
 
@@ -76,23 +122,23 @@ function nodeStyles(status: WorkflowStepStatus) {
     switch (status) {
         case 'completed':
             return {
-                ring: 'bg-[#10B981] shadow-[0_0_0_4px_rgba(16,185,129,0.15)] border-transparent text-white',
+                ring: 'bg-[#10B981] shadow-[0_0_0_4px_rgba(16,185,129,0.2)] border-transparent text-white',
                 line: 'bg-[#10B981]',
             };
         case 'current':
             return {
-                ring: 'bg-[#1A73E8] shadow-[0_0_0_4px_rgba(26,115,232,0.2)] border-transparent text-white',
-                line: 'bg-[#1A73E8]',
+                ring: 'bg-[#2563EB] shadow-[0_0_0_4px_rgba(37,99,235,0.25)] border-transparent text-white',
+                line: 'bg-[#2563EB]',
             };
         default:
             return {
-                ring: 'bg-[#F3F4F6] border border-[#E5E7EB] text-[#9CA3AF]',
-                line: 'bg-[#E5E7EB]',
+                ring: 'bg-[#F1F5F9] border border-[#CBD5E1] text-[#94A3B8]',
+                line: 'bg-[#E2E8F0]',
             };
     }
 }
 
-function FlowIcon({ node }: { node: FlowNode }) {
+function FlowIcon({ node, isFirst }: { node: FlowNode; isFirst?: boolean }) {
     const styles = nodeStyles(node.status);
 
     return (
@@ -107,15 +153,21 @@ function FlowIcon({ node }: { node: FlowNode }) {
             </div>
 
             {/* Tooltip */}
-            <div className="absolute bottom-full mb-2.5 hidden group-hover:flex flex-col items-center z-50">
+            <div
+                className={cn(
+                    'absolute hidden group-hover:flex flex-col items-center z-50',
+                    isFirst ? 'top-full mt-2.5' : 'bottom-full mb-2.5'
+                )}
+            >
+                {isFirst && <div className="w-2 h-2 bg-[#1E293B] rotate-45 -mb-1 z-10" />}
                 <div className="bg-[#1E293B] text-white text-[11px] font-semibold px-3 py-2 rounded-xl shadow-lg whitespace-nowrap">
                     <p className="font-bold text-[#F8FAFC]">{node.label}</p>
                     {node.roomName && <p className="text-[#94A3B8] font-normal text-[10px] mt-0.5">Phòng: {node.roomName}</p>}
                     {node.staffName && <p className="text-[#94A3B8] font-normal text-[10px]">Nhân viên: {node.staffName}</p>}
                 </div>
-                <div className="w-2 h-2 bg-[#1E293B] rotate-45 -mt-1"></div>
+                {!isFirst && <div className="w-2 h-2 bg-[#1E293B] rotate-45 -mt-1" />}
             </div>
-            <span className="text-[11px] font-bold text-neutral-600 mt-1.5 max-w-[120px] text-center truncate">
+            <span className="text-[11px] font-bold text-neutral-600 mt-1.5 max-w-[140px] text-center truncate">
                 {node.label}
             </span>
         </div>
@@ -127,28 +179,63 @@ function Connector({ status }: { status: WorkflowStepStatus }) {
     return <div className={cn('w-0.5 h-6 mx-auto rounded-full', styles.line)} />;
 }
 
-export function WorkflowDiagram({ patientId }: WorkflowDiagramProps) {
+export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
     const accessToken = useAuthStore((s) => s.accessToken);
     const [isLoading, startFetch] = useTransition();
     const [error, setError] = useState<string | null>(null);
     const [flowData, setFlowData] = useState<Record<string, unknown> | null>(null);
+    const [templates, setTemplates] = useState<ProcessTemplate[]>([]);
+    const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
 
     useEffect(() => {
         if (!accessToken || !patientId) return;
 
-        const load = async () => {
+        const loadData = async () => {
             startFetch(async () => {
                 try {
                     setError(null);
-                    const res = await clinicalService.getActiveFlowByPatientId(patientId, accessToken);
-                    const record = res.data as Record<string, unknown>;
-                    const list = (record && typeof record === 'object' && Array.isArray(record.data))
-                        ? record.data
-                        : Array.isArray(record) ? record : [];
-                    if (list.length > 0) {
-                        setFlowData(list[0] as Record<string, unknown>);
-                    } else {
-                        setFlowData(null);
+                    // Fetch Active Flow
+                    const flowRes = await clinicalService.getActiveFlowByPatientId(patientId, accessToken);
+                    let flowObj: Record<string, unknown> | null = null;
+                    if (flowRes?.data) {
+                        const raw = flowRes.data as unknown;
+                        if (Array.isArray(raw) && raw.length > 0) {
+                            const list = raw as Record<string, unknown>[];
+                            flowObj = list.find((item) => ((item.status as string) || '').toUpperCase() === 'IN_PROGRESS') || list[0];
+                        } else if (raw && typeof raw === 'object') {
+                            const rec = raw as Record<string, unknown>;
+                            if (Array.isArray(rec.data) && rec.data.length > 0) {
+                                const list = rec.data as Record<string, unknown>[];
+                                flowObj = list.find((item) => ((item.status as string) || '').toUpperCase() === 'IN_PROGRESS') || list[0];
+                            } else if (rec.data && typeof rec.data === 'object' && !Array.isArray(rec.data)) {
+                                flowObj = rec.data as Record<string, unknown>;
+                            } else {
+                                flowObj = rec;
+                            }
+                        }
+                    }
+                    setFlowData(flowObj);
+
+                    // Fetch Templates
+                    try {
+                        const tplRes = await clinicalService.getProcessTemplates(accessToken);
+                        let tplList: ProcessTemplate[] = [];
+                        if (tplRes?.data) {
+                            const tData = tplRes.data as unknown;
+                            if (Array.isArray(tData)) {
+                                tplList = tData as ProcessTemplate[];
+                            } else if (tData && typeof tData === 'object') {
+                                const rec = tData as Record<string, unknown>;
+                                if (Array.isArray(rec.data)) {
+                                    tplList = rec.data as ProcessTemplate[];
+                                } else if (Array.isArray(rec.templates)) {
+                                    tplList = rec.templates as ProcessTemplate[];
+                                }
+                            }
+                        }
+                        setTemplates(tplList);
+                    } catch {
+                        // ignore template fetch error if any
                     }
                 } catch (err) {
                     console.error('Failed to fetch active flow:', err);
@@ -157,18 +244,55 @@ export function WorkflowDiagram({ patientId }: WorkflowDiagramProps) {
             });
         };
 
-        load();
+        loadData();
     }, [patientId, accessToken]);
 
-    // Build the complete list of steps dynamically
+    const handleSelectTemplate = (templateId: string) => {
+        setSelectedTemplateId(templateId);
+    };
+
+    // Determine active template and current steps to render
+    const activeTemplateId =
+        selectedTemplateId ||
+        (flowData?.template_id as string) ||
+        (patient?.templateId as string) ||
+        (templates[0]?.template_id || templates[0]?.id || '');
+
+    const activeTemplate = templates.find(
+        (t) => (t.template_id || t.id) === activeTemplateId
+    ) || templates[0];
+
+    const rawFlowSteps = (flowData?.steps as unknown[]) || [];
     const dynamicSteps: FlowNode[] = [];
 
-    // API Steps
-    if (flowData) {
-        const rawSteps = (flowData.steps as unknown[]) || [];
-        rawSteps.forEach((stepItem, index) => {
+    const isPatientDone = patient?.status === 'Đã khám';
+
+    if (activeTemplate && activeTemplate.steps && activeTemplate.steps.length > 0) {
+        // Render step names directly from Admin's process template
+        activeTemplate.steps.forEach((tStep: TemplateStep, index: number) => {
+            const rawStep = (rawFlowSteps[index] as Record<string, unknown> | undefined);
+            const status = determineStepStatus(index, rawFlowSteps, activeTemplate.steps.length, isPatientDone);
+            const roomInfo = rawStep?.room_info as Record<string, unknown> | undefined;
+            const staffInfo = rawStep?.staff_info as Record<string, unknown> | undefined;
+
+            const roomName = (roomInfo?.room_name as string) || tStep.room_type;
+            const staffName = (staffInfo?.full_name as string) || '';
+            const label = tStep.step_name || `Bước ${index + 1}`;
+
+            dynamicSteps.push({
+                id: tStep.template_step_id || (rawStep?.step_id as string) || `tpl-step-${index}`,
+                Icon: getIconForStep(tStep.room_type, roomName, label),
+                status,
+                label,
+                roomName,
+                staffName,
+            });
+        });
+    } else if (rawFlowSteps.length > 0) {
+        // Fallback to raw flow steps if no active template steps exist
+        rawFlowSteps.forEach((stepItem, index) => {
             const step = stepItem as Record<string, unknown>;
-            const status = mapStepStatus(step.step_status as string);
+            const status = determineStepStatus(index, rawFlowSteps, rawFlowSteps.length, isPatientDone);
             const specialtyInfo = step.specialty_info as Record<string, unknown> | undefined;
             const roomInfo = step.room_info as Record<string, unknown> | undefined;
             const staffInfo = step.staff_info as Record<string, unknown> | undefined;
@@ -176,7 +300,7 @@ export function WorkflowDiagram({ patientId }: WorkflowDiagramProps) {
             const specialtyName = (specialtyInfo?.specialty_name as string) || '';
             const roomName = (roomInfo?.room_name as string) || '';
             const staffName = (staffInfo?.full_name as string) || '';
-            const label = specialtyName || roomName || `Bước ${index + 1}`;
+            const label = (step.step_name as string) || specialtyName || roomName || `Bước ${index + 1}`;
 
             dynamicSteps.push({
                 id: (step.step_id as string) || `api-step-${index}`,
@@ -188,37 +312,8 @@ export function WorkflowDiagram({ patientId }: WorkflowDiagramProps) {
             });
         });
     } else {
-        // Fallback to static mockup nodes if no active flow
-        dynamicSteps.push({
-            id: 'reception',
-            Icon: FileText,
-            label: 'Tiếp nhận',
-            status: 'completed',
-        });
-        dynamicSteps.push({
-            id: 'payment',
-            Icon: CreditCard,
-            label: 'Thanh toán',
-            status: 'completed',
-        });
-        dynamicSteps.push({
-            id: 'consultation',
-            Icon: Stethoscope,
-            label: 'Khám bệnh',
-            status: 'current',
-        });
-        dynamicSteps.push({
-            id: 'recall',
-            Icon: RefreshCw,
-            label: 'Tái khám',
-            status: 'pending',
-        });
-        dynamicSteps.push({
-            id: 'done',
-            Icon: CheckCircle2,
-            label: 'Hoàn tất',
-            status: 'pending',
-        });
+        // Fallback to full standard workflow steps
+        dynamicSteps.push(...DEFAULT_FULL_WORKFLOW);
     }
 
     if (isLoading) {
@@ -246,7 +341,7 @@ export function WorkflowDiagram({ patientId }: WorkflowDiagramProps) {
             <div className="flex flex-col items-center w-full space-y-1">
                 {dynamicSteps.map((node, idx) => (
                     <div key={node.id} className="flex flex-col items-center w-full">
-                        <FlowIcon node={node} />
+                        <FlowIcon node={node} isFirst={idx === 0} />
                         {idx < dynamicSteps.length - 1 && (
                             <Connector status={node.status} />
                         )}
@@ -254,24 +349,37 @@ export function WorkflowDiagram({ patientId }: WorkflowDiagramProps) {
                 ))}
             </div>
 
-            {/* Template selector footer */}
-            <div className="w-full mt-6 pt-5 border-t border-neutral-100 flex items-center gap-2">
-                <button
-                    type="button"
-                    className="flex-1 flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-[14px] border border-neutral-200 bg-white text-xs font-medium text-neutral-600 hover:border-neutral-300 hover:bg-neutral-50 transition-colors"
-                >
-                    <span>Chọn mẫu quy trình</span>
-                    <ChevronDown className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                </button>
-                <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-10 w-10 p-0 rounded-[14px] shrink-0 border-neutral-200"
-                    aria-label="Thêm mẫu quy trình"
-                >
-                    <Plus className="w-4 h-4" />
-                </Button>
-            </div>
+            {/* Template Selector Footer */}
+            {templates.length > 0 && (
+                <div className="w-full mt-6 pt-5 border-t border-neutral-100 flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">
+                            Quy trình mẫu:
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#F5F2FF] text-[#8B7CF6] border border-[#E0DCFB]">
+                            {dynamicSteps.length} bước
+                        </span>
+                    </div>
+                    <div className="relative w-full">
+                        <select
+                            value={activeTemplateId}
+                            onChange={(e) => handleSelectTemplate(e.target.value)}
+                            className="w-full appearance-none px-3.5 py-2.5 pr-8 rounded-[14px] border border-neutral-200 bg-white text-xs font-bold text-neutral-800 hover:border-[#8B7CF6] focus:border-[#8B7CF6] focus:outline-none transition-colors cursor-pointer"
+                        >
+                            {templates.map((tpl) => {
+                                const tplId = tpl.template_id || tpl.id || '';
+                                const name = getTemplateName(tpl) || `Mẫu quy trình (${tpl.steps?.length || 0} bước)`;
+                                return (
+                                    <option key={tplId || name} value={tplId}>
+                                        {name} ({tpl.steps?.length || 0} bước)
+                                    </option>
+                                );
+                            })}
+                        </select>
+                        <ChevronDown className="w-3.5 h-3.5 text-neutral-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

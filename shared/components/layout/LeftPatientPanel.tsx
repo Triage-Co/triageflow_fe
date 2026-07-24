@@ -292,7 +292,7 @@ export function LeftPatientPanel({ patient, isOpen }: LeftPanelProps) {
                     <div className="flex-1 overflow-y-auto px-5 pb-5 space-y-3">
                         {/* ── Process tab ── */}
                         {tab === 'process' && (
-                            <WorkflowDiagram patientId={patient.patientId || patient.id} />
+                            <WorkflowDiagram patientId={patient.patientId || patient.id} patient={patient} />
                         )}
 
                         {/* ── Info tab ── */}

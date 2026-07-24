@@ -24,6 +24,7 @@ import { useAuthStore } from '@/modules/auth/store/authStore';
 import type { HospitalRoom, Specialty } from '../types/room.types';
 import type { Shift } from '../types/shift.types';
 import { roomService } from '../services/roomService';
+import { isPastOrCompletedShift, validateShiftAssignment, filterEligibleStaffForRoom } from '../utils/shiftValidation';
 
 /* ─── Role Badges Config ─────────────────────────────────────────────────── */
 
@@ -140,10 +141,12 @@ export function AdminRoomDetailPage() {
     };
 
     /* ── Handlers ── */
+    const eligibleStaffs = filterEligibleStaffForRoom(staffs, room);
+
     const openCreateModal = () => {
         setCreateError(null);
         setCreateForm({
-            staff_id: staffs[0]?.staff_id || '',
+            staff_id: eligibleStaffs[0]?.staff_id || '',
             date: new Date().toISOString().split('T')[0],
             start_time: '08:00',
             end_time: '17:00',
@@ -160,6 +163,21 @@ export function AdminRoomDetailPage() {
             setCreateError('Giờ bắt đầu phải nhỏ hơn giờ kết thúc.');
             return;
         }
+
+        const valErr = validateShiftAssignment({
+            roomId,
+            staffId: createForm.staff_id,
+            date: createForm.date,
+            rooms,
+            staffs,
+            specialties,
+            shifts,
+        });
+        if (valErr) {
+            setCreateError(valErr);
+            return;
+        }
+
         setIsCreating(true);
         setCreateError(null);
         try {
@@ -194,7 +212,7 @@ export function AdminRoomDetailPage() {
     };
 
     const handleUpdateShift = async () => {
-        if (!editingShift || !accessToken) return;
+        if (!editingShift || !accessToken || !roomId) return;
         if (!editForm.staff_id || !editForm.date || !editForm.start_time || !editForm.end_time) {
             setUpdateError('Vui lòng điền đầy đủ thông tin.');
             return;
@@ -203,6 +221,22 @@ export function AdminRoomDetailPage() {
             setUpdateError('Giờ bắt đầu phải nhỏ hơn giờ kết thúc.');
             return;
         }
+
+        const valErr = validateShiftAssignment({
+            roomId,
+            staffId: editForm.staff_id,
+            date: editForm.date,
+            excludeShiftId: editingShift.shift_id,
+            rooms,
+            staffs,
+            specialties,
+            shifts,
+        });
+        if (valErr) {
+            setUpdateError(valErr);
+            return;
+        }
+
         setIsUpdating(true);
         setUpdateError(null);
         try {
@@ -283,7 +317,7 @@ export function AdminRoomDetailPage() {
 
     const specName = room.specialty?.specialty_name || specialties.find((s) => s.specialty_id === room.specialty_id)?.specialty_name || 'N/A';
     const specCode = room.specialty?.specialty_code || specialties.find((s) => s.specialty_id === room.specialty_id)?.specialty_code || 'N/A';
-    const roomShifts = shifts.filter((s) => s.room_id === room.room_id);
+    const roomShifts = shifts.filter((s) => s.room_id === room.room_id && !isPastOrCompletedShift(s));
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden relative">
@@ -525,11 +559,16 @@ export function AdminRoomDetailPage() {
                                 className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
                             >
                                 <option value="">— Chọn nhân viên —</option>
-                                {staffs.map((st) => (
-                                    <option key={st.staff_id} value={st.staff_id}>
-                                        {st.full_name} ({st.account?.role || ''})
-                                    </option>
-                                ))}
+                                {eligibleStaffs.map((st) => {
+                                    const rKey = (st.account?.role || '').toUpperCase().replace(/^ROLE_/, '');
+                                    const roleLabel = rKey === 'DOCTOR' ? 'Bác sĩ' : rKey === 'NURSE' ? 'Y tá' : rKey;
+                                    const specName = getStaffSpecialtyName(st.staff_id);
+                                    return (
+                                        <option key={st.staff_id} value={st.staff_id}>
+                                            {st.full_name} — {roleLabel} ({specName})
+                                        </option>
+                                    );
+                                })}
                             </select>
                         </div>
 
@@ -616,11 +655,16 @@ export function AdminRoomDetailPage() {
                                 className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
                             >
                                 <option value="">— Chọn nhân viên —</option>
-                                {staffs.map((st) => (
-                                    <option key={st.staff_id} value={st.staff_id}>
-                                        {st.full_name} ({st.account?.role || ''})
-                                    </option>
-                                ))}
+                                {eligibleStaffs.map((st) => {
+                                    const rKey = (st.account?.role || '').toUpperCase().replace(/^ROLE_/, '');
+                                    const roleLabel = rKey === 'DOCTOR' ? 'Bác sĩ' : rKey === 'NURSE' ? 'Y tá' : rKey;
+                                    const specName = getStaffSpecialtyName(st.staff_id);
+                                    return (
+                                        <option key={st.staff_id} value={st.staff_id}>
+                                            {st.full_name} — {roleLabel} ({specName})
+                                        </option>
+                                    );
+                                })}
                             </select>
                         </div>
 
