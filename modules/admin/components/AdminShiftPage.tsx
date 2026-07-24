@@ -20,7 +20,6 @@ import { useShiftStore } from '../store/shiftStore';
 import { useStaffStore } from '../store/staffStore';
 import { useRoomStore } from '../store/roomStore';
 import { useAuthStore } from '@/modules/auth/store/authStore';
-import { useRouter } from 'next/navigation';
 import type { Shift, CreateShiftDto } from '../types/shift.types';
 import { isPastOrCompletedShift, validateShiftAssignment, filterEligibleStaffForRoom } from '../utils/shiftValidation';
 
@@ -67,7 +66,6 @@ const getCompactPages = (totalPages: number): Array<number | 'ellipsis'> => {
 /* ─── Component ──────────────────────────────────────────────────────────── */
 
 export function AdminShiftPage() {
-    const router = useRouter();
     const accessToken = useAuthStore((s) => s.accessToken);
 
     const { shifts, isLoading, error, fetchShifts, createShift, deleteShift, clearError } = useShiftStore();
@@ -120,8 +118,8 @@ export function AdminShiftPage() {
         return staffs.find(
             (s) =>
                 s.staff_id === staffId ||
-                (s as any).id === staffId ||
-                (s as any).account_id === staffId ||
+                (s as unknown as Record<string, unknown>).id === staffId ||
+                (s as unknown as Record<string, unknown>).account_id === staffId ||
                 s.account?.email === staffId ||
                 s.account?.user_name === staffId
         );
@@ -148,8 +146,8 @@ export function AdminShiftPage() {
         return staffs.filter(
             (st) =>
                 staffIds.has(st.staff_id) ||
-                staffIds.has((st as any).id) ||
-                staffIds.has((st as any).account_id)
+                staffIds.has((st as unknown as Record<string, unknown>).id as string) ||
+                staffIds.has((st as unknown as Record<string, unknown>).account_id as string)
         );
     };
 

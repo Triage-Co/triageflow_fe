@@ -100,8 +100,8 @@ export function AdminShiftDetailPage() {
         return staffs.find(
             (s) =>
                 s.staff_id === staffId ||
-                (s as any).id === staffId ||
-                (s as any).account_id === staffId ||
+                (s as unknown as Record<string, unknown>).id === staffId ||
+                (s as unknown as Record<string, unknown>).account_id === staffId ||
                 s.account?.email === staffId ||
                 s.account?.user_name === staffId
         );

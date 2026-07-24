@@ -13,7 +13,6 @@ import {
     X,
     CreditCard,
     Stethoscope,
-    ChevronLeft,
     ChevronRight,
     Sparkles,
 } from 'lucide-react';
@@ -243,10 +242,6 @@ export function AdminProcessPage() {
     });
 
     // Pagination calculations
-    const totalPages = Math.max(1, Math.ceil(filteredTemplates.length / ITEMS_PER_PAGE));
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const paginatedTemplates = filteredTemplates.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-    const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, filteredTemplates.length);
 
     const getRoomLabel = (roomType: string) => {
         const found = ROOM_TYPE_OPTIONS.find((r) => r.value === roomType);
