@@ -3,7 +3,7 @@ import {
   FloorData3D,
   RoomData,
   WallSegment,
-  ClinicPartitionSegment,
+  AreaPartitionSegment,
   StandaloneDoorData,
 } from '../../utils/buildingToThree';
 import { createWallMaterial, createFloorMaterial, createSlabMaterial } from './threeMaterials';
@@ -72,11 +72,11 @@ export function addWallSegment(
   scene.add(wall);
 }
 
-// ─── Clinic Partitions Builder ────────────────────────────────────────────────
+// ─── Area Partitions Builder ────────────────────────────────────────────────
 
-export function addClinicPartitions(
+export function addAreaPartitions(
   scene: THREE.Scene,
-  partitions: ClinicPartitionSegment[],
+  partitions: AreaPartitionSegment[],
   wallHeight: number
 ) {
   partitions.forEach((cp) => {

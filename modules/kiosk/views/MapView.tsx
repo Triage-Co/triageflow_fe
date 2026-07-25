@@ -11,14 +11,14 @@ export const MapView: React.FC = () => {
   const activeTicket = useFlowStore((state) => state.activeTicket);
 
   const targetRoomCode = activeTicket?.roomNumber || null;
-  const targetClinicId = (activeTicket as any)?.clinicId || null;
+  const targetAreaId = (activeTicket as any)?.areaId || null;
 
   return (
     <div className="w-full h-full relative overflow-hidden bg-slate-50">
       {/* 3D Map Canvas full-screen */}
       <FloorMap
         highlightRoomCode={targetRoomCode}
-        highlightClinicId={targetClinicId}
+        highlightAreaId={targetAreaId}
       />
 
       {/* Floating Header Bar */}

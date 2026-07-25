@@ -1,4 +1,4 @@
-import { ApiFloor, ApiRoom, ApiBoundary, ApiDoor, ApiClinic } from '../types/navigation.types';
+import { ApiFloor, ApiRoom, ApiBoundary, ApiDoor, ApiArea } from '../types/navigation.types';
 
 const DEG_TO_METER_X = 111320;
 const DEG_TO_METER_Z = 110540;
@@ -17,12 +17,12 @@ export interface WallSegment {
   centerZ: number;
 }
 
-// ─── Clinic Partition Segment ──────────────────────────────────────────────────
+// ─── Area Partition Segment ──────────────────────────────────────────────────
 
-export interface ClinicPartitionSegment {
-  clinicId: string;
-  clinicCode: string;
-  clinicLabel: string;
+export interface AreaPartitionSegment {
+  areaId: string;
+  areaCode: string;
+  areaLabel: string;
   color: number;
   startX: number;
   startZ: number;
@@ -51,7 +51,7 @@ export interface RoomData {
   roomCode: string;
   roomLabel: string;
   type: string;
-  clinicId: string | null;
+  areaId: string | null;
   /** Polygon outline points (x = East/West, z = North/South) */
   points: { x: number; z: number }[];
   /** Wall segments from boundaries */
@@ -70,7 +70,7 @@ export interface RoomData {
 
 export interface FloorData3D {
   rooms: RoomData[];
-  clinicPartitions: ClinicPartitionSegment[];
+  areaPartitions: AreaPartitionSegment[];
   standaloneDoors: StandaloneDoorData[];
   floorOutlinePoints: { x: number; z: number }[];
   floorWidth: number;
@@ -81,14 +81,18 @@ export interface FloorData3D {
     minZ: number;
     maxZ: number;
   };
+  standaloneWalls: WallSegment[];
 }
 
-// ─── Clinic Colors ─────────────────────────────────────────────────────────────
+// ─── Area Colors ─────────────────────────────────────────────────────────────
 
-export const CLINIC_COLORS: Record<string, number> = {
+export const AREA_COLORS: Record<string, number> = {
   OPH: 0xef476f,
   SUR: 0x1c6ef3,
   ORTH: 0xe85d04,
+  DERM: 0x06b6d4, // Cyan
+  PED_INT: 0x10b981, // Emerald green
+  GARDEN: 0x84cc16, // Lime green
   Default: 0x64748b,
 };
 
@@ -279,7 +283,7 @@ export function floorToRoomData(floor: ApiFloor): FloorData3D {
       roomCode: room.roomCode,
       roomLabel: room.roomLabel,
       type: room.type,
-      clinicId: room.clinicId ?? null,
+      areaId: room.areaId ?? null,
       points: centeredPoints,
       walls,
       centerX,
@@ -293,13 +297,13 @@ export function floorToRoomData(floor: ApiFloor): FloorData3D {
     };
   });
 
-  // 3. Convert Clinic Partitions
-  const clinicPartitions: ClinicPartitionSegment[] = [];
-  if (floor.clinics) {
-    floor.clinics.forEach((clinic) => {
-      const color = CLINIC_COLORS[clinic.clinicCode] || CLINIC_COLORS.Default;
-      if (clinic.boundaries) {
-        clinic.boundaries.forEach((b) => {
+  // 3. Convert Area Partitions
+  const areaPartitions: AreaPartitionSegment[] = [];
+  if (floor.areas) {
+    floor.areas.forEach((area) => {
+      const color = AREA_COLORS[area.areaCode] || AREA_COLORS.Default;
+      if (area.boundaries) {
+        area.boundaries.forEach((b) => {
           if (b.lineGeom && b.lineGeom.coordinates && b.lineGeom.coordinates.length >= 2) {
             const coords = b.lineGeom.coordinates;
             const startX = coords[0][0] * DEG_TO_METER_X - centerShiftX;
@@ -312,10 +316,10 @@ export function floorToRoomData(floor: ApiFloor): FloorData3D {
             const length = Math.sqrt(dx * dx + dz * dz);
             const angle = Math.atan2(dz, dx);
 
-            clinicPartitions.push({
-              clinicId: clinic.id,
-              clinicCode: clinic.clinicCode,
-              clinicLabel: clinic.clinicLabel,
+            areaPartitions.push({
+              areaId: area.id,
+              areaCode: area.areaCode,
+              areaLabel: area.areaLabel,
               color,
               startX,
               startZ,
@@ -354,8 +358,8 @@ export function floorToRoomData(floor: ApiFloor): FloorData3D {
           });
         });
 
-        // Also check clinic partitions
-        clinicPartitions.forEach((cp) => {
+        // Also check area partitions
+        areaPartitions.forEach((cp) => {
           const d = distToSegment(ptX, ptZ, cp.startX, cp.startZ, cp.endX, cp.endZ);
           if (d < minDist) {
             minDist = d;
@@ -373,11 +377,43 @@ export function floorToRoomData(floor: ApiFloor): FloorData3D {
       }
     });
   }
+  // 5. Convert Standalone Boundaries
+  const standaloneWalls: WallSegment[] = [];
+  if (floor.standaloneBoundaries) {
+    floor.standaloneBoundaries.forEach((b) => {
+      if (b.boundaryType === 'DOOR') {
+        if (b.lineGeom && b.lineGeom.coordinates && b.lineGeom.coordinates.length >= 2) {
+          const coords = b.lineGeom.coordinates;
+          const startX = coords[0][0] * DEG_TO_METER_X - centerShiftX;
+          const startZ = -(coords[0][1] * DEG_TO_METER_Z) - centerShiftZ;
+          const endX = coords[1][0] * DEG_TO_METER_X - centerShiftX;
+          const endZ = -(coords[1][1] * DEG_TO_METER_Z) - centerShiftZ;
+
+          const dx = endX - startX;
+          const dz = endZ - startZ;
+          const length = Math.sqrt(dx * dx + dz * dz);
+          const angle = Math.atan2(dz, dx);
+
+          standaloneDoors.push({
+            id: b.id,
+            centerX: (startX + endX) / 2,
+            centerZ: (startZ + endZ) / 2,
+            width: length,
+            angle,
+          });
+        }
+      } else {
+        const seg = boundaryToWallSegment(b, centerShiftX, centerShiftZ);
+        if (seg) standaloneWalls.push(seg);
+      }
+    });
+  }
 
   return {
     rooms,
-    clinicPartitions,
+    areaPartitions,
     standaloneDoors,
+    standaloneWalls,
     floorOutlinePoints,
     floorWidth: globalMaxX - globalMinX,
     floorHeight: globalMaxZ - globalMinZ,

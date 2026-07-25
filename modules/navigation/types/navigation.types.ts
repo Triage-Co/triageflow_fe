@@ -8,12 +8,15 @@ export interface ApiBuilding {
 
 export interface ApiBoundary {
   id: string;
-  roomId: string;
+  floorId: string;
+  roomId: string | null;
+  areaId: string | null;
   seqNo: number;
   boundaryType: 'WALL' | 'DOOR' | 'WINDOW' | 'CORRIDOR' | 'OPENING';
   adjacentRoomId: string | null;
   hasWall: boolean;
   doorId: string | null;
+  label: string | null;
   lineGeom: {
     type: 'LineString';
     coordinates: [number, number][]; // [lng, lat]
@@ -27,7 +30,7 @@ export interface ApiRoom {
   roomLabel: string;
   type: string; // e.g. "CONSULTATION", "WAITING", "RESTROOM", "OTHER"
   heightMeters: number;
-  clinicId?: string | null;
+  areaId?: string | null;
   centerGeom: {
     type: 'Point';
     coordinates: [number, number]; // [lng, lat]
@@ -49,26 +52,39 @@ export interface ApiDoor {
   isAccessible: boolean;
   isEmergency: boolean;
   active: boolean;
+  areaId: string | null;
   positionGeom: {
     type: 'Point';
     coordinates: [number, number]; // [lng, lat]
   };
 }
 
-export interface ApiClinicBoundary {
+export interface ApiNode {
   id: string;
-  clinicId: string;
-  lineGeom: {
-    type: 'LineString';
-    coordinates: [number, number][]; // [lng, lat]
+  type: string; // e.g. 'ROOM_ENTRANCE', 'CORRIDOR', etc.
+  active: boolean;
+  metadata: Record<string, any>;
+  coordsGeom: {
+    type: 'Point';
+    coordinates: [number, number]; // [lng, lat]
   };
 }
 
-export interface ApiClinic {
+export interface ApiArea {
   id: string;
-  clinicCode: string;
-  clinicLabel: string;
-  boundaries?: ApiClinicBoundary[];
+  floorId: string;
+  areaCode: string;
+  areaLabel: string;
+  description: string | null;
+  centerGeom: {
+    type: 'Point';
+    coordinates: [number, number]; // [lng, lat]
+  };
+  outlineGeom: {
+    type: 'Polygon';
+    coordinates: [number, number][][]; // array of polygons of [lng, lat]
+  };
+  boundaries: ApiBoundary[];
 }
 
 export interface ApiFloor {
@@ -85,7 +101,9 @@ export interface ApiFloor {
   };
   rooms: ApiRoom[];
   doors: ApiDoor[];
-  clinics?: ApiClinic[];
+  areas?: ApiArea[];
+  standaloneBoundaries?: ApiBoundary[];
+  nodes?: ApiNode[];
 }
 
 export interface BuildingMapData {

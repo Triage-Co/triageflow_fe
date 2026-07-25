@@ -8,7 +8,7 @@ import { createWallMaterial, createDoorMaterial } from './threeMaterials';
 import {
   DEFAULT_WALL_HEIGHT,
   addWallSegment,
-  addClinicPartitions,
+  addAreaPartitions,
   addStandaloneDoors,
   addRoomFloor,
   buildFloorSlab,
@@ -19,7 +19,7 @@ interface BuildingMapCanvasProps {
   floorData: FloorData3D;
   highlightedRoomId?: string | null;
   highlightRoomCode?: string | null;
-  highlightClinicId?: string | null;
+  highlightAreaId?: string | null;
   onSelectRoom?: (roomId: string) => void;
 }
 
@@ -38,7 +38,7 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   floorData,
   highlightedRoomId,
   highlightRoomCode,
-  highlightClinicId,
+  highlightAreaId,
   onSelectRoom,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -59,7 +59,7 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       (r) =>
         (targetId && r.id === targetId) ||
         (highlightRoomCode && r.roomCode.toLowerCase() === highlightRoomCode.toLowerCase()) ||
-        (highlightClinicId && r.clinicId === highlightClinicId)
+        (highlightAreaId && r.areaId === highlightAreaId)
     );
 
     if (targetRoom && beaconGroupRef.current) {
@@ -78,7 +78,7 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
 
   useEffect(() => {
     updateHighlightState(activeHighlightId);
-  }, [selectedRoomId, highlightedRoomId, highlightRoomCode, highlightClinicId]);
+  }, [selectedRoomId, highlightedRoomId, highlightRoomCode, highlightAreaId]);
 
   // Main Three.js Scene Setup — Runs ONLY ONCE when floorData mounts
   useEffect(() => {
@@ -94,7 +94,6 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
     // 1. Scene & Camera
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#f8fafc');
-    scene.fog = new THREE.Fog('#f8fafc', 80, 160);
 
     const roomMeshesGroup = new THREE.Group();
     scene.add(roomMeshesGroup);
@@ -146,11 +145,17 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
     buildFloorSlab(scene, floorData);
 
     const doorMat = createDoorMaterial();
-    if (floorData.clinicPartitions && floorData.clinicPartitions.length > 0) {
-      addClinicPartitions(scene, floorData.clinicPartitions, DEFAULT_WALL_HEIGHT);
+    const wallMat = createWallMaterial();
+    if (floorData.areaPartitions && floorData.areaPartitions.length > 0) {
+      addAreaPartitions(scene, floorData.areaPartitions, DEFAULT_WALL_HEIGHT);
     }
     if (floorData.standaloneDoors && floorData.standaloneDoors.length > 0) {
       addStandaloneDoors(scene, floorData.standaloneDoors, doorMat);
+    }
+    if (floorData.standaloneWalls && floorData.standaloneWalls.length > 0) {
+      floorData.standaloneWalls.forEach((seg: WallSegment) => {
+        addWallSegment(scene, seg, DEFAULT_WALL_HEIGHT, wallMat, doorMat);
+      });
     }
 
     // 5. Beacon Group
@@ -158,13 +163,12 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
 
     // 6. Rooms Rendering
     let initialCameraFocus: THREE.Vector3 | null = null;
-    const wallMat = createWallMaterial();
 
     floorData.rooms.forEach((room: RoomData) => {
       const isTarget =
         (highlightedRoomId && room.id === highlightedRoomId) ||
         (highlightRoomCode && room.roomCode.toLowerCase() === highlightRoomCode.toLowerCase()) ||
-        (highlightClinicId && room.clinicId === highlightClinicId);
+        (highlightAreaId && room.areaId === highlightAreaId);
 
       if (isTarget && !initialCameraFocus) {
         initialCameraFocus = new THREE.Vector3(room.centerX, 0, room.centerZ);
@@ -235,7 +239,7 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
           const isHl =
             (currentHlId && r.id === currentHlId) ||
             (highlightRoomCode && r.roomCode.toLowerCase() === highlightRoomCode.toLowerCase()) ||
-            (highlightClinicId && r.clinicId === highlightClinicId);
+            (highlightAreaId && r.areaId === highlightAreaId);
 
           tempVec.set(r.centerX, r.height + 0.5, r.centerZ);
           tempVec.project(camera);
