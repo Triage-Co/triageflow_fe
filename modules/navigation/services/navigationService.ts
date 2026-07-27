@@ -39,3 +39,25 @@ export async function fetchBuildingMap(
 
   return buildingDataPromise;
 }
+
+/**
+ * Fetches routing path between two nodes in the building.
+ */
+export async function fetchRoute(
+  startId: string,
+  startType: 'ROOM' | 'ROOM_ENTRANCE' | 'JUNCTION' | 'ELEVATOR' | 'STAIR',
+  targetId: string,
+  targetType: 'ROOM' | 'ROOM_ENTRANCE' | 'JUNCTION' | 'ELEVATOR' | 'STAIR'
+): Promise<any> {
+  const query = new URLSearchParams({
+    startId,
+    startType,
+    targetId,
+    targetType,
+  }).toString();
+  const response = await apiClient.get<any>(`/api/navigation/route?${query}`);
+  if (response.data) {
+    return response.data;
+  }
+  throw new Error('Không thể tải dữ liệu đường đi');
+}

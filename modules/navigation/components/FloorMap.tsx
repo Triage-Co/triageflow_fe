@@ -9,13 +9,20 @@ import { Loader2 } from 'lucide-react';
 interface FloorMapProps {
   highlightRoomCode?: string | null;
   highlightAreaId?: string | null;
+  startRoomId?: string | null;
+  targetRoomId?: string | null;
+  routePath?: any[];
 }
 
 export const FloorMap: React.FC<FloorMapProps> = ({
   highlightRoomCode,
   highlightAreaId,
+  startRoomId,
+  targetRoomId,
+  routePath,
 }) => {
-  const { data, loading, error } = useBuildingMap(2);
+  const activeFloor = useNavigationStore((s) => s.activeFloor);
+  const { data, loading, error } = useBuildingMap(activeFloor);
   const highlightedRoomId = useNavigationStore((s) => s.highlightedRoomId);
 
   if (loading && !data) {
@@ -44,8 +51,12 @@ export const FloorMap: React.FC<FloorMapProps> = ({
       highlightedRoomId={highlightedRoomId}
       highlightRoomCode={highlightRoomCode}
       highlightAreaId={highlightAreaId}
+      startRoomId={startRoomId}
+      targetRoomId={targetRoomId}
+      routePath={routePath}
     />
   );
 };
 
 export default FloorMap;
+

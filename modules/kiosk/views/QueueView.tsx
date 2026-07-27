@@ -7,6 +7,7 @@ import { useFlowStore } from '../store/flowStore';
 export const QueueView: React.FC = () => {
   const goHome = useKioskStore((state) => state.goHome);
   const navigateToView = useKioskStore((state) => state.navigateToView);
+  const navigateToMap = useKioskStore((state) => state.navigateToMap);
 
   // Dynamic ticket state from Flow Store
   const activeTicket = useFlowStore((state) => state.activeTicket);
@@ -42,12 +43,8 @@ export const QueueView: React.FC = () => {
             <p className="text-xs font-bold text-blue-100">{roomName} - {specialtyName}</p>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 border-t border-white/20 pt-6 max-w-2xl mx-auto">
-            <div>
-              <span className="text-[11px] font-bold text-blue-100 uppercase block mb-1">Số đang gọi</span>
-              <span className="text-3xl font-black">{callingNo}</span>
-            </div>
-            <div className="border-x border-white/20 px-2">
+          <div className="grid grid-cols-2 gap-4 border-t border-white/20 pt-6 max-w-xl mx-auto">
+            <div className="border-r border-white/20">
               <span className="text-[11px] font-bold text-blue-100 uppercase block mb-1">Số của bạn</span>
               <span className="text-3xl font-black">{ticketNo}</span>
             </div>
@@ -77,7 +74,7 @@ export const QueueView: React.FC = () => {
             </div>
 
             <button 
-              onClick={() => navigateToView('map')}
+              onClick={() => navigateToMap(activeTicket?.roomId)}
               className="px-4 py-2.5 bg-[#4F80E1] text-white rounded-xl font-bold text-xs shadow-md hover:bg-blue-600 transition-colors cursor-pointer"
             >
               Xem đường đi

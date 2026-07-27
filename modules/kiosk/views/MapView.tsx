@@ -1,17 +1,168 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useKioskStore } from '../store/kioskStore';
 import { useFlowStore } from '../store/flowStore';
 import { FloorMap } from '@/modules/navigation/components/FloorMap';
-import { ArrowLeft, MapPin } from 'lucide-react';
+import { useBuildingMap } from '@/modules/navigation/hooks/useWayfinding';
+import { fetchRoute } from '@/modules/navigation/services/navigationService';
+import { RoomPickerModal } from '../components/RoomPickerModal';
+import { useNavigationStore } from '@/modules/navigation/store/navigationStore';
+import { ArrowLeft, MapPin, Search, Navigation, RotateCcw, Loader2 } from 'lucide-react';
+
+interface RoomOption {
+  id: string;
+  roomCode: string;
+  roomLabel: string;
+  floorNumber: number;
+  type: string;
+}
 
 export const MapView: React.FC = () => {
   const goHome = useKioskStore((state) => state.goHome);
+  const navigateToView = useKioskStore((state) => state.navigateToView);
+  const mapNavigationRoomId = useKioskStore((state) => state.mapNavigationRoomId);
   const activeTicket = useFlowStore((state) => state.activeTicket);
 
   const targetRoomCode = activeTicket?.roomNumber || null;
+  const targetSpecialty = activeTicket?.clinicName || null;
   const targetAreaId = (activeTicket as any)?.areaId || null;
+
+  // Map data and states for routing
+  const { rawMap } = useBuildingMap(2);
+  const [startRoom, setStartRoom] = useState<RoomOption | null>(null);
+  const [targetRoom, setTargetRoom] = useState<RoomOption | null>(null);
+  const [routeData, setRouteData] = useState<any>(null);
+  const [modalType, setModalType] = useState<'start' | 'target' | null>(null);
+  const [routeLoading, setRouteLoading] = useState(false);
+
+  const KIOSK_PHARMACY_ROOM_ID = '2bb6af59-495d-4c89-bc42-ad72d8bbac87';
+
+  const normalizeString = (str: string): string => {
+    return str
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // loại bỏ dấu Tiếng Việt
+      .replace(/\s+/g, '') // loại bỏ khoảng trắng
+      .replace(/phong/g, '') // loại bỏ từ 'phong'
+      .replace(/p\.?/g, '') // loại bỏ tiền tố 'p' hoặc 'p.'
+      .trim();
+  };
+
+  // Tự động thiết lập điểm xuất phát là Nhà Thuốc và điểm đích dựa trên phiếu khám
+  useEffect(() => {
+    console.log('MapView Auto-Routing Debug:', {
+      mapNavigationRoomId,
+      targetRoomCode,
+      targetSpecialty,
+      activeTicket,
+      rawMap: !!rawMap
+    });
+
+    if (rawMap && rawMap.floors) {
+      let foundStart: RoomOption | null = null;
+      let foundTarget: RoomOption | null = null;
+
+      // Tìm Nhà Thuốc mặc định
+      for (const floor of rawMap.floors) {
+        const room = floor.rooms.find((r) => r.id === KIOSK_PHARMACY_ROOM_ID);
+        if (room) {
+          foundStart = {
+            id: room.id,
+            roomCode: room.roomCode,
+            roomLabel: room.roomLabel,
+            floorNumber: floor.floorNumber,
+            type: room.type,
+          };
+          break;
+        }
+      }
+
+      // Tìm Phòng khám đích dựa trên mapNavigationRoomId, roomNumber hoặc clinicName (chuyên khoa)
+      if (mapNavigationRoomId || targetRoomCode || targetSpecialty) {
+        const normTargetCode = targetRoomCode ? normalizeString(targetRoomCode) : '';
+        const normSpecialty = targetSpecialty ? normalizeString(targetSpecialty) : '';
+
+        for (const floor of rawMap.floors) {
+          const room = floor.rooms.find((r) => {
+            if (mapNavigationRoomId && r.id === mapNavigationRoomId) return true;
+            
+            const normLabel = normalizeString(r.roomLabel);
+            const normCode = normalizeString(r.roomCode);
+
+            // 1. So khớp theo tên phòng (ví dụ: "Phòng 109" -> "109")
+            if (normTargetCode && (normLabel === normTargetCode || normCode === normTargetCode || normLabel.includes(normTargetCode) || normCode.includes(normTargetCode))) {
+              return true;
+            }
+
+            // 2. So khớp theo Chuyên khoa (ví dụ: "Tiêu hóa" khớp với "Nội tiêu hóa 1")
+            if (normSpecialty && (normLabel.includes(normSpecialty) || normCode.includes(normSpecialty))) {
+              return true;
+            }
+
+            return false;
+          });
+          if (room) {
+            foundTarget = {
+              id: room.id,
+              roomCode: room.roomCode,
+              roomLabel: room.roomLabel,
+              floorNumber: floor.floorNumber,
+              type: room.type,
+            };
+            break;
+          }
+        }
+      }
+
+      if (foundStart) {
+        setStartRoom(foundStart);
+      }
+      if (foundTarget) {
+        setTargetRoom(foundTarget);
+        // Ưu tiên hiển thị tầng của phòng khám đích
+        useNavigationStore.getState().setActiveFloor(foundTarget.floorNumber);
+      } else if (foundStart) {
+        // Fallback hiển thị tầng của Quầy Tiếp Nhận
+        useNavigationStore.getState().setActiveFloor(foundStart.floorNumber);
+      }
+    }
+  }, [rawMap, mapNavigationRoomId, targetRoomCode, targetSpecialty, activeTicket]);
+
+  // Fetch route when both start and target are selected
+  useEffect(() => {
+    if (startRoom && targetRoom) {
+      setRouteLoading(true);
+      fetchRoute(startRoom.id, 'ROOM', targetRoom.id, 'ROOM')
+        .then((data) => {
+          setRouteData(data);
+        })
+        .catch((err) => {
+          console.error('Lỗi khi lấy chỉ đường:', err);
+        })
+        .finally(() => {
+          setRouteLoading(false);
+        });
+    } else {
+      setRouteData(null);
+    }
+  }, [startRoom, targetRoom]);
+
+  const handleBack = () => {
+    if (mapNavigationRoomId) {
+      navigateToView('patient_info');
+    } else {
+      goHome();
+    }
+  };
+
+  const handleReset = () => {
+    setStartRoom(null);
+    setTargetRoom(null);
+    setRouteData(null);
+  };
+
+  const routePath = routeData?.path || undefined;
 
   return (
     <div className="w-full h-full relative overflow-hidden bg-slate-50">
@@ -19,12 +170,15 @@ export const MapView: React.FC = () => {
       <FloorMap
         highlightRoomCode={targetRoomCode}
         highlightAreaId={targetAreaId}
+        startRoomId={startRoom?.id}
+        targetRoomId={targetRoom?.id}
+        routePath={routePath}
       />
 
       {/* Floating Header Bar */}
       <div className="absolute top-6 left-6 z-20 flex items-center gap-4 pointer-events-auto">
         <button
-          onClick={goHome}
+          onClick={handleBack}
           className="flex items-center gap-2 px-5 py-2.5 bg-white/95 backdrop-blur-md rounded-full text-xs font-bold text-slate-700 shadow-md border border-slate-200 hover:bg-slate-50 transition-all cursor-pointer active:scale-95"
         >
           <ArrowLeft className="w-4 h-4 text-slate-600" /> Quay lại
@@ -45,8 +199,94 @@ export const MapView: React.FC = () => {
         </div>
       </div>
 
-      {/* Target Destination Info Badge (if active ticket) */}
-      {targetRoomCode && (
+      {/* Top Right Floating Action: Reset Button */}
+      {(startRoom || targetRoom) && (
+        <div className="absolute top-6 right-6 z-20 pointer-events-auto">
+          <button
+            onClick={handleReset}
+            className="flex items-center gap-2 px-5 py-2.5 bg-white/95 backdrop-blur-md rounded-full text-xs font-extrabold text-rose-600 hover:text-rose-700 shadow-md border border-slate-200 hover:bg-rose-50/50 transition-all cursor-pointer active:scale-95"
+          >
+            <RotateCcw className="w-4 h-4" /> Reset chỉ đường
+          </button>
+        </div>
+      )}
+
+      {/* Left Panel: Find Route Interface */}
+      <div className="absolute top-24 left-6 z-20 w-80 bg-white/90 backdrop-blur-md p-5 rounded-[28px] border border-slate-200 shadow-xl flex flex-col gap-4 pointer-events-auto">
+        <div>
+          <h3 className="text-sm font-black text-slate-800 tracking-tight flex items-center gap-2">
+            <Navigation className="w-4 h-4 text-[#155DFC] rotate-45" /> Chỉ đường đi
+          </h3>
+          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">
+            Thiết lập điểm xuất phát và đích
+          </p>
+        </div>
+
+        {/* Start Point Input Button */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
+            Điểm xuất phát
+          </label>
+          <button
+            onClick={() => setModalType('start')}
+            className={`w-full text-left px-4 py-3 rounded-2xl border text-xs font-semibold flex items-center justify-between transition-all cursor-pointer ${
+              startRoom
+                ? 'bg-emerald-50/50 border-emerald-200 text-emerald-800 font-bold'
+                : 'bg-slate-50/60 border-slate-200 hover:bg-slate-100/50 text-slate-400'
+            }`}
+          >
+            <span className="truncate">
+              {startRoom ? `Tầng ${startRoom.floorNumber} - ${startRoom.roomLabel}` : 'Chọn điểm đi...'}
+            </span>
+            <Search className={`w-3.5 h-3.5 shrink-0 ${startRoom ? 'text-emerald-600' : 'text-slate-400'}`} />
+          </button>
+        </div>
+
+        {/* Target Point Input Button */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
+            Điểm cần đến
+          </label>
+          <button
+            onClick={() => setModalType('target')}
+            className={`w-full text-left px-4 py-3 rounded-2xl border text-xs font-semibold flex items-center justify-between transition-all cursor-pointer ${
+              targetRoom
+                ? 'bg-rose-50/50 border-rose-200 text-rose-800 font-bold'
+                : 'bg-slate-50/60 border-slate-200 hover:bg-slate-100/50 text-slate-400'
+            }`}
+          >
+            <span className="truncate">
+              {targetRoom ? `Tầng ${targetRoom.floorNumber} - ${targetRoom.roomLabel}` : 'Chọn điểm đến...'}
+            </span>
+            <Search className={`w-3.5 h-3.5 shrink-0 ${targetRoom ? 'text-rose-600' : 'text-slate-400'}`} />
+          </button>
+        </div>
+
+        {/* Route Calculation Result */}
+        {routeLoading && (
+          <div className="flex items-center justify-center gap-2 py-3 bg-slate-50/50 rounded-2xl border border-slate-100">
+            <Loader2 className="w-4 h-4 text-[#155DFC] animate-spin" />
+            <span className="text-[11px] font-semibold text-slate-500">Đang tìm đường tối ưu...</span>
+          </div>
+        )}
+
+        {routeData && !routeLoading && (
+          <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100 space-y-2">
+            <p className="text-[10px] font-black text-blue-800 uppercase tracking-wider">
+              Kết quả đường đi
+            </p>
+            <div className="text-xs">
+              <span className="text-slate-400 block text-[10px] font-bold">Tổng quãng đường</span>
+              <span className="font-black text-slate-800 text-sm">
+                ~{Math.round(routeData.totalDistance)} mét
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Target Destination Info Badge (Default Expo Target if active ticket exists) */}
+      {targetRoomCode && !startRoom && !targetRoom && (
         <div className="absolute bottom-6 left-6 z-20 bg-white/95 backdrop-blur-md px-4 py-3 rounded-2xl border border-slate-200 shadow-lg flex items-center gap-3">
           <div className="w-3 h-3 rounded-full bg-[#155DFC] animate-ping" />
           <div>
@@ -58,6 +298,25 @@ export const MapView: React.FC = () => {
             </p>
           </div>
         </div>
+      )}
+
+      {/* Room Selection Popup Modal */}
+      {rawMap && (
+        <RoomPickerModal
+          isOpen={modalType !== null}
+          onClose={() => setModalType(null)}
+          title={modalType === 'start' ? 'Chọn điểm xuất phát' : 'Chọn điểm đến'}
+          floors={rawMap.floors}
+          onSelect={(room) => {
+            if (modalType === 'start') {
+              setStartRoom(room);
+              useNavigationStore.getState().setActiveFloor(room.floorNumber);
+            } else {
+              setTargetRoom(room);
+              useNavigationStore.getState().setActiveFloor(room.floorNumber);
+            }
+          }}
+        />
       )}
     </div>
   );

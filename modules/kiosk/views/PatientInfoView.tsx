@@ -20,6 +20,7 @@ export const PatientInfoView: React.FC = () => {
 
   const goHome = useKioskStore((state) => state.goHome);
   const navigateToView = useKioskStore((state) => state.navigateToView);
+  const navigateToMap = useKioskStore((state) => state.navigateToMap);
   const selectedDoctor = useKioskStore((state) => state.selectedDoctor);
   const activeTicket = useFlowStore((state) => state.activeTicket);
   const patientInfo = useAuthStore((state) => state.patientInfo);
@@ -292,7 +293,7 @@ export const PatientInfoView: React.FC = () => {
             </div>
 
             <button
-              onClick={() => navigateToView('map')}
+              onClick={() => navigateToMap(activeTicket?.roomId)}
               className="w-full py-3.5 bg-white text-[#155DFC] rounded-2xl font-black text-xs lg:text-sm flex items-center justify-center gap-2 shadow-md hover:bg-blue-50 transition-all cursor-pointer mt-4"
             >
               <Navigation className="w-4 h-4 rotate-45" /> Xem đường đi
@@ -353,21 +354,15 @@ export const PatientInfoView: React.FC = () => {
               </span>
             </div>
 
-            {/* 3 Metric Cards */}
-            <div className="grid grid-cols-3 gap-4">
-              {/* Metric 1 */}
-              <div className="bg-[#F8FAFC] rounded-2xl p-5 border border-neutral-100 text-center space-y-1">
-                <span className="text-xs font-bold text-neutral-400 block">Số đang gọi</span>
-                <span className="text-3xl lg:text-4xl font-black text-[#1E2939] block">{currentCallingNo || '---'}</span>
-              </div>
-
-              {/* Metric 2 (Highlighted Blue) */}
+            {/* 2 Metric Cards */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* Metric 1 (Highlighted Blue) */}
               <div className="bg-[#D6E6FE] rounded-2xl p-5 border-2 border-[#A4C8FF] text-center space-y-1 shadow-sm">
                 <span className="text-xs font-bold text-[#155DFC] block">Số của bạn</span>
                 <span className="text-3xl lg:text-4xl font-black text-[#0F2C59] block">{ticketNo || '---'}</span>
               </div>
 
-              {/* Metric 3 */}
+              {/* Metric 2 */}
               <div className="bg-[#F8FAFC] rounded-2xl p-5 border border-neutral-100 text-center space-y-1">
                 <span className="text-xs font-bold text-neutral-400 block">Thời gian chờ</span>
                 <div className="flex items-baseline justify-center gap-1">

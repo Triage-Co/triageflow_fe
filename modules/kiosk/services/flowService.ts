@@ -6,6 +6,9 @@ import {
   PatientFlowItem,
   StepDetailPatientResponseData,
   PendingPaymentStep,
+  ServiceOrder,
+  ServiceItem,
+  TransactionQrResult,
 } from '../types/flow.types';
 import { useAuthStore } from '../store/authStore';
 
@@ -64,6 +67,41 @@ export const flowService = {
   getPendingPaymentSteps: async (patientId: string, token?: string) => {
     return apiClient.get<PendingPaymentStep[]>(
       `/api/step?patient_id=${encodeURIComponent(patientId)}`,
+      { headers: getAuthHeaders(token) }
+    );
+  },
+
+  // GET /api/service-order/pending/{patientId}
+  getPendingServiceOrders: async (patientId: string, token?: string) => {
+    return apiClient.get<ServiceOrder[]>(
+      `/api/service-order/pending/${encodeURIComponent(patientId)}`,
+      { headers: getAuthHeaders(token) }
+    );
+  },
+
+  // GET /api/service
+  getAllServices: async (page = 1, limit = 100, token?: string) => {
+    return apiClient.get<{ data: ServiceItem[] }>(
+      `/api/service?page=${page}&limit=${limit}`,
+      { headers: getAuthHeaders(token) }
+    );
+  },
+
+  // POST /api/transaction
+  createTransactionQr: async (
+    payload: {
+      transType: string;
+      amount: number;
+      clientId: string;
+      returnUrl: string;
+      cancelUrl: string;
+      service_order_id: string;
+    },
+    token?: string
+  ) => {
+    return apiClient.post<TransactionQrResult>(
+      '/api/transaction',
+      payload,
       { headers: getAuthHeaders(token) }
     );
   },

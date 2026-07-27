@@ -1,18 +1,59 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useKioskStore } from '../store/kioskStore';
 import { ArrowLeft, MapPin, Navigation, QrCode, CheckCircle2, Clock, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFlowStore } from '../store/flowStore';
 import { useAuthStore } from '../store/authStore';
+import { ServiceOrderModal } from '../components/ServiceOrderModal';
+import { PaymentQrModal } from '../components/PaymentQrModal';
 
 export const DoctorRouteView: React.FC = () => {
   const navigateToView = useKioskStore((state) => state.navigateToView);
+  const navigateToMap = useKioskStore((state) => state.navigateToMap);
   const routeSteps = useFlowStore((state) => state.routeSteps);
   const activeTicket = useFlowStore((state) => state.activeTicket);
   const selectedDoctor = useKioskStore((state) => state.selectedDoctor);
   const showToast = useKioskStore((state) => state.showToast);
 
   const patientId = useAuthStore((state) => state.patientId);
+
+  // States & selectors cho chức năng thanh toán Service Order
+  const [isServiceOrderModalOpen, setIsServiceOrderModalOpen] = useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [selectedServiceOrderId, setSelectedServiceOrderId] = useState<string>('');
+
+  const pendingServiceOrders = useFlowStore((state) => state.pendingServiceOrders);
+  const allServicesList = useFlowStore((state) => state.allServicesList);
+  const isFetchingServiceOrders = useFlowStore((state) => state.isFetchingServiceOrders);
+  const activeTransactionQr = useFlowStore((state) => state.activeTransactionQr);
+  const fetchPendingServiceOrders = useFlowStore((state) => state.fetchPendingServiceOrders);
+  const createServiceOrderTransaction = useFlowStore((state) => state.createServiceOrderTransaction);
+  const clearTransactionQr = useFlowStore((state) => state.clearTransactionQr);
+
+  const handleOpenServiceOrders = async () => {
+    if (patientId) {
+      setIsServiceOrderModalOpen(true);
+      await fetchPendingServiceOrders(patientId);
+    }
+  };
+
+  const handleSelectPay = async (serviceOrderId: string, amount: number) => {
+    if (patientId) {
+      setSelectedServiceOrderId(serviceOrderId);
+      const res = await createServiceOrderTransaction(serviceOrderId, amount, patientId);
+      if (res) {
+        setIsQrModalOpen(true);
+      }
+    }
+  };
+
+  const handlePaymentSuccess = () => {
+    if (patientId) {
+      // Re-fetch flow and active ticket to refresh page data
+      useFlowStore.getState().fetchActiveTicketForPatient(patientId);
+      useFlowStore.getState().fetchDoctorRouteSteps(patientId);
+    }
+  };
 
   useEffect(() => {
     if (patientId) {
@@ -39,12 +80,21 @@ export const DoctorRouteView: React.FC = () => {
           </h2>
         </div>
 
-        <button
-          onClick={() => showToast('Đang mở Master QR Lộ trình...', 'info')}
-          className="flex items-center gap-2 px-5 py-2.5 bg-white rounded-2xl text-xs lg:text-sm font-extrabold text-[#1E2939] shadow-sm border border-neutral-200 hover:bg-neutral-50 transition-all cursor-pointer"
-        >
-          <QrCode className="w-4 h-4 text-[#155DFC]" /> Master QR
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleOpenServiceOrders}
+            className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-2xl text-xs lg:text-sm font-extrabold shadow-md shadow-amber-500/10 transition-all cursor-pointer"
+          >
+            Các mục cần thanh toán
+          </button>
+
+          <button
+            onClick={() => showToast('Đang mở Master QR Lộ trình...', 'info')}
+            className="flex items-center gap-2 px-5 py-2.5 bg-white rounded-2xl text-xs lg:text-sm font-extrabold text-[#1E2939] shadow-sm border border-neutral-200 hover:bg-neutral-50 transition-all cursor-pointer"
+          >
+            <QrCode className="w-4 h-4 text-[#155DFC]" /> Master QR
+          </button>
+        </div>
       </div>
 
       {/* Main Grid (fills remaining height) */}
@@ -97,7 +147,7 @@ export const DoctorRouteView: React.FC = () => {
             )}
 
             <button
-              onClick={() => navigateToView('map')}
+              onClick={() => navigateToMap(activeTicket?.roomId)}
               className="w-full py-4 bg-white text-[#155DFC] rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-md hover:bg-blue-50 transition-all cursor-pointer mt-4"
             >
               <Navigation className="w-4 h-4 rotate-45" /> Xem đường đi
@@ -228,6 +278,29 @@ export const DoctorRouteView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Popup 1: Danh sách service orders cần thanh toán */}
+      <ServiceOrderModal
+        isOpen={isServiceOrderModalOpen}
+        onClose={() => setIsServiceOrderModalOpen(false)}
+        pendingServiceOrders={pendingServiceOrders}
+        allServicesList={allServicesList}
+        onSelectPay={handleSelectPay}
+        isFetching={isFetchingServiceOrders}
+      />
+
+      {/* Popup 2: Hiển thị mã QR thanh toán */}
+      <PaymentQrModal
+        isOpen={isQrModalOpen}
+        onClose={() => {
+          setIsQrModalOpen(false);
+          clearTransactionQr();
+        }}
+        qrResult={activeTransactionQr}
+        patientId={patientId || ''}
+        serviceOrderId={selectedServiceOrderId}
+        onPaymentSuccess={handlePaymentSuccess}
+      />
     </div>
   );
 };

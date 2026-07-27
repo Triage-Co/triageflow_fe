@@ -70,6 +70,7 @@ export interface TicketData {
   stepId?: string;
   bookingId?: string;
   startTime?: string;
+  roomId?: string;
 }
 
 export interface PaymentItem {

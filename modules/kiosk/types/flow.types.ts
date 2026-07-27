@@ -178,3 +178,57 @@ export interface PendingPaymentStep {
   parent_step_id?: string | null;
   physicalRoomId?: string | null;
 }
+
+export interface ServiceOrderDetail {
+  service_order_detail_id: string;
+  service_order_id: string;
+  service_id: string;
+  price_at_order: number;
+  quantity: number;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  service: {
+    service_id: string;
+    service_code: string;
+    service_name: string;
+    price: number;
+    is_active: boolean;
+  };
+}
+
+export interface ServiceOrder {
+  service_order_id: string;
+  booking_id: string;
+  status: string;
+  total_price: number;
+  created_at: string;
+  updated_at: string;
+  serviceOrderDetails: ServiceOrderDetail[];
+}
+
+export interface ServiceItem {
+  service_id: string;
+  service_code: string;
+  service_name: string;
+  price: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TransactionQrResult {
+  bin: string;
+  accountNumber: string;
+  accountName: string;
+  amount: number;
+  description: string;
+  orderCode: number;
+  currency: string;
+  paymentLinkId: string;
+  status: string;
+  expiredAt: string | null;
+  checkoutUrl: string;
+  qrCode: string;
+}
+
