@@ -68,7 +68,7 @@ export interface UserProfile {
     user_name?: string;
     full_name?: string;
     email: string;
-    dob?: string;          // ISO date or DD-MM-YYYY
+    dob?: string;
     role: string;
     gender: Gender;
     citizen_id?: string;
@@ -79,7 +79,9 @@ export interface UserProfile {
 }
 
 export interface UpdateProfileRequest {
+    full_name?: string;
     user_name?: string;
+    dob?: string;
     gender?: Gender;
     phone?: string;
     avatar?: string | null;

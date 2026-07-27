@@ -50,6 +50,13 @@ function StatusBadge({ status }: { status: Status }) {
             </span>
         );
     }
+    if (status === 'Đang gọi') {
+        return (
+            <span className="inline-flex items-center bg-[#F0EBFF] text-[#6B5FD6] text-[12px] font-semibold px-3 py-1 rounded-full">
+                {status}
+            </span>
+        );
+    }
     return (
         <span className="inline-flex items-center bg-[#FFEFE2] text-[#F39C12] text-[12px] font-semibold px-3 py-1 rounded-full">
             {status}
@@ -154,7 +161,7 @@ export function PatientTable({ patients, onSelectPatient }: PatientTableProps) {
                     {/* Filter dropdown */}
                     {showFilter && (
                         <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl border border-neutral-100 shadow-xl z-30 py-2 animate-in fade-in-0 zoom-in-95 duration-150">
-                            {(['all', 'Đang chờ', 'Đang khám', 'Đã khám'] as const).map((option) => (
+                            {(['all', 'Đang chờ', 'Đang gọi', 'Đang khám', 'Đã khám'] as const).map((option) => (
                                 <button
                                     key={option}
                                     onClick={() => {

@@ -493,15 +493,18 @@ function mapSpecialtyIcon(specialty: string): QueuePatient['specialtyIcon'] {
 }
 
 export function mapBackendToQueuePatient(item: BackendQueuePatient): QueuePatient {
-    const patientObj = item.step.flow.booking.patient;
+    const patient = item.step.flow.booking.patient;
+    const account = patient.account;
     const specialty = 'Khám bệnh';
+    const patientName = patient.full_name || account?.full_name || account?.user_name || 'Bệnh nhân';
+    const dob = patient.dob || account?.dob;
     return {
         id: item.queue_id,
         ticketNo: formatTicketNo(item.queue_number),
-        name: patientObj.full_name || patientObj.account.user_name || 'Bệnh nhân',
+        name: patientName,
         specialty,
         specialtyIcon: mapSpecialtyIcon(specialty),
-        priority: mapPriority(patientObj.dob, item.step.flow.status),
+        priority: mapPriority(dob, item.step.flow.status),
         status: mapReceptionStatus(item),
         waitMinutes: calcWaitMinutes(item.step.flow.booking.slot.start_time),
         bookingId: item.step.flow.booking.booking_id,
@@ -527,15 +530,17 @@ export function buildRecentActivities(patients: QueuePatient[]): RecentActivity[
     }));
 }
 
-export function buildReceptionStats(patients: QueuePatient[]): ReceptionStat[] {
+export function buildReceptionStats(patients: QueuePatient[], bookingCount?: number): ReceptionStat[] {
     const waiting = patients.filter((p) => p.status === 'Chờ khám').length;
     const payment = patients.filter((p) => p.status === 'Chờ TT').length;
     const emergency = patients.filter((p) => p.priority === 'Khẩn cấp').length;
     const avgWait = patients.length ? Math.round(patients.reduce((s, p) => s + p.waitMinutes, 0) / patients.length) : 0;
+    const totalRegistered = bookingCount && bookingCount > patients.length ? bookingCount : patients.length;
+
     return [
         { value: waiting, label: 'Đang chờ khám', icon: 'waiting', iconBg: 'bg-[#E8F2FF]', iconColor: 'text-[#3B82F6]' },
-        { value: patients.length, label: 'Đăng ký hôm nay', icon: 'registered', iconBg: 'bg-[#E2F7EB]', iconColor: 'text-[#10B981]' },
-        { value: Math.max(1, Math.ceil(patients.length / 8)), label: 'Hàng đợi đang hoạt động', icon: 'queues', iconBg: 'bg-[#E2F7EB]', iconColor: 'text-[#10B981]' },
+        { value: totalRegistered, label: 'Đăng ký hôm nay', icon: 'registered', iconBg: 'bg-[#E2F7EB]', iconColor: 'text-[#10B981]' },
+        { value: Math.max(patients.length > 0 ? 1 : 0, Math.ceil(patients.length / 8)), label: 'Hàng đợi đang hoạt động', icon: 'queues', iconBg: 'bg-[#E2F7EB]', iconColor: 'text-[#10B981]' },
         { value: payment, label: 'Chờ thanh toán', icon: 'payment', iconBg: 'bg-[#FFF4E5]', iconColor: 'text-[#F59E0B]' },
         { value: emergency, label: 'Ca khẩn cấp', icon: 'emergency', iconBg: 'bg-[#FEE2E2]', iconColor: 'text-[#EF4444]' },
         { value: `${avgWait || 0} phút`, label: 'Thời gian chờ TB', icon: 'avgTime', iconBg: 'bg-[#F3E8FF]', iconColor: 'text-[#8B7CF6]' },
@@ -596,17 +601,18 @@ function formatDobDisplay(dob?: string): string {
 }
 
 export function mapBackendToReceptionDetail(item: BackendQueuePatient): ReceptionPatientDetail {
-    const patientObj = item.step.flow.booking.patient;
+    const patient = item.step.flow.booking.patient;
+    const account = patient.account;
     const slot = item.step.flow.booking.slot;
     return {
         queueId: item.queue_id,
         ticketNo: formatTicketNo(item.queue_number),
-        name: patientObj.full_name || patientObj.account.user_name || 'Bệnh nhân',
-        citizenId: patientObj.citizen_id || '',
-        email: patientObj.account.email || '',
-        phone: patientObj.account.phone || '',
-        dob: formatDobDisplay(patientObj.dob),
-        gender: formatGender(patientObj.gender || patientObj.account.gender),
+        name: patient.full_name || account?.full_name || account?.user_name || 'Bệnh nhân',
+        citizenId: patient.citizen_id || account?.citizen_id || '',
+        email: account?.email || '',
+        phone: account?.phone || null,
+        dob: formatDobDisplay(patient.dob || account?.dob || ''),
+        gender: formatGender(patient.gender || account?.gender || ''),
         queueStatus: item.status,
         paymentStatus: item.step.payment_status,
         stepStatus: item.step.step_status,
@@ -615,7 +621,7 @@ export function mapBackendToReceptionDetail(item: BackendQueuePatient): Receptio
         bookingStatus: item.step.flow.booking.status,
         bookingId: item.step.flow.booking.booking_id,
         waitMinutes: calcWaitMinutes(slot.start_time),
-        priority: mapPriority(patientObj.dob, item.step.flow.status),
+        priority: mapPriority(patient.dob || account?.dob, item.step.flow.status),
         status: mapReceptionStatus(item),
     };
 }

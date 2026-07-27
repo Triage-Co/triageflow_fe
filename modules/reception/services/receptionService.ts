@@ -35,19 +35,76 @@ import {
 } from '@/modules/reception/utils/receptionMapper';
 import { searchPatientRecords, searchPatientRecordsFromBookings } from '@/modules/reception/utils/receptionSearch';
 
-async function fetchPatientAccounts(token: string): Promise<ReceptionAccount[]> {
-    const res = await apiClient.get<unknown>('/api/patient', {
-        headers: { Authorization: `Bearer ${token}` },
-    });
+const CACHE_KEYS = {
+    QUEUE_PATIENTS: 'triageflow_queue_patients_cache',
+    PATIENT_ACCOUNTS: 'triageflow_patient_accounts_cache',
+    PATIENT_LIST: 'triageflow_patient_list_cache',
+};
 
-    if (res.status === 'error' || (typeof res.code === 'number' && res.code >= 400)) {
-        throw new ApiError(res.code ?? 500, res.message || 'Không tải được danh sách bệnh nhân.');
+function getLocalStorageCache<T>(key: string): T | null {
+    if (typeof window === 'undefined') return null;
+    try {
+        const item = localStorage.getItem(key);
+        if (!item) return null;
+        const parsed = JSON.parse(item);
+        return (parsed?.data as T) ?? null;
+    } catch {
+        return null;
+    }
+}
+
+function setLocalStorageCache<T>(key: string, data: T): void {
+    if (typeof window === 'undefined') return;
+    try {
+        localStorage.setItem(
+            key,
+            JSON.stringify({
+                timestamp: Date.now(),
+                data,
+            }),
+        );
+    } catch {
+        // ignore quota errors
+    }
+}
+
+export function clearPatientLocalStorageCache(): void {
+    if (typeof window === 'undefined') return;
+    try {
+        Object.values(CACHE_KEYS).forEach((k) => localStorage.removeItem(k));
+        const today = getTodayDateString();
+        localStorage.removeItem(`${CACHE_KEYS.QUEUE_PATIENTS}_${today}`);
+    } catch {
+        // ignore
+    }
+}
+
+async function fetchPatientAccounts(token: string): Promise<ReceptionAccount[]> {
+    const cached = getLocalStorageCache<ReceptionAccount[]>(CACHE_KEYS.PATIENT_ACCOUNTS);
+
+    const fetchFresh = async (): Promise<ReceptionAccount[]> => {
+        const res = await apiClient.get<unknown>('/api/patient', {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (res.status === 'error' || (typeof res.code === 'number' && res.code >= 400)) {
+            throw new ApiError(res.code ?? 500, res.message || 'Không tải được danh sách bệnh nhân.');
+        }
+
+        const records = normalizePatientListResponse(res.data ?? res);
+        const mapped = records
+            .map(mapPatientRecordToAccount)
+            .filter((a) => a.citizen_id || a.full_name || a.email);
+        setLocalStorageCache(CACHE_KEYS.PATIENT_ACCOUNTS, mapped);
+        return mapped;
+    };
+
+    if (cached && Array.isArray(cached) && cached.length > 0) {
+        fetchFresh().catch(() => {});
+        return cached;
     }
 
-    const records = normalizePatientListResponse(res.data ?? res);
-    return records
-        .map(mapPatientRecordToAccount)
-        .filter((a) => a.citizen_id || a.full_name || a.email);
+    return fetchFresh();
 }
 
 async function resolvePatientIdByCitizenId(
@@ -174,13 +231,147 @@ function assertApiSuccess<T>(res: ApiResponse<T>, fallbackMessage: string): ApiR
 export const receptionService = {
     verifyPatientAgainstDb,
 
-    /** Lễ tân không có quyền GET /api/doctor/patients — dùng booking/flow thay thế. */
-    async getQueueByDate(_date: string, _token: string): Promise<BackendQueuePatient[]> {
-        return [];
+    async getQueueByDate(date: string, token: string): Promise<BackendQueuePatient[]> {
+        const cacheKey = `${CACHE_KEYS.QUEUE_PATIENTS}_${date}`;
+
+        const fetchFreshData = async (): Promise<BackendQueuePatient[]> => {
+            try {
+                const res = await clinicalService.getPatients(date, token);
+                const list = (res as { data?: unknown }).data ?? res;
+                if (Array.isArray(list) && list.length > 0) {
+                    setLocalStorageCache(cacheKey, list as BackendQueuePatient[]);
+                    return list as BackendQueuePatient[];
+                }
+            } catch {
+                // Lễ tân hoặc role khác không gọi được API doctor -> tiếp tục fallback
+            }
+
+            try {
+                const [bookingRes, patientRes] = await Promise.all([
+                    receptionService.getBookings(token).catch(() => null),
+                    fetchPatientAccounts(token).catch(() => []),
+                ]);
+
+                const rawBookings = bookingRes
+                    ? normalizeBookingListResponse((bookingRes as { data?: unknown }).data ?? bookingRes)
+                    : [];
+
+                const patientMap = new Map<string, ReceptionAccount>();
+                if (Array.isArray(patientRes)) {
+                    patientRes.forEach((acc) => {
+                        if (acc.patient_id) patientMap.set(acc.patient_id, acc);
+                        if (acc.account_id) patientMap.set(acc.account_id, acc);
+                    });
+                }
+
+                if (rawBookings.length > 0) {
+                    const result = rawBookings.map((b, index) => {
+                        const bPatient = (b.patient as Record<string, unknown>) ?? {};
+                        const bPatientId = String(bPatient.patient_id ?? b.patient_id ?? '');
+                        const accFromMap = patientMap.get(bPatientId);
+                        const bAcc = (bPatient.account as Record<string, unknown>) ?? (b.account as Record<string, unknown>) ?? {};
+                        const slotObj = (b.slot as Record<string, unknown>) ?? {};
+                        const shiftObj = (slotObj.shift as Record<string, unknown>) ?? {};
+
+                        const fullName = String(
+                            accFromMap?.full_name ?? bAcc.full_name ?? bAcc.user_name ?? b.full_name ?? `Bệnh nhân ${index + 1}`
+                        );
+                        const citizenId = String(accFromMap?.citizen_id ?? bAcc.citizen_id ?? b.citizen_id ?? '');
+                        const email = String(accFromMap?.email ?? bAcc.email ?? b.email ?? '');
+                        const dob = String(accFromMap?.dob ?? bAcc.dob ?? b.dob ?? '1995-01-01');
+                        const gender = String(accFromMap?.gender ?? bAcc.gender ?? b.gender ?? 'MALE');
+                        const phone = (accFromMap?.phone ?? bAcc.phone ?? b.phone ?? null) as string | null;
+
+                        return {
+                            queue_id: String(b.queue_id ?? b.booking_id ?? `q-${index + 1}`),
+                            queue_number: String(b.queue_number ?? b.ticket_no ?? index + 1),
+                            status: String(b.queue_status ?? b.status ?? 'WAITING'),
+                            step: {
+                                step_id: String(b.step_id ?? `step-${index + 1}`),
+                                next_step_id: null,
+                                step_status: String(b.step_status ?? 'WAITING'),
+                                docNo: 1,
+                                payment_status: String(b.payment_status ?? (b.status === 'PAID' || b.is_paid ? 'PAID' : 'PENDING')),
+                                flow: {
+                                    flow_id: String(b.flow_id ?? `flow-${index + 1}`),
+                                    status: String(b.priority ?? b.flow_status ?? 'NORMAL'),
+                                    booking: {
+                                        booking_id: String(b.booking_id ?? `b-${index + 1}`),
+                                        status: String(b.status ?? 'CONFIRMED'),
+                                        slot: {
+                                            slot_id: String(slotObj.slot_id ?? `s-${index + 1}`),
+                                            start_time: String(slotObj.start_time ?? '08:00'),
+                                            end_time: String(slotObj.end_time ?? '08:30'),
+                                            shift: {
+                                                date: String(shiftObj.date ?? date),
+                                            },
+                                        },
+                                        patient: {
+                                            patient_id: bPatientId || `p-${index + 1}`,
+                                            medical_coverage_id: (bPatient.medical_coverage_id as string) ?? null,
+                                            account: {
+                                                full_name: fullName,
+                                                citizen_id: citizenId,
+                                                email: email,
+                                                dob: dob,
+                                                gender: gender,
+                                                role: 'PATIENT',
+                                                phone: phone,
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        };
+                    });
+                    setLocalStorageCache(cacheKey, result);
+                    return result;
+                }
+            } catch {
+                // fallback
+            }
+
+            return [];
+        };
+
+        const cached = getLocalStorageCache<BackendQueuePatient[]>(cacheKey);
+        if (cached && Array.isArray(cached) && cached.length > 0) {
+            fetchFreshData().catch(() => {});
+            return cached;
+        }
+
+        return fetchFreshData();
     },
 
-    getPatientByQueueId: (queueId: string, token: string) =>
-        clinicalService.getPatientByQueueId(queueId, token),
+    async getPatientByQueueId(queueId: string, token: string): Promise<{ data: BackendQueuePatient }> {
+        try {
+            const res = await clinicalService.getPatientByQueueId(queueId, token, true);
+            const dataObj = (res as { data?: BackendQueuePatient }).data ?? res;
+            if (dataObj && typeof dataObj === 'object' && 'queue_id' in dataObj) {
+                return { data: dataObj as BackendQueuePatient };
+            }
+        } catch {
+            // endpoint bác sĩ 404 hoặc không có quyền -> tiếp tục fallback
+        }
+
+        try {
+            const queueItems = await receptionService.getQueueByDate(getTodayDateString(), token);
+            const matched = queueItems.find(
+                (item) =>
+                    item.queue_id === queueId ||
+                    item.step?.flow?.booking?.booking_id === queueId ||
+                    item.step?.flow?.booking?.patient?.patient_id === queueId ||
+                    item.step?.flow?.booking?.patient?.account?.citizen_id === queueId,
+            );
+            if (matched) {
+                return { data: matched };
+            }
+        } catch {
+            // ignore
+        }
+
+        throw new ApiError(404, `Không tìm thấy bệnh nhân nào với mã hàng đợi ${queueId}`);
+    },
 
     getBookings: (token: string) =>
         apiClient.get<unknown>('/api/booking', {
@@ -425,30 +616,43 @@ export const receptionService = {
 
     /** Lấy toàn bộ bệnh nhân từ GET /api/patient (DB). */
     async listPatients(token: string): Promise<PatientSearchResult[]> {
-        const accounts = await fetchPatientAccounts(token);
-        const [queueItems, bookingRes] = await Promise.all([
-            receptionService.getQueueByDate(getTodayDateString(), token),
-            receptionService.getBookings(token).catch(() => null),
-        ]);
+        const cached = getLocalStorageCache<PatientSearchResult[]>(CACHE_KEYS.PATIENT_LIST);
 
-        const bookings =
-            bookingRes && bookingRes.status !== 'error' && (bookingRes.code ?? 200) < 400
-                ? normalizeBookingListResponse(bookingRes.data ?? bookingRes)
-                : [];
+        const fetchFresh = async (): Promise<PatientSearchResult[]> => {
+            const accounts = await fetchPatientAccounts(token);
+            const [queueItems, bookingRes] = await Promise.all([
+                receptionService.getQueueByDate(getTodayDateString(), token),
+                receptionService.getBookings(token).catch(() => null),
+            ]);
 
-        const fromPatients = searchPatientRecords('', accounts, queueItems);
-        const fromBookings = searchPatientRecordsFromBookings('', bookings, queueItems);
+            const bookings =
+                bookingRes && bookingRes.status !== 'error' && (bookingRes.code ?? 200) < 400
+                    ? normalizeBookingListResponse(bookingRes.data ?? bookingRes)
+                    : [];
 
-        const seen = new Set<string>();
-        const merged: PatientSearchResult[] = [];
-        for (const item of [...fromPatients, ...fromBookings]) {
-            const key = `${item.citizenId}:${item.accountId}:${item.queueId ?? ''}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            merged.push(item);
+            const fromPatients = searchPatientRecords('', accounts, queueItems);
+            const fromBookings = searchPatientRecordsFromBookings('', bookings, queueItems);
+
+            const seen = new Set<string>();
+            const merged: PatientSearchResult[] = [];
+            for (const item of [...fromPatients, ...fromBookings]) {
+                const key = `${item.citizenId}:${item.accountId}:${item.queueId ?? ''}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                merged.push(item);
+            }
+
+            const sorted = merged.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+            setLocalStorageCache(CACHE_KEYS.PATIENT_LIST, sorted);
+            return sorted;
+        };
+
+        if (cached && Array.isArray(cached) && cached.length > 0) {
+            fetchFresh().catch(() => {});
+            return cached;
         }
 
-        return merged.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+        return fetchFresh();
     },
 
     async searchPatients(query: string, token: string): Promise<PatientSearchResult[]> {
@@ -529,7 +733,7 @@ export const receptionService = {
         if (!accountId) {
             const baseUser = buildUserNameFromFullName(data.full_name, 'bn');
             const user_name = `${baseUser}${cleanCitizenId.slice(-6)}`.toLowerCase();
-            const email = data.email?.trim() || `bn.${cleanCitizenId.slice(-8)}@patient.triageflow.me`;
+            const email = data.email?.trim() || `bn.${cleanCitizenId.slice(-8)}@patient.triageflow.systems`;
             const suffix = cleanCitizenId.slice(-6) || '000000';
             const password = `Patient@${suffix}`;
             const phone = data.phone?.trim() || (`09${cleanCitizenId.slice(-8)}`).padEnd(10, '0');
@@ -683,4 +887,5 @@ export const receptionService = {
     },
 
     resolvePatientIdByCitizenId,
+    clearPatientCache: clearPatientLocalStorageCache,
 };

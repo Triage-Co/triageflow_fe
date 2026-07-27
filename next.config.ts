@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ['10.170.3.155', 'localhost'],
   async rewrites() {
     const backendUrl =
-      process.env.NEXT_PUBLIC_API_URL || '';
+      process.env.NEXT_PUBLIC_API_URL || 'https://triageflow.systems';
     return [
       {
         source: '/api/:path*',

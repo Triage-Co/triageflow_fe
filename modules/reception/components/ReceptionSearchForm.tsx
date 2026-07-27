@@ -297,7 +297,7 @@ export function ReceptionSearchForm() {
         setIsSubmitting(true);
         setModalError(null);
         try {
-            const email = `bn.${citizenId.slice(-8)}@patient.triageflow.me`;
+            const email = `bn.${citizenId.slice(-8)}@patient.triageflow.systems`;
             const suffix = citizenId.slice(-6) || '000000';
             const password = `Patient@${suffix}`;
 

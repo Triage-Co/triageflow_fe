@@ -39,7 +39,9 @@ interface NavItem {
 
 const NAV_BY_ROLE: Record<string, NavItem[]> = {
     DOCTOR: [
-        { label: 'Danh sách bệnh nhân', href: '/doctor/dashboard', icon: LayoutDashboard },
+        { label: 'Danh sách bệnh nhân', href: '/doctor', icon: LayoutDashboard },
+        { label: 'Tiếp nhận bệnh nhân', href: '/lab', icon: FlaskConical },
+        { label: 'Thanh toán', href: '/cashier', icon: CreditCard },
         { label: 'Thông báo', href: '/doctor/notification', icon: Bell },
         { label: 'Cài đặt', href: '/doctor/setting', icon: Settings },
     ],
@@ -51,7 +53,6 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
     ],
     RECEPTIONIST: [
         { label: 'Tổng quan', href: '/reception', icon: LayoutDashboard },
-        { label: 'Đăng ký bệnh nhân', href: '/reception/register', icon: UserPlus },
         { label: 'Tra cứu bệnh nhân', href: '/reception/search', icon: Search },
         { label: 'Thông báo', href: '/notifications', icon: Bell },
         { label: 'Thống kê', href: '/reception/stats', icon: BarChart3 },
@@ -70,7 +71,8 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
         { label: 'Cài đặt', href: '/settings', icon: Settings },
     ],
     PHARMACY_STAFF: [
-        { label: 'Dược phẩm', href: '/pharmacy', icon: Pill },
+        { label: 'Tiếp Nhận Bệnh Nhân', href: '/pharmacy', icon: Pill },
+        { label: 'Danh Sách Bệnh Nhân', href: '/pharmacy/patients', icon: LayoutDashboard },
         { label: 'Thông báo', href: '/notifications', icon: Bell },
         { label: 'Cài đặt', href: '/settings', icon: Settings },
     ],

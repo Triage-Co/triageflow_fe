@@ -272,7 +272,7 @@ export function CccdQrScanner({ open, onClose, onSuccess, onManualInput }: CccdQ
 
             ekycLaunchedRef.current = true;
 
-            window.SDK.launch({
+            (window.SDK.launch as (config: unknown) => void)({
                 ...buildVnptSdkLaunchConfig(vnptCredentials),
                 CUTOM_THEME: {
                     PRIMARY_COLOR: '#8B7CF6',
@@ -280,7 +280,7 @@ export function CccdQrScanner({ open, onClose, onSuccess, onManualInput }: CccdQ
                     BACKGROUND_COLOR: '#FFFFFF',
                 },
                 CALL_BACK_END_FLOW: handleEkycResult,
-                CALL_BACK_DOCUMENT_RESULT: async (result) => {
+                CALL_BACK_DOCUMENT_RESULT: async (result: any) => {
                     const qrRaw =
                         (typeof result.qr_code === 'string' && result.qr_code) ||
                         (typeof result.dataBase64 === 'string' && result.dataBase64) ||

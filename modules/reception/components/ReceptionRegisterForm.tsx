@@ -240,7 +240,7 @@ export function ReceptionRegisterForm() {
         setError(null);
         try {
             let patientId = existingAccount?.patient_id;
-            const email = form.email || `bn.${form.citizen_id.slice(-8)}@patient.triageflow.me`;
+            const email = form.email || `bn.${form.citizen_id.slice(-8)}@patient.triageflow.systems`;
             
             if (!patientId) {
                 const suffix = form.citizen_id.slice(-6);
@@ -405,6 +405,7 @@ export function ReceptionRegisterForm() {
             if (draft.citizen_id || draft.full_name) {
                 setScanBanner('Đã khôi phục thông tin bệnh nhân từ lần nhập trước.');
             }
+        }, 0);
 
         return () => window.clearTimeout(hydrateTimer);
     }, []);
@@ -642,7 +643,7 @@ export function ReceptionRegisterForm() {
                 return;
             }
             if (!form.email) {
-                update('email', `bn.${form.citizen_id.slice(-8)}@patient.triageflow.me`);
+                update('email', `bn.${form.citizen_id.slice(-8)}@patient.triageflow.systems`);
             }
             setStep(2);
         } else if (step === 2) {
@@ -722,7 +723,7 @@ export function ReceptionRegisterForm() {
         startTransition(async () => {
             try {
                 let patientId = existingAccount?.patient_id;
-                const email = form.email || `bn.${form.citizen_id.slice(-8)}@patient.triageflow.me`;
+                const email = form.email || `bn.${form.citizen_id.slice(-8)}@patient.triageflow.systems`;
 
                 if (!patientId) {
                     const suffix = form.citizen_id.slice(-6);

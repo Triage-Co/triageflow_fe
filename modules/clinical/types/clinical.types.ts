@@ -1,6 +1,6 @@
 // ── Enums & Literal Types ──────────────────────────────────────────────────
 export type Priority = 'Bình thường' | 'Ngồi xe lăn' | 'Khám sức khỏe' | 'Quay lại phòng khám';
-export type Status = 'Đã khám' | 'Đang khám' | 'Đang chờ';
+export type Status = 'Đã khám' | 'Đang khám' | 'Đang gọi' | 'Đang chờ';
 export type Gender = 'Nam' | 'Nữ';
 
 // ── Vitals ─────────────────────────────────────────────────────────────────

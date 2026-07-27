@@ -2,11 +2,10 @@ import React from 'react';
 import { RoomWaitingScreen } from '@/modules/queue/components/RoomWaitingScreen';
 
 interface PageProps {
-    searchParams: Promise<{ roomId?: string }>;
+    searchParams: Promise<{ roomId?: string; staffId?: string }>;
 }
 
 export default async function RoomDisplayPage({ searchParams }: PageProps) {
     const params = await searchParams;
-    const roomId = params?.roomId || '201';
-    return <RoomWaitingScreen roomId={roomId} />;
+    return <RoomWaitingScreen roomId={params?.roomId} staffId={params?.staffId} />;
 }

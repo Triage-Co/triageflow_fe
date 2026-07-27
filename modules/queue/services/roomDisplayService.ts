@@ -52,20 +52,23 @@ function mapPatient(item: BackendQueuePatient): QueuePatientItem {
     };
 }
 
+/** Current on TV: CALLING (just called) or IN_PROGRESS (examining) */
 function isCurrentPatient(item: BackendQueuePatient): boolean {
-    const s = item.step?.step_status ?? item.status;
-    return s === 'PROCESSING' || s === 'IN_PROGRESS' || s === 'ONGOING';
+    const queueStatus = (item.status || '').toUpperCase();
+    const step = (item.step?.step_status || '').toUpperCase();
+    return (
+        queueStatus === 'CALLING' ||
+        queueStatus === 'IN_PROGRESS' ||
+        step === 'PROCESSING' ||
+        step === 'IN_PROGRESS' ||
+        step === 'ONGOING'
+    );
 }
 
+/** Upcoming = PENDING only (must not include current CALLING/IN_PROGRESS) */
 function isWaiting(item: BackendQueuePatient): boolean {
-    const s = item.step?.step_status ?? item.status;
-    return (
-        s !== 'PROCESSING' &&
-        s !== 'IN_PROGRESS' &&
-        s !== 'ONGOING' &&
-        s !== 'COMPLETED' &&
-        s !== 'CANCELLED'
-    );
+    const queueStatus = (item.status || '').toUpperCase();
+    return queueStatus === 'PENDING' || queueStatus === 'WAITING';
 }
 
 export const roomDisplayService = {
@@ -145,37 +148,38 @@ export const roomDisplayService = {
                 : [];
 
             if (patients.length === 0) {
-                // No patients today → return correct room info + mock queue to demonstrate UI
+                // No patients today → return correct room info with empty patient queue
                 return {
                     room: roomInfo,
-                    currentPatient: {
-                        id: 'demo-current',
-                        queueNumber: 'A102',
-                        patientName: 'Nguyễn Văn An',
-                        status: 'PROCESSING'
-                    },
-                    upcomingPatients: [
-                        { id: 'demo-1', queueNumber: 'A103', patientName: 'Trần Văn Bình', status: 'WAITING' },
-                        { id: 'demo-2', queueNumber: 'A104', patientName: 'Lê Minh Châu', status: 'WAITING' },
-                        { id: 'demo-3', queueNumber: 'A105', patientName: 'Phạm Quốc Dũng', status: 'WAITING' },
-                        { id: 'demo-4', queueNumber: 'A106', patientName: 'Võ Thị Hằng', status: 'WAITING' }
-                    ],
+                    currentPatient: null,
+                    upcomingPatients: [],
                     lastUpdated: new Date().toISOString(),
                 };
             }
 
-            // ── 3. Filter patients matching the room's specialty ────────────────
-            // Map the patients and filter those whose specialty matches this room
-            const mappedPatients = patients.map(mapPatient);
+            // ── 3. Current = CALLING|IN_PROGRESS; Upcoming = PENDING & queue_number > current ─────
+            const current = patients.find(isCurrentPatient) ?? null;
+            const currentNumStr = current ? String(current.queue_number).replace(/^0+/, '') : '';
+            const currentNumVal = parseInt(currentNumStr, 10);
 
-            // Determine current and upcoming patients
-            const current = patients.find(isCurrentPatient);
-            const waiting = patients.filter(isWaiting);
+            const waiting = patients.filter((p) => {
+                if (!isWaiting(p)) return false;
+                if (current && p.queue_id === current.queue_id) return false;
+
+                const pNumStr = String(p.queue_number).replace(/^0+/, '') || '0';
+                const pNumVal = parseInt(pNumStr, 10);
+
+                if (!isNaN(currentNumVal) && currentNumVal > 0 && !isNaN(pNumVal) && pNumVal <= currentNumVal) {
+                    return false;
+                }
+
+                return true;
+            });
 
             return {
                 room: roomInfo,
                 currentPatient: current ? mapPatient(current) : null,
-                upcomingPatients: waiting.map(mapPatient),
+                upcomingPatients: waiting.slice(0, 5).map(mapPatient),
                 lastUpdated: new Date().toISOString(),
             };
         } catch (error) {
