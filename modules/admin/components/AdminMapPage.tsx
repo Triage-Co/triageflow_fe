@@ -12,17 +12,71 @@ import {
   X,
   MapPin,
   Route,
+  CircleDot,
+  Footprints,
+  Bug,
+  DoorOpen,
+  Plus,
+  Trash2,
+  Save,
+  Waypoints,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { FloorMap } from '@/modules/navigation/components/FloorMap';
-import { useBuildingMap } from '@/modules/navigation/hooks/useWayfinding';
+import {
+  FloorMap,
+  type PendingAddNode,
+} from '@/modules/navigation/components/FloorMap';
+import {
+  clearBuildingMapCache,
+  useBuildingMap,
+} from '@/modules/navigation/hooks/useWayfinding';
 import { fetchRoute } from '@/modules/navigation/services/navigationService';
-import type { RouteResult } from '@/modules/navigation/types/navigation.types';
+import {
+  fetchDebugSteps,
+  saveCorridorEdits,
+} from '@/modules/navigation/services/graphService';
+import type {
+  ApiRoom,
+  CorridorDebugSteps,
+  RouteResult,
+} from '@/modules/navigation/types/navigation.types';
 import { ApiError } from '@/shared/services/apiClient';
+import { useAuthStore } from '@/modules/auth/store/authStore';
 
 type MapMode = 'watch' | 'edit';
 
+const ROOM_TYPE_LABELS: Record<string, string> = {
+  CONSULTATION: 'Phòng khám',
+  WAITING: 'Phòng chờ',
+  RESTROOM: 'Nhà vệ sinh',
+  OTHER: 'Khác',
+};
+
+const DEBUG_STEPS = [
+  {
+    key: 1 as const,
+    label: 'Step 1: tạo điểm nối',
+    activeClass: 'bg-red-500 border-red-500 text-white',
+  },
+  {
+    key: 2 as const,
+    label: 'Step 2: Delaunay Triangulation',
+    activeClass: 'bg-slate-500 border-slate-500 text-white',
+  },
+  {
+    key: 3 as const,
+    label: 'Step 3: E-zigzag',
+    activeClass: 'bg-cyan-500 border-cyan-500 text-white',
+  },
+  {
+    key: 4 as const,
+    label: 'Step 4: tạo trung điểm',
+    activeClass: 'bg-amber-500 border-amber-500 text-white',
+  },
+];
+
 export function AdminMapPage() {
+  const accessToken = useAuthStore((s) => s.accessToken);
   const [mode, setMode] = useState<MapMode>('watch');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [startRoomId, setStartRoomId] = useState<string>('');
@@ -32,19 +86,72 @@ export function AdminMapPage() {
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [inspectedRoomId, setInspectedRoomId] = useState<string | null>(null);
+  const [mapRefreshKey, setMapRefreshKey] = useState(0);
 
-  const { rawMap } = useBuildingMap(1);
+  // Edit overlays
+  const [showNodes, setShowNodes] = useState(false);
+  const [showWalkable, setShowWalkable] = useState(false);
+  const [showDebugStep1, setShowDebugStep1] = useState(false);
+  const [showDebugStep2, setShowDebugStep2] = useState(false);
+  const [showDebugStep3, setShowDebugStep3] = useState(false);
+  const [showDebugStep4, setShowDebugStep4] = useState(false);
+  const [debugSteps, setDebugSteps] = useState<CorridorDebugSteps | null>(null);
+  const [debugLoading, setDebugLoading] = useState(false);
+  const [debugError, setDebugError] = useState<string | null>(null);
 
-  const rooms = useMemo(() => {
-    const floor =
-      rawMap?.floors.find((f) => f.floorNumber === 1) || rawMap?.floors[0];
-    if (!floor) return [];
-    return [...floor.rooms]
-      .filter((r) => r.roomCode?.trim())
-      .sort((a, b) => a.roomLabel.localeCompare(b.roomLabel, 'vi'));
+  // Node edit
+  const [nodeEditMode, setNodeEditMode] = useState(false);
+  const [placingNode, setPlacingNode] = useState(false);
+  const [pendingAdds, setPendingAdds] = useState<PendingAddNode[]>([]);
+  const [pendingRemoves, setPendingRemoves] = useState<string[]>([]);
+  const [selectedEditableNodeId, setSelectedEditableNodeId] = useState<
+    string | null
+  >(null);
+  const [savingNodes, setSavingNodes] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const { rawMap } = useBuildingMap(1, mapRefreshKey);
+
+  const activeFloor = useMemo(() => {
+    return rawMap?.floors.find((f) => f.floorNumber === 1) || rawMap?.floors[0];
   }, [rawMap]);
 
+  const rooms = useMemo(() => {
+    if (!activeFloor) return [];
+    return [...activeFloor.rooms]
+      .filter((r) => r.roomCode?.trim())
+      .sort((a, b) => a.roomLabel.localeCompare(b.roomLabel, 'vi'));
+  }, [activeFloor]);
+
+  const roomsById = useMemo(() => {
+    const map = new Map<string, ApiRoom>();
+    activeFloor?.rooms.forEach((r) => map.set(r.id, r));
+    return map;
+  }, [activeFloor]);
+
+  const inspectedRoom = inspectedRoomId
+    ? roomsById.get(inspectedRoomId) ?? null
+    : null;
+
+  const inspectedAreaLabel = useMemo(() => {
+    if (!inspectedRoom?.areaId || !activeFloor?.areas) return null;
+    return (
+      activeFloor.areas.find((a) => a.id === inspectedRoom.areaId)?.areaLabel ??
+      null
+    );
+  }, [inspectedRoom, activeFloor]);
+
+  const selectedNodeMeta = useMemo(() => {
+    if (!selectedEditableNodeId || !activeFloor?.nodes) return null;
+    return (
+      activeFloor.nodes.find((n) => n.id === selectedEditableNodeId) ?? null
+    );
+  }, [selectedEditableNodeId, activeFloor]);
+
   const buildingName = rawMap?.building?.name || 'Tòa G2 – Khoa Khám Bệnh';
+  const floorId = activeFloor?.id;
+  const isDirty = pendingAdds.length > 0 || pendingRemoves.length > 0;
 
   useEffect(() => {
     setMounted(true);
@@ -60,21 +167,47 @@ export function AdminMapPage() {
   }, [isFullscreen]);
 
   useEffect(() => {
-    if (!isFullscreen) return;
+    if (!isFullscreen && !savingNodes) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsFullscreen(false);
+      if (savingNodes) {
+        e.preventDefault();
+        return;
+      }
+      if (e.key === 'Escape' && isFullscreen) setIsFullscreen(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isFullscreen]);
+  }, [isFullscreen, savingNodes]);
 
   const clearRoute = useCallback(() => {
     setRouteResult(null);
     setRouteError(null);
   }, []);
 
+  const resetNodeEditState = useCallback(() => {
+    setPlacingNode(false);
+    setPendingAdds([]);
+    setPendingRemoves([]);
+    setSelectedEditableNodeId(null);
+    setSaveError(null);
+  }, []);
+
+  const exitNodeEditMode = useCallback(() => {
+    if (isDirty) {
+      const ok = window.confirm(
+        'Bạn có thay đổi chưa lưu. Thoát sẽ hủy các thay đổi?'
+      );
+      if (!ok) return;
+    }
+    setNodeEditMode(false);
+    resetNodeEditState();
+  }, [isDirty, resetNodeEditState]);
+
   const handleSelectRoom = useCallback(
     (roomId: string) => {
+      if (nodeEditMode) return;
+      setInspectedRoomId(roomId);
+
       if (mode !== 'watch') return;
 
       clearRoute();
@@ -89,8 +222,71 @@ export function AdminMapPage() {
         setPickStep('start');
       }
     },
-    [mode, pickStep, startRoomId, targetRoomId, clearRoute]
+    [
+      mode,
+      pickStep,
+      startRoomId,
+      targetRoomId,
+      clearRoute,
+      nodeEditMode,
+    ]
   );
+
+  const handlePlaceNode = useCallback((coords: [number, number]) => {
+    setPendingAdds((prev) => [
+      ...prev,
+      { tempId: `tmp-${Date.now()}-${prev.length}`, coords },
+    ]);
+    setSelectedEditableNodeId(null);
+  }, []);
+
+  const handleDeleteSelectedNode = useCallback(() => {
+    if (!selectedEditableNodeId) return;
+    if (selectedEditableNodeId.startsWith('tmp-')) {
+      setPendingAdds((prev) =>
+        prev.filter((p) => p.tempId !== selectedEditableNodeId)
+      );
+    } else {
+      setPendingRemoves((prev) =>
+        prev.includes(selectedEditableNodeId)
+          ? prev
+          : [...prev, selectedEditableNodeId]
+      );
+    }
+    setSelectedEditableNodeId(null);
+  }, [selectedEditableNodeId]);
+
+  const handleSaveCorridorEdits = async () => {
+    if (!floorId || !accessToken || !isDirty) return;
+
+    setSavingNodes(true);
+    setSaveError(null);
+
+    try {
+      await saveCorridorEdits(
+        floorId,
+        {
+          add: pendingAdds.map((p) => p.coords),
+          remove: pendingRemoves,
+        },
+        accessToken
+      );
+      resetNodeEditState();
+      clearBuildingMapCache();
+      setMapRefreshKey((k) => k + 1);
+      setShowNodes(true);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setSaveError(err.message || 'Không thể lưu thay đổi node.');
+      } else {
+        setSaveError(
+          err instanceof Error ? err.message : 'Không thể lưu thay đổi node.'
+        );
+      }
+    } finally {
+      setSavingNodes(false);
+    }
+  };
 
   const handleFindRoute = async () => {
     if (!startRoomId || !targetRoomId) {
@@ -130,25 +326,96 @@ export function AdminMapPage() {
     }
   };
 
+  const ensureDebugSteps = useCallback(async (): Promise<boolean> => {
+    if (debugSteps) return true;
+    if (!floorId) {
+      setDebugError('Không tìm thấy floorId.');
+      return false;
+    }
+
+    setDebugLoading(true);
+    setDebugError(null);
+    try {
+      const data = await fetchDebugSteps(floorId);
+      setDebugSteps(data);
+      return true;
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setDebugError(err.message || 'Không thể tải dữ liệu debug.');
+      } else {
+        setDebugError(
+          err instanceof Error ? err.message : 'Không thể tải dữ liệu debug.'
+        );
+      }
+      return false;
+    } finally {
+      setDebugLoading(false);
+    }
+  }, [debugSteps, floorId]);
+
+  const toggleDebugStep = async (step: 1 | 2 | 3 | 4) => {
+    const setters = {
+      1: setShowDebugStep1,
+      2: setShowDebugStep2,
+      3: setShowDebugStep3,
+      4: setShowDebugStep4,
+    } as const;
+    const getters = {
+      1: showDebugStep1,
+      2: showDebugStep2,
+      3: showDebugStep3,
+      4: showDebugStep4,
+    } as const;
+
+    const currentlyOn = getters[step];
+    if (currentlyOn) {
+      setters[step](false);
+      return;
+    }
+
+    const ok = await ensureDebugSteps();
+    if (!ok) return;
+    setters[step](true);
+  };
+
   const mapContent = (
     <FloorMap
       floorNumber={1}
-      startRoomId={startRoomId || null}
-      targetRoomId={targetRoomId || null}
-      routePath={routeResult?.path ?? null}
-      onSelectRoom={mode === 'watch' ? handleSelectRoom : undefined}
+      refreshKey={mapRefreshKey}
+      startRoomId={mode === 'watch' ? startRoomId || null : null}
+      targetRoomId={mode === 'watch' ? targetRoomId || null : null}
+      routePath={mode === 'watch' ? routeResult?.path ?? null : null}
+      onSelectRoom={handleSelectRoom}
+      showNodes={(mode === 'edit' && showNodes) || nodeEditMode}
+      showWalkable={
+        (mode === 'edit' && showWalkable) || (nodeEditMode && placingNode)
+      }
+      debugSteps={mode === 'edit' && !nodeEditMode ? debugSteps : null}
+      showDebugStep1={mode === 'edit' && !nodeEditMode && showDebugStep1}
+      showDebugStep2={mode === 'edit' && !nodeEditMode && showDebugStep2}
+      showDebugStep3={mode === 'edit' && !nodeEditMode && showDebugStep3}
+      showDebugStep4={mode === 'edit' && !nodeEditMode && showDebugStep4}
+      nodeEditMode={nodeEditMode}
+      placingNode={placingNode}
+      pendingAdds={pendingAdds}
+      pendingRemoves={pendingRemoves}
+      selectedEditableNodeId={selectedEditableNodeId}
+      onSelectEditableNode={setSelectedEditableNodeId}
+      onPlaceNode={handlePlaceNode}
     />
   );
 
   const toolbar = (
-    <div className="flex flex-wrap items-center gap-3">
-      {/* Mode toggle */}
-      <div className="inline-flex rounded-xl border border-[#EBEBEB] bg-[#F8F8FB] p-1">
+    <div className="flex items-center gap-2 shrink-0">
+      <div className="inline-flex rounded-lg border border-[#EBEBEB] bg-[#F8F8FB] p-0.5">
         <button
           type="button"
-          onClick={() => setMode('watch')}
+          onClick={() => {
+            if (nodeEditMode) exitNodeEditMode();
+            setMode('watch');
+          }}
           className={cn(
-            'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors cursor-pointer',
+            'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-bold transition-colors cursor-pointer',
             mode === 'watch'
               ? 'bg-white text-[#2D2D2D] shadow-sm'
               : 'text-[#7B7B7B] hover:text-[#2D2D2D]'
@@ -161,7 +428,7 @@ export function AdminMapPage() {
           type="button"
           onClick={() => setMode('edit')}
           className={cn(
-            'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors cursor-pointer',
+            'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-bold transition-colors cursor-pointer',
             mode === 'edit'
               ? 'bg-white text-[#2D2D2D] shadow-sm'
               : 'text-[#7B7B7B] hover:text-[#2D2D2D]'
@@ -175,7 +442,7 @@ export function AdminMapPage() {
       <button
         type="button"
         onClick={() => setIsFullscreen((v) => !v)}
-        className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#EBEBEB] bg-white text-[12px] font-bold text-[#2D2D2D] hover:bg-[#F8F8FB] transition-colors cursor-pointer"
+        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[#EBEBEB] bg-white text-[11px] font-bold text-[#2D2D2D] hover:bg-[#F8F8FB] transition-colors cursor-pointer whitespace-nowrap"
       >
         {isFullscreen ? (
           <>
@@ -192,149 +459,451 @@ export function AdminMapPage() {
     </div>
   );
 
-  const routePanel =
-    mode === 'watch' ? (
-      <div className="flex flex-col gap-3 p-4 rounded-2xl border border-[#EBEBEB] bg-white/95 backdrop-blur-md shadow-sm">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#155DFC] flex items-center justify-center">
-            <Route className="w-4 h-4" />
+  const watchPanel = (
+    <div className="flex flex-col gap-2 p-3 rounded-xl border border-[#EBEBEB] bg-white/95 backdrop-blur-md shadow-sm">
+      <div className="flex items-center gap-2 min-w-0">
+        <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#155DFC] flex items-center justify-center shrink-0">
+          <Route className="w-3.5 h-3.5" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[11px] font-extrabold text-[#2D2D2D] truncate">
+            Dẫn đường
+          </p>
+          <p className="text-[9px] font-semibold text-[#9C9C9C] truncate">
+            Click phòng hoặc chọn
+            {pickStep === 'start' ? ' · điểm đi' : ' · điểm đến'}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="flex flex-col gap-0.5 min-w-0">
+          <span className="text-[9px] uppercase tracking-wider font-extrabold text-emerald-600">
+            Điểm đi
+          </span>
+          <select
+            value={startRoomId}
+            onChange={(e) => {
+              clearRoute();
+              setStartRoomId(e.target.value);
+              setPickStep('target');
+              if (e.target.value) setInspectedRoomId(e.target.value);
+            }}
+            className="h-8 w-full min-w-0 rounded-lg border border-[#EBEBEB] bg-white px-2 text-[11px] font-semibold text-[#2D2D2D] outline-none focus:border-[#8B7CF6]"
+          >
+            <option value="">Chọn phòng...</option>
+            {rooms.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.roomLabel} ({r.roomCode})
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-0.5 min-w-0">
+          <span className="text-[9px] uppercase tracking-wider font-extrabold text-[#ef476f]">
+            Điểm đến
+          </span>
+          <select
+            value={targetRoomId}
+            onChange={(e) => {
+              clearRoute();
+              setTargetRoomId(e.target.value);
+              setPickStep('start');
+              if (e.target.value) setInspectedRoomId(e.target.value);
+            }}
+            className="h-8 w-full min-w-0 rounded-lg border border-[#EBEBEB] bg-white px-2 text-[11px] font-semibold text-[#2D2D2D] outline-none focus:border-[#8B7CF6]"
+          >
+            <option value="">Chọn phòng...</option>
+            {rooms.map((r) => (
+              <option key={r.id} value={r.id} disabled={r.id === startRoomId}>
+                {r.roomLabel} ({r.roomCode})
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          onClick={handleFindRoute}
+          disabled={routeLoading || !startRoomId || !targetRoomId}
+          className={cn(
+            'flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-bold text-white transition-colors cursor-pointer',
+            routeLoading || !startRoomId || !targetRoomId
+              ? 'bg-[#B8B0F0] cursor-not-allowed'
+              : 'bg-[#8B7CF6] hover:bg-[#7A6BE8]'
+          )}
+        >
+          {routeLoading ? (
+            <Loader2 className="w-3 h-3 animate-spin" />
+          ) : (
+            <Navigation className="w-3 h-3" />
+          )}
+          Tìm đường
+        </button>
+
+        {(routeResult || startRoomId || targetRoomId) && (
+          <button
+            type="button"
+            onClick={() => {
+              setStartRoomId('');
+              setTargetRoomId('');
+              setPickStep('start');
+              clearRoute();
+            }}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[#EBEBEB] text-[11px] font-bold text-[#7B7B7B] hover:bg-[#F8F8FB] cursor-pointer"
+          >
+            <X className="w-3 h-3" />
+            Xóa
+          </button>
+        )}
+      </div>
+
+      {routeResult && (
+        <p className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 rounded-lg px-2 py-1.5">
+          {routeResult.totalDistance.toFixed(1)} m · {routeResult.path.length}{' '}
+          điểm
+        </p>
+      )}
+      {routeError && (
+        <p className="text-[10px] font-semibold text-rose-600 bg-rose-50 rounded-lg px-2 py-1.5">
+          {routeError}
+        </p>
+      )}
+    </div>
+  );
+
+  const nodeEditPanel = (
+    <div className="flex flex-col gap-2 p-2.5 rounded-xl border border-[#EBEBEB] bg-white/95 backdrop-blur-md shadow-sm">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+            <Waypoints className="w-3.5 h-3.5" />
           </div>
-          <div>
-            <p className="text-[12px] font-extrabold text-[#2D2D2D]">Dẫn đường</p>
-            <p className="text-[10px] font-semibold text-[#9C9C9C]">
-              Chọn từ danh sách hoặc click phòng trên map
-              {pickStep === 'start' ? ' (điểm đi)' : ' (điểm đến)'}
+          <div className="min-w-0">
+            <p className="text-[11px] font-extrabold text-[#2D2D2D]">
+              Edit node
+            </p>
+            <p className="text-[9px] font-semibold text-[#9C9C9C] truncate">
+              CORRIDOR / JUNCTION
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={exitNodeEditMode}
+          className="text-[10px] font-bold text-[#7B7B7B] hover:text-[#2D2D2D] cursor-pointer px-2 py-1 rounded-md hover:bg-[#F8F8FB]"
+        >
+          Thoát
+        </button>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => {
+          setPlacingNode((v) => !v);
+          setSelectedEditableNodeId(null);
+        }}
+        className={cn(
+          'flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-colors cursor-pointer w-full',
+          placingNode
+            ? 'bg-emerald-500 border-emerald-500 text-white'
+            : 'bg-white border-[#EBEBEB] text-[#2D2D2D] hover:bg-[#F8F8FB]'
+        )}
+      >
+        <Plus className="w-3.5 h-3.5" />
+        {placingNode ? 'Đang thêm… (click map)' : 'Thêm node'}
+      </button>
+
+      {selectedEditableNodeId && (
+        <div className="rounded-lg border border-[#EBEBEB] bg-[#F8F8FB] p-2 space-y-1.5">
+          <p className="text-[10px] font-bold text-[#2D2D2D] truncate">
+            {selectedNodeMeta
+              ? `${selectedNodeMeta.type}`
+              : selectedEditableNodeId.startsWith('tmp-')
+                ? 'Node mới (chưa lưu)'
+                : 'Node đã chọn'}
+          </p>
+          <button
+            type="button"
+            onClick={handleDeleteSelectedNode}
+            className="flex items-center justify-center gap-1 w-full px-2.5 py-1.5 rounded-lg bg-rose-500 text-white text-[11px] font-bold cursor-pointer hover:bg-rose-600"
+          >
+            <Trash2 className="w-3 h-3" />
+            Xóa node
+          </button>
+        </div>
+      )}
+
+      {isDirty && (
+        <p className="text-[9px] font-semibold text-amber-700 bg-amber-50 rounded-lg px-2 py-1.5">
+          +{pendingAdds.length} · −{pendingRemoves.length} chưa lưu
+        </p>
+      )}
+      {saveError && (
+        <p className="text-[10px] font-semibold text-rose-600 bg-rose-50 rounded-lg px-2 py-1.5">
+          {saveError}
+        </p>
+      )}
+    </div>
+  );
+
+  const editPanel = nodeEditMode ? (
+    nodeEditPanel
+  ) : (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap gap-1.5 p-2.5 rounded-xl border border-[#EBEBEB] bg-white/95 backdrop-blur-md shadow-sm">
+        <button
+          type="button"
+          onClick={() => setShowNodes((v) => !v)}
+          className={cn(
+            'flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-colors cursor-pointer',
+            showNodes
+              ? 'bg-indigo-500 border-indigo-500 text-white'
+              : 'bg-white border-[#EBEBEB] text-[#2D2D2D] hover:bg-[#F8F8FB]'
+          )}
+        >
+          <CircleDot className="w-3 h-3" />
+          Nodes{showNodes ? ': Hiện' : ''}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setShowWalkable((v) => !v)}
+          className={cn(
+            'flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-colors cursor-pointer',
+            showWalkable
+              ? 'bg-emerald-500 border-emerald-500 text-white'
+              : 'bg-white border-[#EBEBEB] text-[#2D2D2D] hover:bg-[#F8F8FB]'
+          )}
+        >
+          <Footprints className="w-3 h-3" />
+          Walkable{showWalkable ? ': Bật' : ''}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setNodeEditMode(true);
+            setShowNodes(true);
+            setPlacingNode(false);
+          }}
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[#EBEBEB] bg-white text-[11px] font-bold text-[#2D2D2D] hover:bg-[#F8F8FB] cursor-pointer"
+        >
+          <Waypoints className="w-3 h-3" />
+          Edit node
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-2 p-2.5 rounded-xl border border-[#EBEBEB] bg-white/95 backdrop-blur-md shadow-sm">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+            <Bug className="w-3.5 h-3.5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-extrabold text-[#2D2D2D] truncate">
+              Debug tạo node
+            </p>
+            <p className="text-[9px] font-semibold text-[#9C9C9C] truncate">
+              MPRSS · bật từng bước
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wider font-extrabold text-emerald-600">
-              Điểm đi
-            </span>
-            <select
-              value={startRoomId}
-              onChange={(e) => {
-                clearRoute();
-                setStartRoomId(e.target.value);
-                setPickStep('target');
-              }}
-              className="h-9 rounded-xl border border-[#EBEBEB] bg-white px-3 text-[12px] font-semibold text-[#2D2D2D] outline-none focus:border-[#8B7CF6]"
-            >
-              <option value="">Chọn phòng...</option>
-              {rooms.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.roomLabel} ({r.roomCode})
-                </option>
-              ))}
-            </select>
-          </label>
+        <div className="flex flex-col gap-1.5">
+          {DEBUG_STEPS.map((step) => {
+            const active =
+              step.key === 1
+                ? showDebugStep1
+                : step.key === 2
+                  ? showDebugStep2
+                  : step.key === 3
+                    ? showDebugStep3
+                    : showDebugStep4;
 
-          <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wider font-extrabold text-[#ef476f]">
-              Điểm đến
-            </span>
-            <select
-              value={targetRoomId}
-              onChange={(e) => {
-                clearRoute();
-                setTargetRoomId(e.target.value);
-                setPickStep('start');
-              }}
-              className="h-9 rounded-xl border border-[#EBEBEB] bg-white px-3 text-[12px] font-semibold text-[#2D2D2D] outline-none focus:border-[#8B7CF6]"
-            >
-              <option value="">Chọn phòng...</option>
-              {rooms.map((r) => (
-                <option key={r.id} value={r.id} disabled={r.id === startRoomId}>
-                  {r.roomLabel} ({r.roomCode})
-                </option>
-              ))}
-            </select>
-          </label>
+            return (
+              <button
+                key={step.key}
+                type="button"
+                disabled={debugLoading}
+                onClick={() => toggleDebugStep(step.key)}
+                className={cn(
+                  'flex items-center px-2.5 py-1.5 rounded-lg border text-[10px] font-bold text-left transition-colors cursor-pointer disabled:opacity-60 w-full',
+                  active
+                    ? step.activeClass
+                    : 'bg-white border-[#EBEBEB] text-[#2D2D2D] hover:bg-[#F8F8FB]'
+                )}
+              >
+                <span className="truncate">
+                  {active ? `${step.label} (Hiện)` : step.label}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        {debugLoading && (
+          <p className="flex items-center gap-1.5 text-[10px] font-semibold text-[#7B7B7B]">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            Đang tải debug...
+          </p>
+        )}
+        {debugError && (
+          <p className="text-[10px] font-semibold text-rose-600 bg-rose-50 rounded-lg px-2 py-1.5">
+            {debugError}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+
+  const sidePanel = mode === 'watch' ? watchPanel : editPanel;
+
+  const roomInfoPopup = inspectedRoom && !nodeEditMode && (
+    <div className="absolute top-4 right-4 z-20 pointer-events-auto w-[220px]">
+      <div className="rounded-xl border border-[#EBEBEB] bg-white/95 backdrop-blur-md shadow-md p-3">
+        <div className="flex items-start gap-2">
+          <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#155DFC] flex items-center justify-center shrink-0 mt-0.5">
+            <DoorOpen className="w-3.5 h-3.5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-extrabold text-[#2D2D2D] leading-snug break-words">
+              {inspectedRoom.roomLabel}
+            </p>
+            <p className="text-[10px] font-bold text-[#155DFC] mt-0.5">
+              {inspectedRoom.roomCode}
+            </p>
+          </div>
           <button
             type="button"
-            onClick={handleFindRoute}
-            disabled={routeLoading || !startRoomId || !targetRoomId}
-            className={cn(
-              'flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-bold text-white transition-colors cursor-pointer',
-              routeLoading || !startRoomId || !targetRoomId
-                ? 'bg-[#B8B0F0] cursor-not-allowed'
-                : 'bg-[#8B7CF6] hover:bg-[#7A6BE8]'
-            )}
+            onClick={() => setInspectedRoomId(null)}
+            className="shrink-0 p-0.5 rounded-md text-[#9C9C9C] hover:text-[#2D2D2D] hover:bg-[#F8F8FB] cursor-pointer"
+            aria-label="Đóng"
           >
-            {routeLoading ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Navigation className="w-3.5 h-3.5" />
-            )}
-            Tìm đường
+            <X className="w-3.5 h-3.5" />
           </button>
-
-          {(routeResult || startRoomId || targetRoomId) && (
-            <button
-              type="button"
-              onClick={() => {
-                setStartRoomId('');
-                setTargetRoomId('');
-                setPickStep('start');
-                clearRoute();
-              }}
-              className="flex items-center gap-1 px-3 py-2 rounded-xl border border-[#EBEBEB] text-[12px] font-bold text-[#7B7B7B] hover:bg-[#F8F8FB] cursor-pointer"
-            >
-              <X className="w-3.5 h-3.5" />
-              Xóa
-            </button>
-          )}
         </div>
 
-        {routeResult && (
-          <p className="text-[12px] font-semibold text-emerald-700 bg-emerald-50 rounded-xl px-3 py-2">
-            Quãng đường: {routeResult.totalDistance.toFixed(1)} m ·{' '}
-            {routeResult.path.length} điểm
-          </p>
-        )}
-        {routeError && (
-          <p className="text-[12px] font-semibold text-rose-600 bg-rose-50 rounded-xl px-3 py-2">
-            {routeError}
-          </p>
-        )}
+        <div className="mt-2 pt-2 border-t border-[#F0F0F0] space-y-1">
+          <div className="flex justify-between gap-2 text-[10px]">
+            <span className="font-semibold text-[#9C9C9C]">Loại</span>
+            <span className="font-bold text-[#2D2D2D] text-right">
+              {ROOM_TYPE_LABELS[inspectedRoom.type] ||
+                inspectedRoom.type ||
+                '—'}
+            </span>
+          </div>
+          {inspectedAreaLabel && (
+            <div className="flex justify-between gap-2 text-[10px]">
+              <span className="font-semibold text-[#9C9C9C]">Khu vực</span>
+              <span className="font-bold text-[#2D2D2D] text-right truncate">
+                {inspectedAreaLabel}
+              </span>
+            </div>
+          )}
+          {typeof inspectedRoom.heightMeters === 'number' && (
+            <div className="flex justify-between gap-2 text-[10px]">
+              <span className="font-semibold text-[#9C9C9C]">Chiều cao</span>
+              <span className="font-bold text-[#2D2D2D]">
+                {inspectedRoom.heightMeters} m
+              </span>
+            </div>
+          )}
+          <div className="flex justify-between gap-2 text-[10px]">
+            <span className="font-semibold text-[#9C9C9C]">POI</span>
+            <span className="font-bold text-[#2D2D2D]">
+              {inspectedRoom.pois?.length ?? 0}
+            </span>
+          </div>
+        </div>
       </div>
-    ) : (
-      <div className="p-4 rounded-2xl border border-dashed border-[#D4D0F5] bg-[#F8F7FF]">
-        <p className="text-[13px] font-bold text-[#2D2D2D]">Chế độ Edit</p>
-        <p className="text-[12px] text-[#7B7B7B] mt-1 font-medium">
-          Chế độ chỉnh sửa bản đồ sẽ được triển khai sau. Hiện tại chỉ xem và dẫn
-          đường ở Watch mode.
-        </p>
+    </div>
+  );
+
+  const saveFab =
+    nodeEditMode &&
+    (
+      <div className="absolute bottom-4 right-4 z-30 pointer-events-auto">
+        <button
+          type="button"
+          disabled={!isDirty || savingNodes}
+          onClick={handleSaveCorridorEdits}
+          className={cn(
+            'flex items-center gap-2 px-4 py-3 rounded-2xl text-[13px] font-bold shadow-lg transition-colors',
+            !isDirty || savingNodes
+              ? 'bg-[#C8C2F0] text-white cursor-not-allowed'
+              : 'bg-[#8B7CF6] text-white hover:bg-[#7A6BE8] cursor-pointer'
+          )}
+        >
+          {savingNodes ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Save className="w-4 h-4" />
+          )}
+          Lưu
+        </button>
       </div>
+    );
+
+  const progressModal =
+    savingNodes &&
+    createPortal(
+      <div
+        className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/45 backdrop-blur-[2px]"
+        role="alertdialog"
+        aria-modal="true"
+        aria-busy="true"
+      >
+        <div className="mx-4 w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-[#EBEBEB] p-6 text-center">
+          <div className="mx-auto mb-4 relative w-14 h-14">
+            <div className="absolute inset-0 rounded-full border-4 border-[#EEEDFC]" />
+            <div className="absolute inset-0 rounded-full border-4 border-t-[#8B7CF6] animate-spin" />
+            <Navigation className="absolute inset-0 m-auto w-5 h-5 text-[#8B7CF6]" />
+          </div>
+          <p className="text-[14px] font-bold text-[#2D2D2D] leading-relaxed">
+            Đang tạo đường đi cho bệnh nhân, xin đợi một chút...
+          </p>
+          <p className="text-[12px] font-medium text-[#7B7B7B] mt-2 leading-relaxed">
+            Bạn có thể đóng cửa sổ này và làm việc khác
+          </p>
+        </div>
+      </div>,
+      document.body
     );
 
   const pageBody = (
     <div className="relative flex-1 min-h-0 overflow-hidden">
       {mapContent}
 
-      <div className="absolute top-4 left-4 right-4 z-20 flex flex-col gap-3 pointer-events-none max-w-xl">
-        <div className="pointer-events-auto flex flex-wrap items-center gap-3">
-          <div className="bg-white/95 backdrop-blur-md px-4 py-2 rounded-2xl border border-slate-200 shadow-md flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#155DFC] flex items-center justify-center">
-              <MapPin className="w-4 h-4" />
+      <div className="absolute top-4 left-4 z-20 pointer-events-none">
+        <div className="pointer-events-auto inline-flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <div className="bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-2 shrink-0">
+              <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#155DFC] flex items-center justify-center">
+                <MapPin className="w-3.5 h-3.5" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-[11px] font-extrabold text-slate-800 tracking-tight whitespace-nowrap">
+                  Sơ đồ bệnh viện 3D
+                </h2>
+                <p className="text-[9px] font-semibold text-slate-500 whitespace-nowrap max-w-[160px] truncate">
+                  {buildingName}
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-xs font-extrabold text-slate-800 tracking-tight">
-                Sơ đồ bệnh viện 3D
-              </h2>
-              <p className="text-[11px] font-semibold text-slate-500">{buildingName}</p>
-            </div>
+            {toolbar}
           </div>
-          <div className="pointer-events-auto">{toolbar}</div>
-        </div>
 
-        <div className="pointer-events-auto">{routePanel}</div>
+          <div className="w-0 min-w-full max-h-[55vh] overflow-y-auto overflow-x-hidden">
+            {sidePanel}
+          </div>
+        </div>
       </div>
+
+      {roomInfoPopup}
+      {saveFab}
     </div>
   );
 
@@ -358,7 +927,8 @@ export function AdminMapPage() {
                 Cấu hình bản đồ
               </h1>
               <p className="text-[13px] text-[#7B7B7B] mt-1 font-medium">
-                Xem sơ đồ 3D, dẫn đường giữa các phòng, và chỉnh sửa (sắp có).
+                Xem sơ đồ 3D, dẫn đường, debug MPRSS, và chỉnh sửa corridor
+                node.
               </p>
             </div>
 
@@ -377,6 +947,7 @@ export function AdminMapPage() {
       </div>
 
       {fullscreenOverlay}
+      {progressModal}
     </>
   );
 }

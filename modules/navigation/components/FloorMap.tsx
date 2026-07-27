@@ -1,33 +1,77 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useBuildingMap } from '../hooks/useWayfinding';
 import { useNavigationStore } from '../store/navigationStore';
 import { BuildingMapCanvas } from './map/BuildingMapCanvas';
 import { Loader2 } from 'lucide-react';
-import type { RoutePathNode } from '../types/navigation.types';
+import type { CorridorDebugSteps, RoutePathNode } from '../types/navigation.types';
+
+export interface PendingAddNode {
+  tempId: string;
+  coords: [number, number];
+}
 
 interface FloorMapProps {
   floorNumber?: number;
+  refreshKey?: number;
   highlightRoomCode?: string | null;
   highlightAreaId?: string | null;
   startRoomId?: string | null;
   targetRoomId?: string | null;
   routePath?: RoutePathNode[] | null;
   onSelectRoom?: (roomId: string) => void;
+  showNodes?: boolean;
+  showWalkable?: boolean;
+  debugSteps?: CorridorDebugSteps | null;
+  showDebugStep1?: boolean;
+  showDebugStep2?: boolean;
+  showDebugStep3?: boolean;
+  showDebugStep4?: boolean;
+  nodeEditMode?: boolean;
+  placingNode?: boolean;
+  pendingAdds?: PendingAddNode[];
+  pendingRemoves?: string[];
+  selectedEditableNodeId?: string | null;
+  onSelectEditableNode?: (nodeId: string | null) => void;
+  onPlaceNode?: (coords: [number, number]) => void;
 }
 
 export const FloorMap: React.FC<FloorMapProps> = ({
   floorNumber = 1,
+  refreshKey = 0,
   highlightRoomCode,
   highlightAreaId,
   startRoomId,
   targetRoomId,
   routePath,
   onSelectRoom,
+  showNodes,
+  showWalkable,
+  debugSteps,
+  showDebugStep1,
+  showDebugStep2,
+  showDebugStep3,
+  showDebugStep4,
+  nodeEditMode,
+  placingNode,
+  pendingAdds,
+  pendingRemoves,
+  selectedEditableNodeId,
+  onSelectEditableNode,
+  onPlaceNode,
 }) => {
-  const { data, loading, error } = useBuildingMap(floorNumber);
+  const { data, rawMap, loading, error } = useBuildingMap(floorNumber, refreshKey);
   const highlightedRoomId = useNavigationStore((s) => s.highlightedRoomId);
+
+  const apiFloor = useMemo(() => {
+    if (!rawMap) return null;
+    return (
+      rawMap.floors.find((f) => f.floorNumber === floorNumber) ||
+      rawMap.floors[0] ||
+      null
+    );
+  }, [rawMap, floorNumber]);
 
   if (loading && !data) {
     return (
@@ -52,6 +96,7 @@ export const FloorMap: React.FC<FloorMapProps> = ({
   return (
     <BuildingMapCanvas
       floorData={data}
+      apiFloor={apiFloor}
       highlightedRoomId={highlightedRoomId}
       highlightRoomCode={highlightRoomCode}
       highlightAreaId={highlightAreaId}
@@ -59,6 +104,20 @@ export const FloorMap: React.FC<FloorMapProps> = ({
       targetRoomId={targetRoomId}
       routePath={routePath}
       onSelectRoom={onSelectRoom}
+      showNodes={showNodes || nodeEditMode}
+      showWalkable={showWalkable || (nodeEditMode && placingNode)}
+      debugSteps={debugSteps}
+      showDebugStep1={showDebugStep1}
+      showDebugStep2={showDebugStep2}
+      showDebugStep3={showDebugStep3}
+      showDebugStep4={showDebugStep4}
+      nodeEditMode={nodeEditMode}
+      placingNode={placingNode}
+      pendingAdds={pendingAdds}
+      pendingRemoves={pendingRemoves}
+      selectedEditableNodeId={selectedEditableNodeId}
+      onSelectEditableNode={onSelectEditableNode}
+      onPlaceNode={onPlaceNode}
     />
   );
 };

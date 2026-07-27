@@ -8,6 +8,7 @@ import {
   RoomData,
   WallSegment,
   lngLatToLocal,
+  localToLngLat,
 } from '../../utils/buildingToThree';
 import { createWallMaterial, createDoorMaterial } from './threeMaterials';
 import {
@@ -19,10 +20,25 @@ import {
   buildFloorSlab,
   createBeaconGroup,
 } from './threeBuilders';
-import type { RoutePathNode } from '../../types/navigation.types';
+import type {
+  ApiFloor,
+  CorridorDebugSteps,
+  RoutePathNode,
+} from '../../types/navigation.types';
+import {
+  buildNodesGroup,
+  buildWalkableZoneMesh,
+  createEmptyDebugGroups,
+  populateDebugGroups,
+  type DebugLayerGroups,
+} from './mapDebugLayers';
+import type { PendingAddNode } from '../FloorMap';
+
+const EDITABLE_NODE_TYPES = new Set(['CORRIDOR', 'JUNCTION']);
 
 interface BuildingMapCanvasProps {
   floorData: FloorData3D;
+  apiFloor?: ApiFloor | null;
   highlightedRoomId?: string | null;
   highlightRoomCode?: string | null;
   highlightAreaId?: string | null;
@@ -30,6 +46,20 @@ interface BuildingMapCanvasProps {
   targetRoomId?: string | null;
   routePath?: RoutePathNode[] | null;
   onSelectRoom?: (roomId: string) => void;
+  showNodes?: boolean;
+  showWalkable?: boolean;
+  debugSteps?: CorridorDebugSteps | null;
+  showDebugStep1?: boolean;
+  showDebugStep2?: boolean;
+  showDebugStep3?: boolean;
+  showDebugStep4?: boolean;
+  nodeEditMode?: boolean;
+  placingNode?: boolean;
+  pendingAdds?: PendingAddNode[];
+  pendingRemoves?: string[];
+  selectedEditableNodeId?: string | null;
+  onSelectEditableNode?: (nodeId: string | null) => void;
+  onPlaceNode?: (coords: [number, number]) => void;
 }
 
 interface ProjectedMarker {
@@ -46,6 +76,7 @@ interface ProjectedMarker {
 
 export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   floorData,
+  apiFloor = null,
   highlightedRoomId,
   highlightRoomCode,
   highlightAreaId,
@@ -53,6 +84,20 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   targetRoomId = null,
   routePath = null,
   onSelectRoom,
+  showNodes = false,
+  showWalkable = false,
+  debugSteps = null,
+  showDebugStep1 = false,
+  showDebugStep2 = false,
+  showDebugStep3 = false,
+  showDebugStep4 = false,
+  nodeEditMode = false,
+  placingNode = false,
+  pendingAdds = [],
+  pendingRemoves = [],
+  selectedEditableNodeId = null,
+  onSelectEditableNode,
+  onPlaceNode,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -68,11 +113,51 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   const sceneRef = useRef<THREE.Scene | null>(null);
   const pathMeshRef = useRef<THREE.Mesh | null>(null);
   const routePathRef = useRef(routePath);
+  const nodesGroupRef = useRef<THREE.Group | null>(null);
+  const walkableMeshRef = useRef<THREE.Mesh | null>(null);
+  const debugGroupsRef = useRef<DebugLayerGroups | null>(null);
+  const debugPopulatedRef = useRef(false);
+  const pendingPreviewRef = useRef<THREE.Group | null>(null);
+  const placementPlaneRef = useRef<THREE.Mesh | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const roomMeshesGroupRef = useRef<THREE.Group | null>(null);
+
+  const nodeEditModeRef = useRef(nodeEditMode);
+  const placingNodeRef = useRef(placingNode);
+  const pendingRemovesRef = useRef(pendingRemoves);
+  const onSelectEditableNodeRef = useRef(onSelectEditableNode);
+  const onPlaceNodeRef = useRef(onPlaceNode);
+  const selectedEditableNodeIdRef = useRef(selectedEditableNodeId);
+
+  const debugStepsRef = useRef(debugSteps);
+  const showNodesRef = useRef(showNodes);
+  const showWalkableRef = useRef(showWalkable);
+  const showDebugRefs = useRef({
+    s1: showDebugStep1,
+    s2: showDebugStep2,
+    s3: showDebugStep3,
+    s4: showDebugStep4,
+  });
 
   startRoomIdRef.current = startRoomId;
   targetRoomIdRef.current = targetRoomId;
   onSelectRoomRef.current = onSelectRoom;
   routePathRef.current = routePath;
+  debugStepsRef.current = debugSteps;
+  showNodesRef.current = showNodes;
+  showWalkableRef.current = showWalkable;
+  showDebugRefs.current = {
+    s1: showDebugStep1,
+    s2: showDebugStep2,
+    s3: showDebugStep3,
+    s4: showDebugStep4,
+  };
+  nodeEditModeRef.current = nodeEditMode;
+  placingNodeRef.current = placingNode;
+  pendingRemovesRef.current = pendingRemoves;
+  onSelectEditableNodeRef.current = onSelectEditableNode;
+  onPlaceNodeRef.current = onPlaceNode;
+  selectedEditableNodeIdRef.current = selectedEditableNodeId;
 
   const activeHighlightId = selectedRoomId || highlightedRoomId || null;
   activeHighlightIdRef.current = activeHighlightId;
@@ -194,6 +279,154 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
     };
   }, [routePath, floorData.centerShiftX, floorData.centerShiftZ]);
 
+  // Toggle overlay visibility without rebuilding scene
+  useEffect(() => {
+    if (nodesGroupRef.current) {
+      nodesGroupRef.current.visible = showNodes || nodeEditMode;
+      const removeSet = new Set(pendingRemoves);
+      nodesGroupRef.current.children.forEach((child) => {
+        const id = child.userData?.id as string | undefined;
+        if (!id) return;
+        child.visible = !removeSet.has(id);
+
+        if (
+          child instanceof THREE.Mesh &&
+          EDITABLE_NODE_TYPES.has(child.userData?.nodeType || '')
+        ) {
+          const mat = child.material as THREE.MeshStandardMaterial;
+          const original = child.userData.originalColor ?? 0x6366f1;
+          if (selectedEditableNodeId && id === selectedEditableNodeId) {
+            mat.color.set('#ec4899');
+            mat.emissive.set('#db2777');
+            mat.emissiveIntensity = 0.9;
+          } else {
+            mat.color.setHex(original);
+            mat.emissive.setHex(original);
+            mat.emissiveIntensity = 0.6;
+          }
+        }
+      });
+    }
+  }, [showNodes, nodeEditMode, pendingRemoves, selectedEditableNodeId]);
+
+  useEffect(() => {
+    if (walkableMeshRef.current) {
+      walkableMeshRef.current.visible =
+        showWalkable || (nodeEditMode && placingNode);
+    }
+  }, [showWalkable, nodeEditMode, placingNode]);
+
+  // Pending add preview spheres
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    if (pendingPreviewRef.current) {
+      scene.remove(pendingPreviewRef.current);
+      pendingPreviewRef.current.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) {
+          obj.geometry.dispose();
+          if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose());
+          else obj.material.dispose();
+        }
+      });
+      pendingPreviewRef.current = null;
+    }
+
+    if (!pendingAdds.length) return;
+
+    const group = new THREE.Group();
+    group.name = 'pendingAdds';
+    const geo = new THREE.SphereGeometry(0.32, 14, 14);
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x22c55e,
+      emissive: 0x16a34a,
+      emissiveIntensity: 0.7,
+    });
+
+    pendingAdds.forEach((p) => {
+      const { x, z } = lngLatToLocal(
+        p.coords[0],
+        p.coords[1],
+        floorData.centerShiftX,
+        floorData.centerShiftZ
+      );
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(x, 0.35, z);
+      mesh.userData = { tempId: p.tempId, type: 'PENDING_NODE' };
+      group.add(mesh);
+    });
+
+    scene.add(group);
+    pendingPreviewRef.current = group;
+  }, [pendingAdds, floorData.centerShiftX, floorData.centerShiftZ]);
+
+  useEffect(() => {
+    const groups = debugGroupsRef.current;
+    if (!groups) return;
+
+    if (debugSteps && !debugPopulatedRef.current) {
+      populateDebugGroups(
+        groups,
+        debugSteps,
+        floorData.centerShiftX,
+        floorData.centerShiftZ
+      );
+      debugPopulatedRef.current = true;
+    }
+
+    groups.pb.visible = Boolean(debugSteps && showDebugStep1);
+    groups.tin.visible = Boolean(debugSteps && showDebugStep2);
+    groups.zigzag.visible = Boolean(debugSteps && showDebugStep3);
+    groups.pmid.visible = Boolean(debugSteps && showDebugStep4);
+  }, [
+    debugSteps,
+    showDebugStep1,
+    showDebugStep2,
+    showDebugStep3,
+    showDebugStep4,
+    floorData.centerShiftX,
+    floorData.centerShiftZ,
+  ]);
+
+  // When apiFloor arrives after scene mount (or changes), rebuild nodes/walkable overlays
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene || !apiFloor) return;
+
+    if (nodesGroupRef.current) {
+      scene.remove(nodesGroupRef.current);
+      nodesGroupRef.current = null;
+    }
+    if (walkableMeshRef.current) {
+      scene.remove(walkableMeshRef.current);
+      walkableMeshRef.current = null;
+    }
+
+    const nodesGroup = buildNodesGroup(
+      apiFloor.nodes,
+      apiFloor.edges,
+      floorData.centerShiftX,
+      floorData.centerShiftZ
+    );
+    nodesGroup.visible = showNodesRef.current || nodeEditModeRef.current;
+    scene.add(nodesGroup);
+    nodesGroupRef.current = nodesGroup;
+
+    const walkable = buildWalkableZoneMesh(
+      apiFloor,
+      floorData.centerShiftX,
+      floorData.centerShiftZ
+    );
+    if (walkable) {
+      walkable.visible =
+        showWalkableRef.current ||
+        (nodeEditModeRef.current && placingNodeRef.current);
+      scene.add(walkable);
+      walkableMeshRef.current = walkable;
+    }
+  }, [apiFloor, floorData.centerShiftX, floorData.centerShiftZ]);
+
   // Main Three.js Scene Setup — Runs ONLY ONCE when floorData mounts
   useEffect(() => {
     const container = containerRef.current;
@@ -205,6 +438,9 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
 
     roomFloorMeshesRef.current.clear();
     clearPathMesh();
+    nodesGroupRef.current = null;
+    walkableMeshRef.current = null;
+    debugPopulatedRef.current = false;
 
     // 1. Scene & Camera
     const scene = new THREE.Scene();
@@ -213,9 +449,11 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
 
     const roomMeshesGroup = new THREE.Group();
     scene.add(roomMeshesGroup);
+    roomMeshesGroupRef.current = roomMeshesGroup;
 
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 500);
     camera.position.set(0, 50, 50);
+    cameraRef.current = camera;
 
     // 2. Renderer & OrbitControls
     const renderer = new THREE.WebGLRenderer({
@@ -303,6 +541,67 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       });
     });
 
+    // 6b. Edit overlays: nodes, walkable, debug groups
+    if (apiFloor) {
+      const nodesGroup = buildNodesGroup(
+        apiFloor.nodes,
+        apiFloor.edges,
+        floorData.centerShiftX,
+        floorData.centerShiftZ
+      );
+      nodesGroup.visible = showNodesRef.current || nodeEditModeRef.current;
+      scene.add(nodesGroup);
+      nodesGroupRef.current = nodesGroup;
+
+      const walkable = buildWalkableZoneMesh(
+        apiFloor,
+        floorData.centerShiftX,
+        floorData.centerShiftZ
+      );
+      if (walkable) {
+        walkable.visible =
+          showWalkableRef.current ||
+          (nodeEditModeRef.current && placingNodeRef.current);
+        scene.add(walkable);
+        walkableMeshRef.current = walkable;
+      }
+    }
+
+    const debugGroups = createEmptyDebugGroups();
+    scene.add(debugGroups.pb);
+    scene.add(debugGroups.tin);
+    scene.add(debugGroups.zigzag);
+    scene.add(debugGroups.pmid);
+    debugGroupsRef.current = debugGroups;
+
+    // Invisible placement plane for node-edit "add node" clicks
+    const planeGeo = new THREE.PlaneGeometry(400, 400);
+    const planeMat = new THREE.MeshBasicMaterial({
+      visible: false,
+      side: THREE.DoubleSide,
+    });
+    const placementPlane = new THREE.Mesh(planeGeo, planeMat);
+    placementPlane.rotation.x = -Math.PI / 2;
+    placementPlane.position.y = 0.02;
+    placementPlane.name = 'placementPlane';
+    scene.add(placementPlane);
+    placementPlaneRef.current = placementPlane;
+
+    if (debugStepsRef.current) {
+      populateDebugGroups(
+        debugGroups,
+        debugStepsRef.current,
+        floorData.centerShiftX,
+        floorData.centerShiftZ
+      );
+      debugPopulatedRef.current = true;
+      const flags = showDebugRefs.current;
+      debugGroups.pb.visible = flags.s1;
+      debugGroups.tin.visible = flags.s2;
+      debugGroups.zigzag.visible = flags.s3;
+      debugGroups.pmid.visible = flags.s4;
+    }
+
     // Initial camera focus (once on mount)
     if (initialCameraFocus) {
       const focus = initialCameraFocus as THREE.Vector3;
@@ -326,6 +625,66 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
       raycaster.setFromCamera(mouse, camera);
+
+      // Node edit: place new corridor node on floor plane / walkable
+      if (nodeEditModeRef.current && placingNodeRef.current) {
+        const targets: THREE.Object3D[] = [];
+        if (placementPlaneRef.current) targets.push(placementPlaneRef.current);
+        if (walkableMeshRef.current) targets.push(walkableMeshRef.current);
+        const hits = raycaster.intersectObjects(targets, true);
+        if (hits.length > 0) {
+          const pt = hits[0].point;
+          const { lng, lat } = localToLngLat(
+            pt.x,
+            pt.z,
+            floorData.centerShiftX,
+            floorData.centerShiftZ
+          );
+          onPlaceNodeRef.current?.([lng, lat]);
+        }
+        return;
+      }
+
+      // Node edit: select pending preview or CORRIDOR / JUNCTION
+      if (nodeEditModeRef.current) {
+        if (pendingPreviewRef.current) {
+          const pendingHits = raycaster.intersectObjects(
+            pendingPreviewRef.current.children,
+            false
+          );
+          if (pendingHits.length > 0) {
+            const tempId = pendingHits[0].object.userData?.tempId as
+              | string
+              | undefined;
+            if (tempId) {
+              onSelectEditableNodeRef.current?.(tempId);
+              return;
+            }
+          }
+        }
+
+        if (nodesGroupRef.current) {
+          const nodeHits = raycaster.intersectObjects(
+            nodesGroupRef.current.children,
+            false
+          );
+          for (const hit of nodeHits) {
+            const ud = hit.object.userData;
+            if (
+              ud?.type === 'NODE' &&
+              ud.editable &&
+              !pendingRemovesRef.current.includes(ud.id)
+            ) {
+              onSelectEditableNodeRef.current?.(ud.id as string);
+              return;
+            }
+          }
+        }
+        onSelectEditableNodeRef.current?.(null);
+        return;
+      }
+
+      // Watch / default: select room
       const intersects = raycaster.intersectObjects(roomMeshesGroup.children);
 
       if (intersects.length > 0) {
@@ -404,6 +763,14 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       window.removeEventListener('resize', handleResize);
       canvas.removeEventListener('click', handleCanvasClick);
       clearPathMesh();
+      nodesGroupRef.current = null;
+      walkableMeshRef.current = null;
+      debugGroupsRef.current = null;
+      debugPopulatedRef.current = false;
+      pendingPreviewRef.current = null;
+      placementPlaneRef.current = null;
+      cameraRef.current = null;
+      roomMeshesGroupRef.current = null;
       sceneRef.current = null;
       controls.dispose();
       renderer.dispose();

@@ -70,6 +70,14 @@ export interface ApiNode {
   };
 }
 
+export interface ApiEdge {
+  id: string;
+  fromNodeId: string;
+  toNodeId: string;
+  distance?: number;
+  active?: boolean;
+}
+
 export interface ApiArea {
   id: string;
   floorId: string;
@@ -104,6 +112,7 @@ export interface ApiFloor {
   areas?: ApiArea[];
   standaloneBoundaries?: ApiBoundary[];
   nodes?: ApiNode[];
+  edges?: ApiEdge[];
 }
 
 export interface BuildingMapData {
@@ -139,4 +148,12 @@ export interface FetchRouteParams {
   startId: string;
   targetType: RouteLocationType;
   targetId: string;
+}
+
+/** MPRSS corridor algorithm debug geometry layers */
+export interface CorridorDebugSteps {
+  pbPoints: [number, number][];
+  tinEdges: [[number, number], [number, number]][];
+  zigzagEdges: [[number, number], [number, number]][];
+  pmidPoints: [number, number][];
 }

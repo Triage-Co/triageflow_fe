@@ -100,6 +100,19 @@ export function lngLatToLocal(
   };
 }
 
+/** Inverse of lngLatToLocal */
+export function localToLngLat(
+  x: number,
+  z: number,
+  centerShiftX: number,
+  centerShiftZ: number
+): { lng: number; lat: number } {
+  return {
+    lng: (x + centerShiftX) / DEG_TO_METER_X,
+    lat: -((z + centerShiftZ) / DEG_TO_METER_Z),
+  };
+}
+
 // ─── Area Colors ─────────────────────────────────────────────────────────────
 
 export const AREA_COLORS: Record<string, number> = {
