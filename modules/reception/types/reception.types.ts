@@ -20,6 +20,40 @@ export interface ReceptionPatientDetail { queueId: string; ticketNo: string; nam
 export interface PatientSearchResult { accountId: string; patient_id?: string; queueId?: string; name: string; citizenId: string; phone: string | null; email?: string; ticketNo?: string; dob?: string; gender?: string; specialty: string; bhyt: string | null; priority: ReceptionPriority; status: ReceptionStatus | 'Không trong hàng đợi'; waitMinutes?: number; bookingId?: string; inQueueToday: boolean; }
 export interface RegistrationResult { ticketNo: string; queueNumber?: string; bookingId?: string; stepId?: string; queueId?: string; fullName: string; citizenId: string; phone: string; specialty: string; priority: ReceptionPriority; paymentLabel: string; doctorLabel: string; slotTimeLabel: string; roomLabel: string; waitTimeLabel: string; insuranceId: string; qrPayload: string; isPaymentPending?: boolean; paymentQrCode?: string; paymentCheckoutUrl?: string; paymentAmount?: number; paymentAccountName?: string; paymentAccountNumber?: string; paymentDescription?: string; debugLogs?: string[]; }
 export interface ReceptionFlow { flow_id: string; name: string; status: string; }
-export interface CreateTransactionRequest { transType: string; amount: number; clientId: string; returnUrl: string; cancelUrl: string; }
-export interface TransactionQrResponse { qrCode?: string; checkoutUrl?: string; amount?: number; currency?: string; status?: string; transaction_id?: string; qr_code?: string; checkout_url?: string; }
-export interface ReceptionStatsSummary { waiting: number; registered: number; queues: number; payment: number; emergency: number; avgTime: string; walkin: number; reissue: number; }
+export interface CreateTransactionRequest {
+    booking_id?: string;
+    transType?: string;
+    amount: number;
+    clientId?: string;
+    returnUrl?: string;
+    cancelUrl?: string;
+    payment_method?: string;
+}
+export interface TransactionQrResponse {
+    qrCode?: string;
+    checkoutUrl?: string;
+    amount?: number;
+    currency?: string;
+    status?: string;
+    transaction_id?: string;
+    qr_code?: string;
+    checkout_url?: string;
+}
+export interface ReceptionStatsSummary {
+    totalQueue?: number;
+    waiting: number;
+    registered?: number;
+    inExam?: number;
+    queues?: number;
+    payment?: number;
+    paymentPending?: number;
+    paid?: number;
+    bookings?: number;
+    flows?: number;
+    transactions?: number;
+    emergency: number;
+    avgTime?: string;
+    avgWaitMinutes?: number;
+    walkin?: number;
+    reissue?: number;
+}

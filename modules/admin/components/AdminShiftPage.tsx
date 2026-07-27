@@ -12,14 +12,28 @@ import {
     AlertTriangle,
     Eye,
     Clock,
+    Home,
+    UserCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useShiftStore } from '../store/shiftStore';
 import { useStaffStore } from '../store/staffStore';
 import { useRoomStore } from '../store/roomStore';
 import { useAuthStore } from '@/modules/auth/store/authStore';
-import { useRouter } from 'next/navigation';
 import type { Shift, CreateShiftDto } from '../types/shift.types';
+import { validateShiftAssignment, filterEligibleStaffForRoom } from '../utils/shiftValidation';
+
+/* ─── Role Badges Config ─────────────────────────────────────────────────── */
+
+const ROLE_CONFIG: Record<string, { label: string; bg: string; text: string; border: string }> = {
+    DOCTOR: { label: 'Bác sĩ', bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-100' },
+    NURSE: { label: 'Y tá', bg: 'bg-purple-50', text: 'text-purple-600', border: 'border-purple-100' },
+    RECEPTIONIST: { label: 'Lễ tân', bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-100' },
+    LAB_STAFF: { label: 'Kỹ thuật viên XN', bg: 'bg-pink-50', text: 'text-pink-600', border: 'border-pink-100' },
+    PHARMACY_STAFF: { label: 'Dược sĩ', bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-100' },
+    CASHIER: { label: 'Thu ngân', bg: 'bg-cyan-50', text: 'text-cyan-600', border: 'border-cyan-100' },
+    ADMIN: { label: 'Quản trị viên', bg: 'bg-rose-50', text: 'text-rose-600', border: 'border-rose-100' },
+};
 
 /* ─── Helpers ──────────────────────────────────────────────────────────────── */
 
@@ -52,7 +66,6 @@ const getCompactPages = (totalPages: number): Array<number | 'ellipsis'> => {
 /* ─── Component ──────────────────────────────────────────────────────────── */
 
 export function AdminShiftPage() {
-    const router = useRouter();
     const accessToken = useAuthStore((s) => s.accessToken);
 
     const { shifts, isLoading, error, fetchShifts, createShift, deleteShift, clearError } = useShiftStore();
@@ -63,6 +76,14 @@ export function AdminShiftPage() {
     const [dateFilter, setDateFilter] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const ITEMS_PER_PAGE = 10;
+
+    // Room Staff Detail Modal
+    const [selectedRoomShift, setSelectedRoomShift] = useState<{
+        room_id: string;
+        date: string;
+        start_time: string;
+        end_time: string;
+    } | null>(null);
 
     // Create Modal
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -90,15 +111,44 @@ export function AdminShiftPage() {
     }, [accessToken, fetchShifts, fetchStaffs, fetchRooms]);
 
     /* ── Lookup helpers ── */
+    const isStaffsLoading = useStaffStore((s) => s.isLoading);
+
+    const getStaffInfo = (staffId: string) => {
+        if (!staffId) return undefined;
+        return staffs.find(
+            (s) =>
+                s.staff_id === staffId ||
+                (s as unknown as Record<string, unknown>).id === staffId ||
+                (s as unknown as Record<string, unknown>).account_id === staffId ||
+                s.account?.email === staffId ||
+                s.account?.user_name === staffId
+        );
+    };
 
     const getStaffName = (staffId: string) => {
-        const staff = staffs.find((s) => s.staff_id === staffId);
-        return staff?.full_name || staffId || '';
+        const staff = getStaffInfo(staffId);
+        if (staff?.full_name) return staff.full_name;
+        if (isStaffsLoading) return 'Đang tải...';
+        return 'Nhân viên trực';
     };
 
     const getRoomName = (roomId: string) => {
         const room = rooms.find((r) => r.room_id === roomId);
         return room?.room_name || roomId || '';
+    };
+
+    const getStaffsForRoomShift = (roomId: string, dateStr: string) => {
+        const shiftDateKey = toDateKey(dateStr);
+        const matchingShifts = shifts.filter(
+            (s) => s.room_id === roomId && toDateKey(s.date) === shiftDateKey
+        );
+        const staffIds = new Set(matchingShifts.map((s) => s.staff_id));
+        return staffs.filter(
+            (st) =>
+                staffIds.has(st.staff_id) ||
+                staffIds.has((st as unknown as Record<string, unknown>).id as string) ||
+                staffIds.has((st as unknown as Record<string, unknown>).account_id as string)
+        );
     };
 
     /* ── Handlers ── */
@@ -124,12 +174,26 @@ export function AdminShiftPage() {
             setCreateError('Giờ bắt đầu phải nhỏ hơn giờ kết thúc.');
             return;
         }
+
+        const valErr = validateShiftAssignment({
+            roomId: createForm.room_id,
+            staffId: createForm.staff_id,
+            date: createForm.date,
+            rooms,
+            staffs,
+            specialties: useRoomStore.getState().specialties,
+            shifts,
+        });
+        if (valErr) {
+            setCreateError(valErr);
+            return;
+        }
+
         setIsCreating(true);
         setCreateError(null);
         try {
             await createShift(createForm, accessToken || '');
             setIsCreateModalOpen(false);
-            if (accessToken) await fetchShifts(accessToken);
         } catch (err) {
             setCreateError(err instanceof Error ? err.message : 'Tạo ca trực thất bại.');
         } finally {
@@ -277,7 +341,6 @@ export function AdminShiftPage() {
                                     <thead>
                                         <tr className="bg-neutral-50/80 border-b border-[#EBEBEB]">
                                             <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider w-[64px]">STT</th>
-                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Nhân viên</th>
                                             <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Phòng trực</th>
                                             <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Ngày trực</th>
                                             <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Ca làm việc</th>
@@ -291,19 +354,27 @@ export function AdminShiftPage() {
                                                     {(currentPage - 1) * ITEMS_PER_PAGE + index + 1}
                                                 </td>
                                                 <td className="px-5 py-4">
-                                                    <span className="text-[13px] font-bold text-[#2D2D2D]">
-                                                        {getStaffName(shift.staff_id)}
-                                                    </span>
-                                                </td>
-                                                <td className="px-5 py-4">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-6 h-6 rounded-lg bg-[#F5F2FF] border border-[#E0DCFB] flex items-center justify-center shrink-0">
-                                                            <CalendarDays className="w-3 h-3 text-[#8B7CF6]" />
+                                                    <button
+                                                        onClick={() => setSelectedRoomShift({
+                                                            room_id: shift.room_id,
+                                                            date: shift.date,
+                                                            start_time: shift.start_time,
+                                                            end_time: shift.end_time,
+                                                        })}
+                                                        className="flex items-center gap-2 group/btn cursor-pointer text-left"
+                                                    >
+                                                        <div className="w-8 h-8 rounded-xl bg-[#F5F2FF] border border-[#E0DCFB] flex items-center justify-center shrink-0 group-hover/btn:bg-[#8B7CF6] transition-colors">
+                                                            <Home className="w-4 h-4 text-[#8B7CF6] group-hover/btn:text-white transition-colors" />
                                                         </div>
-                                                        <span className="text-[13px] font-semibold text-[#2D2D2D]">
-                                                            {getRoomName(shift.room_id)}
-                                                        </span>
-                                                    </div>
+                                                        <div>
+                                                            <span className="text-[13px] font-bold text-[#2D2D2D] group-hover/btn:text-[#8B7CF6] transition-colors block">
+                                                                {getRoomName(shift.room_id)}
+                                                            </span>
+                                                            <span className="text-[10px] text-[#8B7CF6] font-semibold opacity-0 group-hover/btn:opacity-100 transition-opacity">
+                                                                Xem danh sách nhân viên →
+                                                            </span>
+                                                        </div>
+                                                    </button>
                                                 </td>
                                                 <td className="px-5 py-4">
                                                     <span className="inline-flex items-center text-[12px] font-bold px-2.5 py-1 rounded-lg bg-[#F5F2FF] text-[#8B7CF6] border border-[#E0DCFB]">
@@ -319,8 +390,13 @@ export function AdminShiftPage() {
                                                 <td className="px-5 py-4">
                                                     <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <button
-                                                            onClick={() => router.push(`/admin/shift/${shift.shift_id}`)}
-                                                            title="Xem chi tiết ca trực"
+                                                            onClick={() => setSelectedRoomShift({
+                                                                room_id: shift.room_id,
+                                                                date: shift.date,
+                                                                start_time: shift.start_time,
+                                                                end_time: shift.end_time,
+                                                            })}
+                                                            title="Xem danh sách nhân viên trực"
                                                             className="w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-400 hover:text-[#8B7CF6] hover:border-[#8B7CF6]/30 hover:bg-[#F5F2FF] transition cursor-pointer"
                                                         >
                                                             <Eye className="w-3.5 h-3.5" />
@@ -397,11 +473,95 @@ export function AdminShiftPage() {
             </div>
 
             {/* ── Backdrop ── */}
-            {(isCreateModalOpen || !!deletingShift) && (
+            {(isCreateModalOpen || !!deletingShift || !!selectedRoomShift) && (
                 <div
                     className="fixed inset-0 bg-neutral-900/40 backdrop-blur-[2px] z-50"
-                    onClick={() => { setIsCreateModalOpen(false); setDeletingShift(null); }}
+                    onClick={() => { setIsCreateModalOpen(false); setDeletingShift(null); setSelectedRoomShift(null); }}
                 />
+            )}
+
+            {/* ════════════════════════════════════════════════════ */}
+            {/* ── Modal: Danh sách nhân viên trực phòng ─────────── */}
+            {/* ════════════════════════════════════════════════════ */}
+            {selectedRoomShift && (
+                <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[580px] max-h-[90vh] bg-white rounded-3xl shadow-2xl p-6 z-[60] flex flex-col gap-4 overflow-y-auto">
+                    {/* Header */}
+                    <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-2xl bg-[#F5F2FF] border border-[#E0DCFB] flex items-center justify-center text-[#8B7CF6]">
+                                <Home className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <h2 className="text-[18px] font-bold text-[#2D2D2D]">
+                                    {getRoomName(selectedRoomShift.room_id)}
+                                </h2>
+                                <p className="text-[12px] text-[#7B7B7B] font-semibold mt-0.5">
+                                    Ngày trực: <span className="text-[#8B7CF6] font-bold">{formatDate(selectedRoomShift.date)}</span> (
+                                    {selectedRoomShift.start_time} – {selectedRoomShift.end_time})
+                                </p>
+                            </div>
+                        </div>
+                        <button onClick={() => setSelectedRoomShift(null)} className="text-neutral-400 hover:text-neutral-600 cursor-pointer">
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+
+                    {/* Staff List */}
+                    <div className="space-y-3 my-1">
+                        <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider block">
+                            Nhân viên phân công trực phòng ({getStaffsForRoomShift(selectedRoomShift.room_id, selectedRoomShift.date).length})
+                        </span>
+
+                        {getStaffsForRoomShift(selectedRoomShift.room_id, selectedRoomShift.date).length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-8 gap-2 bg-[#F8F9FA] rounded-2xl border border-dashed border-neutral-200">
+                                <UserCheck className="w-7 h-7 text-neutral-300" />
+                                <p className="text-xs text-neutral-400 font-semibold">Chưa tìm thấy thông tin nhân viên phân công.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-2.5 max-h-[360px] overflow-y-auto pr-1">
+                                {getStaffsForRoomShift(selectedRoomShift.room_id, selectedRoomShift.date).map((staff) => {
+                                    const roleKey = (staff.account?.role || 'NURSE').toUpperCase().replace(/^ROLE_/, '');
+                                    const roleCfg = ROLE_CONFIG[roleKey] || { label: roleKey, bg: 'bg-neutral-50', text: 'text-neutral-600', border: 'border-neutral-100' };
+
+                                    return (
+                                        <div
+                                            key={staff.staff_id}
+                                            className="flex items-center justify-between p-3.5 bg-[#F8F9FA] hover:bg-[#F5F2FF]/60 rounded-2xl border border-[#EBEBEB] transition-colors"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-xl bg-[#F5F2FF] border border-[#E0DCFB] flex items-center justify-center text-[#8B7CF6] shrink-0">
+                                                    <UserCheck className="w-5 h-5" />
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[13px] font-bold text-[#2D2D2D]">{staff.full_name}</span>
+                                                        <span className={cn('text-[10px] font-bold px-2.5 py-0.5 rounded-full border', roleCfg.bg, roleCfg.text, roleCfg.border)}>
+                                                            {roleCfg.label}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-3 text-[11px] text-[#7B7B7B] font-medium mt-1">
+                                                        <span>Email: {staff.account?.email || 'N/A'}</span>
+                                                        {staff.account?.phone && <span>· SĐT: {staff.account.phone}</span>}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Footer Action */}
+                    <div className="pt-3 border-t border-neutral-100 flex justify-end">
+                        <button
+                            onClick={() => setSelectedRoomShift(null)}
+                            className="px-5 py-2.5 bg-[#8B7CF6] hover:bg-[#7a6ae5] text-white text-xs font-bold rounded-xl transition cursor-pointer"
+                        >
+                            Đóng
+                        </button>
+                    </div>
+                </div>
             )}
 
             {/* ════════════════════════════════════════════════════ */}
@@ -428,22 +588,6 @@ export function AdminShiftPage() {
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5 col-span-2">
-                            <label className="text-[11px] font-bold text-neutral-500 uppercase">Nhân viên trực *</label>
-                            <select
-                                value={createForm.staff_id}
-                                onChange={(e) => setCreateForm((prev) => ({ ...prev, staff_id: e.target.value }))}
-                                className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
-                            >
-                                <option value="">— Chọn nhân viên —</option>
-                                {staffs.map((staff) => (
-                                    <option key={staff.staff_id} value={staff.staff_id}>
-                                        {staff.full_name} ({staff.account?.role || ''})
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className="space-y-1.5 col-span-2">
                             <label className="text-[11px] font-bold text-neutral-500 uppercase">Phòng trực *</label>
                             <select
                                 value={createForm.room_id}
@@ -453,9 +597,32 @@ export function AdminShiftPage() {
                                 <option value="">— Chọn phòng khám —</option>
                                 {rooms.map((room) => (
                                     <option key={room.room_id} value={room.room_id}>
-                                        {room.room_name}
+                                        {room.room_name} ({room.specialty?.specialty_name || ''})
                                     </option>
                                 ))}
+                            </select>
+                        </div>
+
+                        <div className="space-y-1.5 col-span-2">
+                            <label className="text-[11px] font-bold text-neutral-500 uppercase">Nhân viên trực *</label>
+                            <select
+                                value={createForm.staff_id}
+                                onChange={(e) => setCreateForm((prev) => ({ ...prev, staff_id: e.target.value }))}
+                                className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
+                            >
+                                <option value="">— Chọn nhân viên —</option>
+                                {filterEligibleStaffForRoom(
+                                    staffs,
+                                    rooms.find((r) => r.room_id === createForm.room_id)
+                                ).map((staff) => {
+                                    const rKey = (staff.account?.role || '').toUpperCase().replace(/^ROLE_/, '');
+                                    const roleLabel = rKey === 'DOCTOR' ? 'Bác sĩ' : rKey === 'NURSE' ? 'Y tá' : rKey;
+                                    return (
+                                        <option key={staff.staff_id} value={staff.staff_id}>
+                                            {staff.full_name} — {roleLabel}
+                                        </option>
+                                    );
+                                })}
                             </select>
                         </div>
 

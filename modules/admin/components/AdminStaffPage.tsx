@@ -286,10 +286,20 @@ export function AdminStaffPage() {
     /* ── Computed ─────────────────────────────────────────────── */
 
     const filteredStaffs = staffs.filter((staff) => {
-        const matchesSearch = staff.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            staff.account?.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            staff.account?.user_name?.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesRole = roleFilter === 'ALL' || staff.account?.role === roleFilter;
+        const fullName = staff.full_name || staff.account?.user_name || '';
+        const email = staff.account?.email || '';
+        const userName = staff.account?.user_name || '';
+        const q = searchQuery.toLowerCase();
+
+        const matchesSearch =
+            fullName.toLowerCase().includes(q) ||
+            email.toLowerCase().includes(q) ||
+            userName.toLowerCase().includes(q);
+
+        const staffRole = (staff.account?.role || '').toUpperCase().replace(/^ROLE_/, '');
+        const filterRole = roleFilter.toUpperCase().replace(/^ROLE_/, '');
+
+        const matchesRole = roleFilter === 'ALL' || staffRole === filterRole;
         return matchesSearch && matchesRole;
     });
 
@@ -422,12 +432,7 @@ export function AdminStaffPage() {
                                                 <td className="px-5 py-4">
                                                     <div className="flex items-center gap-3">
                                                         <div className="w-9 h-9 rounded-xl bg-[#F5F2FF] border border-[#E0DCFB] flex items-center justify-center shrink-0 overflow-hidden">
-                                                            {staff.account?.avatar ? (
-                                                                // eslint-disable-next-line @next/next/no-img-element
-                                                                <img src={staff.account.avatar} alt="Avatar" className="w-full h-full object-cover" />
-                                                            ) : (
-                                                                <UserCheck className="w-4 h-4 text-[#8B7CF6]" />
-                                                            )}
+                                                            <UserCheck className="w-4 h-4 text-[#8B7CF6]" />
                                                         </div>
                                                         <span className="text-[13px] font-bold text-[#2D2D2D]">{staff.full_name}</span>
                                                     </div>

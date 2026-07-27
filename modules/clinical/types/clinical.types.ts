@@ -45,9 +45,13 @@ export interface Patient {
     vitals: Vitals;
     insurance: { hasInsurance: boolean; coverage: string };
     visitType: 'Tái khám' | 'Khám mới' | 'Cấp cứu';
+    flowId?: string;
+    templateId?: string;
+    workflowSteps?: WorkflowStep[];
     // EMR-specific fields
     medicalRecord?: MedicalRecord;
     department?: string;
+    patientId?: string;
 }
 
 // ── Stat Card ──────────────────────────────────────────────────────────────

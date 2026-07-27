@@ -47,6 +47,15 @@ function normalizeName(name: string): string {
 }
 
 export function mapEkycResultToCccd(result: EkycResult): CccdScanResult | null {
+    const extra = result as EkycResult & {
+        liveness_card_front?: { liveness?: unknown };
+        liveness_card_back?: { liveness?: unknown };
+        liveness_face?: { liveness?: unknown };
+        compare?: { result?: unknown };
+        hash_img?: string;
+        data_hash_document?: string;
+    };
+
     const ocr = result.ocr;
     if (!ocr?.id || !ocr?.name) return null;
 
@@ -54,10 +63,10 @@ export function mapEkycResultToCccd(result: EkycResult): CccdScanResult | null {
     if (!dob) return null;
 
     const docLive =
-        isTruthy(result.liveness_card_front?.liveness) &&
-        isTruthy(result.liveness_card_back?.liveness);
-    const faceLive = isTruthy(result.liveness_face?.liveness);
-    const faceMatched = isTruthy(result.compare?.result);
+        isTruthy(extra.liveness_card_front?.liveness) &&
+        isTruthy(extra.liveness_card_back?.liveness);
+    const faceLive = isTruthy(extra.liveness_face?.liveness);
+    const faceMatched = isTruthy(extra.compare?.result);
 
     return {
         citizen_id: ocr.id.trim(),
@@ -66,7 +75,7 @@ export function mapEkycResultToCccd(result: EkycResult): CccdScanResult | null {
         gender: parseGender(ocr.gender),
         address: ocr.recent_location?.trim() || ocr.origin_location?.trim() || '',
         ekyc_verified: docLive && faceLive && faceMatched,
-        ekyc_hash: result.hash_img || result.data_hash_document || undefined,
+        ekyc_hash: extra.hash_img || extra.data_hash_document || undefined,
         face_matched: faceMatched,
         document_liveness: docLive,
         face_liveness: faceLive,

@@ -5,7 +5,7 @@ import { resolveApiError } from '@/shared/utils/apiError';
 
 const API_BASE_URL =
     typeof window === 'undefined'
-        ? (process.env.NEXT_PUBLIC_API_URL || 'https://www.triageflow.me')
+        ? (process.env.NEXT_PUBLIC_API_URL || '')
         : '';
 
 export interface ApiResponse<T> {

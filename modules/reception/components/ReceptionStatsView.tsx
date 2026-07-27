@@ -29,17 +29,17 @@ const STAT_CARDS: {
     color: string;
     bg: string;
 }[] = [
-    { key: 'totalQueue', label: 'Tổng hàng đợi', icon: ListOrdered, color: 'text-[#10B981]', bg: 'bg-[#D1FAE5]' },
-    { key: 'waiting', label: 'Đang chờ khám', icon: Users, color: 'text-[#3B82F6]', bg: 'bg-[#DBEAFE]' },
-    { key: 'inExam', label: 'Đang khám', icon: Activity, color: 'text-[#8B7CF6]', bg: 'bg-[#EDE9FE]' },
-    { key: 'paymentPending', label: 'Chờ thanh toán', icon: CreditCard, color: 'text-[#F59E0B]', bg: 'bg-[#FEF3C7]' },
-    { key: 'paid', label: 'Đã thanh toán', icon: CreditCard, color: 'text-[#059669]', bg: 'bg-[#D1FAE5]' },
-    { key: 'bookings', label: 'Booking hôm nay', icon: UserPlus, color: 'text-[#10B981]', bg: 'bg-[#D1FAE5]' },
-    { key: 'flows', label: 'Luồng khám (Flow)', icon: ListOrdered, color: 'text-[#6366F1]', bg: 'bg-[#E0E7FF]' },
-    { key: 'transactions', label: 'Giao dịch', icon: CreditCard, color: 'text-[#0891B2]', bg: 'bg-[#CFFAFE]' },
-    { key: 'emergency', label: 'Ca khẩn cấp', icon: AlertTriangle, color: 'text-[#EF4444]', bg: 'bg-[#FEE2E2]' },
-    { key: 'avgWaitMinutes', label: 'Chờ TB (phút)', icon: Clock, color: 'text-[#8B7CF6]', bg: 'bg-[#F3E8FF]' },
-];
+        { key: 'totalQueue', label: 'Tổng hàng đợi', icon: ListOrdered, color: 'text-[#10B981]', bg: 'bg-[#D1FAE5]' },
+        { key: 'waiting', label: 'Đang chờ khám', icon: Users, color: 'text-[#3B82F6]', bg: 'bg-[#DBEAFE]' },
+        { key: 'inExam', label: 'Đang khám', icon: Activity, color: 'text-[#8B7CF6]', bg: 'bg-[#EDE9FE]' },
+        { key: 'paymentPending', label: 'Chờ thanh toán', icon: CreditCard, color: 'text-[#F59E0B]', bg: 'bg-[#FEF3C7]' },
+        { key: 'paid', label: 'Đã thanh toán', icon: CreditCard, color: 'text-[#059669]', bg: 'bg-[#D1FAE5]' },
+        { key: 'bookings', label: 'Booking hôm nay', icon: UserPlus, color: 'text-[#10B981]', bg: 'bg-[#D1FAE5]' },
+        { key: 'flows', label: 'Luồng khám (Flow)', icon: ListOrdered, color: 'text-[#6366F1]', bg: 'bg-[#E0E7FF]' },
+        { key: 'transactions', label: 'Giao dịch', icon: CreditCard, color: 'text-[#0891B2]', bg: 'bg-[#CFFAFE]' },
+        { key: 'emergency', label: 'Ca khẩn cấp', icon: AlertTriangle, color: 'text-[#EF4444]', bg: 'bg-[#FEE2E2]' },
+        { key: 'avgWaitMinutes', label: 'Chờ TB (phút)', icon: Clock, color: 'text-[#8B7CF6]', bg: 'bg-[#F3E8FF]' },
+    ];
 
 export function ReceptionStatsView() {
     const accessToken = useAuthStore((s) => s.accessToken);
@@ -58,18 +58,21 @@ export function ReceptionStatsView() {
 
                 const [queueRes, bookingRes, flowRes, txRes] = await Promise.all([
                     receptionService.getQueueByDate(today, accessToken),
-                    receptionService.getBookings(accessToken).catch(() => ({ data: [] })),
-                    receptionService.getFlows(accessToken).catch(() => ({ data: [] })),
-                    receptionService.getTransactions(accessToken).catch(() => ({ data: [] })),
+                    receptionService.getBookings(accessToken).catch(() => ({ data: [] as unknown[] })),
+                    receptionService.getFlows(accessToken).catch(() => ({ data: [] as unknown[] })),
+                    receptionService.getTransactions(accessToken).catch(() => ({ data: [] as unknown[] })),
                 ]);
 
                 const queue = queueRes.map(mapBackendToQueuePatient);
+                const bookingCount = Array.isArray(bookingRes.data) ? bookingRes.data.length : 0;
+                const flowCount = Array.isArray(flowRes.data) ? flowRes.data.length : 0;
+                const txCount = Array.isArray(txRes.data) ? txRes.data.length : 0;
                 setSummary(
                     buildStatsSummary(
                         queue,
-                        bookingRes.data?.length ?? 0,
-                        flowRes.data?.length ?? 0,
-                        txRes.data?.length ?? 0,
+                        bookingCount,
+                        flowCount,
+                        txCount,
                     ),
                 );
             } catch (err) {

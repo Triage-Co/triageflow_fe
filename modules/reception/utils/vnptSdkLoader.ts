@@ -18,9 +18,21 @@ declare global {
     interface Window {
         lottie?: { loadAnimation?: (...args: unknown[]) => unknown };
         VNPTQRBrowserSDK?: VnptQrBrowserSdk;
-        FaceVNPTBrowserSDK?: FaceVnptBrowserSdk;
-        SDK?: import('@ultranomic/vnpt-ekyc-sdk').EkycSDK;
     }
+}
+
+type RuntimeWindow = Window & {
+    SDK?: { launch?: (...args: unknown[]) => unknown };
+    FaceVNPTBrowserSDK?: FaceVnptBrowserSdk;
+};
+
+function hasVnptSdkReady(runtimeWindow: RuntimeWindow): boolean {
+    const globalBag = runtimeWindow as unknown as Record<string, unknown>;
+    const sdk = globalBag.SDK as { launch?: unknown } | undefined;
+    const qrSdk = globalBag.VNPTQRBrowserSDK;
+    const faceSdk = globalBag.FaceVNPTBrowserSDK;
+
+    return typeof sdk?.launch === 'function' && Boolean(qrSdk) && Boolean(faceSdk);
 }
 
 let loadPromise: Promise<void> | null = null;
@@ -71,8 +83,9 @@ async function ensureLottieLoaded(): Promise<void> {
 }
 
 async function waitForVnptGlobals(): Promise<void> {
+    const runtimeWindow = window as RuntimeWindow;
     for (let attempt = 0; attempt < 50; attempt += 1) {
-        if (window.SDK?.launch && window.VNPTQRBrowserSDK && window.FaceVNPTBrowserSDK) {
+        if (hasVnptSdkReady(runtimeWindow)) {
             return;
         }
         await new Promise((resolve) => window.setTimeout(resolve, 100));
@@ -97,7 +110,9 @@ export function ensureVnptSdkLoaded(): Promise<void> {
         return Promise.reject(new Error('VNPT eKYC chỉ chạy trên trình duyệt'));
     }
 
-    if (window.SDK?.launch && window.VNPTQRBrowserSDK && window.FaceVNPTBrowserSDK) {
+    const runtimeWindow = window as RuntimeWindow;
+
+    if (hasVnptSdkReady(runtimeWindow)) {
         return Promise.resolve();
     }
 

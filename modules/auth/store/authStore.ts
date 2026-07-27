@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import type { AuthUser, StaffRole, UserProfile, UpdateProfileRequest } from '@/shared/types/auth.types';
 import { authService } from '../services/authService';
+import { usePatientTabsStore } from '@/modules/clinical/store/clinicalStore';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -113,6 +114,13 @@ export const useAuthStore = create<AuthStore>()(
                     localStorage.removeItem('refreshToken');
                     sessionStorage.removeItem('accessToken');
                     sessionStorage.removeItem('refreshToken');
+                    localStorage.removeItem('emr_patient_tabs_persist');
+
+                    try {
+                        usePatientTabsStore.getState().clearAll();
+                    } catch (e) {
+                        console.warn('Failed to clear patient tabs store during logout:', e);
+                    }
 
                     set(
                         { user: null, accessToken: null, refreshToken: null, error: null, profile: null },
@@ -129,8 +137,8 @@ export const useAuthStore = create<AuthStore>()(
                         const res = await authService.getProfile(token);
                         if (res && res.data) {
                             const currentUser = get().user;
-                            const updatedUser = currentUser && res.data.user_name
-                                ? { ...currentUser, fullName: res.data.user_name }
+                            const updatedUser = currentUser && res.data.full_name
+                                ? { ...currentUser, fullName: res.data.full_name }
                                 : currentUser;
                             set({ profile: res.data, user: updatedUser, isLoading: false }, false, 'fetchProfile/success');
                         } else {
@@ -152,8 +160,8 @@ export const useAuthStore = create<AuthStore>()(
                         if (res && res.data) {
                             // Update profile and user info in state
                             const currentUser = get().user;
-                            const updatedUser = currentUser && res.data.user_name
-                                ? { ...currentUser, fullName: res.data.user_name }
+                            const updatedUser = currentUser && res.data.full_name
+                                ? { ...currentUser, fullName: res.data.full_name }
                                 : currentUser;
                             set({
                                 profile: res.data,

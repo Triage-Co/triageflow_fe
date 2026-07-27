@@ -3,7 +3,12 @@
 import { use, useEffect, useState } from 'react';
 import { EMRPageLayout } from '@/shared/components/layout/EMRPageLayout';
 import { notFound } from 'next/navigation';
-import { clinicalService, mapBackendPatientToFrontend } from '@/modules/clinical/services/clinicalService';
+import {
+    clinicalService,
+    extractWorkflowStepsFromResponse,
+    mapBackendPatientToFrontend,
+    pickFirstTemplateId,
+} from '@/modules/clinical/services/clinicalService';
 import { useAuthStore } from '@/modules/auth/store/authStore';
 import { usePatientTabsStore } from '@/modules/clinical/store/clinicalStore';
 import type { Patient } from '@/modules/clinical/types/clinical.types';
@@ -42,9 +47,66 @@ export default function DoctorPatientPage({ params }: { params: Promise<{ id: st
                 setError(null);
                 const res = await clinicalService.getPatientByQueueId(id, accessToken);
                 if (res?.data) {
+                    // Check if this patient belongs to the logged-in doctor (timezone-safe)
+                    const shiftDateRaw = res.data.step?.flow?.booking?.slot?.shift?.date;
+                    let dateStr = '';
+                    if (shiftDateRaw) {
+                        const d = new Date(shiftDateRaw);
+                        const yyyy = d.getFullYear();
+                        const mm = String(d.getMonth() + 1).padStart(2, '0');
+                        const dd = String(d.getDate()).padStart(2, '0');
+                        dateStr = `${yyyy}-${mm}-${dd}`;
+                    } else {
+                        const d = new Date();
+                        const yyyy = d.getFullYear();
+                        const mm = String(d.getMonth() + 1).padStart(2, '0');
+                        const dd = String(d.getDate()).padStart(2, '0');
+                        dateStr = `${yyyy}-${mm}-${dd}`;
+                    }
+
+                    const doctorPatientsRes = await clinicalService.getPatients(dateStr, accessToken);
+                    const isAssigned = doctorPatientsRes.data?.some(p => p.queue_id === id);
+                    if (!isAssigned) {
+                        setError('Bạn không có quyền xem thông tin bệnh nhân này.');
+                        setIsLoading(false);
+                        return;
+                    }
+
                     const mapped = mapBackendPatientToFrontend(res.data);
-                    setPatient(mapped);
-                    setPatientData(id, mapped);
+                    let finalPatient = mapped;
+
+                    if (mapped.flowId) {
+                        let templateId = mapped.templateId;
+
+                        if (!templateId) {
+                            try {
+                                const templatesRes = await clinicalService.getProcessTemplates(accessToken);
+                                templateId = pickFirstTemplateId(templatesRes.data);
+                            } catch (e) {
+                                console.error('Failed to pre-fetch templates on load:', e);
+                            }
+                        }
+
+                        if (templateId) {
+                            try {
+                                const assignRes = await clinicalService.assignTemplateToFlow(mapped.flowId, templateId, accessToken);
+                                const workflowSteps = extractWorkflowStepsFromResponse(assignRes.data);
+                                finalPatient = {
+                                    ...mapped,
+                                    templateId,
+                                    workflowSteps: workflowSteps.length > 0 ? workflowSteps : mapped.workflowSteps,
+                                };
+                            } catch {
+                                finalPatient = {
+                                    ...mapped,
+                                    templateId,
+                                };
+                            }
+                        }
+                    }
+
+                    setPatient(finalPatient);
+                    setPatientData(id, finalPatient);
                 } else {
                     setError('Không tìm thấy thông tin bệnh nhân.');
                 }

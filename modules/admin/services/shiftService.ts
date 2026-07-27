@@ -20,6 +20,12 @@ export const shiftService = {
         });
     },
 
+    updateShift: async (id: string, data: Partial<CreateShiftDto>, token: string) => {
+        return apiClient.patch<Shift>(`/api/shift/${id}`, data, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+    },
+
     deleteShift: async (id: string, token: string) => {
         return apiClient.delete<void>(`/api/shift/${id}`, {
             headers: { Authorization: `Bearer ${token}` },
