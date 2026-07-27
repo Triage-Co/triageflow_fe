@@ -82,6 +82,22 @@ export interface FloorData3D {
     maxZ: number;
   };
   standaloneWalls: WallSegment[];
+  /** Shift applied when converting GeoJSON lng/lat → local meters */
+  centerShiftX: number;
+  centerShiftZ: number;
+}
+
+/** Convert WGS84 lng/lat to local Three.js XZ using the same shift as floorToRoomData */
+export function lngLatToLocal(
+  lng: number,
+  lat: number,
+  centerShiftX: number,
+  centerShiftZ: number
+): { x: number; z: number } {
+  return {
+    x: lng * DEG_TO_METER_X - centerShiftX,
+    z: -(lat * DEG_TO_METER_Z) - centerShiftZ,
+  };
 }
 
 // ─── Area Colors ─────────────────────────────────────────────────────────────
@@ -423,5 +439,7 @@ export function floorToRoomData(floor: ApiFloor): FloorData3D {
       minZ: globalMinZ - centerShiftZ,
       maxZ: globalMaxZ - centerShiftZ,
     },
+    centerShiftX,
+    centerShiftZ,
   };
 }

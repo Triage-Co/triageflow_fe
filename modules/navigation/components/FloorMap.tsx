@@ -5,17 +5,28 @@ import { useBuildingMap } from '../hooks/useWayfinding';
 import { useNavigationStore } from '../store/navigationStore';
 import { BuildingMapCanvas } from './map/BuildingMapCanvas';
 import { Loader2 } from 'lucide-react';
+import type { RoutePathNode } from '../types/navigation.types';
 
 interface FloorMapProps {
+  floorNumber?: number;
   highlightRoomCode?: string | null;
   highlightAreaId?: string | null;
+  startRoomId?: string | null;
+  targetRoomId?: string | null;
+  routePath?: RoutePathNode[] | null;
+  onSelectRoom?: (roomId: string) => void;
 }
 
 export const FloorMap: React.FC<FloorMapProps> = ({
+  floorNumber = 1,
   highlightRoomCode,
   highlightAreaId,
+  startRoomId,
+  targetRoomId,
+  routePath,
+  onSelectRoom,
 }) => {
-  const { data, loading, error } = useBuildingMap(2);
+  const { data, loading, error } = useBuildingMap(floorNumber);
   const highlightedRoomId = useNavigationStore((s) => s.highlightedRoomId);
 
   if (loading && !data) {
@@ -44,6 +55,10 @@ export const FloorMap: React.FC<FloorMapProps> = ({
       highlightedRoomId={highlightedRoomId}
       highlightRoomCode={highlightRoomCode}
       highlightAreaId={highlightAreaId}
+      startRoomId={startRoomId}
+      targetRoomId={targetRoomId}
+      routePath={routePath}
+      onSelectRoom={onSelectRoom}
     />
   );
 };

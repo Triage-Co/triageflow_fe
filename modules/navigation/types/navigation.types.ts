@@ -117,3 +117,26 @@ export interface BuildingMapResponse {
   status: string;
   data: BuildingMapData;
 }
+
+export type RouteLocationType = 'ROOM' | 'POI' | 'NODE';
+
+export interface RoutePathNode {
+  id: string;
+  type: string;
+  coords: [number, number]; // [lng, lat]
+  metadata?: Record<string, unknown> | null;
+  floorId: string;
+  floorNumber: number;
+}
+
+export interface RouteResult {
+  totalDistance: number;
+  path: RoutePathNode[];
+}
+
+export interface FetchRouteParams {
+  startType: RouteLocationType;
+  startId: string;
+  targetType: RouteLocationType;
+  targetId: string;
+}

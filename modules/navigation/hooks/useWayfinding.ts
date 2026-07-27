@@ -3,12 +3,15 @@ import { fetchBuildingMap } from '../services/navigationService';
 import { floorToRoomData, FloorData3D } from '../utils/buildingToThree';
 import { BuildingMapData } from '../types/navigation.types';
 
-const cache = new Map<number, FloorData3D>();
+const floorCache = new Map<number, FloorData3D>();
+let rawMapCache: BuildingMapData | null = null;
 
-export function useBuildingMap(floorNumber: number = 2) {
-  const [data, setData] = useState<FloorData3D | null>(() => cache.get(floorNumber) ?? null);
-  const [rawMap, setRawMap] = useState<BuildingMapData | null>(null);
-  const [loading, setLoading] = useState<boolean>(!cache.has(floorNumber));
+export function useBuildingMap(floorNumber: number = 1) {
+  const [data, setData] = useState<FloorData3D | null>(
+    () => floorCache.get(floorNumber) ?? null
+  );
+  const [rawMap, setRawMap] = useState<BuildingMapData | null>(() => rawMapCache);
+  const [loading, setLoading] = useState<boolean>(!floorCache.has(floorNumber));
   const [error, setError] = useState<Error | null>(null);
 
   const isMounted = useRef(true);
@@ -20,8 +23,9 @@ export function useBuildingMap(floorNumber: number = 2) {
   }, []);
 
   useEffect(() => {
-    if (cache.has(floorNumber)) {
-      setData(cache.get(floorNumber)!);
+    if (floorCache.has(floorNumber) && rawMapCache) {
+      setData(floorCache.get(floorNumber)!);
+      setRawMap(rawMapCache);
       setLoading(false);
       setError(null);
       return;
@@ -33,6 +37,7 @@ export function useBuildingMap(floorNumber: number = 2) {
     fetchBuildingMap()
       .then((buildingData) => {
         if (!isMounted.current) return;
+        rawMapCache = buildingData;
         setRawMap(buildingData);
 
         const targetFloor =
@@ -44,7 +49,7 @@ export function useBuildingMap(floorNumber: number = 2) {
         }
 
         const parsed = floorToRoomData(targetFloor);
-        cache.set(floorNumber, parsed);
+        floorCache.set(floorNumber, parsed);
         setData(parsed);
       })
       .catch((err) => {
@@ -63,5 +68,5 @@ export function useBuildingMap(floorNumber: number = 2) {
 }
 
 export function useWayfinding() {
-  return useBuildingMap(2);
+  return useBuildingMap(1);
 }
