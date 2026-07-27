@@ -144,13 +144,21 @@ export function LeftPatientPanel({ patient, isOpen }: LeftPanelProps) {
         || (patient.visitReason && patient.visitReason !== 'Chưa có lý do khám từ hệ thống' ? patient.visitReason : '')
         || 'Chưa có lý do khám';
 
+    const formatVitalValue = (val: string | number | undefined | null) => {
+        if (val === undefined || val === null || (typeof val === 'number' && isNaN(val)) || String(val) === 'NaN') {
+            return '—';
+        }
+        return String(val);
+    };
+
     const displayVitals = {
-        heartRate: sessionData?.heart_rate !== undefined && sessionData?.heart_rate !== null ? sessionData.heart_rate : '—',
-        bloodPressure: (sessionData?.blood_pressure_sys !== undefined && sessionData?.blood_pressure_dia !== undefined)
+        heartRate: formatVitalValue(sessionData?.heart_rate),
+        bloodPressure: (sessionData?.blood_pressure_sys !== undefined && sessionData?.blood_pressure_sys !== null && !isNaN(Number(sessionData.blood_pressure_sys)) &&
+                        sessionData?.blood_pressure_dia !== undefined && sessionData?.blood_pressure_dia !== null && !isNaN(Number(sessionData.blood_pressure_dia)))
             ? `${sessionData.blood_pressure_sys}/${sessionData.blood_pressure_dia}`
             : '—',
-        temperature: sessionData?.temperature !== undefined && sessionData?.temperature !== null ? sessionData.temperature : '—',
-        spO2: sessionData?.spo2 !== undefined && sessionData?.spo2 !== null ? sessionData.spo2 : '—',
+        temperature: formatVitalValue(sessionData?.temperature),
+        spO2: formatVitalValue(sessionData?.spo2),
     };
 
 

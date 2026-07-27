@@ -277,7 +277,7 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
         <div className="space-y-4">
             {/* Lý do khám */}
             <SectionCard
-                title="Lý do khám bệnh"
+                title="Lý do đến khám"
                 onEdit={!isReadOnly ? () => setEditingSection('visitReason') : undefined}
             >
                 {editingSection === 'visitReason' ? (

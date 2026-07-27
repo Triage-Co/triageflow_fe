@@ -58,8 +58,15 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
         { label: 'Cài đặt', href: '/settings', icon: Settings },
     ],
     LAB_STAFF: [
-        { label: 'Xét nghiệm', href: '/lab', icon: FlaskConical },
-        { label: 'Thông báo', href: '/notifications', icon: Bell },
+        { label: 'Tiếp Nhận Bệnh Nhân', href: '/lab', icon: UserCheck },
+        { label: 'Danh Sách Bệnh Nhân', href: '/lab/patients', icon: LayoutDashboard },
+        { label: 'Thông báo', href: '/lab/notification', icon: Bell },
+        { label: 'Cài đặt', href: '/settings', icon: Settings },
+    ],
+    LAB_TECHNICIAN: [
+        { label: 'Tiếp Nhận Bệnh Nhân', href: '/lab', icon: UserCheck },
+        { label: 'Danh Sách Bệnh Nhân', href: '/lab/patients', icon: LayoutDashboard },
+        { label: 'Thông báo', href: '/lab/notification', icon: Bell },
         { label: 'Cài đặt', href: '/settings', icon: Settings },
     ],
     PHARMACY_STAFF: [
@@ -109,6 +116,7 @@ const ROLE_LABELS: Record<string, string> = {
     NURSE: 'Y tá',
     ADMIN: 'Quản trị',
     LAB_STAFF: 'Xét nghiệm',
+    LAB_TECHNICIAN: 'Xét nghiệm',
     PHARMACY_STAFF: 'Dược',
     CASHIER: 'Thu ngân',
     USER: 'Bệnh nhân',

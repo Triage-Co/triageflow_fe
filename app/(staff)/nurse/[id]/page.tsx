@@ -54,8 +54,12 @@ export default function DoctorPatientPage({ params }: { params: Promise<{ id: st
                         let templateId = mapped.templateId;
 
                         if (!templateId) {
-                            const templatesRes = await clinicalService.getProcessTemplates(accessToken);
-                            templateId = pickFirstTemplateId(templatesRes.data);
+                            try {
+                                const templatesRes = await clinicalService.getProcessTemplates(accessToken);
+                                templateId = pickFirstTemplateId(templatesRes.data);
+                            } catch (e) {
+                                console.error('Failed to pre-fetch templates on load:', e);
+                            }
                         }
 
                         if (templateId) {

@@ -42,7 +42,7 @@ export function AdminCreateUserPage() {
         setIsCreating(true);
         setCreateError(null);
         try {
-            const STAFF_ROLES = ['DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_STAFF', 'PHARMACY_STAFF', 'CASHIER', 'ADMIN'];
+            const STAFF_ROLES = ['DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_STAFF', 'LAB_TECHNICIAN', 'PHARMACY_STAFF', 'CASHIER', 'ADMIN'];
             if (STAFF_ROLES.includes(createForm.role) && accessToken) {
                 await staffService.createStaff({
                     user_name: createForm.user_name.trim(),
@@ -188,7 +188,8 @@ export function AdminCreateUserPage() {
                                         <option value="DOCTOR">Bác sĩ</option>
                                         <option value="NURSE">Y tá / Điều dưỡng</option>
                                         <option value="RECEPTIONIST">Lễ tân</option>
-                                        <option value="LAB_STAFF">Xét nghiệm</option>
+                                        <option value="LAB_STAFF">Xét nghiệm (LAB_STAFF)</option>
+                                        <option value="LAB_TECHNICIAN">Kỹ thuật viên Xét nghiệm</option>
                                         <option value="PHARMACY_STAFF">Dược sĩ</option>
                                         <option value="CASHIER">Thu ngân</option>
                                         <option value="ADMIN">Quản trị viên</option>

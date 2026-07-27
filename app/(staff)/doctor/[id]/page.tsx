@@ -47,6 +47,31 @@ export default function DoctorPatientPage({ params }: { params: Promise<{ id: st
                 setError(null);
                 const res = await clinicalService.getPatientByQueueId(id, accessToken);
                 if (res?.data) {
+                    // Check if this patient belongs to the logged-in doctor (timezone-safe)
+                    const shiftDateRaw = res.data.step?.flow?.booking?.slot?.shift?.date;
+                    let dateStr = '';
+                    if (shiftDateRaw) {
+                        const d = new Date(shiftDateRaw);
+                        const yyyy = d.getFullYear();
+                        const mm = String(d.getMonth() + 1).padStart(2, '0');
+                        const dd = String(d.getDate()).padStart(2, '0');
+                        dateStr = `${yyyy}-${mm}-${dd}`;
+                    } else {
+                        const d = new Date();
+                        const yyyy = d.getFullYear();
+                        const mm = String(d.getMonth() + 1).padStart(2, '0');
+                        const dd = String(d.getDate()).padStart(2, '0');
+                        dateStr = `${yyyy}-${mm}-${dd}`;
+                    }
+
+                    const doctorPatientsRes = await clinicalService.getPatients(dateStr, accessToken);
+                    const isAssigned = doctorPatientsRes.data?.some(p => p.queue_id === id);
+                    if (!isAssigned) {
+                        setError('Bạn không có quyền xem thông tin bệnh nhân này.');
+                        setIsLoading(false);
+                        return;
+                    }
+
                     const mapped = mapBackendPatientToFrontend(res.data);
                     let finalPatient = mapped;
 
@@ -54,8 +79,12 @@ export default function DoctorPatientPage({ params }: { params: Promise<{ id: st
                         let templateId = mapped.templateId;
 
                         if (!templateId) {
-                            const templatesRes = await clinicalService.getProcessTemplates(accessToken);
-                            templateId = pickFirstTemplateId(templatesRes.data);
+                            try {
+                                const templatesRes = await clinicalService.getProcessTemplates(accessToken);
+                                templateId = pickFirstTemplateId(templatesRes.data);
+                            } catch (e) {
+                                console.error('Failed to pre-fetch templates on load:', e);
+                            }
                         }
 
                         if (templateId) {

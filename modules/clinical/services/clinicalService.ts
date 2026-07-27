@@ -360,6 +360,16 @@ export const clinicalService = {
             headers: { Authorization: `Bearer ${token}` },
         }),
 
+    getAllFlows: (token: string) =>
+        apiClient.get<unknown>('/api/flow', {
+            headers: { Authorization: `Bearer ${token}` },
+        }),
+
+    getFlowById: (flowId: string, token: string) =>
+        apiClient.get<unknown>(`/api/flow/${flowId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+        }),
+
     getVisitSessionByPatientId: (patientId: string, token: string) =>
         apiClient.get<unknown>(`/api/visit-session?patient_id=${patientId}`, {
             headers: { Authorization: `Bearer ${token}` },
@@ -367,6 +377,23 @@ export const clinicalService = {
 
     updateVisitSession: (visitSessionId: string, body: Record<string, unknown>, token: string) =>
         apiClient.patch<unknown>(`/api/visit-session/${visitSessionId}`, body, {
+            headers: { Authorization: `Bearer ${token}` },
+        }),
+
+    createStepParent: (body: { flow_id: string; room_id: string; staff_id?: string; step_status?: string }, token: string) =>
+        apiClient.post<unknown>('/api/step/parent', body, {
+            headers: { Authorization: `Bearer ${token}` },
+        }),
+
+    updateStep: (stepId: string, body: { room_id?: string; staff_id?: string; docNo?: number; payment_status?: string }, token: string) =>
+        apiClient.patch<unknown>(`/api/step/${stepId}`, body, {
+            headers: { Authorization: `Bearer ${token}` },
+        }),
+
+    updateStepStatus: (stepId: string, stepStatus: string, token: string) =>
+        apiClient.patch<unknown>(`/api/step/${stepId}/status`, {
+            step_status: stepStatus,
+        }, {
             headers: { Authorization: `Bearer ${token}` },
         }),
 };

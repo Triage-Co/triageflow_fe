@@ -2,22 +2,8 @@ import type { HospitalRoom, Specialty } from '../types/room.types';
 import type { Staff } from '../types/staff.types';
 import type { Shift } from '../types/shift.types';
 
-/** Check if shift is in the past (date before today) or completed */
-export const isPastOrCompletedShift = (shift: { date?: string; status?: string; end_time?: string }): boolean => {
-    const todayKey = new Date().toISOString().split('T')[0];
-    const dateStr = shift.date ? shift.date.split('T')[0] : '';
-
-    // Past date
-    if (dateStr && dateStr < todayKey) {
-        return true;
-    }
-
-    // Completed status
-    const status = ((shift.status as string) || '').toUpperCase();
-    if (status === 'COMPLETED' || status === 'FINISHED' || status === 'DONE') {
-        return true;
-    }
-
+/** Check if shift is in the past (always returns false so all shifts are visible) */
+export const isPastOrCompletedShift = (_shift: { date?: string; status?: string; end_time?: string }): boolean => {
     return false;
 };
 

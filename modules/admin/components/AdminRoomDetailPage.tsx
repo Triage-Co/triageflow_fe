@@ -24,7 +24,7 @@ import { useAuthStore } from '@/modules/auth/store/authStore';
 import type { HospitalRoom, Specialty } from '../types/room.types';
 import type { Shift } from '../types/shift.types';
 import { roomService } from '../services/roomService';
-import { isPastOrCompletedShift, validateShiftAssignment, filterEligibleStaffForRoom } from '../utils/shiftValidation';
+import { validateShiftAssignment, filterEligibleStaffForRoom } from '../utils/shiftValidation';
 
 /* ─── Role Badges Config ─────────────────────────────────────────────────── */
 
@@ -326,7 +326,13 @@ export function AdminRoomDetailPage() {
 
     const specName = room.specialty?.specialty_name || specialties.find((s) => s.specialty_id === room.specialty_id)?.specialty_name || 'N/A';
     const specCode = room.specialty?.specialty_code || specialties.find((s) => s.specialty_id === room.specialty_id)?.specialty_code || 'N/A';
-    const roomShifts = shifts.filter((s) => s.room_id === room.room_id && !isPastOrCompletedShift(s));
+    const roomShifts = shifts
+        .filter((s) => s.room_id === room.room_id)
+        .sort((a, b) => {
+            const dateA = a.date ? new Date(a.date).getTime() : 0;
+            const dateB = b.date ? new Date(b.date).getTime() : 0;
+            return dateA - dateB;
+        });
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden relative">

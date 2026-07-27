@@ -33,6 +33,7 @@ export type StaffRole =
     | 'NURSE'
     | 'RECEPTIONIST'
     | 'LAB_STAFF'
+    | 'LAB_TECHNICIAN'
     | 'PHARMACY_STAFF'
     | 'CASHIER'
     | 'ADMIN';

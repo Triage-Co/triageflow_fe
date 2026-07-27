@@ -21,7 +21,7 @@ import { useStaffStore } from '../store/staffStore';
 import { useRoomStore } from '../store/roomStore';
 import { useAuthStore } from '@/modules/auth/store/authStore';
 import type { Shift, CreateShiftDto } from '../types/shift.types';
-import { isPastOrCompletedShift, validateShiftAssignment, filterEligibleStaffForRoom } from '../utils/shiftValidation';
+import { validateShiftAssignment, filterEligibleStaffForRoom } from '../utils/shiftValidation';
 
 /* ─── Role Badges Config ─────────────────────────────────────────────────── */
 
@@ -218,8 +218,6 @@ export function AdminShiftPage() {
     /* ── Computed ── */
 
     const filteredShifts = shifts.filter((shift) => {
-        if (isPastOrCompletedShift(shift)) return false;
-
         const matchesRoom = roomFilter === 'ALL' || shift.room_id === roomFilter;
 
         const shiftDate = toDateKey(shift.date);
