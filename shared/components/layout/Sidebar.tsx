@@ -7,7 +7,6 @@ import {
     Activity,
     BarChart3,
     Bell,
-    CalendarClock,
     ChevronLeft,
     ChevronRight,
     Cpu,

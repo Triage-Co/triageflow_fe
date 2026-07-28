@@ -17,15 +17,90 @@ import {
     Sparkles,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
+import { apiClient } from '@/shared/services/apiClient';
 import { useProcessStore } from '../store/processStore';
 import {
     ProcessTemplate,
     TemplateStep,
     CreateTemplateDto,
     ROOM_TYPE_OPTIONS,
+    normalizeRoomType,
 } from '../types/process.types';
 
-const ITEMS_PER_PAGE = 3;
+interface ServiceOption {
+    service_id: string;
+    service_code: string;
+    service_name: string;
+    is_active?: boolean;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    return value as Record<string, unknown>;
+}
+
+function pickServiceCodeByRoomType(roomType: string, options: ServiceOption[]): string {
+    if (!options.length) return roomType;
+
+    const code = normalizeRoomType(roomType);
+    const keywordMap: Record<string, string[]> = {
+        RECEPTION: ['DANG_KY', 'TIEP_DON', 'KHAM'],
+        TRIAGE_AREA: ['PHAN_LOAI', 'KHAM_CAP_CUU', 'TRIAGE'],
+        CLINICAL_ROOM: ['KHAM_CHUYEN_KHOA', 'KHAM'],
+        PROCEDURE_ROOM: ['DIEU_TRI', 'NOI_SOI', 'THU_THUAT'],
+        LABORATORY: ['XET_NGHIEM'],
+        IMAGING_ROOM: ['X_QUANG', 'SIEU_AM', 'MRI', 'CT'],
+        FUNCTIONAL_EXPLORATION: ['THAM_DO', 'FUNCTIONAL'],
+        PHARMACY: ['THUOC', 'PHARMACY'],
+        CASHIER: ['THANH_TOAN', 'VIEN_PHI'],
+        EMPTY: ['KHAM'],
+        OTHER: ['KHAM'],
+    };
+
+    const activeOptions = options.filter((opt) => opt.is_active !== false);
+    const source = activeOptions.length > 0 ? activeOptions : options;
+    const keywords = keywordMap[code] || [code];
+    const matched = source.find((opt) =>
+        keywords.some((keyword) => opt.service_code.toUpperCase().includes(keyword))
+    );
+
+    return matched?.service_code || source[0].service_code || roomType;
+}
+
+function extractServiceOptions(raw: unknown): ServiceOption[] {
+    const list: unknown[] = [];
+
+    if (Array.isArray(raw)) {
+        list.push(...raw);
+    } else {
+        const record = asRecord(raw);
+        const firstData = record?.data;
+        const firstDataRecord = asRecord(firstData);
+
+        if (Array.isArray(firstData)) list.push(...firstData);
+        if (Array.isArray(firstDataRecord?.data)) list.push(...(firstDataRecord.data as unknown[]));
+        if (Array.isArray(record?.items)) list.push(...(record.items as unknown[]));
+    }
+
+    const dedup = new Map<string, ServiceOption>();
+    list.forEach((item) => {
+        const rec = asRecord(item);
+        if (!rec) return;
+        const serviceCode = typeof rec.service_code === 'string' ? rec.service_code.trim() : '';
+        const serviceName = typeof rec.service_name === 'string' ? rec.service_name.trim() : '';
+        const serviceId = typeof rec.service_id === 'string' ? rec.service_id : serviceCode;
+        if (!serviceCode) return;
+
+        dedup.set(serviceCode, {
+            service_id: serviceId,
+            service_code: serviceCode,
+            service_name: serviceName || serviceCode,
+            is_active: typeof rec.is_active === 'boolean' ? rec.is_active : true,
+        });
+    });
+
+    return Array.from(dedup.values());
+}
 
 export function AdminProcessPage() {
     const accessToken = useAuthStore((s) => s.accessToken);
@@ -43,7 +118,6 @@ export function AdminProcessPage() {
     // Local UI states
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
-    const [currentPage, setCurrentPage] = useState(1);
 
     // Modal states
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -62,6 +136,8 @@ export function AdminProcessPage() {
     const [formActive, setFormActive] = useState(true);
     const [formSubmitting, setFormSubmitting] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
+    const [serviceOptions, setServiceOptions] = useState<ServiceOption[]>([]);
+    const [isLoadingServices, setIsLoadingServices] = useState(false);
 
     useEffect(() => {
         if (accessToken) {
@@ -69,11 +145,40 @@ export function AdminProcessPage() {
         }
     }, [accessToken, fetchTemplates]);
 
+    useEffect(() => {
+        if (!accessToken) return;
+
+        let isCancelled = false;
+        setIsLoadingServices(true);
+
+        apiClient
+            .get<unknown>('/api/service?page=1&limit=100', {
+                headers: { Authorization: `Bearer ${accessToken}` },
+            })
+            .then((res) => {
+                if (isCancelled) return;
+                const services = extractServiceOptions(res.data);
+                setServiceOptions(services);
+            })
+            .catch((err) => {
+                console.error('Failed to load service list:', err);
+            })
+            .finally(() => {
+                if (!isCancelled) setIsLoadingServices(false);
+            });
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [accessToken]);
+
     // Initial default steps for new template
     const createDefaultStep = (index: number): TemplateStep => ({
         template_step_id: `step_${index + 1}`,
         step_name: `Bước ${index + 1}`,
-        room_type: 'CONSULTATION',
+        room_type: 'CLINICAL_ROOM',
+        step_type: 'CLINICAL_ROOM',
+        service_code: pickServiceCodeByRoomType('CLINICAL_ROOM', serviceOptions),
         requires_payment: false,
         depends_on: index > 0 ? [`step_${index}`] : [],
         sub_steps: [],
@@ -87,6 +192,8 @@ export function AdminProcessPage() {
                 template_step_id: 'step_1',
                 step_name: 'Đăng ký & Phân loại',
                 room_type: 'RECEPTION',
+                step_type: 'RECEPTION',
+                service_code: pickServiceCodeByRoomType('RECEPTION', serviceOptions),
                 requires_payment: false,
                 depends_on: [],
                 sub_steps: [],
@@ -94,7 +201,9 @@ export function AdminProcessPage() {
             {
                 template_step_id: 'step_2',
                 step_name: 'Khám chuyên khoa',
-                room_type: 'CONSULTATION',
+                room_type: 'CLINICAL_ROOM',
+                step_type: 'CLINICAL_ROOM',
+                service_code: pickServiceCodeByRoomType('CLINICAL_ROOM', serviceOptions),
                 requires_payment: false,
                 depends_on: ['step_1'],
                 sub_steps: [],
@@ -113,6 +222,11 @@ export function AdminProcessPage() {
                 ? template.steps.map((s, idx) => ({
                     ...s,
                     template_step_id: s.template_step_id || `step_${idx + 1}`,
+                    room_type: normalizeRoomType(s.room_type),
+                    step_type: normalizeRoomType(s.step_type || s.room_type),
+                    service_code:
+                        s.service_code ||
+                        pickServiceCodeByRoomType(normalizeRoomType(s.room_type), serviceOptions),
                 }))
                 : [createDefaultStep(0)]
         );
@@ -136,12 +250,26 @@ export function AdminProcessPage() {
             return;
         }
         const updated = formSteps.filter((_, idx) => idx !== index);
-        // Re-index steps
-        const reindexed = updated.map((step, idx) => ({
-            ...step,
-            template_step_id: `step_${idx + 1}`,
-            depends_on: step.depends_on.filter((d) => d !== step.template_step_id),
-        }));
+        const idMap = new Map(updated.map((step, idx) => [step.template_step_id, `step_${idx + 1}`]));
+
+        // Re-index steps and remap dependency ids to keep graph consistent.
+        const reindexed = updated.map((step, idx) => {
+            const newId = `step_${idx + 1}`;
+            const rawDependsOn = Array.isArray(step.depends_on) ? step.depends_on : [];
+            const mappedDependsOn = rawDependsOn
+                .map((dep) => idMap.get(dep) || dep)
+                .filter((dep) => dep !== newId);
+
+            return {
+                ...step,
+                template_step_id: newId,
+                depends_on: Array.from(new Set(mappedDependsOn)),
+                room_type: normalizeRoomType(step.room_type),
+                step_type: normalizeRoomType(step.step_type || step.room_type),
+                service_code: (step.service_code || normalizeRoomType(step.room_type)).trim(),
+                sub_steps: Array.isArray(step.sub_steps) ? step.sub_steps : [],
+            };
+        });
         setFormSteps(reindexed);
     };
 
@@ -152,6 +280,25 @@ export function AdminProcessPage() {
     ) => {
         const updated = [...formSteps];
         updated[index] = { ...updated[index], [field]: value };
+        setFormSteps(updated);
+    };
+
+    const handleRoomTypeChange = (index: number, roomType: string) => {
+        const updated = [...formSteps];
+        const current = updated[index];
+        const normalizedRoomType = normalizeRoomType(roomType);
+        const shouldSyncServiceCode =
+            !current.service_code || current.service_code === current.room_type;
+
+        updated[index] = {
+            ...current,
+            room_type: normalizedRoomType,
+            step_type: normalizedRoomType,
+            service_code: shouldSyncServiceCode
+                ? pickServiceCodeByRoomType(normalizedRoomType, serviceOptions)
+                : current.service_code,
+        };
+
         setFormSteps(updated);
     };
 
@@ -174,14 +321,44 @@ export function AdminProcessPage() {
                 setFormError(`Bước ${i + 1} chưa có tên.`);
                 return;
             }
+            if (!formSteps[i].service_code?.trim()) {
+                setFormError(`Bước ${i + 1} chưa có mã dịch vụ (service_code).`);
+                return;
+            }
         }
 
         setFormSubmitting(true);
         setFormError(null);
 
+        const normalizedSteps: TemplateStep[] = formSteps.map((step, idx) => {
+            const templateStepId = step.template_step_id?.trim() || `step_${idx + 1}`;
+
+            return {
+                template_step_id: templateStepId,
+                step_name: step.step_name.trim(),
+                room_type: normalizeRoomType(step.room_type),
+                step_type: normalizeRoomType(step.step_type || step.room_type),
+                service_code: (
+                    step.service_code ||
+                    pickServiceCodeByRoomType(normalizeRoomType(step.room_type), serviceOptions)
+                ).trim(),
+                requires_payment: Boolean(step.requires_payment),
+                depends_on: Array.isArray(step.depends_on) ? step.depends_on.filter(Boolean) : [],
+                sub_steps: Array.isArray(step.sub_steps) ? step.sub_steps.filter(Boolean) : [],
+            };
+        });
+
+        const validIds = new Set(normalizedSteps.map((step) => step.template_step_id));
+        const payloadSteps = normalizedSteps.map((step) => ({
+            ...step,
+            depends_on: Array.from(new Set(step.depends_on)).filter(
+                (depId) => depId !== step.template_step_id && validIds.has(depId)
+            ),
+        }));
+
         const payload: CreateTemplateDto = {
             name: formName.trim(),
-            steps: formSteps,
+            steps: payloadSteps,
         };
 
         try {
@@ -189,7 +366,7 @@ export function AdminProcessPage() {
                 const templateId = editingTemplate.template_id || editingTemplate.id || '';
                 await updateTemplate(
                     templateId,
-                    payload,
+                    { ...payload, is_active: formActive },
                     accessToken
                 );
             } else {
@@ -219,11 +396,6 @@ export function AdminProcessPage() {
             console.error('Failed to delete template:', err);
         }
     };
-
-    // Reset pagination when search or filter changes
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [searchQuery, statusFilter]);
 
     // Filter templates safely
     const filteredTemplates = templates.filter((t) => {
@@ -318,8 +490,8 @@ export function AdminProcessPage() {
                             key={st}
                             onClick={() => setStatusFilter(st)}
                             className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer whitespace-nowrap ${statusFilter === st
-                                    ? 'bg-purple-100 text-purple-700 font-semibold border border-purple-200'
-                                    : 'bg-neutral-50 text-neutral-600 hover:bg-neutral-100 border border-neutral-200'
+                                ? 'bg-purple-100 text-purple-700 font-semibold border border-purple-200'
+                                : 'bg-neutral-50 text-neutral-600 hover:bg-neutral-100 border border-neutral-200'
                                 }`}
                         >
                             {st === 'ALL'
@@ -385,8 +557,8 @@ export function AdminProcessPage() {
 
                                     <span
                                         className={`px-3 py-1 text-xs font-semibold rounded-full border ${isActive
-                                                ? 'bg-purple-50 text-purple-600 border-purple-100'
-                                                : 'bg-neutral-100 text-neutral-500 border-neutral-200'
+                                            ? 'bg-purple-50 text-purple-600 border-purple-100'
+                                            : 'bg-neutral-100 text-neutral-500 border-neutral-200'
                                             }`}
                                     >
                                         {isActive ? 'Hoạt động' : 'Không hoạt động'}
@@ -569,100 +741,137 @@ export function AdminProcessPage() {
                                 </div>
 
                                 <div className="space-y-4">
-                                    {formSteps.map((step, idx) => (
-                                        <div
-                                            key={step.template_step_id || idx}
-                                            className="p-4 rounded-2xl border border-neutral-200 bg-white shadow-2xs space-y-4 relative group"
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="w-6 h-6 rounded-full bg-purple-600 text-white text-xs font-bold flex items-center justify-center">
-                                                        {idx + 1}
-                                                    </span>
-                                                    <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-                                                        Mã bước: {step.template_step_id}
-                                                    </span>
-                                                </div>
-
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleRemoveStep(idx)}
-                                                    title="Xóa bước này"
-                                                    className="p-1.5 rounded-lg text-neutral-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </div>
-
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                {/* Step Name */}
-                                                <div className="space-y-1">
-                                                    <label className="block text-xs font-medium text-neutral-600">
-                                                        Tên bước <span className="text-red-500">*</span>
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        required
-                                                        placeholder="e.g. Khám lâm sàng"
-                                                        value={step.step_name}
-                                                        onChange={(e) =>
-                                                            handleStepChange(idx, 'step_name', e.target.value)
-                                                        }
-                                                        className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm text-neutral-900 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
-                                                    />
-                                                </div>
-
-                                                {/* Room Type */}
-                                                <div className="space-y-1">
-                                                    <label className="block text-xs font-medium text-neutral-600">
-                                                        Loại phòng khám / dịch vụ
-                                                    </label>
-                                                    <select
-                                                        value={step.room_type}
-                                                        onChange={(e) =>
-                                                            handleStepChange(idx, 'room_type', e.target.value)
-                                                        }
-                                                        className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm text-neutral-900 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 bg-white"
-                                                    >
-                                                        {ROOM_TYPE_OPTIONS.map((opt) => (
-                                                            <option key={opt.value} value={opt.value}>
-                                                                {opt.label}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                            </div>
-
-                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-neutral-100">
-                                                {/* Requires Payment checkbox */}
-                                                <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-neutral-700">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={step.requires_payment}
-                                                        onChange={(e) =>
-                                                            handleStepChange(
-                                                                idx,
-                                                                'requires_payment',
-                                                                e.target.checked
-                                                            )
-                                                        }
-                                                        className="h-4 w-4 rounded border-neutral-300 text-purple-600 focus:ring-purple-500 accent-purple-600"
-                                                    />
-                                                    <span>Yêu cầu hoàn tất thanh toán trước khi vào bước</span>
-                                                </label>
-
-                                                {/* Depends On info */}
-                                                {idx > 0 && (
-                                                    <div className="text-[11px] text-neutral-500 flex items-center gap-1 bg-neutral-50 px-2.5 py-1 rounded-md border border-neutral-200">
-                                                        <span>Phụ thuộc:</span>
-                                                        <span className="font-semibold text-purple-700">
-                                                            {step.depends_on.join(', ') || `step_${idx}`}
+                                    {formSteps.map((step, idx) => {
+                                        return (
+                                            <div
+                                                key={step.template_step_id || idx}
+                                                className="p-4 rounded-2xl border border-neutral-200 bg-white shadow-2xs space-y-4 relative group"
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="w-6 h-6 rounded-full bg-purple-600 text-white text-xs font-bold flex items-center justify-center">
+                                                            {idx + 1}
+                                                        </span>
+                                                        <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                                                            Mã bước: {step.template_step_id}
                                                         </span>
                                                     </div>
-                                                )}
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveStep(idx)}
+                                                        title="Xóa bước này"
+                                                        className="p-1.5 rounded-lg text-neutral-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                    {/* Step Name */}
+                                                    <div className="space-y-1">
+                                                        <label className="block text-xs font-medium text-neutral-600">
+                                                            Tên bước <span className="text-red-500">*</span>
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            required
+                                                            placeholder="e.g. Khám lâm sàng"
+                                                            value={step.step_name}
+                                                            onChange={(e) =>
+                                                                handleStepChange(idx, 'step_name', e.target.value)
+                                                            }
+                                                            className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm text-neutral-900 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                                                        />
+                                                    </div>
+
+                                                    {/* Room Type */}
+                                                    <div className="space-y-1">
+                                                        <label className="block text-xs font-medium text-neutral-600">
+                                                            Loại phòng khám / dịch vụ
+                                                        </label>
+                                                        <select
+                                                            value={step.room_type}
+                                                            onChange={(e) => handleRoomTypeChange(idx, e.target.value)}
+                                                            className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm text-neutral-900 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 bg-white"
+                                                        >
+                                                            {ROOM_TYPE_OPTIONS.map((opt) => (
+                                                                <option key={opt.value} value={opt.value}>
+                                                                    {opt.label}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+
+                                                    {/* Service */}
+                                                    <div className="space-y-1">
+                                                        <label className="block text-xs font-medium text-neutral-600">
+                                                            Chuyên khoa <span className="text-red-500">*</span>
+                                                        </label>
+                                                        <select
+                                                            value={step.service_code}
+                                                            onChange={(e) =>
+                                                                handleStepChange(idx, 'service_code', e.target.value)
+                                                            }
+                                                            className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm text-neutral-900 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 bg-white"
+                                                        >
+                                                            {isLoadingServices && (
+                                                                <option value="">Đang tải danh sách dịch vụ...</option>
+                                                            )}
+
+                                                            {!isLoadingServices && serviceOptions.length === 0 && (
+                                                                <option value={step.service_code || step.room_type}>
+                                                                    {step.service_code || step.room_type}
+                                                                </option>
+                                                            )}
+
+                                                            {serviceOptions.map((service) => (
+                                                                <option key={service.service_id || service.service_code} value={service.service_code}>
+                                                                    {service.service_name}
+                                                                </option>
+                                                            ))}
+
+                                                            {step.service_code &&
+                                                                !serviceOptions.some((service) => service.service_code === step.service_code) && (
+                                                                    <option value={step.service_code}>
+                                                                        Chua co trong danh muc
+                                                                    </option>
+                                                                )}
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-neutral-100">
+                                                    {/* Requires Payment checkbox */}
+                                                    <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-neutral-700">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={step.requires_payment}
+                                                            onChange={(e) =>
+                                                                handleStepChange(
+                                                                    idx,
+                                                                    'requires_payment',
+                                                                    e.target.checked
+                                                                )
+                                                            }
+                                                            className="h-4 w-4 rounded border-neutral-300 text-purple-600 focus:ring-purple-500 accent-purple-600"
+                                                        />
+                                                        <span>Yêu cầu hoàn tất thanh toán trước khi vào bước</span>
+                                                    </label>
+
+                                                    {/* Depends On info */}
+                                                    {idx > 0 && (
+                                                        <div className="text-[11px] text-neutral-500 flex items-center gap-1 bg-neutral-50 px-2.5 py-1 rounded-md border border-neutral-200">
+                                                            <span>Phụ thuộc:</span>
+                                                            <span className="font-semibold text-purple-700">
+                                                                {step.depends_on.join(', ') || `step_${idx}`}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </div>
 

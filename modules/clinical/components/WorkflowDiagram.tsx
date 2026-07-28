@@ -40,8 +40,16 @@ interface DraftStep {
     specialty_id: string;
     room_id: string;
     staff_id: string;
+    service_code: string;
     room_type: string;
     doctor_name?: string;
+}
+
+interface ServiceOption {
+    service_id: string;
+    service_code: string;
+    service_name: string;
+    is_active?: boolean;
 }
 
 interface FlowNode {
@@ -75,6 +83,85 @@ const DEFAULT_FULL_WORKFLOW: FlowNode[] = [
     { id: 'payment', Icon: CreditCard, label: 'Thanh toán viện phí', status: 'current' },
     { id: 'done', Icon: CheckCircle2, label: 'Hoàn tất khám', status: 'current' },
 ];
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    return value as Record<string, unknown>;
+}
+
+function extractServiceOptions(raw: unknown): ServiceOption[] {
+    const list: unknown[] = [];
+
+    if (Array.isArray(raw)) {
+        list.push(...raw);
+    } else {
+        const record = asRecord(raw);
+        const firstData = record?.data;
+        const firstDataRecord = asRecord(firstData);
+
+        if (Array.isArray(firstData)) list.push(...firstData);
+        if (Array.isArray(firstDataRecord?.data)) list.push(...(firstDataRecord.data as unknown[]));
+        if (Array.isArray(record?.items)) list.push(...(record.items as unknown[]));
+    }
+
+    const dedup = new Map<string, ServiceOption>();
+    list.forEach((item) => {
+        const rec = asRecord(item);
+        if (!rec) return;
+        const serviceCode = typeof rec.service_code === 'string' ? rec.service_code.trim() : '';
+        const serviceName = typeof rec.service_name === 'string' ? rec.service_name.trim() : '';
+        const serviceId = typeof rec.service_id === 'string' ? rec.service_id : serviceCode;
+        if (!serviceCode) return;
+
+        dedup.set(serviceCode, {
+            service_id: serviceId,
+            service_code: serviceCode,
+            service_name: serviceName || serviceCode,
+            is_active: typeof rec.is_active === 'boolean' ? rec.is_active : true,
+        });
+    });
+
+    return Array.from(dedup.values());
+}
+
+function pickServiceCodeByContext(input: {
+    roomType?: string;
+    roomName?: string;
+    specialtyName?: string;
+}, services: ServiceOption[]): string {
+    const source = services.filter((service) => service.is_active !== false);
+    const candidates = source.length > 0 ? source : services;
+    if (!candidates.length) return '';
+
+    const roomType = (input.roomType || '').toUpperCase();
+    const roomName = (input.roomName || '').toUpperCase();
+    const specialtyName = (input.specialtyName || '').toUpperCase();
+
+    const keywordMap: Record<string, string[]> = {
+        RECEPTION: ['KHAM', 'DANG_KY', 'TIEP_DON'],
+        TRIAGE_AREA: ['KHAM_CAP_CUU', 'TRIAGE'],
+        CLINICAL_ROOM: ['KHAM_CHUYEN_KHOA', 'KHAM'],
+        PROCEDURE_ROOM: ['NOI_SOI', 'THU_THUAT', 'DIEU_TRI'],
+        LABORATORY: ['XET_NGHIEM'],
+        IMAGING_ROOM: ['X_QUANG', 'SIEU_AM', 'CT', 'MRI'],
+        FUNCTIONAL_EXPLORATION: ['THAM_DO', 'FUNCTIONAL'],
+        PHARMACY: ['THUOC', 'PHARMACY'],
+        CASHIER: ['THANH_TOAN', 'VIEN_PHI'],
+    };
+
+    const explicitKeywords = keywordMap[roomType] || [];
+    const inferredKeywords = [roomName, specialtyName]
+        .filter(Boolean)
+        .flatMap((value) => value.split(/\s+/g))
+        .filter((token) => token.length > 2);
+    const keywords = [...explicitKeywords, ...inferredKeywords];
+
+    const matched = candidates.find((service) =>
+        keywords.some((keyword) => service.service_code.toUpperCase().includes(keyword) || service.service_name.toUpperCase().includes(keyword))
+    );
+
+    return matched?.service_code || candidates[0].service_code;
+}
 
 function getTemplateName(tpl?: ProcessTemplate | Record<string, unknown> | null): string {
     if (!tpl) return '';
@@ -153,45 +240,18 @@ function getIconForStep(specialtyName: string, roomName: string, label: string):
     return Stethoscope;
 }
 
-function determineStepStatus(
-    index: number,
-    rawFlowSteps: unknown[],
-    templateStepsCount: number,
-    isPatientDone?: boolean
-): WorkflowStepStatus {
+function mapStepStatusToNodeStatus(stepStatus: string, isPatientDone?: boolean): WorkflowStepStatus {
     if (isPatientDone) return 'completed';
 
-    if (Array.isArray(rawFlowSteps) && rawFlowSteps.length > 0) {
-        const rawStep = rawFlowSteps[index] as Record<string, unknown> | undefined;
-        if (rawStep) {
-            const st = ((rawStep.step_status as string) || '').toUpperCase();
-            const paySt = ((rawStep.payment_status as string) || '').toUpperCase();
-
-            if (st === 'COMPLETED' || st === 'DONE' || st === 'SUCCESSED' || st === 'FINISHED' || paySt === 'SUCCESSED') {
-                return 'completed';
-            }
-            if (
-                st === 'PENDING' ||
-                st === 'IN_PROGRESS' ||
-                st === 'PROCESSING' ||
-                st === 'CURRENT' ||
-                st === 'DOING' ||
-                st === 'EXAMINING' ||
-                st === 'ACTIVE' ||
-                st === 'ONGOING'
-            ) {
-                return 'pending';
-            }
-            return 'current';
-        }
+    const st = (stepStatus || '').toUpperCase().trim();
+    if (['COMPLETED', 'DONE', 'SUCCESSED', 'FINISHED'].includes(st)) {
+        return 'completed';
     }
 
-    // Fallback theo vị trí thứ tự:
-    // Bước 0 (Đăng ký & Phân loại) → Xanh lá (Đã xong)
-    // Bước 1 (Khám chuyên khoa) → Xanh dương (Pending)
-    // Bước còn lại (Làm xét nghiệm, Thanh toán...) → Default (Chưa bắt đầu)
-    if (index === 0) return 'completed';
-    if (index === 1) return 'pending';
+    if (['PENDING', 'IN_PROGRESS', 'PROCESSING', 'CURRENT', 'DOING', 'EXAMINING', 'ACTIVE', 'ONGOING'].includes(st)) {
+        return 'pending';
+    }
+
     return 'current';
 }
 
@@ -259,8 +319,23 @@ function Connector({ status }: { status: WorkflowStepStatus }) {
     return <div className={cn('w-0.5 h-6 mx-auto rounded-full', styles.line)} />;
 }
 
+function normalizeRoomKey(value?: string): string {
+    return (value || '').toLowerCase().trim();
+}
+
+function getRoomTypeValue(room: unknown): string {
+    const rec = asRecord(room);
+    const roomType = rec?.room_type;
+    if (typeof roomType === 'string') return roomType;
+    const altRoomType = rec?.roomType;
+    if (typeof altRoomType === 'string') return altRoomType;
+    return '';
+}
+
 export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
     const accessToken = useAuthStore((s) => s.accessToken);
+    const authUser = useAuthStore((s) => s.user);
+    const authProfile = useAuthStore((s) => s.profile);
     const [isLoading, startFetch] = useTransition();
     const [error, setError] = useState<string | null>(null);
     const [flowData, setFlowData] = useState<Record<string, unknown> | null>(null);
@@ -277,11 +352,13 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
     const [editingSpecialtyId, setEditingSpecialtyId] = useState<string>('');
     const [editingRoomId, setEditingRoomId] = useState<string>('');
     const [editingStaffId, setEditingStaffId] = useState<string>('');
-    const [editingDoctorName, setEditingDoctorName] = useState<string>('');
     const [selectedSpecialtyId, setSelectedSpecialtyId] = useState<string>('');
     const [selectedRoomId, setSelectedRoomId] = useState<string>('');
     const [selectedStaffId, setSelectedStaffId] = useState<string>('');
-    const [selectedDoctorName, setSelectedDoctorName] = useState<string>('');
+    const [selectedServiceCode, setSelectedServiceCode] = useState<string>('');
+    const [selectedDraftServiceCode, setSelectedDraftServiceCode] = useState<string>('');
+    const [serviceOptions, setServiceOptions] = useState<ServiceOption[]>([]);
+    const [isLoadingServices, setIsLoadingServices] = useState(true);
     const [editingStepStatus, setEditingStepStatus] = useState<string>('');
     const [isActionLoading, setIsActionLoading] = useState(false);
     const [selectedStepNode, setSelectedStepNode] = useState<FlowNode | null>(null);
@@ -352,6 +429,87 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
     const { staffs, fetchStaffs } = useStaffStore();
     const { shifts, fetchShifts } = useShiftStore();
 
+    const currentRole = (authUser?.role || authProfile?.role || '').toUpperCase();
+    const isDoctorRole = currentRole === 'DOCTOR';
+
+    const currentDoctorStaffId = useMemo(() => {
+        if (!isDoctorRole) return '';
+
+        const userId = (authUser?.id || '').toLowerCase();
+        const userEmail = (authUser?.email || '').toLowerCase();
+        const profileId = (authProfile?.id || '').toLowerCase();
+        const profileAccountId = (authProfile?.account_id || '').toLowerCase();
+        const profileEmail = (authProfile?.email || '').toLowerCase();
+
+        const matched = staffs.find((staff) => {
+            const rec = staff as unknown as Record<string, unknown>;
+            const accountRec = rec.account && typeof rec.account === 'object'
+                ? (rec.account as Record<string, unknown>)
+                : null;
+
+            const staffId = (staff.staff_id || '').toLowerCase();
+            const accountId = (typeof rec.account_id === 'string' ? rec.account_id : '').toLowerCase();
+            const accountRecId = (typeof accountRec?.id === 'string' ? accountRec.id : '').toLowerCase();
+            const accountEmail = (typeof accountRec?.email === 'string' ? accountRec.email : '').toLowerCase();
+
+            return Boolean(
+                (userId && (staffId === userId || accountId === userId || accountRecId === userId)) ||
+                (profileId && (staffId === profileId || accountId === profileId || accountRecId === profileId)) ||
+                (profileAccountId && (accountId === profileAccountId || accountRecId === profileAccountId)) ||
+                (userEmail && accountEmail === userEmail) ||
+                (profileEmail && accountEmail === profileEmail)
+            );
+        });
+
+        return matched?.staff_id || '';
+    }, [
+        isDoctorRole,
+        staffs,
+        authUser?.id,
+        authUser?.email,
+        authProfile?.id,
+        authProfile?.account_id,
+        authProfile?.email,
+    ]);
+
+    const currentDoctorRoomKeys = useMemo(() => {
+        if (!isDoctorRole || !currentDoctorStaffId) return new Set<string>();
+
+        const keys = new Set<string>();
+        shifts.forEach((shift) => {
+            if (shift.staff_id !== currentDoctorStaffId) return;
+
+            const shiftRoomId = normalizeRoomKey(shift.room_id);
+            if (shiftRoomId) keys.add(shiftRoomId);
+
+            const room = rooms.find((r) => r.room_id === shift.room_id || r.room_name === shift.room_id);
+            if (room) {
+                const roomId = normalizeRoomKey(room.room_id);
+                const roomName = normalizeRoomKey(room.room_name);
+                const physicalRoomId = normalizeRoomKey(room.physical_room_id || '');
+
+                if (roomId) keys.add(roomId);
+                if (roomName) keys.add(roomName);
+                if (physicalRoomId) keys.add(physicalRoomId);
+            }
+        });
+
+        return keys;
+    }, [isDoctorRole, currentDoctorStaffId, shifts, rooms]);
+
+    const canCurrentDoctorEditStepStatus = (step: Record<string, unknown>): boolean => {
+        if (!isDoctorRole) return true;
+
+        const roomInfo = step.room_info as Record<string, unknown> | undefined;
+        const candidateRoomKeys = [
+            normalizeRoomKey(step.room_id as string),
+            normalizeRoomKey(roomInfo?.room_id as string),
+            normalizeRoomKey(roomInfo?.room_name as string),
+        ].filter(Boolean);
+
+        return candidateRoomKeys.some((key) => currentDoctorRoomKeys.has(key));
+    };
+
 
 
     useEffect(() => {
@@ -361,6 +519,34 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
             fetchShifts(accessToken).catch(() => { });
         }
     }, [accessToken, fetchRooms, fetchStaffs, fetchShifts]);
+
+    useEffect(() => {
+        if (!accessToken) return;
+
+        let isCancelled = false;
+
+        clinicalService
+            .getServices(accessToken, 1, 100)
+            .then((res) => {
+                if (isCancelled) return;
+                const options = extractServiceOptions(res.data);
+                setServiceOptions(options);
+                if (options.length > 0) {
+                    setSelectedServiceCode((prev) => prev || options[0].service_code);
+                    setSelectedDraftServiceCode((prev) => prev || options[0].service_code);
+                }
+            })
+            .catch((err) => {
+                console.error('Failed to load service list for workflow:', err);
+            })
+            .finally(() => {
+                if (!isCancelled) setIsLoadingServices(false);
+            });
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [accessToken]);
 
     const specialties = useMemo(() => {
         const byId = new Map<string, string>();
@@ -610,26 +796,38 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
         setEditingSpecialtyId(specialtyId);
         setEditingRoomId('');
         setEditingStaffId('');
-        setEditingDoctorName('');
     };
 
     const handleEditingRoomChange = (roomId: string) => {
         setEditingRoomId(roomId);
         setEditingStaffId(pickDoctorOnDutyForRoom(roomId));
-        setEditingDoctorName(getStaffOnDutyForRoom(roomId) || 'Chưa có bác sĩ');
     };
 
     const handleSelectedSpecialtyChange = (specialtyId: string) => {
         setSelectedSpecialtyId(specialtyId);
         setSelectedRoomId('');
         setSelectedStaffId('');
-        setSelectedDoctorName('');
+        setSelectedServiceCode('');
+        setSelectedDraftServiceCode('');
     };
 
     const handleSelectedRoomChange = (roomId: string) => {
         setSelectedRoomId(roomId);
         setSelectedStaffId(pickDoctorOnDutyForRoom(roomId));
-        setSelectedDoctorName(getStaffOnDutyForRoom(roomId) || 'Chưa có bác sĩ');
+
+        const room = rooms.find((r) => r.room_id === roomId);
+        const defaultServiceCode = pickServiceCodeByContext(
+            {
+                roomType: getRoomTypeValue(room),
+                roomName: room?.room_name,
+                specialtyName: room?.specialty?.specialty_name,
+            },
+            serviceOptions
+        );
+        if (defaultServiceCode) {
+            setSelectedServiceCode(defaultServiceCode);
+            setSelectedDraftServiceCode(defaultServiceCode);
+        }
     };
 
     const reloadFlow = async () => {
@@ -697,6 +895,23 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
         const flowId = (flowData?.flow_id as string) || patient?.flowId;
         if (!flowId || !accessToken || !selectedRoomId) return;
 
+        const room = rooms.find((r) => r.room_id === selectedRoomId);
+        const resolvedServiceCode =
+            selectedServiceCode ||
+            pickServiceCodeByContext(
+                {
+                    roomType: getRoomTypeValue(room),
+                    roomName: room?.room_name,
+                    specialtyName: room?.specialty?.specialty_name,
+                },
+                serviceOptions
+            );
+
+        if (!resolvedServiceCode) {
+            setError('Vui lòng chọn mã dịch vụ cho bước khám.');
+            return;
+        }
+
         const resolvedStaffId = selectedStaffId || pickDoctorOnDutyForRoom(selectedRoomId);
         if (!resolvedStaffId) {
             setError('Không tìm thấy bác sĩ/nhân viên trực cho phòng đã chọn. Vui lòng chọn phòng khác hoặc phân ca trước.');
@@ -705,15 +920,17 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
 
         setIsActionLoading(true);
         try {
-            const payload: { flow_id: string; room_id: string; staff_id?: string; step_status: string } = {
+            const payload: { flow_id: string; room_id: string; staff_id?: string; step_status: string; service_code: string } = {
                 flow_id: flowId,
                 room_id: selectedRoomId,
                 step_status: 'PENDING',
                 staff_id: resolvedStaffId,
+                service_code: resolvedServiceCode,
             };
             await clinicalService.createStepParent(payload, accessToken);
             setSelectedRoomId('');
             setSelectedStaffId('');
+            setSelectedServiceCode('');
             await reloadFlow();
         } catch (err) {
             console.error('Failed to add step:', err);
@@ -776,6 +993,16 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                                 const initialDrafts: DraftStep[] = (firstTpl.steps || []).map((s, idx) => {
                                     const defaultRoom = rooms.find(r => r.room_name.toLowerCase().includes(s.room_type.toLowerCase())) || rooms[0];
                                     const rId = defaultRoom?.room_id || '';
+                                    const defaultServiceCode =
+                                        s.service_code ||
+                                        pickServiceCodeByContext(
+                                            {
+                                                roomType: getRoomTypeValue(defaultRoom) || s.room_type,
+                                                roomName: defaultRoom?.room_name,
+                                                specialtyName: defaultRoom?.specialty?.specialty_name,
+                                            },
+                                            serviceOptions
+                                        );
                                     return {
                                         tempId: `draft-${idx}-${Date.now()}`,
                                         step_name: s.step_name || s.room_type,
@@ -783,6 +1010,7 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                                         room_type: s.room_type,
                                         room_id: rId,
                                         staff_id: rId ? pickDoctorOnDutyForRoom(rId) : '',
+                                        service_code: defaultServiceCode,
                                         doctor_name: rId ? (getStaffOnDutyForRoom(rId) || 'Chưa có bác sĩ') : 'Chưa có bác sĩ',
                                     };
                                 });
@@ -812,6 +1040,16 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
             const initialDrafts: DraftStep[] = tpl.steps.map((s, idx) => {
                 const defaultRoom = rooms.find(r => r.room_name.toLowerCase().includes(s.room_type.toLowerCase())) || rooms[0];
                 const rId = defaultRoom?.room_id || '';
+                const defaultServiceCode =
+                    s.service_code ||
+                    pickServiceCodeByContext(
+                        {
+                            roomType: getRoomTypeValue(defaultRoom) || s.room_type,
+                            roomName: defaultRoom?.room_name,
+                            specialtyName: defaultRoom?.specialty?.specialty_name,
+                        },
+                        serviceOptions
+                    );
                 return {
                     tempId: `draft-${idx}-${Date.now()}`,
                     step_name: s.step_name || s.room_type,
@@ -819,6 +1057,7 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                     room_type: s.room_type,
                     room_id: rId,
                     staff_id: rId ? pickDoctorOnDutyForRoom(rId) : '',
+                    service_code: defaultServiceCode,
                     doctor_name: rId ? (getStaffOnDutyForRoom(rId) || 'Chưa có bác sĩ') : 'Chưa có bác sĩ',
                 };
             });
@@ -837,6 +1076,17 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                 }
                 if (updates.room_id !== undefined) {
                     updated.doctor_name = getStaffOnDutyForRoom(updates.room_id) || 'Chưa có bác sĩ';
+                    if (!updated.service_code) {
+                        const room = rooms.find((r) => r.room_id === updates.room_id);
+                        updated.service_code = pickServiceCodeByContext(
+                            {
+                                roomType: getRoomTypeValue(room),
+                                roomName: room?.room_name,
+                                specialtyName: room?.specialty?.specialty_name,
+                            },
+                            serviceOptions
+                        );
+                    }
                 }
                 return updated;
             }
@@ -848,8 +1098,12 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
         setDraftSteps(prev => prev.filter(step => step.tempId !== tempId));
     };
 
-    const handleAddDraftStep = (specialty_id: string, room_id: string, staff_id: string) => {
+    const handleAddDraftStep = (specialty_id: string, room_id: string, staff_id: string, service_code: string) => {
         if (!room_id) return;
+        if (!service_code) {
+            setError('Vui lòng chọn mã dịch vụ cho bước nháp.');
+            return;
+        }
         const resolvedStaffId = staff_id || pickDoctorOnDutyForRoom(room_id);
         if (!resolvedStaffId) {
             setError('Không tìm thấy bác sĩ/nhân viên trực cho phòng đã chọn. Vui lòng chọn phòng khác hoặc phân ca trước.');
@@ -864,6 +1118,7 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
             room_type: room?.specialty_id || 'GENERAL',
             room_id,
             staff_id: resolvedStaffId,
+            service_code,
             doctor_name: doctorName,
         };
         setDraftSteps(prev => [...prev, newStep]);
@@ -894,15 +1149,22 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
             return;
         }
 
+        const missingServiceCode = draftSteps.find((s) => !s.service_code);
+        if (missingServiceCode) {
+            setError(`Bước "${missingServiceCode.step_name}" chưa có mã dịch vụ.`);
+            return;
+        }
+
         setIsAssigning(true);
         setError(null);
         try {
             // Create steps sequentially in database
             for (const step of draftSteps) {
-                const payload: { flow_id: string; room_id: string; staff_id?: string; step_status: string } = {
+                const payload: { flow_id: string; room_id: string; staff_id?: string; step_status: string; service_code: string } = {
                     flow_id: flowId,
                     room_id: step.room_id,
                     step_status: 'PENDING',
+                    service_code: step.service_code,
                 };
                 if (step.staff_id) {
                     payload.staff_id = step.staff_id;
@@ -942,7 +1204,7 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
             const stepStatus = ((step.step_status as string) || '').toUpperCase();
             if (stepStatus === 'CANCELLED') return;
 
-            const status = determineStepStatus(index, orderedFlowSteps, orderedFlowSteps.length, isPatientDone);
+            const status = mapStepStatusToNodeStatus(stepStatus, isPatientDone);
             const specialtyInfo = step.specialty_info as Record<string, unknown> | undefined;
             const roomInfo = step.room_info as Record<string, unknown> | undefined;
             const staffInfo = step.staff_info as Record<string, unknown> | undefined;
@@ -1154,6 +1416,8 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                                 const stepStatus = ((step.step_status as string) || '').toUpperCase();
                                 if (stepStatus === 'CANCELLED') return null;
 
+                                const canEditStatus = canCurrentDoctorEditStepStatus(step);
+
                                 const isStepEditing = editingStepId === stepId;
                                 const roomInfo = step.room_info as Record<string, unknown> | undefined;
                                 const specialtyInfo = step.specialty_info as Record<string, unknown> | undefined;
@@ -1171,7 +1435,39 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                                                     <span>Phòng: <strong className="text-neutral-600 font-semibold">{roomName || 'Chưa phân công'}</strong></span>
                                                     <span>Chuyên khoa: <strong className="text-neutral-600 font-semibold">{specialtyName || 'Chưa phân khoa'}</strong></span>
                                                     <span>Bác sĩ trực: <strong className="text-[#5B4ED6] font-semibold">{dynamicSteps.find((n) => n.id === stepId)?.staffName || 'Chưa có bác sĩ'}</strong></span>
-                                                    <span>Trạng thái: <strong className="text-brand-500 font-semibold">{stepStatus}</strong></span>
+                                                    <span className="flex items-center gap-1">
+                                                        Trạng thái:
+                                                        <select
+                                                            value={stepStatus}
+                                                            onChange={async (e) => {
+                                                                if (!accessToken) return;
+                                                                if (!canEditStatus) {
+                                                                    setError('Bác sĩ chỉ có thể sửa trạng thái ở bước mình phụ trách.');
+                                                                    return;
+                                                                }
+
+                                                                const newStatus = e.target.value;
+                                                                try {
+                                                                    setIsActionLoading(true);
+                                                                    await clinicalService.updateStepStatus(stepId, newStatus, accessToken);
+                                                                    await reloadFlow();
+                                                                } catch (err) {
+                                                                    console.error('Failed to update step status:', err);
+                                                                    setError('Không thể cập nhật trạng thái.');
+                                                                } finally {
+                                                                    setIsActionLoading(false);
+                                                                }
+                                                            }}
+                                                            disabled={isActionLoading || !canEditStatus}
+                                                            className="bg-neutral-50 hover:bg-neutral-100 text-brand-600 border border-neutral-200 rounded-md px-1.5 py-0.5 text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-500/20"
+                                                        >
+                                                            <option value="PENDING">PENDING</option>
+                                                            <option value="IN_PROGRESS">IN_PROGRESS</option>
+                                                            <option value="COMPLETED">COMPLETED</option>
+                                                            <option value="DECLINED">DECLINED</option>
+                                                            <option value="CANCELLED">CANCELLED</option>
+                                                        </select>
+                                                    </span>
                                                 </div>
                                             )}
 
@@ -1252,14 +1548,11 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                                                                 (roomInfo?.specialty_id as string) ||
                                                                 (specialtyInfo?.specialty_id as string) ||
                                                                 '';
-                                                            const matchedNode = dynamicSteps.find((n) => n.id === stepId);
-                                                            const doctorName = matchedNode?.staffName || getStaffOnDutyForRoom(currentRoomId) || 'Chưa có bác sĩ';
 
                                                             setEditingStepId(stepId);
                                                             setEditingSpecialtyId(currentSpecialtyId);
                                                             setEditingRoomId(currentRoomId);
                                                             setEditingStaffId(pickDoctorOnDutyForRoom(currentRoomId));
-                                                            setEditingDoctorName(doctorName);
                                                             setEditingStepStatus(normalizeStepStatusForApi(stepStatus));
                                                         }}
                                                         className="p-2 text-neutral-400 hover:text-brand-500 hover:bg-neutral-50 rounded-xl transition-all cursor-pointer"
@@ -1292,7 +1585,7 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                                 <Plus className="w-4 h-4 text-brand-500" />
                                 Thêm bước khám mới
                             </h4>
-                            <div className="grid grid-cols-2 gap-3 mb-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
                                 <div>
                                     <label className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 block mb-1">Chuyên khoa</label>
                                     <select
@@ -1320,11 +1613,26 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                                         ))}
                                     </select>
                                 </div>
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 block mb-1">Dịch vụ</label>
+                                    <select
+                                        value={selectedServiceCode}
+                                        onChange={(e) => setSelectedServiceCode(e.target.value)}
+                                        disabled={isLoadingServices || serviceOptions.length === 0}
+                                        className="w-full text-xs font-bold p-2.5 rounded-xl border border-neutral-200 bg-white disabled:bg-neutral-50 disabled:text-neutral-400"
+                                    >
+                                        {serviceOptions.map((service) => (
+                                            <option key={service.service_id || service.service_code} value={service.service_code}>
+                                                {service.service_name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
 
                             </div>
                             <button
                                 onClick={handleAddStep}
-                                disabled={isActionLoading || !selectedRoomId}
+                                disabled={!selectedRoomId || !selectedServiceCode}
                                 className="w-full bg-brand-500 hover:bg-brand-600 disabled:bg-neutral-200 disabled:text-neutral-400 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
                             >
                                 {isActionLoading ? (
@@ -1413,6 +1721,26 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                                                         ))}
                                                     </select>
                                                 </div>
+                                                <div>
+                                                    <label className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 block mb-1">
+                                                        Dịch vụ
+                                                    </label>
+                                                    <select
+                                                        value={step.service_code}
+                                                        onChange={(e) => {
+                                                            handleUpdateDraftStep(step.tempId, {
+                                                                service_code: e.target.value,
+                                                            });
+                                                        }}
+                                                        className="w-full text-xs font-bold p-2.5 rounded-xl border border-neutral-200 bg-white focus:border-[#8B7CF6] focus:outline-none"
+                                                    >
+                                                        {serviceOptions.map((service) => (
+                                                            <option key={service.service_id || service.service_code} value={service.service_code}>
+                                                                {service.service_name}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
                                                 {step.room_id && (
                                                     <div className="col-span-2">
                                                         <label className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 block mb-1">
@@ -1451,7 +1779,7 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                                 <Plus className="w-4 h-4 text-brand-500" />
                                 Bổ sung bước khám nháp
                             </h4>
-                            <div className="grid grid-cols-2 gap-3 mb-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
                                 <div>
                                     <label className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 block mb-1">Chuyên khoa</label>
                                     <select
@@ -1479,17 +1807,32 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                                         ))}
                                     </select>
                                 </div>
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 block mb-1">Dịch vụ</label>
+                                    <select
+                                        value={selectedDraftServiceCode}
+                                        onChange={(e) => setSelectedDraftServiceCode(e.target.value)}
+                                        disabled={isLoadingServices || serviceOptions.length === 0}
+                                        className="w-full text-xs font-bold p-2.5 rounded-xl border border-neutral-200 bg-white disabled:bg-neutral-50 disabled:text-neutral-400"
+                                    >
+                                        {serviceOptions.map((service) => (
+                                            <option key={service.service_id || service.service_code} value={service.service_code}>
+                                                {service.service_name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
 
                             </div>
                             <button
                                 onClick={() => {
-                                    handleAddDraftStep(selectedSpecialtyId, selectedRoomId, selectedStaffId);
+                                    handleAddDraftStep(selectedSpecialtyId, selectedRoomId, selectedStaffId, selectedDraftServiceCode);
                                     setSelectedSpecialtyId('');
                                     setSelectedRoomId('');
                                     setSelectedStaffId('');
-                                    setSelectedDoctorName('');
+                                    setSelectedDraftServiceCode('');
                                 }}
-                                disabled={!selectedRoomId}
+                                disabled={!selectedRoomId || !selectedDraftServiceCode}
                                 className="w-full bg-neutral-100 hover:bg-neutral-200 disabled:opacity-50 text-neutral-700 font-bold py-2 px-4 rounded-xl text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer border border-neutral-200"
                             >
                                 <Plus className="w-4 h-4" />

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { ProcessTemplate, CreateTemplateDto, UpdateTemplateDto, TemplateStep } from '../types/process.types';
+import { normalizeRoomType } from '../types/process.types';
 import { processService } from '../services/processService';
 
 export interface ProcessState {
@@ -26,6 +27,59 @@ const initialState: ProcessState = {
     error: null,
 };
 
+function pickString(record: Record<string, unknown>, keys: string[]): string | undefined {
+    for (const key of keys) {
+        const value = record[key];
+        if (typeof value === 'string' && value.trim()) return value;
+    }
+    return undefined;
+}
+
+function toStringArray(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+}
+
+function toBoolean(value: unknown, fallback = false): boolean {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+        if (value.toLowerCase() === 'true') return true;
+        if (value.toLowerCase() === 'false') return false;
+    }
+    if (typeof value === 'number') return value !== 0;
+    return fallback;
+}
+
+function normalizeTemplateSteps(rawSteps: unknown): TemplateStep[] {
+    if (!Array.isArray(rawSteps)) return [];
+
+    const normalized = rawSteps.map((rawStep, index) => {
+        const record = (rawStep && typeof rawStep === 'object' ? rawStep : {}) as Record<string, unknown>;
+        const templateStepId = pickString(record, ['template_step_id', 'step_id', 'id']) || `step_${index + 1}`;
+        const stepName = pickString(record, ['step_name', 'name', 'label']) || `Bước ${index + 1}`;
+        const roomType = normalizeRoomType(pickString(record, ['room_type', 'roomType']));
+
+        return {
+            template_step_id: templateStepId,
+            step_name: stepName,
+            room_type: roomType,
+            step_type: normalizeRoomType(pickString(record, ['step_type', 'stepType']) || roomType),
+            service_code: pickString(record, ['service_code', 'serviceCode']) || roomType,
+            requires_payment: toBoolean(record.requires_payment ?? record.requiresPayment, false),
+            depends_on: toStringArray(record.depends_on ?? record.dependsOn),
+            sub_steps: toStringArray(record.sub_steps ?? record.subSteps),
+        } satisfies TemplateStep;
+    });
+
+    const validIds = new Set(normalized.map((step) => step.template_step_id));
+    return normalized.map((step) => ({
+        ...step,
+        depends_on: Array.from(new Set(step.depends_on)).filter(
+            (depId) => depId !== step.template_step_id && validIds.has(depId)
+        ),
+    }));
+}
+
 function getTemplateKey(t: ProcessTemplate): string {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return String(t.template_id || t.id || (t as any).flow_id || t.name || '');
@@ -34,7 +88,7 @@ function getTemplateKey(t: ProcessTemplate): string {
 function normalizeTemplate(raw: unknown): ProcessTemplate {
     const record = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
     const rawSteps = (record.steps || record.template_steps || record.flow_steps || []) as unknown;
-    const normalizedSteps = Array.isArray(rawSteps) ? (rawSteps as TemplateStep[]) : [];
+    const normalizedSteps = normalizeTemplateSteps(rawSteps);
 
     return {
         ...(record as Partial<ProcessTemplate>),
@@ -143,8 +197,9 @@ export const useProcessStore = create<ProcessStore>()(
                         if (Array.isArray(fetched)) {
                             const map = new Map<string, ProcessTemplate>();
                             [newTemplate, ...fetched, ...get().templates].forEach((t) => {
-                                const k = getTemplateKey(t).toLowerCase();
-                                if (k && !map.has(k)) map.set(k, t);
+                                const normalizedTemplate = normalizeTemplate(t);
+                                const k = getTemplateKey(normalizedTemplate).toLowerCase();
+                                if (k && !map.has(k)) map.set(k, normalizedTemplate);
                             });
                             set({ templates: Array.from(map.values()) });
                         }

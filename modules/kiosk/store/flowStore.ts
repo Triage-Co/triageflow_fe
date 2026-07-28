@@ -236,7 +236,7 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
       }
 
       // Lấy stepId từ flowData
-      let stepId: string | null = flowData?.step_id || (Array.isArray(flowData) ? flowData[0]?.steps?.[0]?.step_id : null);
+      const stepId: string | null = flowData?.step_id || (Array.isArray(flowData) ? flowData[0]?.steps?.[0]?.step_id : null);
 
       if (!stepId) {
         set({ activeTicket: null, routeSteps: [] });

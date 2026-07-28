@@ -375,12 +375,17 @@ export const clinicalService = {
             headers: { Authorization: `Bearer ${token}` },
         }),
 
+    getServices: (token: string, page = 1, limit = 100) =>
+        apiClient.get<unknown>(`/api/service?page=${page}&limit=${limit}`, {
+            headers: { Authorization: `Bearer ${token}` },
+        }),
+
     updateVisitSession: (visitSessionId: string, body: Record<string, unknown>, token: string) =>
         apiClient.patch<unknown>(`/api/visit-session/${visitSessionId}`, body, {
             headers: { Authorization: `Bearer ${token}` },
         }),
 
-    createStepParent: (body: { flow_id: string; room_id: string; staff_id?: string; step_status?: string }, token: string) =>
+    createStepParent: (body: { flow_id: string; room_id: string; staff_id?: string; step_status?: string; service_code?: string }, token: string) =>
         apiClient.post<unknown>('/api/step/parent', body, {
             headers: { Authorization: `Bearer ${token}` },
         }),
