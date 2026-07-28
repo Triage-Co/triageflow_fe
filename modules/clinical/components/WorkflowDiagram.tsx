@@ -51,6 +51,16 @@ interface FlowNode {
     label: string;
     roomName?: string;
     staffName?: string;
+    detail?: {
+        source: 'live' | 'draft' | 'default';
+        stepStatus?: string;
+        roomId?: string;
+        specialtyName?: string;
+        specialtyId?: string;
+        staffId?: string;
+        paymentStatus?: string;
+        docNo?: string;
+    };
 }
 
 interface WorkflowDiagramProps {
@@ -60,10 +70,10 @@ interface WorkflowDiagramProps {
 
 const DEFAULT_FULL_WORKFLOW: FlowNode[] = [
     { id: 'reception', Icon: FileText, label: 'Đăng ký & Phân loại', status: 'completed' },
-    { id: 'consultation', Icon: Stethoscope, label: 'Khám chuyên khoa', status: 'current' },
-    { id: 'lab', Icon: Microscope, label: 'Xét nghiệm Cận lâm sàng', status: 'pending' },
-    { id: 'payment', Icon: CreditCard, label: 'Thanh toán viện phí', status: 'pending' },
-    { id: 'done', Icon: CheckCircle2, label: 'Hoàn tất khám', status: 'pending' },
+    { id: 'consultation', Icon: Stethoscope, label: 'Khám chuyên khoa', status: 'pending' },
+    { id: 'lab', Icon: Microscope, label: 'Xét nghiệm Cận lâm sàng', status: 'current' },
+    { id: 'payment', Icon: CreditCard, label: 'Thanh toán viện phí', status: 'current' },
+    { id: 'done', Icon: CheckCircle2, label: 'Hoàn tất khám', status: 'current' },
 ];
 
 function getTemplateName(tpl?: ProcessTemplate | Record<string, unknown> | null): string {
@@ -160,20 +170,29 @@ function determineStepStatus(
             if (st === 'COMPLETED' || st === 'DONE' || st === 'SUCCESSED' || st === 'FINISHED' || paySt === 'SUCCESSED') {
                 return 'completed';
             }
-            if (st === 'PROCESSING' || st === 'IN_PROGRESS' || st === 'CURRENT' || st === 'DOING' || st === 'EXAMINING' || st === 'ACTIVE') {
-                return 'current';
+            if (
+                st === 'PENDING' ||
+                st === 'IN_PROGRESS' ||
+                st === 'PROCESSING' ||
+                st === 'CURRENT' ||
+                st === 'DOING' ||
+                st === 'EXAMINING' ||
+                st === 'ACTIVE' ||
+                st === 'ONGOING'
+            ) {
+                return 'pending';
             }
-            return 'pending';
+            return 'current';
         }
     }
 
     // Fallback theo vị trí thứ tự:
     // Bước 0 (Đăng ký & Phân loại) → Xanh lá (Đã xong)
-    // Bước 1 (Khám chuyên khoa) → Xanh dương (Đang thực hiện)
-    // Bước còn lại (Làm xét nghiệm, Thanh toán...) → Xám (Chờ)
+    // Bước 1 (Khám chuyên khoa) → Xanh dương (Pending)
+    // Bước còn lại (Làm xét nghiệm, Thanh toán...) → Default (Chưa bắt đầu)
     if (index === 0) return 'completed';
-    if (index === 1) return 'current';
-    return 'pending';
+    if (index === 1) return 'pending';
+    return 'current';
 }
 
 function nodeStyles(status: WorkflowStepStatus) {
@@ -183,7 +202,7 @@ function nodeStyles(status: WorkflowStepStatus) {
                 ring: 'bg-[#10B981] shadow-[0_0_0_4px_rgba(16,185,129,0.2)] border-transparent text-white',
                 line: 'bg-[#10B981]',
             };
-        case 'current':
+        case 'pending':
             return {
                 ring: 'bg-[#2563EB] shadow-[0_0_0_4px_rgba(37,99,235,0.25)] border-transparent text-white',
                 line: 'bg-[#2563EB]',
@@ -196,19 +215,22 @@ function nodeStyles(status: WorkflowStepStatus) {
     }
 }
 
-function FlowIcon({ node, isFirst }: { node: FlowNode; isFirst?: boolean }) {
+function FlowIcon({ node, isFirst, onClick }: { node: FlowNode; isFirst?: boolean; onClick?: () => void }) {
     const styles = nodeStyles(node.status);
 
     return (
         <div className="group relative flex flex-col items-center">
-            <div
+            <button
+                type="button"
+                onClick={onClick}
                 className={cn(
                     'w-11 h-11 rounded-full flex items-center justify-center shrink-0 transition-all duration-200 cursor-pointer',
                     styles.ring
                 )}
+                title="Xem chi tiết bước"
             >
                 <node.Icon className="w-5 h-5" strokeWidth={2.2} />
-            </div>
+            </button>
 
             {/* Tooltip */}
             <div
@@ -260,9 +282,69 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
     const [selectedRoomId, setSelectedRoomId] = useState<string>('');
     const [selectedStaffId, setSelectedStaffId] = useState<string>('');
     const [selectedDoctorName, setSelectedDoctorName] = useState<string>('');
+    const [editingStepStatus, setEditingStepStatus] = useState<string>('');
     const [isActionLoading, setIsActionLoading] = useState(false);
+    const [selectedStepNode, setSelectedStepNode] = useState<FlowNode | null>(null);
 
-    const rawFlowSteps = (flowData?.steps as unknown[]) || [];
+    const normalizeStepStatusForApi = (status?: string): 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'DECLINED' | 'CANCELLED' => {
+        const normalized = (status || '').toUpperCase().trim();
+
+        if (['COMPLETED', 'DONE', 'FINISHED', 'SUCCESSED'].includes(normalized)) {
+            return 'COMPLETED';
+        }
+        if (['IN_PROGRESS', 'PROCESSING', 'ONGOING', 'CURRENT', 'DOING', 'EXAMINING', 'ACTIVE'].includes(normalized)) {
+            return 'IN_PROGRESS';
+        }
+        if (['DECLINED', 'REJECTED', 'DENIED'].includes(normalized)) {
+            return 'DECLINED';
+        }
+        if (['CANCELLED', 'CANCELED'].includes(normalized)) {
+            return 'CANCELLED';
+        }
+        return 'PENDING';
+    };
+
+    const getStatusCandidates = (normalizedStatus: string): string[] => {
+        switch (normalizedStatus) {
+            case 'IN_PROGRESS':
+                return ['IN_PROGRESS', 'PROCESSING', 'ONGOING', 'CURRENT', 'ACTIVE'];
+            case 'COMPLETED':
+                return ['COMPLETED', 'DONE', 'FINISHED', 'SUCCESSED'];
+            case 'DECLINED':
+                return ['DECLINED', 'REJECTED', 'DENIED'];
+            case 'CANCELLED':
+                return ['CANCELLED', 'CANCELED'];
+            default:
+                return ['PENDING', 'WAITING'];
+        }
+    };
+
+    const updateStepStatusWithFallback = async (stepId: string, status: string, token: string) => {
+        const normalizedStatus = normalizeStepStatusForApi(status);
+        const candidates = getStatusCandidates(normalizedStatus);
+        let lastError: unknown = null;
+
+        for (const candidate of candidates) {
+            try {
+                await clinicalService.updateStepStatus(stepId, candidate, token);
+                return;
+            } catch (err) {
+                lastError = err;
+            }
+        }
+
+        throw lastError;
+    };
+
+    const rawFlowSteps = useMemo(() => {
+        const steps = flowData?.steps;
+        return Array.isArray(steps) ? steps : [];
+    }, [flowData]);
+    const orderedFlowSteps = useMemo(() => {
+        if (!Array.isArray(rawFlowSteps) || rawFlowSteps.length <= 1) return rawFlowSteps;
+        // Backend often returns newest-first; reverse for oldest-first timeline in UI.
+        return [...rawFlowSteps].reverse();
+    }, [rawFlowSteps]);
     const hasLiveSteps = rawFlowSteps.length > 0;
 
     // Get rooms, staff and shifts from Zustand stores
@@ -467,7 +549,16 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
             roomShifts = shifts.filter((s) => s.room_id && (s.room_id === roomName || s.room_id.includes(roomName)));
         }
 
-        if (roomShifts.length === 0) return '';
+        if (roomShifts.length === 0) {
+            const roomSpecialtyId = targetRoom?.specialty_id;
+            const doctorInSpecialty = staffs.find(
+                (st) => roomSpecialtyId && st.specialty_id === roomSpecialtyId && (st.account?.role as string) === 'DOCTOR'
+            ) || staffs.find(
+                (st) => (st.account?.role as string) === 'DOCTOR'
+            );
+
+            return doctorInSpecialty?.staff_id || '';
+        }
 
         const now = new Date();
         const year = now.getFullYear();
@@ -500,7 +591,17 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                 (st as unknown as Record<string, unknown>).account_id === sId
         );
 
-        return staff?.staff_id || sId || '';
+        const resolvedStaffId = staff?.staff_id || sId || '';
+        if (resolvedStaffId) return resolvedStaffId;
+
+        const roomSpecialtyId = targetRoom?.specialty_id;
+        const doctorInSpecialty = staffs.find(
+            (st) => roomSpecialtyId && st.specialty_id === roomSpecialtyId && (st.account?.role as string) === 'DOCTOR'
+        ) || staffs.find(
+            (st) => (st.account?.role as string) === 'DOCTOR'
+        );
+
+        return doctorInSpecialty?.staff_id || '';
     };
 
 
@@ -579,6 +680,9 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                 payload.staff_id = editingStaffId;
             }
             await clinicalService.updateStep(stepId, payload, accessToken);
+            if (editingStepStatus) {
+                await updateStepStatusWithFallback(stepId, editingStepStatus, accessToken);
+            }
             setEditingStepId(null);
             await reloadFlow();
         } catch (err) {
@@ -592,16 +696,21 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
     const handleAddStep = async () => {
         const flowId = (flowData?.flow_id as string) || patient?.flowId;
         if (!flowId || !accessToken || !selectedRoomId) return;
+
+        const resolvedStaffId = selectedStaffId || pickDoctorOnDutyForRoom(selectedRoomId);
+        if (!resolvedStaffId) {
+            setError('Không tìm thấy bác sĩ/nhân viên trực cho phòng đã chọn. Vui lòng chọn phòng khác hoặc phân ca trước.');
+            return;
+        }
+
         setIsActionLoading(true);
         try {
             const payload: { flow_id: string; room_id: string; staff_id?: string; step_status: string } = {
                 flow_id: flowId,
                 room_id: selectedRoomId,
                 step_status: 'PENDING',
+                staff_id: resolvedStaffId,
             };
-            if (selectedStaffId) {
-                payload.staff_id = selectedStaffId;
-            }
             await clinicalService.createStepParent(payload, accessToken);
             setSelectedRoomId('');
             setSelectedStaffId('');
@@ -741,6 +850,11 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
 
     const handleAddDraftStep = (specialty_id: string, room_id: string, staff_id: string) => {
         if (!room_id) return;
+        const resolvedStaffId = staff_id || pickDoctorOnDutyForRoom(room_id);
+        if (!resolvedStaffId) {
+            setError('Không tìm thấy bác sĩ/nhân viên trực cho phòng đã chọn. Vui lòng chọn phòng khác hoặc phân ca trước.');
+            return;
+        }
         const room = rooms.find(r => r.room_id === room_id);
         const doctorName = getStaffOnDutyForRoom(room_id) || 'Chưa có bác sĩ';
         const newStep: DraftStep = {
@@ -749,7 +863,7 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
             specialty_id,
             room_type: room?.specialty_id || 'GENERAL',
             room_id,
-            staff_id,
+            staff_id: resolvedStaffId,
             doctor_name: doctorName,
         };
         setDraftSteps(prev => [...prev, newStep]);
@@ -771,6 +885,12 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
         const missingRoom = draftSteps.find(s => !s.room_id);
         if (missingRoom) {
             setError(`Vui lòng chọn phòng cho bước "${missingRoom.step_name}".`);
+            return;
+        }
+
+        const missingStaff = draftSteps.find(s => !s.staff_id);
+        if (missingStaff) {
+            setError(`Bước "${missingStaff.step_name}" chưa có bác sĩ/nhân viên phụ trách.`);
             return;
         }
 
@@ -796,26 +916,7 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
             setIsConfiguringDraft(false);
 
             // Refetch active flow to get updated steps
-            const flowRes = await clinicalService.getActiveFlowByPatientId(patientId, accessToken);
-            let flowObj: Record<string, unknown> | null = null;
-            if (flowRes?.data) {
-                const raw = flowRes.data as unknown;
-                if (Array.isArray(raw) && raw.length > 0) {
-                    const list = raw as Record<string, unknown>[];
-                    flowObj = list.find((item) => ((item.status as string) || '').toUpperCase() === 'IN_PROGRESS') || list[0];
-                } else if (raw && typeof raw === 'object') {
-                    const rec = raw as Record<string, unknown>;
-                    if (Array.isArray(rec.data) && rec.data.length > 0) {
-                        const list = rec.data as Record<string, unknown>[];
-                        flowObj = list.find((item) => ((item.status as string) || '').toUpperCase() === 'IN_PROGRESS') || list[0];
-                    } else if (rec.data && typeof rec.data === 'object' && !Array.isArray(rec.data)) {
-                        flowObj = rec.data as Record<string, unknown>;
-                    } else {
-                        flowObj = rec;
-                    }
-                }
-            }
-            setFlowData(flowObj);
+            await reloadFlow();
         } catch (err) {
             console.error('Failed to commit flow steps:', err);
             setError('Không thể lưu quy trình vào cơ sở dữ liệu.');
@@ -835,28 +936,13 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
     const dynamicSteps: FlowNode[] = [];
     const isPatientDone = patient?.status === 'Đã khám';
 
-    if (activeTemplateId && (!hasLiveSteps || selectedTemplateId)) {
-        // Render preview template steps on the UI using draftSteps state
-        draftSteps.forEach((dStep: DraftStep, index: number) => {
-            const roomObj = rooms.find(r => r.room_id === dStep.room_id);
-            const label = dStep.step_name || `Bước ${index + 1}`;
-            dynamicSteps.push({
-                id: dStep.tempId,
-                Icon: getIconForStep(dStep.room_type, roomObj?.room_name || dStep.room_type, label),
-                status: 'pending', // Previews are shown as pending/inactive
-                label,
-                roomName: roomObj?.room_name || 'Chưa phân phòng',
-                staffName: getStaffOnDutyForRoom(dStep.room_id) || 'Chưa phân công',
-            });
-        });
-    } else if (hasLiveSteps) {
-        // Render step names directly from active flow steps if they exist
-        rawFlowSteps.forEach((stepItem, index) => {
+    const appendLiveSteps = () => {
+        orderedFlowSteps.forEach((stepItem, index) => {
             const step = stepItem as Record<string, unknown>;
             const stepStatus = ((step.step_status as string) || '').toUpperCase();
             if (stepStatus === 'CANCELLED') return;
 
-            const status = determineStepStatus(index, rawFlowSteps, rawFlowSteps.length, isPatientDone);
+            const status = determineStepStatus(index, orderedFlowSteps, orderedFlowSteps.length, isPatientDone);
             const specialtyInfo = step.specialty_info as Record<string, unknown> | undefined;
             const roomInfo = step.room_info as Record<string, unknown> | undefined;
             const staffInfo = step.staff_info as Record<string, unknown> | undefined;
@@ -901,8 +987,49 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                 label,
                 roomName,
                 staffName,
+                detail: {
+                    source: 'live',
+                    stepStatus,
+                    roomId: (step.room_id as string) || (roomInfo?.room_id as string) || '',
+                    specialtyName,
+                    specialtyId: (specialtyInfo?.specialty_id as string) || '',
+                    staffId: (step.staff_id as string) || (staffInfo?.staff_id as string) || '',
+                    paymentStatus: (step.payment_status as string) || '',
+                    docNo: String(step.docNo || ''),
+                },
             });
         });
+    };
+
+    if (selectedTemplateId) {
+        if (hasLiveSteps) {
+            appendLiveSteps();
+        }
+
+        // Preview template steps are appended after existing flow steps.
+        draftSteps.forEach((dStep: DraftStep, index: number) => {
+            const roomObj = rooms.find(r => r.room_id === dStep.room_id);
+            const label = dStep.step_name || `Bước ${index + 1}`;
+            dynamicSteps.push({
+                id: dStep.tempId,
+                Icon: getIconForStep(dStep.room_type, roomObj?.room_name || dStep.room_type, label),
+                status: 'current',
+                label,
+                roomName: roomObj?.room_name || 'Chưa phân phòng',
+                staffName: getStaffOnDutyForRoom(dStep.room_id) || 'Chưa phân công',
+                detail: {
+                    source: 'draft',
+                    stepStatus: 'NOT_STARTED',
+                    roomId: dStep.room_id,
+                    specialtyId: dStep.specialty_id,
+                    staffId: dStep.staff_id,
+                    paymentStatus: 'N/A',
+                    docNo: 'N/A',
+                },
+            });
+        });
+    } else if (hasLiveSteps) {
+        appendLiveSteps();
     } else {
         // Fallback to full standard workflow steps
         dynamicSteps.push(...DEFAULT_FULL_WORKFLOW);
@@ -930,13 +1057,21 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
 
     return (
         <div
-            onClick={() => setIsSelectingTemplate(true)}
-            className="bg-white rounded-[24px] border border-neutral-200/60 shadow-[0_4px_20px_rgba(0,0,0,0.03)] p-6 flex flex-col items-center w-full max-w-[280px] mx-auto select-none cursor-pointer hover:border-[#8B7CF6]/40 hover:shadow-[0_4px_25px_rgba(139,124,246,0.08)] transition-all group/workflow"
+            className="bg-white rounded-[24px] border border-neutral-200/60 shadow-[0_4px_20px_rgba(0,0,0,0.03)] p-6 flex flex-col items-center w-full max-w-[280px] mx-auto select-none transition-all group/workflow"
         >
+            <div className="w-full mb-4">
+                <button
+                    onClick={() => setIsSelectingTemplate(true)}
+                    className="w-full bg-[#F5F2FF] hover:bg-[#EDE8FF] text-[#6D5DE5] border border-[#DED7FF] font-bold py-2.5 px-4 rounded-xl text-xs transition-colors cursor-pointer"
+                >
+                    Thêm flow vào template
+                </button>
+            </div>
+
             <div className="flex flex-col items-center w-full space-y-1">
                 {dynamicSteps.map((node, idx) => (
                     <div key={node.id} className="flex flex-col items-center w-full">
-                        <FlowIcon node={node} isFirst={idx === 0} />
+                        <FlowIcon node={node} isFirst={idx === 0} onClick={() => setSelectedStepNode(node)} />
                         {idx < dynamicSteps.length - 1 && (
                             <Connector status={node.status} />
                         )}
@@ -1013,14 +1148,13 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                     <div className="my-6 space-y-4">
                         {/* List of current steps */}
                         <div className="border border-neutral-100 rounded-2xl overflow-hidden divide-y divide-neutral-100 bg-neutral-50/50">
-                            {rawFlowSteps.map((stepItem, idx) => {
+                            {orderedFlowSteps.map((stepItem, idx) => {
                                 const step = stepItem as Record<string, unknown>;
                                 const stepId = (step.step_id as string) || `step-${idx}`;
                                 const stepStatus = ((step.step_status as string) || '').toUpperCase();
                                 if (stepStatus === 'CANCELLED') return null;
 
                                 const isStepEditing = editingStepId === stepId;
-                                const isPending = stepStatus === 'PENDING';
                                 const roomInfo = step.room_info as Record<string, unknown> | undefined;
                                 const specialtyInfo = step.specialty_info as Record<string, unknown> | undefined;
                                 const roomName = (roomInfo?.room_name as string) || '';
@@ -1031,11 +1165,12 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                                     <div key={stepId} className="p-4 flex items-center justify-between gap-4 bg-white">
                                         <div className="flex-1 min-w-0">
                                             <p className="font-bold text-neutral-800 text-sm">{stepName}</p>
+
                                             {!isStepEditing && (
-                                                    <div className="flex gap-4 text-xs text-neutral-400 mt-1 font-medium flex-wrap">
+                                                <div className="flex gap-4 text-xs text-neutral-400 mt-1 font-medium flex-wrap">
                                                     <span>Phòng: <strong className="text-neutral-600 font-semibold">{roomName || 'Chưa phân công'}</strong></span>
                                                     <span>Chuyên khoa: <strong className="text-neutral-600 font-semibold">{specialtyName || 'Chưa phân khoa'}</strong></span>
-                                                    <span>Bác sĩ trực: <strong className="text-[#5B4ED6] font-semibold">{dynamicSteps.find(n => n.id === stepId)?.staffName || 'Chưa có bác sĩ'}</strong></span>
+                                                    <span>Bác sĩ trực: <strong className="text-[#5B4ED6] font-semibold">{dynamicSteps.find((n) => n.id === stepId)?.staffName || 'Chưa có bác sĩ'}</strong></span>
                                                     <span>Trạng thái: <strong className="text-brand-500 font-semibold">{stepStatus}</strong></span>
                                                 </div>
                                             )}
@@ -1055,6 +1190,7 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                                                             ))}
                                                         </select>
                                                     </div>
+
                                                     <div>
                                                         <label className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 block mb-1">Phòng khám</label>
                                                         <select
@@ -1070,6 +1206,20 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                                                         </select>
                                                     </div>
 
+                                                    <div className="col-span-2">
+                                                        <label className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 block mb-1">Trạng thái</label>
+                                                        <select
+                                                            value={editingStepStatus}
+                                                            onChange={(e) => setEditingStepStatus(e.target.value)}
+                                                            className="w-full text-xs font-bold p-2.5 rounded-xl border border-neutral-200 bg-white"
+                                                        >
+                                                            <option value="PENDING">PENDING</option>
+                                                            <option value="IN_PROGRESS">IN_PROGRESS</option>
+                                                            <option value="COMPLETED">COMPLETED</option>
+                                                            <option value="DECLINED">DECLINED</option>
+                                                            <option value="CANCELLED">CANCELLED</option>
+                                                        </select>
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
@@ -1093,30 +1243,31 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                                                 </>
                                             ) : (
                                                 <>
-                                                    {isPending && (
-                                                        <button
-                                                            onClick={() => {
-                                                                const currentRoomId = (roomInfo?.room_id as string) || '';
-                                                                const currentRoom = rooms.find((r) => r.room_id === currentRoomId);
-                                                                const currentSpecialtyId =
-                                                                    currentRoom?.specialty_id ||
-                                                                    (roomInfo?.specialty_id as string) ||
-                                                                    (specialtyInfo?.specialty_id as string) ||
-                                                                    '';
-                                                                const matchedNode = dynamicSteps.find((n) => n.id === stepId);
-                                                                const doctorName = matchedNode?.staffName || getStaffOnDutyForRoom(currentRoomId) || 'Chưa có bác sĩ';
-                                                                setEditingStepId(stepId);
-                                                                setEditingSpecialtyId(currentSpecialtyId);
-                                                                setEditingRoomId(currentRoomId);
-                                                                setEditingStaffId(pickDoctorOnDutyForRoom(currentRoomId));
-                                                                setEditingDoctorName(doctorName);
-                                                            }}
-                                                            className="p-2 text-neutral-400 hover:text-brand-500 hover:bg-neutral-50 rounded-xl transition-all cursor-pointer"
-                                                            title="Sửa bước"
-                                                        >
-                                                            <Edit3 className="w-4 h-4" />
-                                                        </button>
-                                                    )}
+                                                    <button
+                                                        onClick={() => {
+                                                            const currentRoomId = (roomInfo?.room_id as string) || '';
+                                                            const currentRoom = rooms.find((r) => r.room_id === currentRoomId);
+                                                            const currentSpecialtyId =
+                                                                currentRoom?.specialty_id ||
+                                                                (roomInfo?.specialty_id as string) ||
+                                                                (specialtyInfo?.specialty_id as string) ||
+                                                                '';
+                                                            const matchedNode = dynamicSteps.find((n) => n.id === stepId);
+                                                            const doctorName = matchedNode?.staffName || getStaffOnDutyForRoom(currentRoomId) || 'Chưa có bác sĩ';
+
+                                                            setEditingStepId(stepId);
+                                                            setEditingSpecialtyId(currentSpecialtyId);
+                                                            setEditingRoomId(currentRoomId);
+                                                            setEditingStaffId(pickDoctorOnDutyForRoom(currentRoomId));
+                                                            setEditingDoctorName(doctorName);
+                                                            setEditingStepStatus(normalizeStepStatusForApi(stepStatus));
+                                                        }}
+                                                        className="p-2 text-neutral-400 hover:text-brand-500 hover:bg-neutral-50 rounded-xl transition-all cursor-pointer"
+                                                        title="Sửa bước"
+                                                    >
+                                                        <Edit3 className="w-4 h-4" />
+                                                    </button>
+
                                                     {stepStatus !== 'COMPLETED' && (
                                                         <button
                                                             onClick={() => handleCancelStep(stepId)}
@@ -1428,6 +1579,49 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                             );
                         })}
                     </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={!!selectedStepNode} onOpenChange={(open) => !open && setSelectedStepNode(null)}>
+                <DialogContent className="max-w-lg" onClick={(e) => e.stopPropagation()}>
+                    <DialogHeader>
+                        <DialogTitle>Chi tiết bước quy trình</DialogTitle>
+                        <DialogDescription>
+                            Thông tin chi tiết của bước bạn vừa chọn.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {selectedStepNode && (
+                        <div className="space-y-3 text-sm">
+                            <div className="rounded-xl border border-neutral-200 bg-neutral-50/70 p-3">
+                                <p className="text-xs text-neutral-500 font-semibold">Tên bước</p>
+                                <p className="font-bold text-neutral-800 mt-0.5">{selectedStepNode.label}</p>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="rounded-lg border border-neutral-200 p-2.5">
+                                    <p className="text-[11px] text-neutral-500 font-semibold">Trạng thái</p>
+                                    <p className="font-semibold text-neutral-800">{selectedStepNode.detail?.stepStatus || 'N/A'}</p>
+                                </div>
+                                <div className="rounded-lg border border-neutral-200 p-2.5">
+                                    <p className="text-[11px] text-neutral-500 font-semibold">Phòng</p>
+                                    <p className="font-semibold text-neutral-800">{selectedStepNode.roomName || selectedStepNode.detail?.roomId || 'N/A'}</p>
+                                </div>
+                                <div className="rounded-lg border border-neutral-200 p-2.5">
+                                    <p className="text-[11px] text-neutral-500 font-semibold">Bác sĩ / Nhân viên</p>
+                                    <p className="font-semibold text-neutral-800">{selectedStepNode.staffName || selectedStepNode.detail?.staffId || 'N/A'}</p>
+                                </div>
+                                <div className="rounded-lg border border-neutral-200 p-2.5">
+                                    <p className="text-[11px] text-neutral-500 font-semibold">Payment status</p>
+                                    <p className="font-semibold text-neutral-800">{selectedStepNode.detail?.paymentStatus || 'N/A'}</p>
+                                </div>
+                                <div className="rounded-lg border border-neutral-200 p-2.5">
+                                    <p className="text-[11px] text-neutral-500 font-semibold">Specialty</p>
+                                    <p className="font-semibold text-neutral-800">{selectedStepNode.detail?.specialtyName || selectedStepNode.detail?.specialtyId || 'N/A'}</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </DialogContent>
             </Dialog>
         </div>
