@@ -12,7 +12,7 @@ export interface ApiBoundary {
   roomId: string | null;
   areaId: string | null;
   seqNo: number;
-  boundaryType: 'WALL' | 'DOOR' | 'WINDOW' | 'CORRIDOR' | 'OPENING';
+  boundaryType: 'WALL' | 'DOOR' | 'WINDOW' | 'OPEN';
   adjacentRoomId: string | null;
   hasWall: boolean;
   doorId: string | null;
@@ -28,7 +28,6 @@ export interface ApiRoom {
   floorId: string;
   roomCode: string;
   roomLabel: string;
-  type: string; // e.g. "CONSULTATION", "WAITING", "RESTROOM", "OTHER"
   heightMeters: number;
   areaId?: string | null;
   centerGeom: {

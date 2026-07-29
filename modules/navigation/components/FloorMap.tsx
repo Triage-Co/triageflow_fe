@@ -6,10 +6,23 @@ import { useNavigationStore } from '../store/navigationStore';
 import { BuildingMapCanvas } from './map/BuildingMapCanvas';
 import { Loader2 } from 'lucide-react';
 import type { CorridorDebugSteps, RoutePathNode } from '../types/navigation.types';
+import type {
+  DraftBoundary,
+  DraftRoom,
+  GeometryTool,
+} from '@/modules/admin/hooks/useMapGeometryEditor';
+import type { EditorHit } from './map/mapEditorLayers';
+import type { LngLat } from '@/modules/admin/utils/mapEditorGeometry';
 
 export interface PendingAddNode {
   tempId: string;
   coords: [number, number];
+}
+
+export interface EditorPointerEvent {
+  lngLat: LngLat;
+  hit: EditorHit | null;
+  shiftKey: boolean;
 }
 
 interface FloorMapProps {
@@ -35,6 +48,19 @@ interface FloorMapProps {
   selectedEditableNodeId?: string | null;
   onSelectEditableNode?: (nodeId: string | null) => void;
   onPlaceNode?: (coords: [number, number]) => void;
+  /** Geometry editor */
+  topDown?: boolean;
+  geometryEditMode?: boolean;
+  geometryTool?: GeometryTool;
+  editorRooms?: DraftRoom[];
+  editorBoundaries?: DraftBoundary[];
+  editorSelectedKey?: string | null;
+  editorSelectedVertex?: { roomKey: string; index: number } | null;
+  editorPreviewPoints?: LngLat[];
+  editorErrorKeys?: string[];
+  onEditorPointerDown?: (e: EditorPointerEvent) => void;
+  onEditorPointerMove?: (e: EditorPointerEvent) => void;
+  onEditorPointerUp?: (e: EditorPointerEvent) => void;
 }
 
 export const FloorMap: React.FC<FloorMapProps> = ({
@@ -60,6 +86,18 @@ export const FloorMap: React.FC<FloorMapProps> = ({
   selectedEditableNodeId,
   onSelectEditableNode,
   onPlaceNode,
+  topDown,
+  geometryEditMode,
+  geometryTool,
+  editorRooms,
+  editorBoundaries,
+  editorSelectedKey,
+  editorSelectedVertex,
+  editorPreviewPoints,
+  editorErrorKeys,
+  onEditorPointerDown,
+  onEditorPointerMove,
+  onEditorPointerUp,
 }) => {
   const { data, rawMap, loading, error } = useBuildingMap(floorNumber, refreshKey);
   const highlightedRoomId = useNavigationStore((s) => s.highlightedRoomId);
@@ -118,6 +156,18 @@ export const FloorMap: React.FC<FloorMapProps> = ({
       selectedEditableNodeId={selectedEditableNodeId}
       onSelectEditableNode={onSelectEditableNode}
       onPlaceNode={onPlaceNode}
+      topDown={topDown}
+      geometryEditMode={geometryEditMode}
+      geometryTool={geometryTool}
+      editorRooms={editorRooms}
+      editorBoundaries={editorBoundaries}
+      editorSelectedKey={editorSelectedKey}
+      editorSelectedVertex={editorSelectedVertex}
+      editorPreviewPoints={editorPreviewPoints}
+      editorErrorKeys={editorErrorKeys}
+      onEditorPointerDown={onEditorPointerDown}
+      onEditorPointerMove={onEditorPointerMove}
+      onEditorPointerUp={onEditorPointerUp}
     />
   );
 };

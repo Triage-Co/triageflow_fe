@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Eye,
@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 import {
   FloorMap,
   type PendingAddNode,
+  type EditorPointerEvent,
 } from '@/modules/navigation/components/FloorMap';
 import {
   clearBuildingMapCache,
@@ -42,15 +43,24 @@ import type {
 } from '@/modules/navigation/types/navigation.types';
 import { ApiError } from '@/shared/services/apiClient';
 import { useAuthStore } from '@/modules/auth/store/authStore';
+import {
+  useMapGeometryEditor,
+  type GeometrySelection,
+  type GeometryTool,
+} from '../hooks/useMapGeometryEditor';
+import {
+  generateGraph,
+  saveMapGeometry,
+} from '../services/mapEditorService';
+import {
+  GeometryEditorPanel,
+  GeometrySaveFab,
+} from './GeometryEditorPanel';
+import { snapPoint } from '../utils/mapEditorSnap';
+import type { LngLat } from '../utils/mapEditorGeometry';
 
 type MapMode = 'watch' | 'edit';
-
-const ROOM_TYPE_LABELS: Record<string, string> = {
-  CONSULTATION: 'Phòng khám',
-  WAITING: 'Phòng chờ',
-  RESTROOM: 'Nhà vệ sinh',
-  OTHER: 'Khác',
-};
+type EditTab = 'geometry' | 'nodes';
 
 const DEBUG_STEPS = [
   {
@@ -78,6 +88,7 @@ const DEBUG_STEPS = [
 export function AdminMapPage() {
   const accessToken = useAuthStore((s) => s.accessToken);
   const [mode, setMode] = useState<MapMode>('watch');
+  const [editTab, setEditTab] = useState<EditTab>('geometry');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [startRoomId, setStartRoomId] = useState<string>('');
   const [targetRoomId, setTargetRoomId] = useState<string>('');
@@ -111,11 +122,34 @@ export function AdminMapPage() {
   const [savingNodes, setSavingNodes] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // Geometry editor
+  const [geometryTool, setGeometryTool] = useState<GeometryTool>('select');
+  const [geometrySelection, setGeometrySelection] =
+    useState<GeometrySelection>(null);
+  const [previewPoints, setPreviewPoints] = useState<LngLat[]>([]);
+  const [savingGeometry, setSavingGeometry] = useState(false);
+  const [geometrySaveError, setGeometrySaveError] = useState<string | null>(
+    null,
+  );
+  const [showGenerateGraph, setShowGenerateGraph] = useState(false);
+  const [generatingGraph, setGeneratingGraph] = useState(false);
+  const dragRef = useRef<{
+    kind: 'vertex' | 'wall-endpoint';
+    roomKey?: string;
+    vertexIndex?: number;
+    boundaryKey?: string;
+    endpoint?: 0 | 1;
+  } | null>(null);
+
   const { rawMap } = useBuildingMap(1, mapRefreshKey);
 
   const activeFloor = useMemo(() => {
     return rawMap?.floors.find((f) => f.floorNumber === 1) || rawMap?.floors[0];
   }, [rawMap]);
+
+  const geometryEditor = useMapGeometryEditor(
+    mode === 'edit' && editTab === 'geometry' ? activeFloor : null,
+  );
 
   const rooms = useMemo(() => {
     if (!activeFloor) return [];
@@ -149,9 +183,46 @@ export function AdminMapPage() {
     );
   }, [selectedEditableNodeId, activeFloor]);
 
+  const selectedDraftRoom = useMemo(() => {
+    if (!geometrySelection) return null;
+    if (geometrySelection.kind === 'room') {
+      return (
+        geometryEditor.rooms.find((r) => r.key === geometrySelection.key) ??
+        null
+      );
+    }
+    if (geometrySelection.kind === 'vertex') {
+      return (
+        geometryEditor.rooms.find(
+          (r) => r.key === geometrySelection.roomKey,
+        ) ?? null
+      );
+    }
+    return null;
+  }, [geometrySelection, geometryEditor.rooms]);
+
   const buildingName = rawMap?.building?.name || 'Tòa G2 – Khoa Khám Bệnh';
   const floorId = activeFloor?.id;
   const isDirty = pendingAdds.length > 0 || pendingRemoves.length > 0;
+  const geometryActive =
+    mode === 'edit' && editTab === 'geometry' && !nodeEditMode;
+
+  const snapTargets = useMemo(() => {
+    const vertices: LngLat[] = [];
+    const edges: [LngLat, LngLat][] = [];
+    for (const room of geometryEditor.rooms) {
+      const pts = room.outline;
+      for (let i = 0; i < pts.length - 1; i++) {
+        vertices.push(pts[i]);
+        edges.push([pts[i], pts[i + 1]]);
+      }
+    }
+    for (const b of geometryEditor.boundaries) {
+      vertices.push(b.line[0], b.line[1]);
+      edges.push(b.line);
+    }
+    return { vertices, edges };
+  }, [geometryEditor.rooms, geometryEditor.boundaries]);
 
   useEffect(() => {
     setMounted(true);
@@ -167,9 +238,10 @@ export function AdminMapPage() {
   }, [isFullscreen]);
 
   useEffect(() => {
-    if (!isFullscreen && !savingNodes) return;
+    if (!isFullscreen && !savingNodes && !savingGeometry && !generatingGraph)
+      return;
     const onKey = (e: KeyboardEvent) => {
-      if (savingNodes) {
+      if (savingNodes || savingGeometry || generatingGraph) {
         e.preventDefault();
         return;
       }
@@ -177,7 +249,27 @@ export function AdminMapPage() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isFullscreen, savingNodes]);
+  }, [isFullscreen, savingNodes, savingGeometry, generatingGraph]);
+
+  // Ctrl+Z / Ctrl+Shift+Z for geometry editor
+  useEffect(() => {
+    if (!geometryActive) return;
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      if (e.key === 'z' || e.key === 'Z') {
+        e.preventDefault();
+        if (e.shiftKey) geometryEditor.redo();
+        else geometryEditor.undo();
+      }
+      if (e.key === 'y' || e.key === 'Y') {
+        e.preventDefault();
+        geometryEditor.redo();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [geometryActive, geometryEditor]);
 
   const clearRoute = useCallback(() => {
     setRouteResult(null);
@@ -195,7 +287,7 @@ export function AdminMapPage() {
   const exitNodeEditMode = useCallback(() => {
     if (isDirty) {
       const ok = window.confirm(
-        'Bạn có thay đổi chưa lưu. Thoát sẽ hủy các thay đổi?'
+        'Bạn có thay đổi chưa lưu. Thoát sẽ hủy các thay đổi?',
       );
       if (!ok) return;
     }
@@ -203,9 +295,16 @@ export function AdminMapPage() {
     resetNodeEditState();
   }, [isDirty, resetNodeEditState]);
 
+  const confirmLeaveGeometry = useCallback(() => {
+    if (!geometryEditor.isDirty) return true;
+    return window.confirm(
+      'Bạn có thay đổi geometry chưa lưu. Tiếp tục sẽ hủy các thay đổi?',
+    );
+  }, [geometryEditor.isDirty]);
+
   const handleSelectRoom = useCallback(
     (roomId: string) => {
-      if (nodeEditMode) return;
+      if (nodeEditMode || geometryActive) return;
       setInspectedRoomId(roomId);
 
       if (mode !== 'watch') return;
@@ -229,7 +328,8 @@ export function AdminMapPage() {
       targetRoomId,
       clearRoute,
       nodeEditMode,
-    ]
+      geometryActive,
+    ],
   );
 
   const handlePlaceNode = useCallback((coords: [number, number]) => {
@@ -244,13 +344,13 @@ export function AdminMapPage() {
     if (!selectedEditableNodeId) return;
     if (selectedEditableNodeId.startsWith('tmp-')) {
       setPendingAdds((prev) =>
-        prev.filter((p) => p.tempId !== selectedEditableNodeId)
+        prev.filter((p) => p.tempId !== selectedEditableNodeId),
       );
     } else {
       setPendingRemoves((prev) =>
         prev.includes(selectedEditableNodeId)
           ? prev
-          : [...prev, selectedEditableNodeId]
+          : [...prev, selectedEditableNodeId],
       );
     }
     setSelectedEditableNodeId(null);
@@ -269,7 +369,7 @@ export function AdminMapPage() {
           add: pendingAdds.map((p) => p.coords),
           remove: pendingRemoves,
         },
-        accessToken
+        accessToken,
       );
       resetNodeEditState();
       clearBuildingMapCache();
@@ -280,11 +380,86 @@ export function AdminMapPage() {
         setSaveError(err.message || 'Không thể lưu thay đổi node.');
       } else {
         setSaveError(
-          err instanceof Error ? err.message : 'Không thể lưu thay đổi node.'
+          err instanceof Error ? err.message : 'Không thể lưu thay đổi node.',
         );
       }
     } finally {
       setSavingNodes(false);
+    }
+  };
+
+  const handleSaveGeometry = async () => {
+    if (!floorId || !accessToken || !geometryEditor.isDirty) return;
+    if (geometryEditor.clientErrors.length > 0) {
+      setGeometrySaveError('Hãy sửa các lỗi validation trước khi lưu.');
+      return;
+    }
+
+    setSavingGeometry(true);
+    setGeometrySaveError(null);
+
+    try {
+      const payload = geometryEditor.buildPayload();
+      await saveMapGeometry(floorId, payload, accessToken);
+      clearBuildingMapCache();
+      pendingDraftResetRef.current = true;
+      setMapRefreshKey((k) => k + 1);
+      setShowGenerateGraph(true);
+      setGeometrySelection(null);
+      setPreviewPoints([]);
+      setGeometrySaveError(null);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        const detail = err.detail ? `\n${err.detail}` : '';
+        setGeometrySaveError(
+          `${err.message || 'Không thể lưu bản đồ.'}${detail}`,
+        );
+      } else {
+        setGeometrySaveError(
+          err instanceof Error ? err.message : 'Không thể lưu bản đồ.',
+        );
+      }
+    } finally {
+      setSavingGeometry(false);
+    }
+  };
+
+  // After successful geometry save + map reload, re-seed draft from server data
+  const pendingDraftResetRef = useRef(false);
+  const resetFromFloorRef = useRef(geometryEditor.resetFromFloor);
+  resetFromFloorRef.current = geometryEditor.resetFromFloor;
+  useEffect(() => {
+    if (pendingDraftResetRef.current && activeFloor) {
+      resetFromFloorRef.current(activeFloor);
+      pendingDraftResetRef.current = false;
+    }
+  }, [activeFloor, mapRefreshKey]);
+
+  const handleGenerateGraph = async () => {
+    if (!floorId || !accessToken) return;
+    const ok = window.confirm(
+      'Tạo lại graph sẽ XÓA toàn bộ node/edge hiện có của tầng (bao gồm corridor node chỉnh tay ở tab Nodes) rồi sinh lại từ geometry. Tiếp tục?',
+    );
+    if (!ok) return;
+
+    setGeneratingGraph(true);
+    try {
+      await generateGraph(floorId, accessToken);
+      clearBuildingMapCache();
+      setMapRefreshKey((k) => k + 1);
+      setShowNodes(true);
+      setShowGenerateGraph(false);
+      setEditTab('nodes');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setGeometrySaveError(err.message || 'Không thể tạo graph.');
+      } else {
+        setGeometrySaveError(
+          err instanceof Error ? err.message : 'Không thể tạo graph.',
+        );
+      }
+    } finally {
+      setGeneratingGraph(false);
     }
   };
 
@@ -314,11 +489,11 @@ export function AdminMapPage() {
       if (err instanceof ApiError) {
         setRouteError(
           err.message ||
-            'Không tìm thấy đường đi. Đồ thị có thể chưa được sinh.'
+            'Không tìm thấy đường đi. Đồ thị có thể chưa được sinh.',
         );
       } else {
         setRouteError(
-          err instanceof Error ? err.message : 'Không thể tính đường đi.'
+          err instanceof Error ? err.message : 'Không thể tính đường đi.',
         );
       }
     } finally {
@@ -344,7 +519,7 @@ export function AdminMapPage() {
         setDebugError(err.message || 'Không thể tải dữ liệu debug.');
       } else {
         setDebugError(
-          err instanceof Error ? err.message : 'Không thể tải dữ liệu debug.'
+          err instanceof Error ? err.message : 'Không thể tải dữ liệu debug.',
         );
       }
       return false;
@@ -378,6 +553,182 @@ export function AdminMapPage() {
     setters[step](true);
   };
 
+  const snapLngLat = useCallback(
+    (raw: LngLat, shiftKey: boolean, previous?: LngLat | null) => {
+      return snapPoint(raw, snapTargets, {
+        disableSnap: shiftKey,
+        previousPoint: previous,
+        lockOrtho: geometryTool === 'draw-room' || geometryTool === 'draw-wall',
+      }).point;
+    },
+    [snapTargets, geometryTool],
+  );
+
+  const handleEditorPointerDown = useCallback(
+    (e: EditorPointerEvent) => {
+      const { hit, lngLat, shiftKey } = e;
+
+      if (geometryTool === 'draw-room') {
+        const snapped = snapLngLat(
+          lngLat,
+          shiftKey,
+          previewPoints[previewPoints.length - 1] ?? null,
+        );
+        // Double-click finish: if close to first point and >= 3 verts
+        if (
+          previewPoints.length >= 3 &&
+          Math.abs(snapped[0] - previewPoints[0][0]) < 1e-6 &&
+          Math.abs(snapped[1] - previewPoints[0][1]) < 1e-6
+        ) {
+          geometryEditor.addRoom(previewPoints);
+          setPreviewPoints([]);
+          return;
+        }
+        setPreviewPoints((prev) => [...prev, snapped]);
+        return;
+      }
+
+      if (geometryTool === 'draw-wall') {
+        const snapped = snapLngLat(
+          lngLat,
+          shiftKey,
+          previewPoints[0] ?? null,
+        );
+        if (previewPoints.length === 0) {
+          setPreviewPoints([snapped]);
+        } else {
+          geometryEditor.addWall(previewPoints[0], snapped);
+          setPreviewPoints([]);
+        }
+        return;
+      }
+
+      if (geometryTool === 'place-door') {
+        if (hit?.kind === 'wall' && hit.boundaryKey) {
+          const key = geometryEditor.placeDoorOnWall(hit.boundaryKey, lngLat);
+          if (key) setGeometrySelection({ kind: 'door', key });
+        }
+        return;
+      }
+
+      if (geometryTool === 'delete') {
+        if (hit?.kind === 'vertex' && hit.roomKey != null && hit.vertexIndex != null) {
+          geometryEditor.deleteVertex(hit.roomKey, hit.vertexIndex);
+          return;
+        }
+        if (hit?.kind === 'door' && hit.boundaryKey) {
+          geometryEditor.deleteBoundary(hit.boundaryKey);
+          return;
+        }
+        if (hit?.kind === 'wall' && hit.boundaryKey) {
+          geometryEditor.deleteBoundary(hit.boundaryKey);
+          return;
+        }
+        if (hit?.kind === 'room' && hit.roomKey) {
+          geometryEditor.deleteRoom(hit.roomKey);
+          setGeometrySelection(null);
+        }
+        return;
+      }
+
+      // select tool
+      if (hit?.kind === 'vertex' && hit.roomKey != null && hit.vertexIndex != null) {
+        setGeometrySelection({
+          kind: 'vertex',
+          roomKey: hit.roomKey,
+          index: hit.vertexIndex,
+        });
+        geometryEditor.checkpoint();
+        dragRef.current = {
+          kind: 'vertex',
+          roomKey: hit.roomKey,
+          vertexIndex: hit.vertexIndex,
+        };
+        return;
+      }
+      if (hit?.kind === 'edge' && hit.roomKey != null && hit.edgeIndex != null) {
+        geometryEditor.insertVertex(hit.roomKey, hit.edgeIndex, lngLat);
+        return;
+      }
+      if ((hit?.kind === 'wall' || hit?.kind === 'door') && hit.boundaryKey) {
+        setGeometrySelection({
+          kind: hit.kind,
+          key: hit.boundaryKey,
+        });
+        if (hit.endpoint === 0 || hit.endpoint === 1) {
+          geometryEditor.checkpoint();
+          dragRef.current = {
+            kind: 'wall-endpoint',
+            boundaryKey: hit.boundaryKey,
+            endpoint: hit.endpoint,
+          };
+        }
+        return;
+      }
+      if (hit?.kind === 'room' && hit.roomKey) {
+        setGeometrySelection({ kind: 'room', key: hit.roomKey });
+        return;
+      }
+      setGeometrySelection(null);
+    },
+    [geometryTool, previewPoints, geometryEditor, snapLngLat],
+  );
+
+  const handleEditorPointerMove = useCallback(
+    (e: EditorPointerEvent) => {
+      if (geometryTool === 'draw-room' || geometryTool === 'draw-wall') {
+        // live preview cursor could be added later
+        return;
+      }
+      const drag = dragRef.current;
+      if (!drag) return;
+      const snapped = snapLngLat(e.lngLat, e.shiftKey);
+      if (
+        drag.kind === 'vertex' &&
+        drag.roomKey != null &&
+        drag.vertexIndex != null
+      ) {
+        geometryEditor.moveVertex(
+          drag.roomKey,
+          drag.vertexIndex,
+          snapped,
+          false,
+        );
+      } else if (
+        drag.kind === 'wall-endpoint' &&
+        drag.boundaryKey != null &&
+        drag.endpoint != null
+      ) {
+        geometryEditor.moveWallEndpoint(
+          drag.boundaryKey,
+          drag.endpoint,
+          snapped,
+          false,
+        );
+      }
+    },
+    [geometryTool, geometryEditor, snapLngLat],
+  );
+
+  const handleEditorPointerUp = useCallback(() => {
+    dragRef.current = null;
+  }, []);
+
+  const drawHint = useMemo(() => {
+    if (geometryTool === 'draw-room') {
+      if (previewPoints.length === 0) return 'Click để thêm đỉnh phòng. Click đỉnh đầu để đóng (≥3 đỉnh).';
+      return `${previewPoints.length} đỉnh · click đỉnh đầu để hoàn thành`;
+    }
+    if (geometryTool === 'draw-wall') {
+      return previewPoints.length === 0
+        ? 'Click điểm đầu tường'
+        : 'Click điểm cuối tường';
+    }
+    if (geometryTool === 'place-door') return 'Click lên một tường để đặt cửa';
+    if (geometryTool === 'delete') return 'Click đối tượng để xóa';
+    return null;
+  }, [geometryTool, previewPoints.length]);
+
   const mapContent = (
     <FloorMap
       floorNumber={1}
@@ -386,15 +737,28 @@ export function AdminMapPage() {
       targetRoomId={mode === 'watch' ? targetRoomId || null : null}
       routePath={mode === 'watch' ? routeResult?.path ?? null : null}
       onSelectRoom={handleSelectRoom}
-      showNodes={(mode === 'edit' && showNodes) || nodeEditMode}
+      showNodes={(mode === 'edit' && editTab === 'nodes' && showNodes) || nodeEditMode}
       showWalkable={
-        (mode === 'edit' && showWalkable) || (nodeEditMode && placingNode)
+        (mode === 'edit' && editTab === 'nodes' && showWalkable) ||
+        (nodeEditMode && placingNode)
       }
-      debugSteps={mode === 'edit' && !nodeEditMode ? debugSteps : null}
-      showDebugStep1={mode === 'edit' && !nodeEditMode && showDebugStep1}
-      showDebugStep2={mode === 'edit' && !nodeEditMode && showDebugStep2}
-      showDebugStep3={mode === 'edit' && !nodeEditMode && showDebugStep3}
-      showDebugStep4={mode === 'edit' && !nodeEditMode && showDebugStep4}
+      debugSteps={
+        mode === 'edit' && editTab === 'nodes' && !nodeEditMode
+          ? debugSteps
+          : null
+      }
+      showDebugStep1={
+        mode === 'edit' && editTab === 'nodes' && !nodeEditMode && showDebugStep1
+      }
+      showDebugStep2={
+        mode === 'edit' && editTab === 'nodes' && !nodeEditMode && showDebugStep2
+      }
+      showDebugStep3={
+        mode === 'edit' && editTab === 'nodes' && !nodeEditMode && showDebugStep3
+      }
+      showDebugStep4={
+        mode === 'edit' && editTab === 'nodes' && !nodeEditMode && showDebugStep4
+      }
       nodeEditMode={nodeEditMode}
       placingNode={placingNode}
       pendingAdds={pendingAdds}
@@ -402,6 +766,34 @@ export function AdminMapPage() {
       selectedEditableNodeId={selectedEditableNodeId}
       onSelectEditableNode={setSelectedEditableNodeId}
       onPlaceNode={handlePlaceNode}
+      topDown={geometryActive}
+      geometryEditMode={geometryActive}
+      geometryTool={geometryTool}
+      editorRooms={geometryEditor.rooms}
+      editorBoundaries={geometryEditor.boundaries}
+      editorSelectedKey={
+        geometrySelection &&
+        (geometrySelection.kind === 'room' ||
+          geometrySelection.kind === 'wall' ||
+          geometrySelection.kind === 'door')
+          ? geometrySelection.key
+          : geometrySelection?.kind === 'vertex'
+            ? geometrySelection.roomKey
+            : null
+      }
+      editorSelectedVertex={
+        geometrySelection?.kind === 'vertex'
+          ? {
+              roomKey: geometrySelection.roomKey,
+              index: geometrySelection.index,
+            }
+          : null
+      }
+      editorPreviewPoints={previewPoints}
+      editorErrorKeys={geometryEditor.clientErrors.map((e) => e.key)}
+      onEditorPointerDown={handleEditorPointerDown}
+      onEditorPointerMove={handleEditorPointerMove}
+      onEditorPointerUp={handleEditorPointerUp}
     />
   );
 
@@ -411,6 +803,7 @@ export function AdminMapPage() {
         <button
           type="button"
           onClick={() => {
+            if (geometryActive && !confirmLeaveGeometry()) return;
             if (nodeEditMode) exitNodeEditMode();
             setMode('watch');
           }}
@@ -418,7 +811,7 @@ export function AdminMapPage() {
             'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-bold transition-colors cursor-pointer',
             mode === 'watch'
               ? 'bg-white text-[#2D2D2D] shadow-sm'
-              : 'text-[#7B7B7B] hover:text-[#2D2D2D]'
+              : 'text-[#7B7B7B] hover:text-[#2D2D2D]',
           )}
         >
           <Eye className="w-3.5 h-3.5" />
@@ -431,7 +824,7 @@ export function AdminMapPage() {
             'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-bold transition-colors cursor-pointer',
             mode === 'edit'
               ? 'bg-white text-[#2D2D2D] shadow-sm'
-              : 'text-[#7B7B7B] hover:text-[#2D2D2D]'
+              : 'text-[#7B7B7B] hover:text-[#2D2D2D]',
           )}
         >
           <Pencil className="w-3.5 h-3.5" />
@@ -455,6 +848,42 @@ export function AdminMapPage() {
             Toàn màn hình
           </>
         )}
+      </button>
+    </div>
+  );
+
+  const editTabBar = mode === 'edit' && !nodeEditMode && (
+    <div className="inline-flex rounded-lg border border-[#EBEBEB] bg-white p-0.5 shadow-sm">
+      <button
+        type="button"
+        onClick={() => {
+          if (editTab === 'nodes') setEditTab('geometry');
+        }}
+        className={cn(
+          'px-2.5 py-1 rounded-md text-[10px] font-bold cursor-pointer',
+          editTab === 'geometry'
+            ? 'bg-[#8B7CF6] text-white'
+            : 'text-[#7B7B7B] hover:text-[#2D2D2D]',
+        )}
+      >
+        Geometry
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          if (editTab === 'geometry' && !confirmLeaveGeometry()) return;
+          setEditTab('nodes');
+          setPreviewPoints([]);
+          setGeometrySelection(null);
+        }}
+        className={cn(
+          'px-2.5 py-1 rounded-md text-[10px] font-bold cursor-pointer',
+          editTab === 'nodes'
+            ? 'bg-[#8B7CF6] text-white'
+            : 'text-[#7B7B7B] hover:text-[#2D2D2D]',
+        )}
+      >
+        Nodes
       </button>
     </div>
   );
@@ -533,7 +962,7 @@ export function AdminMapPage() {
             'flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-bold text-white transition-colors cursor-pointer',
             routeLoading || !startRoomId || !targetRoomId
               ? 'bg-[#B8B0F0] cursor-not-allowed'
-              : 'bg-[#8B7CF6] hover:bg-[#7A6BE8]'
+              : 'bg-[#8B7CF6] hover:bg-[#7A6BE8]',
           )}
         >
           {routeLoading ? (
@@ -610,7 +1039,7 @@ export function AdminMapPage() {
           'flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-colors cursor-pointer w-full',
           placingNode
             ? 'bg-emerald-500 border-emerald-500 text-white'
-            : 'bg-white border-[#EBEBEB] text-[#2D2D2D] hover:bg-[#F8F8FB]'
+            : 'bg-white border-[#EBEBEB] text-[#2D2D2D] hover:bg-[#F8F8FB]',
         )}
       >
         <Plus className="w-3.5 h-3.5" />
@@ -650,7 +1079,7 @@ export function AdminMapPage() {
     </div>
   );
 
-  const editPanel = nodeEditMode ? (
+  const nodesPanel = nodeEditMode ? (
     nodeEditPanel
   ) : (
     <div className="flex flex-col gap-2">
@@ -662,7 +1091,7 @@ export function AdminMapPage() {
             'flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-colors cursor-pointer',
             showNodes
               ? 'bg-indigo-500 border-indigo-500 text-white'
-              : 'bg-white border-[#EBEBEB] text-[#2D2D2D] hover:bg-[#F8F8FB]'
+              : 'bg-white border-[#EBEBEB] text-[#2D2D2D] hover:bg-[#F8F8FB]',
           )}
         >
           <CircleDot className="w-3 h-3" />
@@ -676,7 +1105,7 @@ export function AdminMapPage() {
             'flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-colors cursor-pointer',
             showWalkable
               ? 'bg-emerald-500 border-emerald-500 text-white'
-              : 'bg-white border-[#EBEBEB] text-[#2D2D2D] hover:bg-[#F8F8FB]'
+              : 'bg-white border-[#EBEBEB] text-[#2D2D2D] hover:bg-[#F8F8FB]',
           )}
         >
           <Footprints className="w-3 h-3" />
@@ -733,7 +1162,7 @@ export function AdminMapPage() {
                   'flex items-center px-2.5 py-1.5 rounded-lg border text-[10px] font-bold text-left transition-colors cursor-pointer disabled:opacity-60 w-full',
                   active
                     ? step.activeClass
-                    : 'bg-white border-[#EBEBEB] text-[#2D2D2D] hover:bg-[#F8F8FB]'
+                    : 'bg-white border-[#EBEBEB] text-[#2D2D2D] hover:bg-[#F8F8FB]',
                 )}
               >
                 <span className="truncate">
@@ -759,9 +1188,51 @@ export function AdminMapPage() {
     </div>
   );
 
-  const sidePanel = mode === 'watch' ? watchPanel : editPanel;
+  const geometryPanel = (
+    <GeometryEditorPanel
+      tool={geometryTool}
+      onToolChange={(t) => {
+        setGeometryTool(t);
+        setPreviewPoints([]);
+        dragRef.current = null;
+      }}
+      selection={geometrySelection}
+      selectedRoom={selectedDraftRoom}
+      areas={activeFloor?.areas || []}
+      changeCount={geometryEditor.changeCount}
+      canUndo={geometryEditor.canUndo}
+      canRedo={geometryEditor.canRedo}
+      onUndo={geometryEditor.undo}
+      onRedo={geometryEditor.redo}
+      onUpdateRoomProps={geometryEditor.updateRoomProps}
+      onDeleteSelection={() => {
+        if (!geometrySelection) return;
+        if (geometrySelection.kind === 'room') {
+          geometryEditor.deleteRoom(geometrySelection.key);
+        } else if (geometrySelection.kind === 'vertex') {
+          geometryEditor.deleteVertex(
+            geometrySelection.roomKey,
+            geometrySelection.index,
+          );
+        } else {
+          geometryEditor.deleteBoundary(geometrySelection.key);
+        }
+        setGeometrySelection(null);
+      }}
+      clientErrors={geometryEditor.clientErrors}
+      saveError={geometrySaveError}
+      drawHint={drawHint}
+    />
+  );
 
-  const roomInfoPopup = inspectedRoom && !nodeEditMode && (
+  const sidePanel =
+    mode === 'watch'
+      ? watchPanel
+      : editTab === 'geometry' && !nodeEditMode
+        ? geometryPanel
+        : nodesPanel;
+
+  const roomInfoPopup = inspectedRoom && !nodeEditMode && !geometryActive && (
     <div className="absolute top-4 right-4 z-20 pointer-events-auto w-[220px]">
       <div className="rounded-xl border border-[#EBEBEB] bg-white/95 backdrop-blur-md shadow-md p-3">
         <div className="flex items-start gap-2">
@@ -787,14 +1258,6 @@ export function AdminMapPage() {
         </div>
 
         <div className="mt-2 pt-2 border-t border-[#F0F0F0] space-y-1">
-          <div className="flex justify-between gap-2 text-[10px]">
-            <span className="font-semibold text-[#9C9C9C]">Loại</span>
-            <span className="font-bold text-[#2D2D2D] text-right">
-              {ROOM_TYPE_LABELS[inspectedRoom.type] ||
-                inspectedRoom.type ||
-                '—'}
-            </span>
-          </div>
           {inspectedAreaLabel && (
             <div className="flex justify-between gap-2 text-[10px]">
               <span className="font-semibold text-[#9C9C9C]">Khu vực</span>
@@ -822,33 +1285,43 @@ export function AdminMapPage() {
     </div>
   );
 
-  const saveFab =
-    nodeEditMode &&
-    (
-      <div className="absolute bottom-4 right-4 z-30 pointer-events-auto">
-        <button
-          type="button"
-          disabled={!isDirty || savingNodes}
-          onClick={handleSaveCorridorEdits}
-          className={cn(
-            'flex items-center gap-2 px-4 py-3 rounded-2xl text-[13px] font-bold shadow-lg transition-colors',
-            !isDirty || savingNodes
-              ? 'bg-[#C8C2F0] text-white cursor-not-allowed'
-              : 'bg-[#8B7CF6] text-white hover:bg-[#7A6BE8] cursor-pointer'
-          )}
-        >
-          {savingNodes ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Save className="w-4 h-4" />
-          )}
-          Lưu
-        </button>
-      </div>
-    );
+  const saveFab = nodeEditMode ? (
+    <div className="absolute bottom-4 right-4 z-30 pointer-events-auto">
+      <button
+        type="button"
+        disabled={!isDirty || savingNodes}
+        onClick={handleSaveCorridorEdits}
+        className={cn(
+          'flex items-center gap-2 px-4 py-3 rounded-2xl text-[13px] font-bold shadow-lg transition-colors',
+          !isDirty || savingNodes
+            ? 'bg-[#C8C2F0] text-white cursor-not-allowed'
+            : 'bg-[#8B7CF6] text-white hover:bg-[#7A6BE8] cursor-pointer',
+        )}
+      >
+        {savingNodes ? (
+          <Loader2 className="w-4 h-4 animate-spin" />
+        ) : (
+          <Save className="w-4 h-4" />
+        )}
+        Lưu
+      </button>
+    </div>
+  ) : geometryActive ? (
+    <GeometrySaveFab
+      disabled={
+        !geometryEditor.isDirty || geometryEditor.clientErrors.length > 0
+      }
+      saving={savingGeometry}
+      onSave={handleSaveGeometry}
+      showGenerate={showGenerateGraph && !geometryEditor.isDirty}
+      generating={generatingGraph}
+      onGenerate={handleGenerateGraph}
+    />
+  ) : null;
 
+  const busy = savingNodes || savingGeometry || generatingGraph;
   const progressModal =
-    savingNodes &&
+    busy &&
     createPortal(
       <div
         className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/45 backdrop-blur-[2px]"
@@ -863,14 +1336,18 @@ export function AdminMapPage() {
             <Navigation className="absolute inset-0 m-auto w-5 h-5 text-[#8B7CF6]" />
           </div>
           <p className="text-[14px] font-bold text-[#2D2D2D] leading-relaxed">
-            Đang tạo đường đi cho bệnh nhân, xin đợi một chút...
+            {generatingGraph
+              ? 'Đang tạo navigation graph, xin đợi...'
+              : savingGeometry
+                ? 'Đang lưu bản đồ, xin đợi...'
+                : 'Đang tạo đường đi cho bệnh nhân, xin đợi một chút...'}
           </p>
           <p className="text-[12px] font-medium text-[#7B7B7B] mt-2 leading-relaxed">
             Bạn có thể đóng cửa sổ này và làm việc khác
           </p>
         </div>
       </div>,
-      document.body
+      document.body,
     );
 
   const pageBody = (
@@ -879,7 +1356,7 @@ export function AdminMapPage() {
 
       <div className="absolute top-4 left-4 z-20 pointer-events-none">
         <div className="pointer-events-auto inline-flex flex-col gap-2">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <div className="bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-2 shrink-0">
               <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#155DFC] flex items-center justify-center">
                 <MapPin className="w-3.5 h-3.5" />
@@ -894,6 +1371,7 @@ export function AdminMapPage() {
               </div>
             </div>
             {toolbar}
+            {editTabBar}
           </div>
 
           <div className="w-0 min-w-full max-h-[55vh] overflow-y-auto overflow-x-hidden">
@@ -914,7 +1392,7 @@ export function AdminMapPage() {
       <div className="fixed inset-0 z-[100] bg-slate-50 flex flex-col">
         {pageBody}
       </div>,
-      document.body
+      document.body,
     );
 
   return (
@@ -927,8 +1405,8 @@ export function AdminMapPage() {
                 Cấu hình bản đồ
               </h1>
               <p className="text-[13px] text-[#7B7B7B] mt-1 font-medium">
-                Xem sơ đồ 3D, dẫn đường, debug MPRSS, và chỉnh sửa corridor
-                node.
+                Xem sơ đồ 3D, dẫn đường, chỉnh geometry (phòng/tường/cửa), debug
+                MPRSS, và chỉnh sửa corridor node.
               </p>
             </div>
 

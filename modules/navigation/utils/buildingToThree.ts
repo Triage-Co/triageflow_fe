@@ -10,7 +10,7 @@ export interface WallSegment {
   startZ: number;
   endX: number;
   endZ: number;
-  boundaryType: 'WALL' | 'DOOR' | 'WINDOW' | 'CORRIDOR' | 'OPENING';
+  boundaryType: 'WALL' | 'DOOR' | 'WINDOW' | 'OPEN';
   length: number;
   angle: number;
   centerX: number;
@@ -50,7 +50,6 @@ export interface RoomData {
   id: string;
   roomCode: string;
   roomLabel: string;
-  type: string;
   areaId: string | null;
   /** Polygon outline points (x = East/West, z = North/South) */
   points: { x: number; z: number }[];
@@ -143,19 +142,6 @@ function getRoomIcon(label: string): string {
   if (l.includes('tiêm chủng')) return '💉';
   if (l.includes('tiếp nhận')) return '🏥';
   return '🏥';
-}
-
-function getRoomColor(type: string): string {
-  switch (type) {
-    case 'CONSULTATION':
-      return '#e0f2fe';
-    case 'WAITING':
-      return '#f0fdf4';
-    case 'RESTROOM':
-      return '#fef2f2';
-    default:
-      return '#f1f5f9';
-  }
 }
 
 // ─── Boundary → Wall Segment ───────────────────────────────────────────────────
@@ -311,7 +297,6 @@ export function floorToRoomData(floor: ApiFloor): FloorData3D {
       id: room.id,
       roomCode: room.roomCode,
       roomLabel: room.roomLabel,
-      type: room.type,
       areaId: room.areaId ?? null,
       points: centeredPoints,
       walls,
@@ -320,7 +305,7 @@ export function floorToRoomData(floor: ApiFloor): FloorData3D {
       width,
       depth,
       height: 2.5,
-      color: getRoomColor(room.type),
+      color: '#f1f5f9',
       pinColor: '#155DFC',
       pinIcon: getRoomIcon(room.roomLabel),
     };

@@ -32,7 +32,18 @@ import {
   populateDebugGroups,
   type DebugLayerGroups,
 } from './mapDebugLayers';
-import type { PendingAddNode } from '../FloorMap';
+import {
+  hitTestEditorOverlay,
+  rebuildEditorOverlay,
+  type EditorHit,
+} from './mapEditorLayers';
+import type { PendingAddNode, EditorPointerEvent } from '../FloorMap';
+import type {
+  DraftBoundary,
+  DraftRoom,
+  GeometryTool,
+} from '@/modules/admin/hooks/useMapGeometryEditor';
+import type { LngLat } from '@/modules/admin/utils/mapEditorGeometry';
 
 const EDITABLE_NODE_TYPES = new Set(['CORRIDOR', 'JUNCTION']);
 
@@ -60,6 +71,18 @@ interface BuildingMapCanvasProps {
   selectedEditableNodeId?: string | null;
   onSelectEditableNode?: (nodeId: string | null) => void;
   onPlaceNode?: (coords: [number, number]) => void;
+  topDown?: boolean;
+  geometryEditMode?: boolean;
+  geometryTool?: GeometryTool;
+  editorRooms?: DraftRoom[];
+  editorBoundaries?: DraftBoundary[];
+  editorSelectedKey?: string | null;
+  editorSelectedVertex?: { roomKey: string; index: number } | null;
+  editorPreviewPoints?: LngLat[];
+  editorErrorKeys?: string[];
+  onEditorPointerDown?: (e: EditorPointerEvent) => void;
+  onEditorPointerMove?: (e: EditorPointerEvent) => void;
+  onEditorPointerUp?: (e: EditorPointerEvent) => void;
 }
 
 interface ProjectedMarker {
@@ -98,6 +121,18 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   selectedEditableNodeId = null,
   onSelectEditableNode,
   onPlaceNode,
+  topDown = false,
+  geometryEditMode = false,
+  geometryTool = 'select',
+  editorRooms = [],
+  editorBoundaries = [],
+  editorSelectedKey = null,
+  editorSelectedVertex = null,
+  editorPreviewPoints = [],
+  editorErrorKeys = [],
+  onEditorPointerDown,
+  onEditorPointerMove,
+  onEditorPointerUp,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -120,7 +155,18 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   const pendingPreviewRef = useRef<THREE.Group | null>(null);
   const placementPlaneRef = useRef<THREE.Mesh | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const orthoCameraRef = useRef<THREE.OrthographicCamera | null>(null);
+  const activeCameraRef = useRef<THREE.Camera | null>(null);
+  const controlsRef = useRef<OrbitControls | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const roomMeshesGroupRef = useRef<THREE.Group | null>(null);
+  const editorOverlayRef = useRef<THREE.Group | null>(null);
+  const topDownRef = useRef(topDown);
+  const geometryEditModeRef = useRef(geometryEditMode);
+  const onEditorPointerDownRef = useRef(onEditorPointerDown);
+  const onEditorPointerMoveRef = useRef(onEditorPointerMove);
+  const onEditorPointerUpRef = useRef(onEditorPointerUp);
+  const draggingEditorRef = useRef(false);
 
   const nodeEditModeRef = useRef(nodeEditMode);
   const placingNodeRef = useRef(placingNode);
@@ -158,6 +204,11 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   onSelectEditableNodeRef.current = onSelectEditableNode;
   onPlaceNodeRef.current = onPlaceNode;
   selectedEditableNodeIdRef.current = selectedEditableNodeId;
+  topDownRef.current = topDown;
+  geometryEditModeRef.current = geometryEditMode;
+  onEditorPointerDownRef.current = onEditorPointerDown;
+  onEditorPointerMoveRef.current = onEditorPointerMove;
+  onEditorPointerUpRef.current = onEditorPointerUp;
 
   const activeHighlightId = selectedRoomId || highlightedRoomId || null;
   activeHighlightIdRef.current = activeHighlightId;
@@ -316,6 +367,98 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
     }
   }, [showWalkable, nodeEditMode, placingNode]);
 
+  // Switch between perspective / orthographic top-down
+  useEffect(() => {
+    const persp = cameraRef.current;
+    const ortho = orthoCameraRef.current;
+    const controls = controlsRef.current;
+    const canvas = canvasRef.current;
+    if (!persp || !ortho || !controls || !canvas) return;
+
+    const target = controls.target.clone();
+
+    if (topDown) {
+      const spanX =
+        (floorData.bounds.maxX - floorData.bounds.minX) / 2 + 8;
+      const spanZ =
+        (floorData.bounds.maxZ - floorData.bounds.minZ) / 2 + 8;
+      const aspect = canvas.clientWidth / Math.max(canvas.clientHeight, 1);
+      let halfW = Math.max(spanX, spanZ * aspect);
+      let halfH = halfW / aspect;
+      ortho.left = -halfW;
+      ortho.right = halfW;
+      ortho.top = halfH;
+      ortho.bottom = -halfH;
+      ortho.position.set(target.x, 100, target.z);
+      ortho.up.set(0, 0, -1);
+      ortho.lookAt(target.x, 0, target.z);
+      ortho.updateProjectionMatrix();
+      activeCameraRef.current = ortho;
+
+      controls.object = ortho;
+      controls.enableRotate = false;
+      controls.minPolarAngle = 0;
+      controls.maxPolarAngle = 0;
+      controls.enablePan = true;
+      controls.minZoom = 0.3;
+      controls.maxZoom = 8;
+      controls.target.copy(target);
+      controls.update();
+    } else {
+      activeCameraRef.current = persp;
+      controls.object = persp;
+      controls.enableRotate = true;
+      controls.minPolarAngle = 0;
+      controls.maxPolarAngle = Math.PI / 2.15;
+      controls.minDistance = 8;
+      controls.maxDistance = 120;
+      controls.target.copy(target);
+      if (persp.position.y < 10) {
+        persp.position.set(target.x + 5, 45, target.z + 45);
+      }
+      controls.update();
+    }
+  }, [topDown, floorData.bounds]);
+
+  // Rebuild geometry editor overlay
+  useEffect(() => {
+    const group = editorOverlayRef.current;
+    if (!group) return;
+    group.visible = geometryEditMode;
+    if (!geometryEditMode) return;
+
+    rebuildEditorOverlay(
+      group,
+      {
+        rooms: editorRooms,
+        boundaries: editorBoundaries,
+        selectedKey: editorSelectedKey,
+        selectedVertex: editorSelectedVertex,
+        previewPoints: editorPreviewPoints,
+        errorKeys: new Set(editorErrorKeys),
+      },
+      floorData.centerShiftX,
+      floorData.centerShiftZ,
+    );
+  }, [
+    geometryEditMode,
+    editorRooms,
+    editorBoundaries,
+    editorSelectedKey,
+    editorSelectedVertex,
+    editorPreviewPoints,
+    editorErrorKeys,
+    floorData.centerShiftX,
+    floorData.centerShiftZ,
+  ]);
+
+  // Hide base room meshes slightly when editing geometry for clarity
+  useEffect(() => {
+    if (roomMeshesGroupRef.current) {
+      roomMeshesGroupRef.current.visible = !geometryEditMode;
+    }
+  }, [geometryEditMode]);
+
   // Pending add preview spheres
   useEffect(() => {
     const scene = sceneRef.current;
@@ -455,6 +598,24 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
     camera.position.set(0, 50, 50);
     cameraRef.current = camera;
 
+    const spanX = (floorData.bounds.maxX - floorData.bounds.minX) / 2 + 8;
+    const spanZ = (floorData.bounds.maxZ - floorData.bounds.minZ) / 2 + 8;
+    let halfW = Math.max(spanX, spanZ * (width / Math.max(height, 1)));
+    let halfH = halfW / (width / Math.max(height, 1));
+    const ortho = new THREE.OrthographicCamera(
+      -halfW,
+      halfW,
+      halfH,
+      -halfH,
+      0.1,
+      500,
+    );
+    ortho.position.set(0, 100, 0);
+    ortho.up.set(0, 0, -1);
+    ortho.lookAt(0, 0, 0);
+    orthoCameraRef.current = ortho;
+    activeCameraRef.current = topDownRef.current ? ortho : camera;
+
     // 2. Renderer & OrbitControls
     const renderer = new THREE.WebGLRenderer({
       canvas,
@@ -465,13 +626,23 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    rendererRef.current = renderer;
 
-    const controls = new OrbitControls(camera, renderer.domElement);
+    const controls = new OrbitControls(
+      activeCameraRef.current,
+      renderer.domElement,
+    );
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.maxPolarAngle = Math.PI / 2.15;
     controls.minDistance = 8;
     controls.maxDistance = 120;
+    if (topDownRef.current) {
+      controls.enableRotate = false;
+      controls.minPolarAngle = 0;
+      controls.maxPolarAngle = 0;
+    }
+    controlsRef.current = controls;
 
     // 3. Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
@@ -587,6 +758,12 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
     scene.add(placementPlane);
     placementPlaneRef.current = placementPlane;
 
+    const editorOverlay = new THREE.Group();
+    editorOverlay.name = 'editorOverlay';
+    editorOverlay.visible = geometryEditModeRef.current;
+    scene.add(editorOverlay);
+    editorOverlayRef.current = editorOverlay;
+
     if (debugStepsRef.current) {
       populateDebugGroups(
         debugGroups,
@@ -620,11 +797,14 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
     const mouse = new THREE.Vector2();
 
     const handleCanvasClick = (event: MouseEvent) => {
+      if (geometryEditModeRef.current) return;
+
       const rect = canvas.getBoundingClientRect();
       mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-      raycaster.setFromCamera(mouse, camera);
+      const cam = activeCameraRef.current || camera;
+      raycaster.setFromCamera(mouse, cam);
 
       // Node edit: place new corridor node on floor plane / walkable
       if (nodeEditModeRef.current && placingNodeRef.current) {
@@ -698,7 +878,75 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       }
     };
 
+    const resolveEditorPointer = (
+      event: PointerEvent,
+    ): EditorPointerEvent | null => {
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      const cam = activeCameraRef.current || camera;
+      raycaster.setFromCamera(mouse, cam);
+
+      let lngLat: [number, number] | null = null;
+      const targets: THREE.Object3D[] = [];
+      if (placementPlaneRef.current) targets.push(placementPlaneRef.current);
+      const planeHits = raycaster.intersectObjects(targets, true);
+      if (planeHits.length > 0) {
+        const pt = planeHits[0].point;
+        const { lng, lat } = localToLngLat(
+          pt.x,
+          pt.z,
+          floorData.centerShiftX,
+          floorData.centerShiftZ,
+        );
+        lngLat = [lng, lat];
+      }
+      if (!lngLat) return null;
+
+      const hit: EditorHit | null = hitTestEditorOverlay(
+        raycaster,
+        editorOverlayRef.current,
+      );
+
+      return {
+        lngLat,
+        hit,
+        shiftKey: event.shiftKey,
+      };
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!geometryEditModeRef.current) return;
+      const payload = resolveEditorPointer(event);
+      if (!payload) return;
+      draggingEditorRef.current = true;
+      if (controlsRef.current) controlsRef.current.enabled = false;
+      onEditorPointerDownRef.current?.(payload);
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!geometryEditModeRef.current) return;
+      if (!draggingEditorRef.current && !onEditorPointerMoveRef.current) return;
+      const payload = resolveEditorPointer(event);
+      if (!payload) return;
+      onEditorPointerMoveRef.current?.(payload);
+    };
+
+    const handlePointerUp = (event: PointerEvent) => {
+      if (!geometryEditModeRef.current) return;
+      const wasDragging = draggingEditorRef.current;
+      draggingEditorRef.current = false;
+      if (controlsRef.current) controlsRef.current.enabled = true;
+      if (!wasDragging && !onEditorPointerUpRef.current) return;
+      const payload = resolveEditorPointer(event);
+      if (!payload) return;
+      onEditorPointerUpRef.current?.(payload);
+    };
+
     canvas.addEventListener('click', handleCanvasClick);
+    canvas.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
 
     // 8. Animation & Marker Projection Loop
     let animationFrameId: number;
@@ -726,7 +974,7 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
             (highlightAreaId && r.areaId === highlightAreaId);
 
           tempVec.set(r.centerX, r.height + 0.5, r.centerZ);
-          tempVec.project(camera);
+          tempVec.project(activeCameraRef.current || camera);
 
           return {
             id: r.id,
@@ -742,7 +990,7 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
         });
 
       setMarkers(newMarkers);
-      renderer.render(scene, camera);
+      renderer.render(scene, activeCameraRef.current || camera);
     };
 
     animate();
@@ -753,6 +1001,28 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       height = container.clientHeight || window.innerHeight;
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
+
+      const orthoCam = orthoCameraRef.current;
+      if (orthoCam) {
+        const spanX =
+          (floorData.bounds.maxX - floorData.bounds.minX) / 2 + 8;
+        const spanZ =
+          (floorData.bounds.maxZ - floorData.bounds.minZ) / 2 + 8;
+        const aspect = width / Math.max(height, 1);
+        let halfW = Math.max(spanX, spanZ * aspect);
+        let halfH = halfW / aspect;
+        // preserve zoom level
+        const curHalfW = (orthoCam.right - orthoCam.left) / 2;
+        const zoom = spanX > 0 ? curHalfW / Math.max(spanX, spanZ * aspect) : 1;
+        halfW *= Math.max(zoom, 0.1);
+        halfH = halfW / aspect;
+        orthoCam.left = -halfW;
+        orthoCam.right = halfW;
+        orthoCam.top = halfH;
+        orthoCam.bottom = -halfH;
+        orthoCam.updateProjectionMatrix();
+      }
+
       renderer.setSize(width, height);
     };
 
@@ -762,6 +1032,9 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       cancelAnimationFrame(animationFrameId);
       window.removeEventListener('resize', handleResize);
       canvas.removeEventListener('click', handleCanvasClick);
+      canvas.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
       clearPathMesh();
       nodesGroupRef.current = null;
       walkableMeshRef.current = null;
@@ -770,6 +1043,11 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       pendingPreviewRef.current = null;
       placementPlaneRef.current = null;
       cameraRef.current = null;
+      orthoCameraRef.current = null;
+      activeCameraRef.current = null;
+      controlsRef.current = null;
+      rendererRef.current = null;
+      editorOverlayRef.current = null;
       roomMeshesGroupRef.current = null;
       sceneRef.current = null;
       controls.dispose();
@@ -800,7 +1078,8 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       {markers.map(
         (m) =>
           m.isVisible &&
-          m.isHighlighted && (
+          m.isHighlighted &&
+          !geometryEditMode && (
             <div
               key={m.id}
               style={{
