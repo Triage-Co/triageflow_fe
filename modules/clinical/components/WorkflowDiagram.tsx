@@ -16,8 +16,15 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Patient, WorkflowStepStatus } from '@/modules/clinical/types/clinical.types';
-import type { ProcessTemplate } from '@/modules/admin/types/process.types';
-import { clinicalService } from '@/modules/clinical/services/clinicalService';
+import type { ProcessTemplate, TemplateStep } from '@/modules/admin/types/process.types';
+import {
+    normalizeRoomType,
+    normalizeStepType,
+    mapRoomTypeToStepType,
+} from '@/modules/admin/types/process.types';
+import {
+    clinicalService,
+} from '@/modules/clinical/services/clinicalService';
 import { useAuthStore } from '@/store/authStore';
 import { useRoomStore } from '@/modules/admin/store/roomStore';
 import { useStaffStore } from '@/modules/admin/store/staffStore';
@@ -43,6 +50,12 @@ interface DraftStep {
     service_code: string;
     room_type: string;
     doctor_name?: string;
+    /** Fields needed for AssignTemplateRequestDto */
+    template_id?: string;
+    template_step_id?: string;
+    step_type?: string;
+    requires_payment?: boolean;
+    depends_on?: string[];
 }
 
 interface ServiceOption {
@@ -77,12 +90,42 @@ interface WorkflowDiagramProps {
 }
 
 const DEFAULT_FULL_WORKFLOW: FlowNode[] = [
-    { id: 'reception', Icon: FileText, label: 'Đăng ký & Phân loại', status: 'completed' },
-    { id: 'consultation', Icon: Stethoscope, label: 'Khám chuyên khoa', status: 'pending' },
-    { id: 'lab', Icon: Microscope, label: 'Xét nghiệm Cận lâm sàng', status: 'current' },
-    { id: 'payment', Icon: CreditCard, label: 'Thanh toán viện phí', status: 'current' },
-    { id: 'done', Icon: CheckCircle2, label: 'Hoàn tất khám', status: 'current' },
+    { id: 'dat-kham', Icon: FileText, label: 'Đặt khám', status: 'completed' },
+    { id: 'kham-benh', Icon: Stethoscope, label: 'Khám bệnh', status: 'pending' },
 ];
+
+function normalizeStepLabel(name: string): string {
+    return name.trim().toLowerCase().normalize('NFC');
+}
+
+function isDefaultBookingStepName(name: string): boolean {
+    const n = normalizeStepLabel(name);
+    return n === 'đặt khám' || n === 'dat kham';
+}
+
+function isDefaultExamStepName(name: string): boolean {
+    const n = normalizeStepLabel(name);
+    return n === 'khám bệnh' || n === 'kham benh';
+}
+
+function isProtectedBaseStep(step: Record<string, unknown>): boolean {
+    const name = String(step.step_name || '');
+    return isDefaultBookingStepName(name) || isDefaultExamStepName(name);
+}
+
+function findLiveExamStepId(steps: unknown[]): string {
+    for (const item of steps) {
+        const live = asRecord(item);
+        if (!live) continue;
+        const status = String(live.step_status || '').toUpperCase();
+        if (status === 'CANCELLED') continue;
+        const name = String(live.step_name || '');
+        if (isDefaultExamStepName(name) && typeof live.step_id === 'string') {
+            return live.step_id;
+        }
+    }
+    return '';
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -176,6 +219,143 @@ function getTemplateName(tpl?: ProcessTemplate | Record<string, unknown> | null)
     );
 }
 
+function buildDraftFromTemplateStep(
+    step: TemplateStep,
+    idx: number,
+    parentTemplateId: string,
+    rooms: Array<{
+        room_id: string;
+        room_name: string;
+        specialty_id?: string;
+        specialty?: { specialty_name?: string };
+    }>,
+    serviceOptions: ServiceOption[],
+    pickDoctorOnDutyForRoom: (roomId: string) => string,
+    getStaffOnDutyForRoom: (roomId: string) => string,
+    getRoomTypeValue: (room: unknown) => string
+): DraftStep {
+    const templateStepId = step.template_step_id || `step_${idx + 1}`;
+    const roomType = normalizeRoomType(step.room_type);
+    const defaultRoom =
+        rooms.find((r) => r.room_name.toLowerCase().includes(roomType.toLowerCase())) || rooms[0];
+    const rId = defaultRoom?.room_id || '';
+    const defaultServiceCode =
+        step.service_code ||
+        pickServiceCodeByContext(
+            {
+                roomType: getRoomTypeValue(defaultRoom) || roomType,
+                roomName: defaultRoom?.room_name,
+                specialtyName: defaultRoom?.specialty?.specialty_name,
+            },
+            serviceOptions
+        ) ||
+        'NONE';
+
+    return {
+        tempId: `draft-${idx}-${Date.now()}`,
+        step_name: step.step_name || roomType,
+        specialty_id: defaultRoom?.specialty_id || '',
+        room_type: roomType,
+        room_id: rId,
+        staff_id: rId ? pickDoctorOnDutyForRoom(rId) : '',
+        service_code: defaultServiceCode,
+        doctor_name: rId ? getStaffOnDutyForRoom(rId) || 'Chưa có bác sĩ' : 'Chưa có bác sĩ',
+        template_id: step.template_id || parentTemplateId || templateStepId,
+        template_step_id: templateStepId,
+        step_type: normalizeStepType(step.step_type, roomType),
+        requires_payment: Boolean(step.requires_payment),
+        depends_on: Array.isArray(step.depends_on)
+            ? step.depends_on
+            : idx > 0
+              ? [`step_${idx}`]
+              : [],
+    };
+}
+
+/**
+ * Expand requires_payment steps into: service → payment → next service → payment...
+ * Standalone PAYMENT/CASHIER template steps are skipped to avoid duplicates.
+ */
+function expandDraftsWithPaymentSteps(
+    drafts: DraftStep[],
+    rooms: Array<{ room_id: string; room_name: string }>,
+    pickDoctorOnDutyForRoom: (roomId: string) => string,
+    getStaffOnDutyForRoom: (roomId: string) => string,
+    getRoomTypeValue: (room: unknown) => string
+): DraftStep[] {
+    // Already expanded (has payment companions) — keep as-is
+    if (
+        drafts.some(
+            (d) =>
+                d.tempId?.startsWith('draft-pay-') ||
+                (normalizeStepType(d.step_type, d.room_type) === 'PAYMENT' &&
+                    (d.step_name || '').startsWith('Thanh toán:'))
+        )
+    ) {
+        return drafts;
+    }
+
+    const result: DraftStep[] = [];
+    let seq = 0;
+
+    const findCashierRoomId = (): string => {
+        const cashier = rooms.find((r) => {
+            const type = normalizeRoomType(getRoomTypeValue(r));
+            const name = (r.room_name || '').toLowerCase();
+            return type === 'CASHIER' || name.includes('thu ngân') || name.includes('thanh toán');
+        });
+        return cashier?.room_id || '';
+    };
+
+    for (const draft of drafts) {
+        const stepType = normalizeStepType(draft.step_type, draft.room_type);
+        const roomType = normalizeRoomType(draft.room_type);
+
+        // Skip standalone payment steps from template — generated from requires_payment instead
+        if (stepType === 'PAYMENT' || roomType === 'CASHIER') {
+            continue;
+        }
+
+        seq += 1;
+        const stepId = `step_${seq}`;
+        const prevId = seq > 1 ? `step_${seq - 1}` : undefined;
+
+        result.push({
+            ...draft,
+            template_step_id: stepId,
+            template_id: draft.template_id || stepId,
+            step_type: stepType,
+            room_type: roomType,
+            depends_on: prevId ? [prevId] : [],
+        });
+
+        if (draft.requires_payment) {
+            seq += 1;
+            const payId = `step_${seq}`;
+            const payRoomId = findCashierRoomId() || draft.room_id || '';
+            result.push({
+                tempId: `draft-pay-${Date.now()}-${seq}`,
+                step_name: `Thanh toán: ${draft.step_name || 'dịch vụ'}`,
+                specialty_id: '',
+                room_id: payRoomId,
+                staff_id: payRoomId ? pickDoctorOnDutyForRoom(payRoomId) : '',
+                service_code: draft.service_code?.trim() || 'NONE',
+                room_type: 'CASHIER',
+                doctor_name: payRoomId
+                    ? getStaffOnDutyForRoom(payRoomId) || 'Thu ngân'
+                    : 'Thu ngân',
+                template_id: payId,
+                template_step_id: payId,
+                step_type: 'PAYMENT',
+                requires_payment: false,
+                depends_on: [stepId],
+            });
+        }
+    }
+
+    return result;
+}
+
 function extractFlowList(raw: unknown): Record<string, unknown>[] {
     if (!raw) return [];
     if (Array.isArray(raw)) return raw as Record<string, unknown>[];
@@ -209,6 +389,205 @@ function pickBestActiveFlow(flows: Record<string, unknown>[]): Record<string, un
         const timeB = new Date((b.create_at || b.created_at || 0) as string | number).getTime();
         return timeB - timeA;
     })[0] || null;
+}
+
+function pickStepOrderNumber(rec: Record<string, unknown>): number | null {
+    for (const key of ['docNo', 'doc_no', 'order', 'sequence', 'seq', 'step_order']) {
+        const val = rec[key];
+        if (typeof val === 'number' && Number.isFinite(val)) return val;
+        if (typeof val === 'string' && val.trim()) {
+            const n = Number(val);
+            if (Number.isFinite(n)) return n;
+        }
+    }
+
+    // Only trust explicit step_N style ids — never parse UUID step_id
+    for (const key of ['template_step_id', 'step_code', 'code']) {
+        const raw = rec[key];
+        if (typeof raw !== 'string') continue;
+        const match = raw.match(/step[_\-]?(\d+)/i);
+        if (match) {
+            const n = Number(match[1]);
+            if (Number.isFinite(n)) return n;
+        }
+    }
+
+    return null;
+}
+
+/** First required predecessor UUID from a live flow step payload (best-effort). */
+function pickLiveRequiredStepId(step: Record<string, unknown> | null | undefined): string {
+    if (!step) return '';
+
+    if (typeof step.required_step_id === 'string' && step.required_step_id.trim()) {
+        return step.required_step_id.trim();
+    }
+
+    const deps = step.depends_on;
+    if (Array.isArray(deps) && deps.length > 0) {
+        const first = deps[0];
+        if (typeof first === 'string' && first.trim()) return first.trim();
+        const rec = asRecord(first);
+        if (rec) {
+            const nested =
+                (typeof rec.step_id === 'string' && rec.step_id.trim()) ||
+                (typeof rec.required_step_id === 'string' && rec.required_step_id.trim()) ||
+                '';
+            if (nested) return nested;
+        }
+    }
+
+    const requiredSteps = step.required_steps;
+    if (Array.isArray(requiredSteps) && requiredSteps.length > 0) {
+        const first = requiredSteps[0];
+        if (typeof first === 'string' && first.trim()) return first.trim();
+        const rec = asRecord(first);
+        if (rec && typeof rec.step_id === 'string' && rec.step_id.trim()) {
+            return rec.step_id.trim();
+        }
+    }
+
+    return '';
+}
+
+/**
+ * Order live flow steps for timeline display.
+ * Avoid blind reverse — that pushes PAYMENT steps to the top when BE returns
+ * services-first then payments (or already oldest-first).
+ */
+function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
+    if (!Array.isArray(steps) || steps.length <= 1) return steps;
+
+    const rows = steps.map((item, index) => {
+        const rec = asRecord(item) || {};
+        const orderNum = pickStepOrderNumber(rec);
+        const createdRaw = rec.create_at ?? rec.created_at ?? rec.updated_at;
+        const createdAt = createdRaw
+            ? new Date(createdRaw as string | number).getTime()
+            : NaN;
+        const dependsOn = Array.isArray(rec.depends_on)
+            ? (rec.depends_on as unknown[]).filter((d): d is string => typeof d === 'string')
+            : [];
+        const stepId =
+            (typeof rec.template_step_id === 'string' && rec.template_step_id) ||
+            (typeof rec.step_id === 'string' && rec.step_id) ||
+            `idx-${index}`;
+        const stepName = String(rec.step_name || '').trim();
+        const stepNameLower = stepName.toLowerCase();
+        // Name-only: room/step_type from BE can mis-tag clinical steps as PAYMENT/CASHIER
+        const isPayment = stepNameLower.startsWith('thanh toán');
+
+        return { item, index, orderNum, createdAt, dependsOn, stepId, stepName, stepNameLower, isPayment };
+    });
+
+    // 1) Pair "Thanh toán: X" immediately after service step "X"
+    const namedPayments = rows.filter(
+        (r) => r.isPayment && r.stepNameLower.startsWith('thanh toán:')
+    );
+    if (namedPayments.length > 0) {
+        const used = new Set<number>();
+        const result: typeof rows = [];
+
+        const services = rows.filter((r) => !r.isPayment);
+        const orderedServices = [...services].sort((a, b) => {
+            if (a.orderNum != null && b.orderNum != null) return a.orderNum - b.orderNum;
+            if (Number.isFinite(a.createdAt) && Number.isFinite(b.createdAt) && a.createdAt !== b.createdAt) {
+                return a.createdAt - b.createdAt;
+            }
+            return a.index - b.index;
+        });
+
+        const findPaymentFor = (svcName: string) => {
+            const exact = `thanh toán: ${svcName}`;
+            return namedPayments.find((p) => {
+                if (used.has(p.index)) return false;
+                // Exact match only — avoid loose includes() swapping pairs
+                return p.stepNameLower === exact || p.stepNameLower === `thanh toan: ${svcName}`;
+            });
+        };
+
+        orderedServices.forEach((svc) => {
+            result.push(svc);
+            used.add(svc.index);
+            const pay = findPaymentFor(svc.stepNameLower);
+            if (pay) {
+                result.push(pay);
+                used.add(pay.index);
+            }
+        });
+
+        // Unmatched payments: try place after service by parsing "Thanh toán: {name}"
+        namedPayments.forEach((pay) => {
+            if (used.has(pay.index)) return;
+            const target = pay.stepNameLower.replace(/^thanh toán:\s*/i, '').trim();
+            const svcIdx = result.findIndex(
+                (r) => !r.isPayment && r.stepNameLower === target
+            );
+            if (svcIdx >= 0) {
+                result.splice(svcIdx + 1, 0, pay);
+            } else {
+                result.push(pay);
+            }
+            used.add(pay.index);
+        });
+
+        rows.forEach((r) => {
+            if (!used.has(r.index)) result.push(r);
+        });
+
+        if (result.length === rows.length) {
+            return result.map((r) => r.item);
+        }
+    }
+
+    // 2) Explicit order / template_step_id (step_1, step_2, ...)
+    if (rows.some((r) => r.orderNum != null)) {
+        return [...rows]
+            .sort((a, b) => {
+                if (a.orderNum != null && b.orderNum != null) return a.orderNum - b.orderNum;
+                if (a.orderNum != null) return -1;
+                if (b.orderNum != null) return 1;
+                return a.index - b.index;
+            })
+            .map((r) => r.item);
+    }
+
+    // 3) Topological order via depends_on (service → its payment)
+    const byId = new Map(rows.map((r) => [r.stepId, r]));
+    const hasDeps = rows.some((r) => r.dependsOn.length > 0);
+    if (hasDeps) {
+        const visited = new Set<string>();
+        const result: typeof rows = [];
+
+        const visit = (row: (typeof rows)[number]) => {
+            if (visited.has(row.stepId)) return;
+            visited.add(row.stepId);
+            row.dependsOn.forEach((depId) => {
+                const dep = byId.get(depId);
+                if (dep) visit(dep);
+            });
+            result.push(row);
+        };
+
+        rows.forEach((row) => visit(row));
+        if (result.length === rows.length) {
+            return result.map((r) => r.item);
+        }
+    }
+
+    // 4) created_at ascending (oldest first = assign order)
+    if (rows.some((r) => Number.isFinite(r.createdAt) && r.createdAt > 0)) {
+        return [...rows]
+            .sort((a, b) => {
+                const ta = Number.isFinite(a.createdAt) ? a.createdAt : Number.MAX_SAFE_INTEGER;
+                const tb = Number.isFinite(b.createdAt) ? b.createdAt : Number.MAX_SAFE_INTEGER;
+                return ta - tb || a.index - b.index;
+            })
+            .map((r) => r.item);
+    }
+
+    // 5) Keep API order — do NOT reverse
+    return steps;
 }
 
 function getIconForStep(specialtyName: string, roomName: string, label: string): NodeIcon {
@@ -360,6 +739,8 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
     const [serviceOptions, setServiceOptions] = useState<ServiceOption[]>([]);
     const [isLoadingServices, setIsLoadingServices] = useState(true);
     const [editingStepStatus, setEditingStepStatus] = useState<string>('');
+    const [editingRequiredStepId, setEditingRequiredStepId] = useState<string>('');
+    const [editingOldRequiredStepId, setEditingOldRequiredStepId] = useState<string>('');
     const [isActionLoading, setIsActionLoading] = useState(false);
     const [selectedStepNode, setSelectedStepNode] = useState<FlowNode | null>(null);
 
@@ -418,9 +799,7 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
         return Array.isArray(steps) ? steps : [];
     }, [flowData]);
     const orderedFlowSteps = useMemo(() => {
-        if (!Array.isArray(rawFlowSteps) || rawFlowSteps.length <= 1) return rawFlowSteps;
-        // Backend often returns newest-first; reverse for oldest-first timeline in UI.
-        return [...rawFlowSteps].reverse();
+        return orderFlowStepsForTimeline(rawFlowSteps);
     }, [rawFlowSteps]);
     const hasLiveSteps = rawFlowSteps.length > 0;
 
@@ -830,8 +1209,8 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
         }
     };
 
-    const reloadFlow = async () => {
-        if (!accessToken || !patientId) return;
+    const reloadFlow = async (): Promise<Record<string, unknown> | null> => {
+        if (!accessToken || !patientId) return null;
         try {
             const flowRes = await clinicalService.getActiveFlowByPatientId(patientId, accessToken);
             let flowObj: Record<string, unknown> | null = null;
@@ -848,8 +1227,10 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                 }
             }
             setFlowData(flowObj);
+            return flowObj;
         } catch (err) {
             console.error('Failed to reload active flow:', err);
+            return null;
         }
     };
 
@@ -881,7 +1262,30 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
             if (editingStepStatus) {
                 await updateStepStatusWithFallback(stepId, editingStepStatus, accessToken);
             }
+
+            const nextRequired = editingRequiredStepId.trim();
+            const oldRequired = editingOldRequiredStepId.trim();
+            if (nextRequired && nextRequired !== stepId) {
+                if (!oldRequired) {
+                    await clinicalService.createStepDependency(
+                        { waiting_step_id: stepId, required_step_id: nextRequired },
+                        accessToken
+                    );
+                } else if (oldRequired !== nextRequired) {
+                    await clinicalService.updateStepDependency(
+                        {
+                            waiting_step_id: stepId,
+                            old_required_step_id: oldRequired,
+                            new_required_step_id: nextRequired,
+                        },
+                        accessToken
+                    );
+                }
+            }
+
             setEditingStepId(null);
+            setEditingRequiredStepId('');
+            setEditingOldRequiredStepId('');
             await reloadFlow();
         } catch (err) {
             console.error('Failed to update step:', err);
@@ -918,20 +1322,70 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
             return;
         }
 
+        // Last non-cancelled step before add — new step will wait on it
+        const previousStepId = (() => {
+            for (let i = orderedFlowSteps.length - 1; i >= 0; i--) {
+                const live = asRecord(orderedFlowSteps[i]);
+                const status = String(live?.step_status || '').toUpperCase();
+                if (status === 'CANCELLED') continue;
+                const id = typeof live?.step_id === 'string' ? live.step_id : '';
+                if (id) return id;
+            }
+            return '';
+        })();
+
         setIsActionLoading(true);
         try {
-            const payload: { flow_id: string; room_id: string; staff_id?: string; step_status: string; service_code: string } = {
+            const roomType = normalizeRoomType(getRoomTypeValue(room) || 'CLINICAL_ROOM');
+            const payload = {
                 flow_id: flowId,
                 room_id: selectedRoomId,
-                step_status: 'PENDING',
+                step_status: 'PENDING' as const,
                 staff_id: resolvedStaffId,
                 service_code: resolvedServiceCode,
+                step_name: room?.room_name || 'Bước khám mới',
+                step_type: mapRoomTypeToStepType(roomType),
             };
             await clinicalService.createStepParent(payload, accessToken);
             setSelectedRoomId('');
             setSelectedStaffId('');
             setSelectedServiceCode('');
-            await reloadFlow();
+            const flowObj = await reloadFlow();
+
+            if (previousStepId && flowObj) {
+                const liveRaw = Array.isArray(flowObj.steps) ? (flowObj.steps as unknown[]) : [];
+                const liveOrdered = orderFlowStepsForTimeline(liveRaw);
+                const existingIds = new Set(
+                    orderedFlowSteps
+                        .map((s) => {
+                            const rec = asRecord(s);
+                            return typeof rec?.step_id === 'string' ? rec.step_id : '';
+                        })
+                        .filter(Boolean)
+                );
+                const newStep = [...liveOrdered].reverse().find((item) => {
+                    const live = asRecord(item);
+                    const id = typeof live?.step_id === 'string' ? live.step_id : '';
+                    const status = String(live?.step_status || '').toUpperCase();
+                    return Boolean(id && !existingIds.has(id) && status !== 'CANCELLED');
+                });
+                const newStepId = (() => {
+                    const live = asRecord(newStep);
+                    return typeof live?.step_id === 'string' ? live.step_id : '';
+                })();
+
+                if (newStepId && newStepId !== previousStepId) {
+                    try {
+                        await clinicalService.createStepDependency(
+                            { waiting_step_id: newStepId, required_step_id: previousStepId },
+                            accessToken
+                        );
+                        await reloadFlow();
+                    } catch (depErr) {
+                        console.warn('Failed to link new step dependency', depErr);
+                    }
+                }
+            }
         } catch (err) {
             console.error('Failed to add step:', err);
             setError('Không thể thêm bước khám mới.');
@@ -982,41 +1436,8 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                             }
                         }
                         setTemplates(tplList);
-
-                        // Asynchronously initialize draft steps if flow has no steps in DB
-                        const rawSteps = (flowObj?.steps as unknown[]) || [];
-                        if (rawSteps.length === 0 && tplList.length > 0) {
-                            const firstTpl = tplList[0];
-                            const firstTplId = firstTpl.template_id || firstTpl.id || '';
-                            if (firstTplId) {
-                                setSelectedTemplateId(firstTplId);
-                                const initialDrafts: DraftStep[] = (firstTpl.steps || []).map((s, idx) => {
-                                    const defaultRoom = rooms.find(r => r.room_name.toLowerCase().includes(s.room_type.toLowerCase())) || rooms[0];
-                                    const rId = defaultRoom?.room_id || '';
-                                    const defaultServiceCode =
-                                        s.service_code ||
-                                        pickServiceCodeByContext(
-                                            {
-                                                roomType: getRoomTypeValue(defaultRoom) || s.room_type,
-                                                roomName: defaultRoom?.room_name,
-                                                specialtyName: defaultRoom?.specialty?.specialty_name,
-                                            },
-                                            serviceOptions
-                                        );
-                                    return {
-                                        tempId: `draft-${idx}-${Date.now()}`,
-                                        step_name: s.step_name || s.room_type,
-                                        specialty_id: defaultRoom?.specialty_id || '',
-                                        room_type: s.room_type,
-                                        room_id: rId,
-                                        staff_id: rId ? pickDoctorOnDutyForRoom(rId) : '',
-                                        service_code: defaultServiceCode,
-                                        doctor_name: rId ? (getStaffOnDutyForRoom(rId) || 'Chưa có bác sĩ') : 'Chưa có bác sĩ',
-                                    };
-                                });
-                                setDraftSteps(initialDrafts);
-                            }
-                        }
+                        // Live steps (incl. BE default Đặt khám / Khám bệnh) are source of truth.
+                        // Do not auto-draft a template — doctor explicitly appends via "Thêm flow vào template".
                     } catch {
                         // ignore template fetch error if any
                     }
@@ -1037,31 +1458,28 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
         setSelectedTemplateId(templateId);
         const tpl = templates.find(t => (t.template_id || t.id) === templateId);
         if (tpl && tpl.steps) {
-            const initialDrafts: DraftStep[] = tpl.steps.map((s, idx) => {
-                const defaultRoom = rooms.find(r => r.room_name.toLowerCase().includes(s.room_type.toLowerCase())) || rooms[0];
-                const rId = defaultRoom?.room_id || '';
-                const defaultServiceCode =
-                    s.service_code ||
-                    pickServiceCodeByContext(
-                        {
-                            roomType: getRoomTypeValue(defaultRoom) || s.room_type,
-                            roomName: defaultRoom?.room_name,
-                            specialtyName: defaultRoom?.specialty?.specialty_name,
-                        },
-                        serviceOptions
-                    );
-                return {
-                    tempId: `draft-${idx}-${Date.now()}`,
-                    step_name: s.step_name || s.room_type,
-                    specialty_id: defaultRoom?.specialty_id || '',
-                    room_type: s.room_type,
-                    room_id: rId,
-                    staff_id: rId ? pickDoctorOnDutyForRoom(rId) : '',
-                    service_code: defaultServiceCode,
-                    doctor_name: rId ? (getStaffOnDutyForRoom(rId) || 'Chưa có bác sĩ') : 'Chưa có bác sĩ',
-                };
-            });
-            setDraftSteps(initialDrafts);
+            const parentId = tpl.template_id || tpl.id || templateId;
+            const baseDrafts = tpl.steps.map((s, idx) =>
+                buildDraftFromTemplateStep(
+                    s,
+                    idx,
+                    parentId,
+                    rooms,
+                    serviceOptions,
+                    pickDoctorOnDutyForRoom,
+                    getStaffOnDutyForRoom,
+                    getRoomTypeValue
+                )
+            );
+            setDraftSteps(
+                expandDraftsWithPaymentSteps(
+                    baseDrafts,
+                    rooms,
+                    pickDoctorOnDutyForRoom,
+                    getStaffOnDutyForRoom,
+                    getRoomTypeValue
+                )
+            );
         } else {
             setDraftSteps([]);
         }
@@ -1111,15 +1529,23 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
         }
         const room = rooms.find(r => r.room_id === room_id);
         const doctorName = getStaffOnDutyForRoom(room_id) || 'Chưa có bác sĩ';
+        const nextIdx = draftSteps.length;
+        const templateStepId = `step_${nextIdx + 1}`;
+        const roomType = normalizeRoomType(getRoomTypeValue(room) || 'CLINICAL_ROOM');
         const newStep: DraftStep = {
             tempId: `draft-custom-${Date.now()}`,
-            step_name: room?.room_name || 'Khám chức năng',
+            step_name: room?.room_name || 'Chỉ định thêm',
             specialty_id,
-            room_type: room?.specialty_id || 'GENERAL',
+            room_type: roomType,
             room_id,
             staff_id: resolvedStaffId,
             service_code,
             doctor_name: doctorName,
+            template_id: templateStepId,
+            template_step_id: templateStepId,
+            step_type: mapRoomTypeToStepType(roomType),
+            requires_payment: false,
+            depends_on: nextIdx > 0 ? [`step_${nextIdx}`] : [],
         };
         setDraftSteps(prev => [...prev, newStep]);
     };
@@ -1131,57 +1557,154 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
             return;
         }
 
+        const templateId = selectedTemplateId.trim();
+        if (!templateId) {
+            setError('Vui lòng chọn một template để thêm vào quy trình.');
+            return;
+        }
+
         if (draftSteps.length === 0) {
             setError('Quy trình nháp không có bước nào.');
             return;
         }
 
-        // Validate that all steps have a room selected
-        const missingRoom = draftSteps.find(s => !s.room_id);
+        const expandedForValidation = expandDraftsWithPaymentSteps(
+            draftSteps,
+            rooms,
+            pickDoctorOnDutyForRoom,
+            getStaffOnDutyForRoom,
+            getRoomTypeValue
+        );
+
+        // Validate service steps (payment companions may not need staff)
+        const missingRoom = expandedForValidation.find(
+            (s) => !s.room_id && normalizeStepType(s.step_type, s.room_type) !== 'PAYMENT'
+        );
         if (missingRoom) {
             setError(`Vui lòng chọn phòng cho bước "${missingRoom.step_name}".`);
             return;
         }
 
-        const missingStaff = draftSteps.find(s => !s.staff_id);
+        const missingStaff = expandedForValidation.find(
+            (s) => !s.staff_id && normalizeStepType(s.step_type, s.room_type) !== 'PAYMENT'
+        );
         if (missingStaff) {
             setError(`Bước "${missingStaff.step_name}" chưa có bác sĩ/nhân viên phụ trách.`);
             return;
         }
 
-        const missingServiceCode = draftSteps.find((s) => !s.service_code);
+        const missingServiceCode = expandedForValidation.find((s) => !s.service_code);
         if (missingServiceCode) {
             setError(`Bước "${missingServiceCode.step_name}" chưa có mã dịch vụ.`);
             return;
         }
 
+        const beforeStepIds = new Set(
+            orderedFlowSteps
+                .map((item) => {
+                    const live = asRecord(item);
+                    return typeof live?.step_id === 'string' ? live.step_id : '';
+                })
+                .filter(Boolean)
+        );
+
         setIsAssigning(true);
         setError(null);
         try {
-            // Create steps sequentially in database
-            for (const step of draftSteps) {
-                const payload: { flow_id: string; room_id: string; staff_id?: string; step_status: string; service_code: string } = {
-                    flow_id: flowId,
-                    room_id: step.room_id,
-                    step_status: 'PENDING',
-                    service_code: step.service_code,
-                };
-                if (step.staff_id) {
-                    payload.staff_id = step.staff_id;
+            const expandedDrafts = expandedForValidation;
+            setDraftSteps(expandedDrafts);
+
+            // 1) Append saved template onto flow (BE keeps default Đặt khám / Khám bệnh)
+            await clinicalService.assignTemplateToFlow(flowId, templateId, accessToken);
+
+            // 2) Reload; patch room/staff on newly created steps (match by name)
+            const flowObj = await reloadFlow();
+            const liveRaw = Array.isArray(flowObj?.steps) ? (flowObj!.steps as unknown[]) : [];
+            const liveOrdered = orderFlowStepsForTimeline(liveRaw);
+
+            const newLiveSteps = liveOrdered.filter((item) => {
+                const live = asRecord(item);
+                const id = typeof live?.step_id === 'string' ? live.step_id : '';
+                return Boolean(id && !beforeStepIds.has(id));
+            });
+            const unusedNew = [...newLiveSteps];
+            const draftTemplateIdToLiveId = new Map<string, string>();
+            const appendedLiveIds: string[] = [];
+
+            for (const draft of expandedDrafts) {
+                const draftName = (draft.step_name || '').trim().toLowerCase();
+                const matchIdx = unusedNew.findIndex((liveItem) => {
+                    const live = asRecord(liveItem);
+                    const liveName = String(live?.step_name || '').trim().toLowerCase();
+                    return Boolean(draftName && liveName && draftName === liveName);
+                });
+                const liveItem = matchIdx >= 0 ? unusedNew.splice(matchIdx, 1)[0] : null;
+                const live = asRecord(liveItem);
+                const stepId = typeof live?.step_id === 'string' ? live.step_id : '';
+                const templateStepId = (draft.template_step_id || '').trim();
+                if (stepId && templateStepId) {
+                    draftTemplateIdToLiveId.set(templateStepId, stepId);
                 }
-                await clinicalService.createStepParent(payload, accessToken);
+                if (stepId) appendedLiveIds.push(stepId);
+                if (!stepId || !draft.room_id) continue;
+
+                const patch: { room_id: string; staff_id?: string } = {
+                    room_id: draft.room_id,
+                };
+                if (draft.staff_id) patch.staff_id = draft.staff_id;
+
+                try {
+                    await clinicalService.updateStep(stepId, patch, accessToken);
+                } catch (patchErr) {
+                    console.warn('Failed to patch room/staff for step', stepId, patchErr);
+                }
             }
 
-            // Clear draft state and return to live steps mode
+            // 3) Runtime dependencies: first appended → Khám bệnh; then draft.depends_on edges
+            const examStepId = findLiveExamStepId(liveOrdered);
+            const firstAppendedId = appendedLiveIds[0] || '';
+            if (examStepId && firstAppendedId && examStepId !== firstAppendedId) {
+                try {
+                    await clinicalService.createStepDependency(
+                        { waiting_step_id: firstAppendedId, required_step_id: examStepId },
+                        accessToken
+                    );
+                } catch (depErr) {
+                    console.warn('Failed to link first template step to Khám bệnh', depErr);
+                }
+            }
+
+            for (const draft of expandedDrafts) {
+                const waitingId = draftTemplateIdToLiveId.get((draft.template_step_id || '').trim());
+                if (!waitingId) continue;
+
+                const deps = Array.isArray(draft.depends_on) ? draft.depends_on.filter(Boolean) : [];
+                for (const depTemplateId of deps) {
+                    const requiredId = draftTemplateIdToLiveId.get(depTemplateId.trim());
+                    if (!requiredId || requiredId === waitingId) continue;
+                    try {
+                        await clinicalService.createStepDependency(
+                            { waiting_step_id: waitingId, required_step_id: requiredId },
+                            accessToken
+                        );
+                    } catch (depErr) {
+                        console.warn('Failed to create step dependency', waitingId, requiredId, depErr);
+                    }
+                }
+            }
+
             setSelectedTemplateId('');
             setDraftSteps([]);
             setIsConfiguringDraft(false);
 
-            // Refetch active flow to get updated steps
             await reloadFlow();
         } catch (err) {
             console.error('Failed to commit flow steps:', err);
-            setError('Không thể lưu quy trình vào cơ sở dữ liệu.');
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : 'Không thể lưu quy trình vào cơ sở dữ liệu.'
+            );
         } finally {
             setIsAssigning(false);
         }
@@ -1190,7 +1713,6 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
     // Determine active template and current steps to render
     const activeTemplateId =
         selectedTemplateId ||
-        (!hasLiveSteps && templates[0] ? (templates[0].template_id || templates[0].id) : '') ||
         (flowData?.template_id as string) ||
         (patient?.templateId as string) ||
         '';
@@ -1199,12 +1721,18 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
     const isPatientDone = patient?.status === 'Đã khám';
 
     const appendLiveSteps = () => {
+        const seenIds = new Set<string>();
+        const seenNames = new Set<string>();
+
         orderedFlowSteps.forEach((stepItem, index) => {
             const step = stepItem as Record<string, unknown>;
             const stepStatus = ((step.step_status as string) || '').toUpperCase();
             if (stepStatus === 'CANCELLED') return;
 
-            const status = mapStepStatusToNodeStatus(stepStatus, isPatientDone);
+            const stepId = (step.step_id as string) || `api-step-${index}`;
+            if (seenIds.has(stepId)) return;
+            seenIds.add(stepId);
+
             const specialtyInfo = step.specialty_info as Record<string, unknown> | undefined;
             const roomInfo = step.room_info as Record<string, unknown> | undefined;
             const staffInfo = step.staff_info as Record<string, unknown> | undefined;
@@ -1212,6 +1740,13 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
             const specialtyName = (specialtyInfo?.specialty_name as string) || '';
             const roomName = (roomInfo?.room_name as string) || '';
             const label = (step.step_name as string) || roomName || specialtyName || `Bước ${index + 1}`;
+
+            // Drop exact name duplicates (common after assign + parent double-create)
+            const nameKey = label.trim().toLowerCase();
+            if (nameKey && seenNames.has(nameKey)) return;
+            if (nameKey) seenNames.add(nameKey);
+
+            const status = mapStepStatusToNodeStatus(stepStatus, isPatientDone);
 
             let staffName = (staffInfo?.full_name as string) || '';
 
@@ -1243,7 +1778,7 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
             }
 
             dynamicSteps.push({
-                id: (step.step_id as string) || `api-step-${index}`,
+                id: stepId,
                 Icon: getIconForStep(specialtyName, roomName, label),
                 status,
                 label,
@@ -1263,12 +1798,11 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
         });
     };
 
-    if (selectedTemplateId) {
+    if (selectedTemplateId && draftSteps.length > 0) {
+        // Append mode: keep live base (Đặt khám / Khám bệnh / …) then preview draft steps
         if (hasLiveSteps) {
             appendLiveSteps();
         }
-
-        // Preview template steps are appended after existing flow steps.
         draftSteps.forEach((dStep: DraftStep, index: number) => {
             const roomObj = rooms.find(r => r.room_id === dStep.room_id);
             const label = dStep.step_name || `Bước ${index + 1}`;
@@ -1293,7 +1827,7 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
     } else if (hasLiveSteps) {
         appendLiveSteps();
     } else {
-        // Fallback to full standard workflow steps
+        // Waiting for BE-seeded defaults after booking
         dynamicSteps.push(...DEFAULT_FULL_WORKFLOW);
     }
 
@@ -1326,7 +1860,7 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                     onClick={() => setIsSelectingTemplate(true)}
                     className="w-full bg-[#F5F2FF] hover:bg-[#EDE8FF] text-[#6D5DE5] border border-[#DED7FF] font-bold py-2.5 px-4 rounded-xl text-xs transition-colors cursor-pointer"
                 >
-                    Thêm flow vào template
+                    Thêm template vào quy trình
                 </button>
             </div>
 
@@ -1342,11 +1876,11 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
             </div>
 
             {/* Template Selector Footer */}
-            {(selectedTemplateId || !hasLiveSteps) ? (
+            {selectedTemplateId && draftSteps.length > 0 ? (
                 <div className="w-full mt-6 pt-5 border-t border-neutral-100 flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-between">
                         <span className="text-[10px] font-bold text-[#8B7CF6] uppercase tracking-wider">
-                            Xem trước quy trình:
+                            {hasLiveSteps ? 'Thêm sau bước mặc định:' : 'Xem trước template:'}
                         </span>
                     </div>
                     <div className="flex gap-2">
@@ -1359,19 +1893,17 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                             }}
                             className="flex-1 bg-brand-500 hover:bg-brand-600 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                         >
-                            Cấu hình & Chốt
+                            Cấu hình & Thêm
                         </button>
-                        {hasLiveSteps && (
-                            <button
-                                onClick={() => {
-                                    setSelectedTemplateId('');
-                                    setDraftSteps([]);
-                                }}
-                                className="px-3.5 py-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-600 font-bold rounded-xl text-xs transition-colors cursor-pointer"
-                            >
-                                Hủy
-                            </button>
-                        )}
+                        <button
+                            onClick={() => {
+                                setSelectedTemplateId('');
+                                setDraftSteps([]);
+                            }}
+                            className="px-3.5 py-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-600 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                        >
+                            Hủy
+                        </button>
                     </div>
                 </div>
             ) : (
@@ -1380,19 +1912,27 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                         <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">
                             Quy trình:
                         </span>
-                        <button
-                            onClick={() => {
-                                setIsCustomizing(true);
-                                setEditingStepId(null);
-                                setEditingSpecialtyId('');
-                                setSelectedSpecialtyId('');
-                                setSelectedRoomId('');
-                                setSelectedStaffId('');
-                            }}
-                            className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#F5F2FF] text-[#8B7CF6] border border-[#E0DCFB] hover:bg-[#8B7CF6] hover:text-white transition-colors cursor-pointer"
-                        >
-                            Tùy chỉnh ({dynamicSteps.length} bước)
-                        </button>
+                        {hasLiveSteps ? (
+                            <button
+                                onClick={() => {
+                                    setIsCustomizing(true);
+                                    setEditingStepId(null);
+                                    setEditingRequiredStepId('');
+                                    setEditingOldRequiredStepId('');
+                                    setEditingSpecialtyId('');
+                                    setSelectedSpecialtyId('');
+                                    setSelectedRoomId('');
+                                    setSelectedStaffId('');
+                                }}
+                                className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#F5F2FF] text-[#8B7CF6] border border-[#E0DCFB] hover:bg-[#8B7CF6] hover:text-white transition-colors cursor-pointer"
+                            >
+                                Tùy chỉnh ({dynamicSteps.length} bước)
+                            </button>
+                        ) : (
+                            <span className="text-[10px] font-medium text-neutral-400">
+                                Chờ 2 bước mặc định từ đặt lịch
+                            </span>
+                        )}
                     </div>
                 </div>
             )}
@@ -1516,6 +2056,45 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                                                             <option value="CANCELLED">CANCELLED</option>
                                                         </select>
                                                     </div>
+
+                                                    <div className="col-span-2">
+                                                        <label className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 block mb-1">
+                                                            Phụ thuộc vào
+                                                        </label>
+                                                        <select
+                                                            value={editingRequiredStepId}
+                                                            onChange={(e) => setEditingRequiredStepId(e.target.value)}
+                                                            className="w-full text-xs font-bold p-2.5 rounded-xl border border-neutral-200 bg-white"
+                                                        >
+                                                            <option value="">
+                                                                {editingOldRequiredStepId
+                                                                    ? 'Giữ nguyên (không hỗ trợ xóa)'
+                                                                    : 'Không phụ thuộc'}
+                                                            </option>
+                                                            {orderedFlowSteps.map((depItem, depIdx) => {
+                                                                const dep = asRecord(depItem);
+                                                                const depId =
+                                                                    typeof dep?.step_id === 'string' ? dep.step_id : '';
+                                                                const depStatus = String(dep?.step_status || '').toUpperCase();
+                                                                if (!depId || depId === stepId || depStatus === 'CANCELLED') {
+                                                                    return null;
+                                                                }
+                                                                const depRoom = dep?.room_info as
+                                                                    | Record<string, unknown>
+                                                                    | undefined;
+                                                                const depName =
+                                                                    (typeof dep?.step_name === 'string' && dep.step_name) ||
+                                                                    (typeof depRoom?.room_name === 'string' &&
+                                                                        depRoom.room_name) ||
+                                                                    `Bước ${depIdx + 1}`;
+                                                                return (
+                                                                    <option key={depId} value={depId}>
+                                                                        {depName}
+                                                                    </option>
+                                                                );
+                                                            })}
+                                                        </select>
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
@@ -1531,7 +2110,11 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                                                         Lưu
                                                     </button>
                                                     <button
-                                                        onClick={() => setEditingStepId(null)}
+                                                        onClick={() => {
+                                                            setEditingStepId(null);
+                                                            setEditingRequiredStepId('');
+                                                            setEditingOldRequiredStepId('');
+                                                        }}
                                                         className="px-3 py-1.5 bg-neutral-100 text-neutral-600 rounded-xl text-xs font-bold hover:bg-neutral-200 transition-colors"
                                                     >
                                                         Hủy
@@ -1548,12 +2131,15 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                                                                 (roomInfo?.specialty_id as string) ||
                                                                 (specialtyInfo?.specialty_id as string) ||
                                                                 '';
+                                                            const currentRequired = pickLiveRequiredStepId(step);
 
                                                             setEditingStepId(stepId);
                                                             setEditingSpecialtyId(currentSpecialtyId);
                                                             setEditingRoomId(currentRoomId);
                                                             setEditingStaffId(pickDoctorOnDutyForRoom(currentRoomId));
                                                             setEditingStepStatus(normalizeStepStatusForApi(stepStatus));
+                                                            setEditingRequiredStepId(currentRequired);
+                                                            setEditingOldRequiredStepId(currentRequired);
                                                         }}
                                                         className="p-2 text-neutral-400 hover:text-brand-500 hover:bg-neutral-50 rounded-xl transition-all cursor-pointer"
                                                         title="Sửa bước"
@@ -1561,7 +2147,7 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                                                         <Edit3 className="w-4 h-4" />
                                                     </button>
 
-                                                    {stepStatus !== 'COMPLETED' && (
+                                                    {stepStatus !== 'COMPLETED' && !isProtectedBaseStep(step) && (
                                                         <button
                                                             onClick={() => handleCancelStep(stepId)}
                                                             disabled={isActionLoading}
@@ -1653,9 +2239,9 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
             <Dialog open={isConfiguringDraft} onOpenChange={setIsConfiguringDraft}>
                 <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                     <DialogHeader>
-                        <DialogTitle>Cấu hình & Chốt Quy trình</DialogTitle>
+                        <DialogTitle>Cấu hình & Thêm template</DialogTitle>
                         <DialogDescription>
-                            Gán phòng khám và nhân viên cho từng bước khám nháp trước khi chính thức lưu vào Database.
+                            Gán phòng/nhân viên cho các bước template. Khi lưu, hệ thống gọi assign theo template_id và thêm sau Đặt khám / Khám bệnh.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -1850,11 +2436,11 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                                 {isAssigning ? (
                                     <>
                                         <Loader2 className="w-4 h-4 animate-spin" />
-                                        Đang tạo quy trình...
+                                        Đang thêm template...
                                     </>
                                 ) : (
                                     <>
-                                        Chốt quy trình (Lưu)
+                                        Thêm template vào quy trình
                                     </>
                                 )}
                             </button>
@@ -1873,9 +2459,9 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
             <Dialog open={isSelectingTemplate} onOpenChange={setIsSelectingTemplate}>
                 <DialogContent className="max-w-xl max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                     <DialogHeader>
-                        <DialogTitle>Chọn Quy trình khám mẫu</DialogTitle>
+                        <DialogTitle>Chọn template để thêm vào quy trình</DialogTitle>
                         <DialogDescription>
-                            Chọn một trong các mẫu quy trình dưới đây để áp dụng cho phiên khám của bệnh nhân.
+                            Template sẽ được thêm sau 2 bước mặc định (Đặt khám, Khám bệnh). Không thay thế các bước đã có.
                         </DialogDescription>
                     </DialogHeader>
 

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { ProcessTemplate, CreateTemplateDto, UpdateTemplateDto, TemplateStep } from '../types/process.types';
-import { normalizeRoomType } from '../types/process.types';
+import { normalizeRoomType, normalizeStepType } from '../types/process.types';
 import { processService } from '../services/processService';
 
 export interface ProcessState {
@@ -50,7 +50,7 @@ function toBoolean(value: unknown, fallback = false): boolean {
     return fallback;
 }
 
-function normalizeTemplateSteps(rawSteps: unknown): TemplateStep[] {
+function normalizeTemplateSteps(rawSteps: unknown, parentTemplateId?: string): TemplateStep[] {
     if (!Array.isArray(rawSteps)) return [];
 
     const normalized = rawSteps.map((rawStep, index) => {
@@ -58,12 +58,18 @@ function normalizeTemplateSteps(rawSteps: unknown): TemplateStep[] {
         const templateStepId = pickString(record, ['template_step_id', 'step_id', 'id']) || `step_${index + 1}`;
         const stepName = pickString(record, ['step_name', 'name', 'label']) || `Bước ${index + 1}`;
         const roomType = normalizeRoomType(pickString(record, ['room_type', 'roomType']));
+        const stepType = normalizeStepType(pickString(record, ['step_type', 'stepType']), roomType);
+        const templateId =
+            pickString(record, ['template_id', 'templateId']) ||
+            parentTemplateId ||
+            templateStepId;
 
         return {
+            template_id: templateId,
             template_step_id: templateStepId,
             step_name: stepName,
             room_type: roomType,
-            step_type: normalizeRoomType(pickString(record, ['step_type', 'stepType']) || roomType),
+            step_type: stepType,
             service_code: pickString(record, ['service_code', 'serviceCode']) || roomType,
             requires_payment: toBoolean(record.requires_payment ?? record.requiresPayment, false),
             depends_on: toStringArray(record.depends_on ?? record.dependsOn),
@@ -87,15 +93,16 @@ function getTemplateKey(t: ProcessTemplate): string {
 
 function normalizeTemplate(raw: unknown): ProcessTemplate {
     const record = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+    const templateId =
+        (record.template_id as string | undefined) ||
+        (record.id as string | undefined) ||
+        (record.flow_id as string | undefined);
     const rawSteps = (record.steps || record.template_steps || record.flow_steps || []) as unknown;
-    const normalizedSteps = normalizeTemplateSteps(rawSteps);
+    const normalizedSteps = normalizeTemplateSteps(rawSteps, templateId);
 
     return {
         ...(record as Partial<ProcessTemplate>),
-        template_id:
-            (record.template_id as string | undefined) ||
-            (record.id as string | undefined) ||
-            (record.flow_id as string | undefined),
+        template_id: templateId,
         id: (record.id as string | undefined) || (record.template_id as string | undefined),
         name:
             (record.name as string | undefined) ||

@@ -1,8 +1,23 @@
+/** Matches backend TemplateStepDto.step_type enum */
+export type TemplateStepType =
+    | 'REGISTRATION'
+    | 'TRIAGE'
+    | 'CLINICAL'
+    | 'PROCEDURE'
+    | 'LAB_TEST'
+    | 'IMAGING'
+    | 'FUNCTIONAL_EXPLORATION'
+    | 'PAYMENT'
+    | 'DISPENSING'
+    | 'OTHER';
+
 export interface TemplateStep {
+    /** Required by CreateTemplateDto / TemplateStepDto */
+    template_id: string;
     template_step_id: string;
     step_name: string;
     room_type: string;
-    step_type: string;
+    step_type: TemplateStepType | string;
     service_code: string;
     requires_payment: boolean;
     depends_on: string[];
@@ -63,6 +78,65 @@ export function normalizeRoomType(roomType?: string): string {
     const mapped = LEGACY_ROOM_TYPE_MAP[raw] || raw;
     return ALLOWED_ROOM_TYPES.has(mapped) ? mapped : 'OTHER';
 }
+
+const ALLOWED_STEP_TYPES = new Set<string>([
+    'REGISTRATION',
+    'TRIAGE',
+    'CLINICAL',
+    'PROCEDURE',
+    'LAB_TEST',
+    'IMAGING',
+    'FUNCTIONAL_EXPLORATION',
+    'PAYMENT',
+    'DISPENSING',
+    'OTHER',
+]);
+
+/** Map room_type → default step_type (backend enums differ). */
+export const ROOM_TYPE_TO_STEP_TYPE: Record<string, TemplateStepType> = {
+    RECEPTION: 'REGISTRATION',
+    TRIAGE_AREA: 'TRIAGE',
+    CLINICAL_ROOM: 'CLINICAL',
+    PROCEDURE_ROOM: 'PROCEDURE',
+    LABORATORY: 'LAB_TEST',
+    IMAGING_ROOM: 'IMAGING',
+    FUNCTIONAL_EXPLORATION: 'FUNCTIONAL_EXPLORATION',
+    PHARMACY: 'DISPENSING',
+    CASHIER: 'PAYMENT',
+    EMPTY: 'OTHER',
+    OTHER: 'OTHER',
+};
+
+export function mapRoomTypeToStepType(roomType?: string): TemplateStepType {
+    const normalized = normalizeRoomType(roomType);
+    return ROOM_TYPE_TO_STEP_TYPE[normalized] || 'OTHER';
+}
+
+export function normalizeStepType(stepType?: string, roomTypeFallback?: string): TemplateStepType {
+    const raw = (stepType || '').trim().toUpperCase();
+    if (raw && ALLOWED_STEP_TYPES.has(raw)) return raw as TemplateStepType;
+
+    // Legacy: older FE sent room_type values as step_type
+    if (raw && ROOM_TYPE_TO_STEP_TYPE[raw]) return ROOM_TYPE_TO_STEP_TYPE[raw];
+    if (raw && LEGACY_ROOM_TYPE_MAP[raw]) {
+        return ROOM_TYPE_TO_STEP_TYPE[LEGACY_ROOM_TYPE_MAP[raw]] || 'OTHER';
+    }
+
+    return mapRoomTypeToStepType(roomTypeFallback);
+}
+
+export const STEP_TYPE_OPTIONS = [
+    { value: 'REGISTRATION', label: 'Đăng ký / Tiếp đón' },
+    { value: 'TRIAGE', label: 'Phân loại (Triage)' },
+    { value: 'CLINICAL', label: 'Khám lâm sàng' },
+    { value: 'PROCEDURE', label: 'Thủ thuật / Điều trị' },
+    { value: 'LAB_TEST', label: 'Xét nghiệm' },
+    { value: 'IMAGING', label: 'Chẩn đoán hình ảnh' },
+    { value: 'FUNCTIONAL_EXPLORATION', label: 'Thăm dò chức năng' },
+    { value: 'PAYMENT', label: 'Thanh toán' },
+    { value: 'DISPENSING', label: 'Cấp phát thuốc' },
+    { value: 'OTHER', label: 'Khác' },
+] as const;
 
 export const ROOM_TYPE_OPTIONS = [
     { value: 'RECEPTION', label: 'Tiếp đón / Đăng ký', badgeColor: 'bg-blue-50 text-blue-700 border-blue-200' },

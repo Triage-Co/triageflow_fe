@@ -3,10 +3,53 @@ import type {
     WorkflowStep,
     WorkflowStepStatus,
 } from '@/modules/clinical/types/clinical.types';
+import type { TemplateStep } from '@/modules/admin/types/process.types';
+import {
+    normalizeRoomType,
+    normalizeStepType,
+} from '@/modules/admin/types/process.types';
 
 
 // ── API Services & DTOs ──────────────────────────────────────────────────────
 import { apiClient } from '@/shared/services/apiClient';
+
+/** @deprecated Kept for draft/UI helpers; assign-by-id no longer sends body. */
+export type AssignTemplateStepPayload = Omit<TemplateStep, 'template_step_id'>;
+
+/** @deprecated Assign now uses path params only. */
+export interface AssignTemplateRequestDto {
+    templates: AssignTemplateStepPayload[];
+}
+
+/**
+ * Map template/draft steps → legacy assign body shape (unused by new assign-by-id API).
+ * Kept for local draft preview / room-staff matching after assign.
+ */
+export function mapTemplateStepsToAssignPayload(
+    steps: TemplateStep[] | undefined | null,
+    parentTemplateId?: string
+): AssignTemplateStepPayload[] {
+    if (!Array.isArray(steps) || steps.length === 0) return [];
+
+    return steps.map((step, idx) => {
+        const templateStepId = step.template_step_id?.trim() || `step_${idx + 1}`;
+        const roomType = normalizeRoomType(step.room_type);
+        const uniqueStepKey =
+            templateStepId ||
+            (step.template_id || parentTemplateId || `step_${idx + 1}`).trim();
+
+        return {
+            template_id: uniqueStepKey,
+            service_code: (step.service_code || 'NONE').trim(),
+            step_name: step.step_name?.trim() || `Bước ${idx + 1}`,
+            step_type: normalizeStepType(step.step_type, roomType),
+            room_type: roomType,
+            requires_payment: Boolean(step.requires_payment),
+            depends_on: Array.isArray(step.depends_on) ? step.depends_on.filter(Boolean) : [],
+            sub_steps: [],
+        };
+    });
+}
 
 
 
@@ -343,12 +386,18 @@ export const clinicalService = {
             headers: { Authorization: `Bearer ${token}` },
         }),
 
+    /**
+     * [DOCTOR - ADMIN] Append a saved template onto a visit flow by template_id.
+     * POST /api/flow/assign/{flow_id}/template/{template_id} — no body.
+     */
     assignTemplateToFlow: (flowId: string, templateId: string, token: string) =>
-        apiClient.post<unknown>(`/api/flow/assign/${flowId}`, {
-            template_id: templateId,
-        }, {
-            headers: { Authorization: `Bearer ${token}` },
-        }),
+        apiClient.post<unknown>(
+            `/api/flow/assign/${flowId}/template/${templateId}`,
+            {},
+            {
+                headers: { Authorization: `Bearer ${token}` },
+            }
+        ),
 
     getActiveFlowByPatientId: (patientId: string, token: string) =>
         apiClient.get<unknown>(`/api/flow/patient/${patientId}/active`, {
@@ -385,7 +434,18 @@ export const clinicalService = {
             headers: { Authorization: `Bearer ${token}` },
         }),
 
-    createStepParent: (body: { flow_id: string; room_id: string; staff_id?: string; step_status?: string; service_code?: string }, token: string) =>
+    createStepParent: (
+        body: {
+            flow_id: string;
+            service_code: string;
+            step_name: string;
+            room_id?: string;
+            staff_id?: string;
+            step_status?: string;
+            step_type?: string;
+        },
+        token: string
+    ) =>
         apiClient.post<unknown>('/api/step/parent', body, {
             headers: { Authorization: `Bearer ${token}` },
         }),
@@ -399,6 +459,28 @@ export const clinicalService = {
         apiClient.patch<unknown>(`/api/step/${stepId}/status`, {
             step_status: stepStatus,
         }, {
+            headers: { Authorization: `Bearer ${token}` },
+        }),
+
+    /** Create runtime edge: waiting step cannot proceed until required completes. */
+    createStepDependency: (
+        body: { waiting_step_id: string; required_step_id: string },
+        token: string
+    ) =>
+        apiClient.post<unknown>('/api/step/dependency', body, {
+            headers: { Authorization: `Bearer ${token}` },
+        }),
+
+    /** Replace required predecessor for a waiting step. */
+    updateStepDependency: (
+        body: {
+            waiting_step_id: string;
+            old_required_step_id: string;
+            new_required_step_id: string;
+        },
+        token: string
+    ) =>
+        apiClient.patch<unknown>('/api/step/dependency', body, {
             headers: { Authorization: `Bearer ${token}` },
         }),
 };

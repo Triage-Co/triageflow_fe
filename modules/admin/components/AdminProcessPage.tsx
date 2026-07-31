@@ -24,7 +24,10 @@ import {
     TemplateStep,
     CreateTemplateDto,
     ROOM_TYPE_OPTIONS,
+    STEP_TYPE_OPTIONS,
     normalizeRoomType,
+    normalizeStepType,
+    mapRoomTypeToStepType,
 } from '../types/process.types';
 
 interface ServiceOption {
@@ -34,15 +37,28 @@ interface ServiceOption {
     is_active?: boolean;
 }
 
+/** Sentinel service_code when step does not need a specialty (e.g. registration). */
+const NO_SERVICE_CODE = 'NONE';
+
+const ROOM_TYPES_WITHOUT_SPECIALTY = new Set([
+    'RECEPTION',
+    'TRIAGE_AREA',
+    'CASHIER',
+    'PHARMACY',
+    'EMPTY',
+    'OTHER',
+]);
+
 function asRecord(value: unknown): Record<string, unknown> | null {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
     return value as Record<string, unknown>;
 }
 
 function pickServiceCodeByRoomType(roomType: string, options: ServiceOption[]): string {
-    if (!options.length) return roomType;
-
     const code = normalizeRoomType(roomType);
+    if (ROOM_TYPES_WITHOUT_SPECIALTY.has(code)) return NO_SERVICE_CODE;
+    if (!options.length) return NO_SERVICE_CODE;
+
     const keywordMap: Record<string, string[]> = {
         RECEPTION: ['DANG_KY', 'TIEP_DON', 'KHAM'],
         TRIAGE_AREA: ['PHAN_LOAI', 'KHAM_CAP_CUU', 'TRIAGE'],
@@ -64,7 +80,7 @@ function pickServiceCodeByRoomType(roomType: string, options: ServiceOption[]): 
         keywords.some((keyword) => opt.service_code.toUpperCase().includes(keyword))
     );
 
-    return matched?.service_code || source[0].service_code || roomType;
+    return matched?.service_code || source[0]?.service_code || NO_SERVICE_CODE;
 }
 
 function extractServiceOptions(raw: unknown): ServiceOption[] {
@@ -104,6 +120,10 @@ function extractServiceOptions(raw: unknown): ServiceOption[] {
 
 export function AdminProcessPage() {
     const accessToken = useAuthStore((s) => s.accessToken);
+    const authUser = useAuthStore((s) => s.user);
+    const authProfile = useAuthStore((s) => s.profile);
+    const currentRole = (authUser?.role || authProfile?.role || '').toUpperCase().replace(/^ROLE_/, '');
+    const canEditDependsOn = currentRole === 'ADMIN';
     const {
         templates,
         isLoading,
@@ -172,37 +192,44 @@ export function AdminProcessPage() {
         };
     }, [accessToken]);
 
-    // Initial default steps for new template
-    const createDefaultStep = (index: number): TemplateStep => ({
-        template_step_id: `step_${index + 1}`,
-        step_name: `Bước ${index + 1}`,
-        room_type: 'CLINICAL_ROOM',
-        step_type: 'CLINICAL_ROOM',
-        service_code: pickServiceCodeByRoomType('CLINICAL_ROOM', serviceOptions),
-        requires_payment: false,
-        depends_on: index > 0 ? [`step_${index}`] : [],
-        sub_steps: [],
-    });
+    // Initial default steps for new template — shape matches TemplateStepDto / API sample
+    const createDefaultStep = (index: number): TemplateStep => {
+        const templateStepId = `step_${index + 1}`;
+        const roomType = 'CLINICAL_ROOM';
+        return {
+            template_id: templateStepId,
+            template_step_id: templateStepId,
+            step_name: `Bước ${index + 1}`,
+            room_type: roomType,
+            step_type: mapRoomTypeToStepType(roomType),
+            service_code: pickServiceCodeByRoomType(roomType, serviceOptions),
+            requires_payment: false,
+            depends_on: index > 0 ? [`step_${index}`] : [],
+            sub_steps: [],
+        };
+    };
 
     const openCreateModal = () => {
         setEditingTemplate(null);
         setFormName('');
         setFormSteps([
             {
+                template_id: 'step_1',
                 template_step_id: 'step_1',
                 step_name: 'Đăng ký & Phân loại',
                 room_type: 'RECEPTION',
-                step_type: 'RECEPTION',
+                step_type: 'REGISTRATION',
                 service_code: pickServiceCodeByRoomType('RECEPTION', serviceOptions),
                 requires_payment: false,
                 depends_on: [],
                 sub_steps: [],
             },
             {
+                template_id: 'step_2',
                 template_step_id: 'step_2',
                 step_name: 'Khám chuyên khoa',
                 room_type: 'CLINICAL_ROOM',
-                step_type: 'CLINICAL_ROOM',
+                step_type: 'CLINICAL',
                 service_code: pickServiceCodeByRoomType('CLINICAL_ROOM', serviceOptions),
                 requires_payment: false,
                 depends_on: ['step_1'],
@@ -217,17 +244,25 @@ export function AdminProcessPage() {
     const openEditModal = (template: ProcessTemplate) => {
         setEditingTemplate(template);
         setFormName(template.name);
+        const parentTemplateId = template.template_id || template.id || '';
         setFormSteps(
             template.steps && template.steps.length > 0
-                ? template.steps.map((s, idx) => ({
-                    ...s,
-                    template_step_id: s.template_step_id || `step_${idx + 1}`,
-                    room_type: normalizeRoomType(s.room_type),
-                    step_type: normalizeRoomType(s.step_type || s.room_type),
-                    service_code:
-                        s.service_code ||
-                        pickServiceCodeByRoomType(normalizeRoomType(s.room_type), serviceOptions),
-                }))
+                ? template.steps.map((s, idx) => {
+                    const templateStepId = s.template_step_id || `step_${idx + 1}`;
+                    const roomType = normalizeRoomType(s.room_type);
+                    return {
+                        ...s,
+                        template_id: s.template_id || parentTemplateId || templateStepId,
+                        template_step_id: templateStepId,
+                        room_type: roomType,
+                        step_type: normalizeStepType(s.step_type, roomType),
+                        service_code:
+                            s.service_code ||
+                            pickServiceCodeByRoomType(roomType, serviceOptions),
+                        depends_on: Array.isArray(s.depends_on) ? s.depends_on : [],
+                        sub_steps: Array.isArray(s.sub_steps) ? s.sub_steps : [],
+                    };
+                })
                 : [createDefaultStep(0)]
         );
         const isActive =
@@ -259,14 +294,16 @@ export function AdminProcessPage() {
             const mappedDependsOn = rawDependsOn
                 .map((dep) => idMap.get(dep) || dep)
                 .filter((dep) => dep !== newId);
+            const roomType = normalizeRoomType(step.room_type);
 
             return {
                 ...step,
+                template_id: newId,
                 template_step_id: newId,
                 depends_on: Array.from(new Set(mappedDependsOn)),
-                room_type: normalizeRoomType(step.room_type),
-                step_type: normalizeRoomType(step.step_type || step.room_type),
-                service_code: (step.service_code || normalizeRoomType(step.room_type)).trim(),
+                room_type: roomType,
+                step_type: normalizeStepType(step.step_type, roomType),
+                service_code: (step.service_code || NO_SERVICE_CODE).trim(),
                 sub_steps: Array.isArray(step.sub_steps) ? step.sub_steps : [],
             };
         });
@@ -288,17 +325,41 @@ export function AdminProcessPage() {
         const current = updated[index];
         const normalizedRoomType = normalizeRoomType(roomType);
         const shouldSyncServiceCode =
-            !current.service_code || current.service_code === current.room_type;
+            !current.service_code ||
+            current.service_code === current.room_type ||
+            current.service_code === NO_SERVICE_CODE;
+        const shouldSyncStepType =
+            !current.step_type ||
+            current.step_type === mapRoomTypeToStepType(current.room_type);
 
         updated[index] = {
             ...current,
             room_type: normalizedRoomType,
-            step_type: normalizedRoomType,
+            step_type: shouldSyncStepType
+                ? mapRoomTypeToStepType(normalizedRoomType)
+                : normalizeStepType(current.step_type, normalizedRoomType),
             service_code: shouldSyncServiceCode
                 ? pickServiceCodeByRoomType(normalizedRoomType, serviceOptions)
                 : current.service_code,
         };
 
+        setFormSteps(updated);
+    };
+
+    const handleDependsOnToggle = (index: number, depId: string, checked: boolean) => {
+        if (!canEditDependsOn) return;
+
+        const updated = [...formSteps];
+        const current = updated[index];
+        const currentDeps = Array.isArray(current.depends_on) ? current.depends_on : [];
+        const nextDeps = checked
+            ? Array.from(new Set([...currentDeps, depId]))
+            : currentDeps.filter((id) => id !== depId);
+
+        updated[index] = {
+            ...current,
+            depends_on: nextDeps.filter((id) => id !== current.template_step_id),
+        };
         setFormSteps(updated);
     };
 
@@ -322,7 +383,7 @@ export function AdminProcessPage() {
                 return;
             }
             if (!formSteps[i].service_code?.trim()) {
-                setFormError(`Bước ${i + 1} chưa có mã dịch vụ (service_code).`);
+                setFormError(`Bước ${i + 1} chưa chọn chuyên khoa (hoặc "Không cần").`);
                 return;
             }
         }
@@ -330,21 +391,29 @@ export function AdminProcessPage() {
         setFormSubmitting(true);
         setFormError(null);
 
+        const parentTemplateId =
+            editingTemplate?.template_id || editingTemplate?.id || undefined;
+
+        // Payload matches POST /api/template CreateTemplateDto / TemplateStepDto
         const normalizedSteps: TemplateStep[] = formSteps.map((step, idx) => {
             const templateStepId = step.template_step_id?.trim() || `step_${idx + 1}`;
+            const roomType = normalizeRoomType(step.room_type);
 
             return {
+                template_id: (step.template_id || parentTemplateId || templateStepId).trim(),
                 template_step_id: templateStepId,
                 step_name: step.step_name.trim(),
-                room_type: normalizeRoomType(step.room_type),
-                step_type: normalizeRoomType(step.step_type || step.room_type),
+                room_type: roomType,
+                step_type: normalizeStepType(step.step_type, roomType),
                 service_code: (
                     step.service_code ||
-                    pickServiceCodeByRoomType(normalizeRoomType(step.room_type), serviceOptions)
+                    pickServiceCodeByRoomType(roomType, serviceOptions) ||
+                    NO_SERVICE_CODE
                 ).trim(),
                 requires_payment: Boolean(step.requires_payment),
                 depends_on: Array.isArray(step.depends_on) ? step.depends_on.filter(Boolean) : [],
-                sub_steps: Array.isArray(step.sub_steps) ? step.sub_steps.filter(Boolean) : [],
+                // API allows nested TemplateStepDto[]; unused for now → keep empty list
+                sub_steps: [],
             };
         });
 
@@ -364,11 +433,8 @@ export function AdminProcessPage() {
         try {
             if (editingTemplate) {
                 const templateId = editingTemplate.template_id || editingTemplate.id || '';
-                await updateTemplate(
-                    templateId,
-                    { ...payload, is_active: formActive },
-                    accessToken
-                );
+                // UpdateTemplateDto only accepts name + steps (is_active is UI-only for now)
+                await updateTemplate(templateId, payload, accessToken);
             } else {
                 await createTemplate(payload, accessToken);
             }
@@ -767,7 +833,7 @@ export function AdminProcessPage() {
                                                     </button>
                                                 </div>
 
-                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                     {/* Step Name */}
                                                     <div className="space-y-1">
                                                         <label className="block text-xs font-medium text-neutral-600">
@@ -783,6 +849,26 @@ export function AdminProcessPage() {
                                                             }
                                                             className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm text-neutral-900 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
                                                         />
+                                                    </div>
+
+                                                    {/* Step Type — matches TemplateStepDto.step_type enum */}
+                                                    <div className="space-y-1">
+                                                        <label className="block text-xs font-medium text-neutral-600">
+                                                            Loại bước (step_type) <span className="text-red-500">*</span>
+                                                        </label>
+                                                        <select
+                                                            value={normalizeStepType(step.step_type, step.room_type)}
+                                                            onChange={(e) =>
+                                                                handleStepChange(idx, 'step_type', e.target.value)
+                                                            }
+                                                            className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm text-neutral-900 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 bg-white"
+                                                        >
+                                                            {STEP_TYPE_OPTIONS.map((opt) => (
+                                                                <option key={opt.value} value={opt.value}>
+                                                                    {opt.label}
+                                                                </option>
+                                                            ))}
+                                                        </select>
                                                     </div>
 
                                                     {/* Room Type */}
@@ -803,45 +889,50 @@ export function AdminProcessPage() {
                                                         </select>
                                                     </div>
 
-                                                    {/* Service */}
+                                                    {/* Service / specialty */}
                                                     <div className="space-y-1">
                                                         <label className="block text-xs font-medium text-neutral-600">
                                                             Chuyên khoa <span className="text-red-500">*</span>
                                                         </label>
                                                         <select
-                                                            value={step.service_code}
+                                                            value={step.service_code || NO_SERVICE_CODE}
                                                             onChange={(e) =>
                                                                 handleStepChange(idx, 'service_code', e.target.value)
                                                             }
                                                             className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm text-neutral-900 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 bg-white"
                                                         >
-                                                            {isLoadingServices && (
-                                                                <option value="">Đang tải danh sách dịch vụ...</option>
-                                                            )}
+                                                            <option value={NO_SERVICE_CODE}>Không cần</option>
 
-                                                            {!isLoadingServices && serviceOptions.length === 0 && (
-                                                                <option value={step.service_code || step.room_type}>
-                                                                    {step.service_code || step.room_type}
+                                                            {isLoadingServices && (
+                                                                <option value="" disabled>
+                                                                    Đang tải danh sách dịch vụ...
                                                                 </option>
                                                             )}
 
                                                             {serviceOptions.map((service) => (
-                                                                <option key={service.service_id || service.service_code} value={service.service_code}>
+                                                                <option
+                                                                    key={service.service_id || service.service_code}
+                                                                    value={service.service_code}
+                                                                >
                                                                     {service.service_name}
                                                                 </option>
                                                             ))}
 
                                                             {step.service_code &&
-                                                                !serviceOptions.some((service) => service.service_code === step.service_code) && (
+                                                                step.service_code !== NO_SERVICE_CODE &&
+                                                                !serviceOptions.some(
+                                                                    (service) =>
+                                                                        service.service_code === step.service_code
+                                                                ) && (
                                                                     <option value={step.service_code}>
-                                                                        Chua co trong danh muc
+                                                                        {step.service_code} (không có trong danh mục)
                                                                     </option>
                                                                 )}
                                                         </select>
                                                     </div>
                                                 </div>
 
-                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-neutral-100">
+                                                <div className="flex flex-col gap-3 pt-2 border-t border-neutral-100">
                                                     {/* Requires Payment checkbox */}
                                                     <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-neutral-700">
                                                         <input
@@ -859,15 +950,75 @@ export function AdminProcessPage() {
                                                         <span>Yêu cầu hoàn tất thanh toán trước khi vào bước</span>
                                                     </label>
 
-                                                    {/* Depends On info */}
-                                                    {idx > 0 && (
-                                                        <div className="text-[11px] text-neutral-500 flex items-center gap-1 bg-neutral-50 px-2.5 py-1 rounded-md border border-neutral-200">
-                                                            <span>Phụ thuộc:</span>
-                                                            <span className="font-semibold text-purple-700">
-                                                                {step.depends_on.join(', ') || `step_${idx}`}
+                                                    {/* Depends On — editable only for ADMIN */}
+                                                    <div className="space-y-2">
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <span className="text-xs font-medium text-neutral-600">
+                                                                Phụ thuộc (depends_on)
                                                             </span>
+                                                            {!canEditDependsOn && (
+                                                                <span className="text-[10px] text-neutral-400">
+                                                                    Chỉ ADMIN được chỉnh sửa
+                                                                </span>
+                                                            )}
                                                         </div>
-                                                    )}
+
+                                                        {canEditDependsOn ? (
+                                                            formSteps.filter((s) => s.template_step_id !== step.template_step_id).length === 0 ? (
+                                                                <p className="text-[11px] text-neutral-400 italic">
+                                                                    Chưa có bước khác để phụ thuộc.
+                                                                </p>
+                                                            ) : (
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {formSteps
+                                                                        .filter((s) => s.template_step_id !== step.template_step_id)
+                                                                        .map((candidate) => {
+                                                                            const checked = step.depends_on.includes(
+                                                                                candidate.template_step_id
+                                                                            );
+                                                                            return (
+                                                                                <label
+                                                                                    key={candidate.template_step_id}
+                                                                                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] cursor-pointer select-none transition ${
+                                                                                        checked
+                                                                                            ? 'bg-purple-50 border-purple-200 text-purple-700'
+                                                                                            : 'bg-neutral-50 border-neutral-200 text-neutral-600 hover:bg-neutral-100'
+                                                                                    }`}
+                                                                                >
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        checked={checked}
+                                                                                        onChange={(e) =>
+                                                                                            handleDependsOnToggle(
+                                                                                                idx,
+                                                                                                candidate.template_step_id,
+                                                                                                e.target.checked
+                                                                                            )
+                                                                                        }
+                                                                                        className="h-3.5 w-3.5 rounded border-neutral-300 text-purple-600 accent-purple-600"
+                                                                                    />
+                                                                                    <span className="font-semibold">
+                                                                                        {candidate.template_step_id}
+                                                                                    </span>
+                                                                                    <span className="text-neutral-400 truncate max-w-[140px]">
+                                                                                        {candidate.step_name || 'Chưa đặt tên'}
+                                                                                    </span>
+                                                                                </label>
+                                                                            );
+                                                                        })}
+                                                                </div>
+                                                            )
+                                                        ) : (
+                                                            <div className="text-[11px] text-neutral-500 flex items-center gap-1 bg-neutral-50 px-2.5 py-1.5 rounded-md border border-neutral-200 w-fit">
+                                                                <span>Phụ thuộc:</span>
+                                                                <span className="font-semibold text-purple-700">
+                                                                    {step.depends_on.length > 0
+                                                                        ? step.depends_on.join(', ')
+                                                                        : 'Không có'}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         );
