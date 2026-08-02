@@ -1,14 +1,22 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { fetchBuildingMap } from '../services/navigationService';
 import { floorToRoomData, FloorData3D } from '../utils/buildingToThree';
 import { BuildingMapData } from '../types/navigation.types';
 
-const cache = new Map<number, FloorData3D>();
+const floorCache = new Map<number, FloorData3D>();
+let rawMapCache: BuildingMapData | null = null;
 
-export function useBuildingMap(floorNumber: number = 2) {
-  const [data, setData] = useState<FloorData3D | null>(() => cache.get(floorNumber) ?? null);
-  const [rawMap, setRawMap] = useState<BuildingMapData | null>(null);
-  const [loading, setLoading] = useState<boolean>(!cache.has(floorNumber));
+export function clearBuildingMapCache() {
+  floorCache.clear();
+  rawMapCache = null;
+}
+
+export function useBuildingMap(floorNumber: number = 1, refreshKey: number = 0) {
+  const [data, setData] = useState<FloorData3D | null>(
+    () => floorCache.get(floorNumber) ?? null
+  );
+  const [rawMap, setRawMap] = useState<BuildingMapData | null>(() => rawMapCache);
+  const [loading, setLoading] = useState<boolean>(!floorCache.has(floorNumber));
   const [error, setError] = useState<Error | null>(null);
 
   const isMounted = useRef(true);
@@ -19,49 +27,64 @@ export function useBuildingMap(floorNumber: number = 2) {
     };
   }, []);
 
-  useEffect(() => {
-    if (cache.has(floorNumber)) {
-      setData(cache.get(floorNumber)!);
-      setLoading(false);
+  const load = useCallback(
+    (forceRefresh: boolean) => {
+      if (!forceRefresh && floorCache.has(floorNumber) && rawMapCache) {
+        setData(floorCache.get(floorNumber)!);
+        setRawMap(rawMapCache);
+        setLoading(false);
+        setError(null);
+        return;
+      }
+
+      setLoading(true);
       setError(null);
-      return;
+
+      fetchBuildingMap(undefined, forceRefresh)
+        .then((buildingData) => {
+          if (!isMounted.current) return;
+          rawMapCache = buildingData;
+          setRawMap(buildingData);
+
+          const targetFloor =
+            buildingData.floors.find((f) => f.floorNumber === floorNumber) ||
+            buildingData.floors[0];
+
+          if (!targetFloor) {
+            throw new Error('Dữ liệu sơ đồ tòa nhà không hợp lệ');
+          }
+
+          const parsed = floorToRoomData(targetFloor);
+          floorCache.set(floorNumber, parsed);
+          setData(parsed);
+        })
+        .catch((err) => {
+          if (isMounted.current) {
+            setError(
+              err instanceof Error ? err : new Error('Không thể tải sơ đồ tòa nhà')
+            );
+          }
+        })
+        .finally(() => {
+          if (isMounted.current) {
+            setLoading(false);
+          }
+        });
+    },
+    [floorNumber]
+  );
+
+  useEffect(() => {
+    const force = refreshKey > 0;
+    if (force) {
+      clearBuildingMapCache();
     }
+    load(force);
+  }, [floorNumber, refreshKey, load]);
 
-    setLoading(true);
-    setError(null);
-
-    fetchBuildingMap()
-      .then((buildingData) => {
-        if (!isMounted.current) return;
-        setRawMap(buildingData);
-
-        const targetFloor =
-          buildingData.floors.find((f) => f.floorNumber === floorNumber) ||
-          buildingData.floors[0];
-
-        if (!targetFloor) {
-          throw new Error('Dữ liệu sơ đồ tòa nhà không hợp lệ');
-        }
-
-        const parsed = floorToRoomData(targetFloor);
-        cache.set(floorNumber, parsed);
-        setData(parsed);
-      })
-      .catch((err) => {
-        if (isMounted.current) {
-          setError(err instanceof Error ? err : new Error('Không thể tải sơ đồ tòa nhà'));
-        }
-      })
-      .finally(() => {
-        if (isMounted.current) {
-          setLoading(false);
-        }
-      });
-  }, [floorNumber]);
-
-  return { data, rawMap, loading, error };
+  return { data, rawMap, loading, error, reload: () => load(true) };
 }
 
 export function useWayfinding() {
-  return useBuildingMap(2);
+  return useBuildingMap(1);
 }
