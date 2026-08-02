@@ -56,7 +56,7 @@ export const useStaffStore = create<StaffStore>()(
                                 .filter(Boolean)
                         );
 
-                        const STAFF_ROLES = new Set(['DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_STAFF', 'PHARMACY_STAFF', 'CASHIER', 'ADMIN']);
+                        const STAFF_ROLES = new Set(['DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_STAFF', 'LAB_TECHNICIAN', 'PHARMACY_STAFF', 'CASHIER', 'ADMIN']);
 
                         const extraStaffs: Staff[] = accounts
                             .filter((acc) => {

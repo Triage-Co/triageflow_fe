@@ -5,16 +5,14 @@ import { EMRPageLayout } from '@/shared/components/layout/EMRPageLayout';
 import { notFound } from 'next/navigation';
 import {
     clinicalService,
-    extractWorkflowStepsFromResponse,
     mapBackendPatientToFrontend,
-    pickFirstTemplateId,
 } from '@/modules/clinical/services/clinicalService';
 import { useAuthStore } from '@/modules/auth/store/authStore';
 import { usePatientTabsStore } from '@/modules/clinical/store/clinicalStore';
 import type { Patient } from '@/modules/clinical/types/clinical.types';
 import { Loader2, AlertCircle } from 'lucide-react';
 
-export default function DoctorPatientPage({ params }: { params: Promise<{ id: string }> }) {
+export default function NursePatientPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
     const accessToken = useAuthStore((s) => s.accessToken);
     const { getPatientData, setPatientData } = usePatientTabsStore();
@@ -47,35 +45,8 @@ export default function DoctorPatientPage({ params }: { params: Promise<{ id: st
                 setError(null);
                 const res = await clinicalService.getPatientByQueueId(id, accessToken);
                 if (res?.data) {
-                    const mapped = mapBackendPatientToFrontend(res.data);
-                    let finalPatient = mapped;
-
-                    if (mapped.flowId) {
-                        let templateId = mapped.templateId;
-
-                        if (!templateId) {
-                            const templatesRes = await clinicalService.getProcessTemplates(accessToken);
-                            templateId = pickFirstTemplateId(templatesRes.data);
-                        }
-
-                        if (templateId) {
-                            try {
-                                const assignRes = await clinicalService.assignTemplateToFlow(mapped.flowId, templateId, accessToken);
-                                const workflowSteps = extractWorkflowStepsFromResponse(assignRes.data);
-                                finalPatient = {
-                                    ...mapped,
-                                    templateId,
-                                    workflowSteps: workflowSteps.length > 0 ? workflowSteps : mapped.workflowSteps,
-                                };
-                            } catch {
-                                finalPatient = {
-                                    ...mapped,
-                                    templateId,
-                                };
-                            }
-                        }
-                    }
-
+                    // No auto-assign: template is chosen in Quy trình and assigned via new API body
+                    const finalPatient = mapBackendPatientToFrontend(res.data);
                     setPatient(finalPatient);
                     setPatientData(id, finalPatient);
                 } else {

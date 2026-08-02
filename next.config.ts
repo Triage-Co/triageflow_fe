@@ -1,14 +1,13 @@
-import type { NextConfig } from 'next';
+import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // Allow mobile devices on LAN to load Next.js dev assets (HMR, chunks, etc.)
-  allowedDevOrigins: ['10.170.3.155', 'localhost'],
+  allowedDevOrigins: ["10.170.3.155", "localhost"],
   async rewrites() {
-    const backendUrl =
-      process.env.NEXT_PUBLIC_API_URL || 'https://www.triageflow.me';
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL;
     return [
       {
-        source: '/api/:path*',
+        source: "/api/:path*",
         destination: `${backendUrl}/api/:path*`,
       },
     ];
@@ -16,4 +15,3 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
-

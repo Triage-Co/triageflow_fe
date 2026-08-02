@@ -15,6 +15,7 @@ import {
 import { cn } from '@/lib/utils';
 import { clinicalService } from '@/modules/clinical/services/clinicalService';
 import { useAuthStore } from '@/store/authStore';
+import { ParaclinicalOrdersTab } from '@/modules/clinical/components/ParaclinicalOrdersTab';
 
 type MedTab = 'kham-benh' | 'can-lam-sang' | 'chan-doan' | 'thu-thuat' | 'don-thuoc';
 type EditingSection = 'visitReason' | 'clinicalProgression' | 'medicalHistory' | 'physicalExam' | null;
@@ -277,7 +278,7 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
         <div className="space-y-4">
             {/* Lý do khám */}
             <SectionCard
-                title="Lý do khám bệnh"
+                title="Lý do đến khám"
                 onEdit={!isReadOnly ? () => setEditingSection('visitReason') : undefined}
             >
                 {editingSection === 'visitReason' ? (
@@ -483,102 +484,14 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
     );
 }
 
-function LabTestsTab() {
-    const labOrders = [
-        {
-            name: 'Tổng phân tích tế bào máu ngoại vi (24 chỉ số)',
-            dept: 'Khoa Xét nghiệm - Phòng 102',
-            status: 'completed',
-            time: '08:07 08/07/2026',
-            results: [
-                { name: 'RBC (Hồng cầu)', value: '4.78', unit: 'T/L', range: '3.8 - 5.8', status: 'normal' },
-                { name: 'WBC (Bạch cầu)', value: '8.4', unit: 'G/L', range: '4.0 - 10.0', status: 'normal' },
-                { name: 'HGB (Huyết sắc tố)', value: '142', unit: 'g/L', range: '120 - 165', status: 'normal' },
-                { name: 'PLT (Tiểu cầu)', value: '145', unit: 'G/L', range: '150 - 450', status: 'low' },
-            ]
-        },
-        {
-            name: 'Siêu âm ổ bụng tổng quát',
-            dept: 'Khoa Chẩn đoán hình ảnh - Phòng Siêu âm 3',
-            status: 'completed',
-            time: '08:45 08/07/2026',
-            summary: 'Gan nhiễm mỡ độ 1. Các cơ quan khác trong ổ bụng chưa thấy bất thường trên siêu âm.'
-        },
-        {
-            name: 'Nội soi dạ dày tá tràng test HP',
-            dept: 'Khoa Nội soi - Phòng Nội soi 2',
-            status: 'pending',
-            time: 'Yêu cầu lúc 09:15',
-            summary: 'Bệnh nhân đang chuẩn bị làm nội soi dạ dày...'
-        }
-    ];
-
-    return (
-        <div className="space-y-4">
-            {labOrders.map((order, idx) => (
-                <div key={idx} className="bg-white rounded-2xl border border-[#EBEBEB] p-5 hover:shadow-[0_4px_20px_rgba(0,0,0,0.01)] transition-shadow">
-                    <div className="flex items-start justify-between flex-wrap gap-2 mb-3">
-                        <div>
-                            <h4 className="text-[13px] font-bold text-[#2D2D2D]">{order.name}</h4>
-                            <p className="text-[11px] text-[#9C9C9C] mt-0.5">{order.dept} · {order.time}</p>
-                        </div>
-                        <span className={cn(
-                            "text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider",
-                            order.status === 'completed'
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                                : "bg-amber-50 text-amber-700 border border-amber-100"
-                        )}>
-                            {order.status === 'completed' ? 'Đã có kết quả' : 'Đang thực hiện'}
-                        </span>
-                    </div>
-
-                    {order.status === 'completed' && order.results && (
-                        <div className="mt-4 border border-[#EBEBEB] rounded-xl overflow-hidden">
-                            <table className="w-full text-[12px] text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-neutral-50/80 border-b border-[#EBEBEB] text-[#7B7B7B] font-bold">
-                                        <th className="px-4 py-2">Tên xét nghiệm</th>
-                                        <th className="px-4 py-2 text-right">Kết quả</th>
-                                        <th className="px-4 py-2">Đơn vị</th>
-                                        <th className="px-4 py-2 text-right">Trị số bình thường</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {order.results.map((res, rIdx) => (
-                                        <tr key={rIdx} className="border-b border-neutral-100 last:border-0 hover:bg-neutral-50/50">
-                                            <td className="px-4 py-2 text-[#2D2D2D] font-semibold">{res.name}</td>
-                                            <td className={cn(
-                                                "px-4 py-2 text-right font-bold",
-                                                res.status === 'low' ? "text-amber-600 animate-pulse" : "text-[#2D2D2D]"
-                                            )}>
-                                                {res.value} {res.status === 'low' && '↓'}
-                                            </td>
-                                            <td className="px-4 py-2 text-[#7B7B7B]">{res.unit}</td>
-                                            <td className="px-4 py-2 text-right text-[#9C9C9C]">{res.range}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-
-                    {order.status === 'completed' && order.summary && (
-                        <div className="mt-3 p-3 bg-neutral-50 rounded-xl border border-neutral-100">
-                            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">Kết luận</span>
-                            <p className="text-[12px] text-neutral-700 font-medium mt-1">{order.summary}</p>
-                        </div>
-                    )}
-
-                    {order.status === 'pending' && (
-                        <div className="mt-3 flex items-center gap-2 p-3 bg-amber-50/40 rounded-xl border border-amber-100/30 text-[12px] text-amber-700 font-semibold">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 animate-ping" />
-                            {order.summary}
-                        </div>
-                    )}
-                </div>
-            ))}
-        </div>
-    );
+function LabTestsTab({
+    patient,
+    onFlowChanged,
+}: {
+    patient: Patient;
+    onFlowChanged?: () => void;
+}) {
+    return <ParaclinicalOrdersTab patient={patient} onFlowChanged={onFlowChanged} />;
 }
 
 function DiagnosisTreatmentTab() {
@@ -761,9 +674,10 @@ function PrescriptionTab() {
 interface RightMedicalAreaProps {
     patient: Patient;
     onUpdatePatient: (updated: Patient) => void;
+    onFlowChanged?: () => void;
 }
 
-export function RightMedicalArea({ patient, onUpdatePatient }: RightMedicalAreaProps) {
+export function RightMedicalArea({ patient, onUpdatePatient, onFlowChanged }: RightMedicalAreaProps) {
     const [activeTab, setActiveTab] = useState<MedTab>('kham-benh');
 
     return (
@@ -837,7 +751,7 @@ export function RightMedicalArea({ patient, onUpdatePatient }: RightMedicalAreaP
                     <MedicalRecordContent key={patient.id} patient={patient} onUpdatePatient={onUpdatePatient} />
                 )}
                 {activeTab === 'can-lam-sang' && (
-                    <LabTestsTab />
+                    <LabTestsTab patient={patient} onFlowChanged={onFlowChanged} />
                 )}
                 {activeTab === 'chan-doan' && (
                     <DiagnosisTreatmentTab />

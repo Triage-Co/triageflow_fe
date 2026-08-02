@@ -24,6 +24,7 @@ import { useAuthStore } from '@/modules/auth/store/authStore';
 import type { HospitalRoom, Specialty } from '../types/room.types';
 import type { Shift } from '../types/shift.types';
 import { roomService } from '../services/roomService';
+import { validateShiftAssignment, filterEligibleStaffForRoom } from '../utils/shiftValidation';
 
 /* ─── Role Badges Config ─────────────────────────────────────────────────── */
 
@@ -128,22 +129,34 @@ export function AdminRoomDetailPage() {
     }, [accessToken, roomId, rooms]);
 
     /* ── Lookup Helper ── */
+    const isStaffsLoading = useStaffStore((s) => s.isLoading);
+
     const getStaffInfo = (staffId: string) => {
-        return staffs.find((s) => s.staff_id === staffId);
+        if (!staffId) return undefined;
+        return staffs.find(
+            (s) =>
+                s.staff_id === staffId ||
+                (s as unknown as Record<string, unknown>).id === staffId ||
+                (s as unknown as Record<string, unknown>).account_id === staffId ||
+                s.account?.email === staffId ||
+                s.account?.user_name === staffId
+        );
     };
 
     const getStaffSpecialtyName = (staffId: string) => {
-        const staff = staffs.find((s) => s.staff_id === staffId);
+        const staff = getStaffInfo(staffId);
         if (!staff || !staff.specialty_id) return 'Chưa phân loại';
         const found = specialties.find((s) => s.specialty_id === staff.specialty_id);
         return found?.specialty_name || found?.specialty_code || 'Chưa phân loại';
     };
 
     /* ── Handlers ── */
+    const eligibleStaffs = filterEligibleStaffForRoom(staffs, room);
+
     const openCreateModal = () => {
         setCreateError(null);
         setCreateForm({
-            staff_id: staffs[0]?.staff_id || '',
+            staff_id: eligibleStaffs[0]?.staff_id || '',
             date: new Date().toISOString().split('T')[0],
             start_time: '08:00',
             end_time: '17:00',
@@ -160,6 +173,21 @@ export function AdminRoomDetailPage() {
             setCreateError('Giờ bắt đầu phải nhỏ hơn giờ kết thúc.');
             return;
         }
+
+        const valErr = validateShiftAssignment({
+            roomId,
+            staffId: createForm.staff_id,
+            date: createForm.date,
+            rooms,
+            staffs,
+            specialties,
+            shifts,
+        });
+        if (valErr) {
+            setCreateError(valErr);
+            return;
+        }
+
         setIsCreating(true);
         setCreateError(null);
         try {
@@ -174,7 +202,6 @@ export function AdminRoomDetailPage() {
                 accessToken || ''
             );
             setIsCreateModalOpen(false);
-            if (accessToken) fetchShifts(accessToken);
         } catch (err) {
             setCreateError(err instanceof Error ? err.message : 'Tạo ca trực thất bại.');
         } finally {
@@ -194,7 +221,7 @@ export function AdminRoomDetailPage() {
     };
 
     const handleUpdateShift = async () => {
-        if (!editingShift || !accessToken) return;
+        if (!editingShift || !accessToken || !roomId) return;
         if (!editForm.staff_id || !editForm.date || !editForm.start_time || !editForm.end_time) {
             setUpdateError('Vui lòng điền đầy đủ thông tin.');
             return;
@@ -203,6 +230,22 @@ export function AdminRoomDetailPage() {
             setUpdateError('Giờ bắt đầu phải nhỏ hơn giờ kết thúc.');
             return;
         }
+
+        const valErr = validateShiftAssignment({
+            roomId,
+            staffId: editForm.staff_id,
+            date: editForm.date,
+            excludeShiftId: editingShift.shift_id,
+            rooms,
+            staffs,
+            specialties,
+            shifts,
+        });
+        if (valErr) {
+            setUpdateError(valErr);
+            return;
+        }
+
         setIsUpdating(true);
         setUpdateError(null);
         try {
@@ -283,7 +326,13 @@ export function AdminRoomDetailPage() {
 
     const specName = room.specialty?.specialty_name || specialties.find((s) => s.specialty_id === room.specialty_id)?.specialty_name || 'N/A';
     const specCode = room.specialty?.specialty_code || specialties.find((s) => s.specialty_id === room.specialty_id)?.specialty_code || 'N/A';
-    const roomShifts = shifts.filter((s) => s.room_id === room.room_id);
+    const roomShifts = shifts
+        .filter((s) => s.room_id === room.room_id)
+        .sort((a, b) => {
+            const dateA = a.date ? new Date(a.date).getTime() : 0;
+            const dateB = b.date ? new Date(b.date).getTime() : 0;
+            return dateA - dateB;
+        });
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden relative">
@@ -335,13 +384,6 @@ export function AdminRoomDetailPage() {
                                         <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Chuyên khoa</label>
                                         <div className="text-xs font-semibold text-neutral-600 bg-[#F8F9FA] border border-neutral-100 rounded-xl px-3 py-2">
                                             {specName} ({specCode})
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Mã phòng (Room ID)</label>
-                                        <div className="text-xs font-mono text-neutral-500 bg-[#F8F9FA] border border-neutral-100 rounded-xl px-3 py-2">
-                                            {room.room_id}
                                         </div>
                                     </div>
 
@@ -423,7 +465,13 @@ export function AdminRoomDetailPage() {
                                                                     <div>
                                                                         <div className="flex items-center gap-1.5">
                                                                             <span className="text-xs font-bold text-[#2D2D2D]">
-                                                                                {staff?.full_name || shift.staff_id}
+                                                                                {staff?.full_name ? (
+                                                                                    staff.full_name
+                                                                                ) : isStaffsLoading ? (
+                                                                                    <span className="inline-block w-20 h-3.5 bg-neutral-200/80 animate-pulse rounded align-middle" />
+                                                                                ) : (
+                                                                                    'Nhân viên trực'
+                                                                                )}
                                                                             </span>
                                                                             <span className={cn('text-[9px] font-bold px-2 py-0.5 rounded-full border', roleCfg.bg, roleCfg.text, roleCfg.border)}>
                                                                                 {roleCfg.label}
@@ -525,11 +573,16 @@ export function AdminRoomDetailPage() {
                                 className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
                             >
                                 <option value="">— Chọn nhân viên —</option>
-                                {staffs.map((st) => (
-                                    <option key={st.staff_id} value={st.staff_id}>
-                                        {st.full_name} ({st.account?.role || ''})
-                                    </option>
-                                ))}
+                                {eligibleStaffs.map((st) => {
+                                    const rKey = (st.account?.role || '').toUpperCase().replace(/^ROLE_/, '');
+                                    const roleLabel = rKey === 'DOCTOR' ? 'Bác sĩ' : rKey === 'NURSE' ? 'Y tá' : rKey;
+                                    const specName = getStaffSpecialtyName(st.staff_id);
+                                    return (
+                                        <option key={st.staff_id} value={st.staff_id}>
+                                            {st.full_name} — {roleLabel} ({specName})
+                                        </option>
+                                    );
+                                })}
                             </select>
                         </div>
 
@@ -616,11 +669,16 @@ export function AdminRoomDetailPage() {
                                 className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
                             >
                                 <option value="">— Chọn nhân viên —</option>
-                                {staffs.map((st) => (
-                                    <option key={st.staff_id} value={st.staff_id}>
-                                        {st.full_name} ({st.account?.role || ''})
-                                    </option>
-                                ))}
+                                {eligibleStaffs.map((st) => {
+                                    const rKey = (st.account?.role || '').toUpperCase().replace(/^ROLE_/, '');
+                                    const roleLabel = rKey === 'DOCTOR' ? 'Bác sĩ' : rKey === 'NURSE' ? 'Y tá' : rKey;
+                                    const specName = getStaffSpecialtyName(st.staff_id);
+                                    return (
+                                        <option key={st.staff_id} value={st.staff_id}>
+                                            {st.full_name} — {roleLabel} ({specName})
+                                        </option>
+                                    );
+                                })}
                             </select>
                         </div>
 

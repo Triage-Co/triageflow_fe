@@ -20,8 +20,8 @@ import { useShiftStore } from '../store/shiftStore';
 import { useStaffStore } from '../store/staffStore';
 import { useRoomStore } from '../store/roomStore';
 import { useAuthStore } from '@/modules/auth/store/authStore';
-import { useRouter } from 'next/navigation';
 import type { Shift, CreateShiftDto } from '../types/shift.types';
+import { validateShiftAssignment, filterEligibleStaffForRoom } from '../utils/shiftValidation';
 
 /* ─── Role Badges Config ─────────────────────────────────────────────────── */
 
@@ -66,7 +66,6 @@ const getCompactPages = (totalPages: number): Array<number | 'ellipsis'> => {
 /* ─── Component ──────────────────────────────────────────────────────────── */
 
 export function AdminShiftPage() {
-    const router = useRouter();
     const accessToken = useAuthStore((s) => s.accessToken);
 
     const { shifts, isLoading, error, fetchShifts, createShift, deleteShift, clearError } = useShiftStore();
@@ -112,10 +111,25 @@ export function AdminShiftPage() {
     }, [accessToken, fetchShifts, fetchStaffs, fetchRooms]);
 
     /* ── Lookup helpers ── */
+    const isStaffsLoading = useStaffStore((s) => s.isLoading);
+
+    const getStaffInfo = (staffId: string) => {
+        if (!staffId) return undefined;
+        return staffs.find(
+            (s) =>
+                s.staff_id === staffId ||
+                (s as unknown as Record<string, unknown>).id === staffId ||
+                (s as unknown as Record<string, unknown>).account_id === staffId ||
+                s.account?.email === staffId ||
+                s.account?.user_name === staffId
+        );
+    };
 
     const getStaffName = (staffId: string) => {
-        const staff = staffs.find((s) => s.staff_id === staffId);
-        return staff?.full_name || staffId || '';
+        const staff = getStaffInfo(staffId);
+        if (staff?.full_name) return staff.full_name;
+        if (isStaffsLoading) return 'Đang tải...';
+        return 'Nhân viên trực';
     };
 
     const getRoomName = (roomId: string) => {
@@ -129,7 +143,12 @@ export function AdminShiftPage() {
             (s) => s.room_id === roomId && toDateKey(s.date) === shiftDateKey
         );
         const staffIds = new Set(matchingShifts.map((s) => s.staff_id));
-        return staffs.filter((st) => staffIds.has(st.staff_id));
+        return staffs.filter(
+            (st) =>
+                staffIds.has(st.staff_id) ||
+                staffIds.has((st as unknown as Record<string, unknown>).id as string) ||
+                staffIds.has((st as unknown as Record<string, unknown>).account_id as string)
+        );
     };
 
     /* ── Handlers ── */
@@ -155,12 +174,26 @@ export function AdminShiftPage() {
             setCreateError('Giờ bắt đầu phải nhỏ hơn giờ kết thúc.');
             return;
         }
+
+        const valErr = validateShiftAssignment({
+            roomId: createForm.room_id,
+            staffId: createForm.staff_id,
+            date: createForm.date,
+            rooms,
+            staffs,
+            specialties: useRoomStore.getState().specialties,
+            shifts,
+        });
+        if (valErr) {
+            setCreateError(valErr);
+            return;
+        }
+
         setIsCreating(true);
         setCreateError(null);
         try {
             await createShift(createForm, accessToken || '');
             setIsCreateModalOpen(false);
-            if (accessToken) await fetchShifts(accessToken);
         } catch (err) {
             setCreateError(err instanceof Error ? err.message : 'Tạo ca trực thất bại.');
         } finally {
@@ -555,22 +588,6 @@ export function AdminShiftPage() {
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5 col-span-2">
-                            <label className="text-[11px] font-bold text-neutral-500 uppercase">Nhân viên trực *</label>
-                            <select
-                                value={createForm.staff_id}
-                                onChange={(e) => setCreateForm((prev) => ({ ...prev, staff_id: e.target.value }))}
-                                className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
-                            >
-                                <option value="">— Chọn nhân viên —</option>
-                                {staffs.map((staff) => (
-                                    <option key={staff.staff_id} value={staff.staff_id}>
-                                        {staff.full_name} ({staff.account?.role || ''})
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className="space-y-1.5 col-span-2">
                             <label className="text-[11px] font-bold text-neutral-500 uppercase">Phòng trực *</label>
                             <select
                                 value={createForm.room_id}
@@ -580,9 +597,32 @@ export function AdminShiftPage() {
                                 <option value="">— Chọn phòng khám —</option>
                                 {rooms.map((room) => (
                                     <option key={room.room_id} value={room.room_id}>
-                                        {room.room_name}
+                                        {room.room_name} ({room.specialty?.specialty_name || ''})
                                     </option>
                                 ))}
+                            </select>
+                        </div>
+
+                        <div className="space-y-1.5 col-span-2">
+                            <label className="text-[11px] font-bold text-neutral-500 uppercase">Nhân viên trực *</label>
+                            <select
+                                value={createForm.staff_id}
+                                onChange={(e) => setCreateForm((prev) => ({ ...prev, staff_id: e.target.value }))}
+                                className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
+                            >
+                                <option value="">— Chọn nhân viên —</option>
+                                {filterEligibleStaffForRoom(
+                                    staffs,
+                                    rooms.find((r) => r.room_id === createForm.room_id)
+                                ).map((staff) => {
+                                    const rKey = (staff.account?.role || '').toUpperCase().replace(/^ROLE_/, '');
+                                    const roleLabel = rKey === 'DOCTOR' ? 'Bác sĩ' : rKey === 'NURSE' ? 'Y tá' : rKey;
+                                    return (
+                                        <option key={staff.staff_id} value={staff.staff_id}>
+                                            {staff.full_name} — {roleLabel}
+                                        </option>
+                                    );
+                                })}
                             </select>
                         </div>
 

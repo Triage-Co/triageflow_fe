@@ -15,10 +15,15 @@ interface EMRHeaderProps {
 
 export function EMRHeader({ activeTabId, activeTabName }: EMRHeaderProps) {
     const router = useRouter();
-    const { openTabs, openTab, closeTab } = usePatientTabsStore();
+    const { openTabs, openTab, closeTab, syncForUser } = usePatientTabsStore();
     const [mounted, setMounted] = useState(false);
     const user = useAuthStore((s) => s.user);
     const basePath = user?.role === 'NURSE' ? '/nurse' : '/doctor';
+
+    // Isolate tabs per logged in doctor/staff
+    useEffect(() => {
+        syncForUser(user?.id || null);
+    }, [user?.id, syncForUser]);
 
     useEffect(() => {
         const timer = setTimeout(() => {

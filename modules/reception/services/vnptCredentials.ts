@@ -14,7 +14,7 @@ function shouldPreferLocalVnptEnv(): boolean {
 function getApiBaseUrl(): string {
     // Trình duyệt dùng same-origin để đi qua Next.js rewrite (/api → backend)
     if (typeof window !== 'undefined') return '';
-    return process.env.NEXT_PUBLIC_API_URL?.trim() || 'https://www.triageflow.me';
+    return process.env.NEXT_PUBLIC_API_URL?.trim() || '';
 }
 
 export function normalizeAccessToken(raw?: string): string | undefined {

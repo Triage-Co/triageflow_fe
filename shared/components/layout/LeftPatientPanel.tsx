@@ -50,9 +50,16 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 interface LeftPanelProps {
     patient: Patient;
     isOpen: boolean;
+    flowRefreshKey?: number;
+    onPatientUpdate?: (patient: Patient) => void;
 }
 
-export function LeftPatientPanel({ patient, isOpen }: LeftPanelProps) {
+export function LeftPatientPanel({
+    patient,
+    isOpen,
+    flowRefreshKey = 0,
+    onPatientUpdate,
+}: LeftPanelProps) {
     const user = useAuthStore((s) => s.user);
     const accessToken = useAuthStore((s) => s.accessToken);
     const isReadOnly = user?.role === 'NURSE';
@@ -144,13 +151,21 @@ export function LeftPatientPanel({ patient, isOpen }: LeftPanelProps) {
         || (patient.visitReason && patient.visitReason !== 'Chưa có lý do khám từ hệ thống' ? patient.visitReason : '')
         || 'Chưa có lý do khám';
 
+    const formatVitalValue = (val: string | number | undefined | null) => {
+        if (val === undefined || val === null || (typeof val === 'number' && isNaN(val)) || String(val) === 'NaN') {
+            return '—';
+        }
+        return String(val);
+    };
+
     const displayVitals = {
-        heartRate: sessionData?.heart_rate !== undefined && sessionData?.heart_rate !== null ? sessionData.heart_rate : '—',
-        bloodPressure: (sessionData?.blood_pressure_sys !== undefined && sessionData?.blood_pressure_dia !== undefined)
+        heartRate: formatVitalValue(sessionData?.heart_rate),
+        bloodPressure: (sessionData?.blood_pressure_sys !== undefined && sessionData?.blood_pressure_sys !== null && !isNaN(Number(sessionData.blood_pressure_sys)) &&
+                        sessionData?.blood_pressure_dia !== undefined && sessionData?.blood_pressure_dia !== null && !isNaN(Number(sessionData.blood_pressure_dia)))
             ? `${sessionData.blood_pressure_sys}/${sessionData.blood_pressure_dia}`
             : '—',
-        temperature: sessionData?.temperature !== undefined && sessionData?.temperature !== null ? sessionData.temperature : '—',
-        spO2: sessionData?.spo2 !== undefined && sessionData?.spo2 !== null ? sessionData.spo2 : '—',
+        temperature: formatVitalValue(sessionData?.temperature),
+        spO2: formatVitalValue(sessionData?.spo2),
     };
 
 
@@ -292,7 +307,25 @@ export function LeftPatientPanel({ patient, isOpen }: LeftPanelProps) {
                     <div className="flex-1 overflow-y-auto px-5 pb-5 space-y-3">
                         {/* ── Process tab ── */}
                         {tab === 'process' && (
-                            <WorkflowDiagram patientId={patient.patientId || patient.id} />
+                            <WorkflowDiagram
+                                patientId={patient.patientId || ''}
+                                patient={patient}
+                                refreshKey={flowRefreshKey}
+                                onFlowResolved={({ flowId, bookingId }) => {
+                                    if (!onPatientUpdate) return;
+                                    if (
+                                        patient.flowId === flowId &&
+                                        patient.bookingId === bookingId
+                                    ) {
+                                        return;
+                                    }
+                                    onPatientUpdate({
+                                        ...patient,
+                                        flowId: flowId || patient.flowId,
+                                        bookingId: bookingId || patient.bookingId,
+                                    });
+                                }}
+                            />
                         )}
 
                         {/* ── Info tab ── */}

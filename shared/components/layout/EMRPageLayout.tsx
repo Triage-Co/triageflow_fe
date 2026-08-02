@@ -13,11 +13,16 @@ interface EMRPageLayoutProps {
 
 export function EMRPageLayout({ patient: initialPatient }: EMRPageLayoutProps) {
     const [patient, setPatient] = useState<Patient>(initialPatient);
+    const [flowRefreshKey, setFlowRefreshKey] = useState(0);
     const { setPatientData } = usePatientTabsStore();
 
     const handleUpdatePatient = (updated: Patient) => {
         setPatient(updated);
         setPatientData(updated.id, updated);
+    };
+
+    const handleFlowChanged = () => {
+        setFlowRefreshKey((k) => k + 1);
     };
 
     return (
@@ -29,11 +34,17 @@ export function EMRPageLayout({ patient: initialPatient }: EMRPageLayoutProps) {
                     <LeftPatientPanel
                         patient={patient}
                         isOpen={true}
+                        flowRefreshKey={flowRefreshKey}
+                        onPatientUpdate={handleUpdatePatient}
                     />
                 </div>
 
                 {/* 2. Medical record area (flex-1) */}
-                <RightMedicalArea patient={patient} onUpdatePatient={handleUpdatePatient} />
+                <RightMedicalArea
+                    patient={patient}
+                    onUpdatePatient={handleUpdatePatient}
+                    onFlowChanged={handleFlowChanged}
+                />
             </div>
         </EMRWorkspaceLayout>
     );

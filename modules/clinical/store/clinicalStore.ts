@@ -9,6 +9,7 @@ export interface PatientTab {
 }
 
 interface PatientTabsState {
+    userId: string | null;
     openTabs: PatientTab[];
     patientDataMap: Record<string, Patient>;
     openTab: (tab: PatientTab) => void;
@@ -16,11 +17,13 @@ interface PatientTabsState {
     setPatientData: (id: string, data: Patient) => void;
     getPatientData: (id: string) => Patient | undefined;
     clearAll: () => void;
+    syncForUser: (userId: string | null) => void;
 }
 
 export const usePatientTabsStore = create<PatientTabsState>()(
     persist(
         (set, get) => ({
+            userId: null,
             openTabs: [],
             patientDataMap: {},
 
@@ -68,6 +71,17 @@ export const usePatientTabsStore = create<PatientTabsState>()(
 
             clearAll: () => {
                 set({ openTabs: [], patientDataMap: {} });
+            },
+
+            syncForUser: (userId) => {
+                const state = get();
+                if (state.userId !== userId) {
+                    set({
+                        userId,
+                        openTabs: [],
+                        patientDataMap: {},
+                    });
+                }
             },
         }),
         {
