@@ -458,8 +458,8 @@ function buildDraftFromTemplateStep(
         depends_on: Array.isArray(step.depends_on)
             ? step.depends_on
             : idx > 0
-              ? [`step_${idx}`]
-              : [],
+                ? [`step_${idx}`]
+                : [],
     };
 }
 
@@ -797,7 +797,7 @@ export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
             const prevRoom = Boolean(prevRec?.room_id || asRecord(prevRec?.room_info)?.room_id);
             const nextRoom = Boolean(nextRec?.room_id || asRecord(nextRec?.room_info)?.room_id);
             if (nextRoom && !prevRoom) byKey.set(key, r);
-            else if (nextRoom === prevRoom && (r.created_at || 0) > (prev.created_at || 0)) {
+            else if (nextRoom === prevRoom && (r.createdAt || 0) > (prev.createdAt || 0)) {
                 byKey.set(key, r);
             }
         });

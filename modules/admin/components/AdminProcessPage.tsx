@@ -22,6 +22,7 @@ import { useProcessStore } from '../store/processStore';
 import {
     ProcessTemplate,
     TemplateStep,
+    TemplateStepWriteDto,
     ROOM_TYPE_OPTIONS,
     STEP_TYPE_OPTIONS,
     normalizeRoomType,
@@ -394,7 +395,8 @@ export function AdminProcessPage() {
         setFormError(null);
 
         // TemplateStepDto.template_id = step key (step_1); do not send template_step_id
-        const normalizedSteps: TemplateStep[] = formSteps.map((step, idx) => {
+        type NormalizedStep = TemplateStep & { template_id: string; template_step_id: string };
+        const normalizedSteps: NormalizedStep[] = formSteps.map((step, idx) => {
             const stepKey =
                 step.template_step_id?.trim() ||
                 step.template_id?.trim() ||
@@ -418,9 +420,15 @@ export function AdminProcessPage() {
             };
         });
 
-        const validIds = new Set(normalizedSteps.map((step) => step.template_id));
-        const payloadSteps = normalizedSteps.map(({ template_step_id: _uiOnly, ...step }) => ({
-            ...step,
+        const validIds = new Set<string>(normalizedSteps.map((step) => step.template_id));
+        const payloadSteps: TemplateStepWriteDto[] = normalizedSteps.map((step) => ({
+            template_id: step.template_id,
+            step_name: step.step_name,
+            room_type: step.room_type,
+            step_type: step.step_type,
+            service_code: step.service_code,
+            requires_payment: step.requires_payment,
+            sub_steps: step.sub_steps,
             depends_on: Array.from(new Set(step.depends_on)).filter(
                 (depId) => depId !== step.template_id && validIds.has(depId)
             ),
@@ -971,18 +979,21 @@ export function AdminProcessPage() {
                                                                 <div className="flex flex-wrap gap-2">
                                                                     {formSteps
                                                                         .filter((s) => s.template_step_id !== step.template_step_id)
-                                                                        .map((candidate) => {
+                                                                        .map((candidate, candidateIdx) => {
+                                                                            const candidateId =
+                                                                                candidate.template_step_id ||
+                                                                                candidate.template_id ||
+                                                                                `step_${candidateIdx + 1}`;
                                                                             const checked = step.depends_on.includes(
-                                                                                candidate.template_step_id
+                                                                                candidateId
                                                                             );
                                                                             return (
                                                                                 <label
-                                                                                    key={candidate.template_step_id}
-                                                                                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] cursor-pointer select-none transition ${
-                                                                                        checked
+                                                                                    key={candidateId}
+                                                                                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] cursor-pointer select-none transition ${checked
                                                                                             ? 'bg-purple-50 border-purple-200 text-purple-700'
                                                                                             : 'bg-neutral-50 border-neutral-200 text-neutral-600 hover:bg-neutral-100'
-                                                                                    }`}
+                                                                                        }`}
                                                                                 >
                                                                                     <input
                                                                                         type="checkbox"
@@ -990,14 +1001,14 @@ export function AdminProcessPage() {
                                                                                         onChange={(e) =>
                                                                                             handleDependsOnToggle(
                                                                                                 idx,
-                                                                                                candidate.template_step_id,
+                                                                                                candidateId,
                                                                                                 e.target.checked
                                                                                             )
                                                                                         }
                                                                                         className="h-3.5 w-3.5 rounded border-neutral-300 text-purple-600 accent-purple-600"
                                                                                     />
                                                                                     <span className="font-semibold">
-                                                                                        {candidate.template_step_id}
+                                                                                        {candidateId}
                                                                                     </span>
                                                                                     <span className="text-neutral-400 truncate max-w-[140px]">
                                                                                         {candidate.step_name || 'Chưa đặt tên'}
