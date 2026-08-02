@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["10.170.3.155", "localhost"],
   async rewrites() {
     const backendUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (!backendUrl) {
+      return [];
+    }
     return [
       {
         source: "/api/:path*",
