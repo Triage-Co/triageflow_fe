@@ -135,8 +135,9 @@ function stripPaymentPrefix(name: string): string {
 }
 
 /**
- * Payment for the specialist exam itself (not CLS), e.g. "Thanh toán khám chuyên khoa".
- * These belong BEFORE "Khám bệnh" in the timeline.
+ * Payment for the specialist exam / queue ticket itself (not CLS).
+ * e.g. "Thanh toán khám chuyên khoa", "Thanh toán viện phí".
+ * Do NOT treat CLS fees like "Thanh toán: Khám ngoại khoa" as exam payment.
  */
 function isExamPaymentStepName(name: string): boolean {
     if (!isPaymentStepName(name)) return false;
@@ -144,20 +145,41 @@ function isExamPaymentStepName(name: string): boolean {
     if (!rest) return true;
     if (isDefaultExamStepName(rest)) return true;
     if (rest.includes('chuyên khoa') || rest.includes('chuyen khoa')) return true;
-    // "Thanh toán khám…" / "Thanh toán: khám…" but not CLS imaging names
-    if (rest.startsWith('khám') || rest.startsWith('kham')) {
-        const isClsLike =
-            rest.includes('x-quang') ||
-            rest.includes('xquang') ||
-            rest.includes('siêu âm') ||
-            rest.includes('sieu am') ||
-            rest.includes('xét nghiệm') ||
-            rest.includes('xet nghiem') ||
-            rest.includes('ct ') ||
-            rest.includes('mri');
-        return !isClsLike;
-    }
+    if (rest.includes('viện phí') || rest.includes('vien phi')) return true;
+    if (rest.includes('lấy số') || rest.includes('lay so')) return true;
+    if (rest.includes('đặt khám') || rest.includes('dat kham')) return true;
+    // Bare "Thanh toán khám" / "Thanh toán: khám"
+    if (rest === 'khám' || rest === 'kham') return true;
     return false;
+}
+
+function isPaidPaymentStatus(paymentStatus?: string): boolean {
+    const pay = (paymentStatus || '').toUpperCase().trim();
+    return ['SUCCESSED', 'SUCCESS', 'PAID', 'COMPLETED', 'DONE', 'FINISHED'].includes(pay);
+}
+
+/** Hide cancelled steps — except settled / exam-queue payments that must stay on the timeline. */
+function shouldHideLiveFlowStep(step: Record<string, unknown>): boolean {
+    const stepStatus = String(step.step_status || '').toUpperCase();
+    if (stepStatus !== 'CANCELLED' && stepStatus !== 'CANCELED') return false;
+
+    // Paid successfully — keep visible (green)
+    if (isPaidPaymentStatus(String(step.payment_status || ''))) return false;
+
+    const name = String(step.step_name || '');
+    // BE often soft-cancels the lấy-số payment step after generate — keep it on flow
+    if (isExamPaymentStepName(name)) return false;
+
+    const stepType = String(step.step_type || '').toUpperCase();
+    const roomType = String(step.room_type || '').toUpperCase();
+    if (
+        (stepType === 'PAYMENT' || roomType === 'CASHIER') &&
+        isPaidPaymentStatus(String(step.payment_status || ''))
+    ) {
+        return false;
+    }
+
+    return true;
 }
 
 /** Format CLS / payment step names for timeline display. */
@@ -838,11 +860,25 @@ function getIconForStep(specialtyName: string, roomName: string, label: string):
     return Stethoscope;
 }
 
-function mapStepStatusToNodeStatus(stepStatus: string, isPatientDone?: boolean): WorkflowStepStatus {
+function mapStepStatusToNodeStatus(
+    stepStatus: string,
+    isPatientDone?: boolean,
+    paymentStatus?: string,
+    stepName?: string
+): WorkflowStepStatus {
+    if (isPaidPaymentStatus(paymentStatus)) return 'completed';
     if (isPatientDone) return 'completed';
 
     const st = (stepStatus || '').toUpperCase().trim();
     if (['COMPLETED', 'DONE', 'SUCCESSED', 'FINISHED'].includes(st)) {
+        return 'completed';
+    }
+
+    // Soft-cancelled after lấy số / pay — treat exam payment as completed on UI
+    if (
+        (st === 'CANCELLED' || st === 'CANCELED') &&
+        (isPaidPaymentStatus(paymentStatus) || isExamPaymentStepName(stepName || ''))
+    ) {
         return 'completed';
     }
 
@@ -2053,7 +2089,7 @@ export function WorkflowDiagram({
         orderedFlowSteps.forEach((stepItem, index) => {
             const step = stepItem as Record<string, unknown>;
             const stepStatus = ((step.step_status as string) || '').toUpperCase();
-            if (stepStatus === 'CANCELLED' || stepStatus === 'CANCELED') return;
+            if (shouldHideLiveFlowStep(step)) return;
 
             // Drop cancelled / exact step_id duplicates only (same name can be service + payment)
             const stepId = (step.step_id as string) || `api-step-${index}`;
@@ -2073,7 +2109,8 @@ export function WorkflowDiagram({
                 unlabeledPaymentStepIds.has(stepId) ||
                 stepType === 'PAYMENT' ||
                 roomType === 'CASHIER' ||
-                roomType === 'PAYMENT';
+                roomType === 'PAYMENT' ||
+                isExamPaymentStepName(rawLabel);
             // CLS payment companions → "Thanh toán: {tên dịch vụ}"
             let label = formatFlowStepLabel(rawLabel, { forcePayment });
 
@@ -2083,7 +2120,13 @@ export function WorkflowDiagram({
                 if (bits.length > 0) label = `${rawLabel} · ${bits.join(' · ')}`;
             }
 
-            const status = mapStepStatusToNodeStatus(stepStatus, isPatientDone);
+            const paymentStatus = String(step.payment_status || '');
+            const status = mapStepStatusToNodeStatus(
+                stepStatus,
+                isPatientDone,
+                paymentStatus,
+                rawLabel
+            );
 
             const { staffName, staffId: resolvedStaffId } = resolveLiveStepStaff(step);
 
@@ -2264,7 +2307,7 @@ export function WorkflowDiagram({
                                 const step = stepItem as Record<string, unknown>;
                                 const stepId = (step.step_id as string) || `step-${idx}`;
                                 const stepStatus = ((step.step_status as string) || '').toUpperCase();
-                                if (stepStatus === 'CANCELLED' || stepStatus === 'CANCELED') return null;
+                                if (shouldHideLiveFlowStep(step)) return null;
 
                                 const canEditStatus = canCurrentDoctorEditStepStatus(step);
 
