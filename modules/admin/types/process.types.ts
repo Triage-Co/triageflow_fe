@@ -11,10 +11,12 @@ export type TemplateStepType =
     | 'DISPENSING'
     | 'OTHER';
 
+/** Matches backend TemplateStepDto — `template_id` is the step key (e.g. step_1), not parent template UUID. */
 export interface TemplateStep {
-    /** Required by CreateTemplateDto / TemplateStepDto */
-    template_id: string;
-    template_step_id: string;
+    /** Step key sent to API as `template_id` (required on create/update). */
+    template_id?: string;
+    /** UI-only mirror of the step key; never send on POST/PATCH (not in TemplateStepDto). */
+    template_step_id?: string;
     step_name: string;
     room_type: string;
     step_type: TemplateStepType | string;
@@ -36,9 +38,14 @@ export interface ProcessTemplate {
     updated_at?: string;
 }
 
+/** Fields BE accepts on TemplateStepDto for create/update requests. */
+export type TemplateStepWriteDto = Omit<TemplateStep, 'template_step_id'> & {
+    template_id: string;
+};
+
 export interface CreateTemplateDto {
     name: string;
-    steps: TemplateStep[];
+    steps: TemplateStepWriteDto[];
 }
 
 export interface UpdateTemplateDto {

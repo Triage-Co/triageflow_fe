@@ -22,7 +22,6 @@ import { useProcessStore } from '../store/processStore';
 import {
     ProcessTemplate,
     TemplateStep,
-    CreateTemplateDto,
     ROOM_TYPE_OPTIONS,
     STEP_TYPE_OPTIONS,
     normalizeRoomType,
@@ -244,15 +243,18 @@ export function AdminProcessPage() {
     const openEditModal = (template: ProcessTemplate) => {
         setEditingTemplate(template);
         setFormName(template.name);
-        const parentTemplateId = template.template_id || template.id || '';
         setFormSteps(
             template.steps && template.steps.length > 0
                 ? template.steps.map((s, idx) => {
-                    const templateStepId = s.template_step_id || `step_${idx + 1}`;
+                    // BE TemplateStepDto.template_id is the step key (e.g. step_1)
+                    const templateStepId =
+                        s.template_id?.trim() ||
+                        s.template_step_id?.trim() ||
+                        `step_${idx + 1}`;
                     const roomType = normalizeRoomType(s.room_type);
                     return {
                         ...s,
-                        template_id: s.template_id || parentTemplateId || templateStepId,
+                        template_id: templateStepId,
                         template_step_id: templateStepId,
                         room_type: roomType,
                         step_type: normalizeStepType(s.step_type, roomType),
@@ -391,17 +393,17 @@ export function AdminProcessPage() {
         setFormSubmitting(true);
         setFormError(null);
 
-        const parentTemplateId =
-            editingTemplate?.template_id || editingTemplate?.id || undefined;
-
-        // Payload matches POST /api/template CreateTemplateDto / TemplateStepDto
+        // TemplateStepDto.template_id = step key (step_1); do not send template_step_id
         const normalizedSteps: TemplateStep[] = formSteps.map((step, idx) => {
-            const templateStepId = step.template_step_id?.trim() || `step_${idx + 1}`;
+            const stepKey =
+                step.template_step_id?.trim() ||
+                step.template_id?.trim() ||
+                `step_${idx + 1}`;
             const roomType = normalizeRoomType(step.room_type);
 
             return {
-                template_id: (step.template_id || parentTemplateId || templateStepId).trim(),
-                template_step_id: templateStepId,
+                template_id: stepKey,
+                template_step_id: stepKey,
                 step_name: step.step_name.trim(),
                 room_type: roomType,
                 step_type: normalizeStepType(step.step_type, roomType),
@@ -412,31 +414,28 @@ export function AdminProcessPage() {
                 ).trim(),
                 requires_payment: Boolean(step.requires_payment),
                 depends_on: Array.isArray(step.depends_on) ? step.depends_on.filter(Boolean) : [],
-                // API allows nested TemplateStepDto[]; unused for now → keep empty list
                 sub_steps: [],
             };
         });
 
-        const validIds = new Set(normalizedSteps.map((step) => step.template_step_id));
-        const payloadSteps = normalizedSteps.map((step) => ({
+        const validIds = new Set(normalizedSteps.map((step) => step.template_id));
+        const payloadSteps = normalizedSteps.map(({ template_step_id: _uiOnly, ...step }) => ({
             ...step,
             depends_on: Array.from(new Set(step.depends_on)).filter(
-                (depId) => depId !== step.template_step_id && validIds.has(depId)
+                (depId) => depId !== step.template_id && validIds.has(depId)
             ),
         }));
-
-        const payload: CreateTemplateDto = {
-            name: formName.trim(),
-            steps: payloadSteps,
-        };
 
         try {
             if (editingTemplate) {
                 const templateId = editingTemplate.template_id || editingTemplate.id || '';
-                // UpdateTemplateDto only accepts name + steps (is_active is UI-only for now)
-                await updateTemplate(templateId, payload, accessToken);
+                await updateTemplate(
+                    templateId,
+                    { name: formName.trim(), steps: payloadSteps },
+                    accessToken
+                );
             } else {
-                await createTemplate(payload, accessToken);
+                await createTemplate({ name: formName.trim(), steps: payloadSteps }, accessToken);
             }
             setIsFormModalOpen(false);
         } catch (err) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
     FileText,
     CreditCard,
@@ -24,6 +24,8 @@ import {
 } from '@/modules/admin/types/process.types';
 import {
     clinicalService,
+    extractFlowSteps,
+    resolvePatientFlow,
 } from '@/modules/clinical/services/clinicalService';
 import { useAuthStore } from '@/store/authStore';
 import { useRoomStore } from '@/modules/admin/store/roomStore';
@@ -87,6 +89,10 @@ interface FlowNode {
 interface WorkflowDiagramProps {
     patientId: string;
     patient?: Patient;
+    /** Bump to force reload active flow (e.g. after adding a service order). */
+    refreshKey?: number;
+    /** Sync resolved flow_id / booking_id back to patient context after active-flow fetch. */
+    onFlowResolved?: (info: { flowId: string; bookingId: string }) => void;
 }
 
 const DEFAULT_FULL_WORKFLOW: FlowNode[] = [
@@ -100,12 +106,160 @@ function normalizeStepLabel(name: string): string {
 
 function isDefaultBookingStepName(name: string): boolean {
     const n = normalizeStepLabel(name);
-    return n === 'đặt khám' || n === 'dat kham';
+    return (
+        n === 'đặt khám' ||
+        n === 'dat kham' ||
+        n === 'đặt lịch' ||
+        n === 'dat lich'
+    );
 }
 
 function isDefaultExamStepName(name: string): boolean {
     const n = normalizeStepLabel(name);
     return n === 'khám bệnh' || n === 'kham benh';
+}
+
+function isPaymentStepName(name: string): boolean {
+    const n = normalizeStepLabel(name);
+    return n.startsWith('thanh toán') || n.startsWith('thanh toan');
+}
+
+/** Strip leading "Thanh toán:" / "Thanh toán " for matching service ↔ payment. */
+function stripPaymentPrefix(name: string): string {
+    return normalizeStepLabel(name)
+        .replace(/^thanh toán:\s*/, '')
+        .replace(/^thanh toan:\s*/, '')
+        .replace(/^thanh toán\s+/, '')
+        .replace(/^thanh toan\s+/, '')
+        .trim();
+}
+
+/**
+ * Payment for the specialist exam itself (not CLS), e.g. "Thanh toán khám chuyên khoa".
+ * These belong BEFORE "Khám bệnh" in the timeline.
+ */
+function isExamPaymentStepName(name: string): boolean {
+    if (!isPaymentStepName(name)) return false;
+    const rest = stripPaymentPrefix(name);
+    if (!rest) return true;
+    if (isDefaultExamStepName(rest)) return true;
+    if (rest.includes('chuyên khoa') || rest.includes('chuyen khoa')) return true;
+    // "Thanh toán khám…" / "Thanh toán: khám…" but not CLS imaging names
+    if (rest.startsWith('khám') || rest.startsWith('kham')) {
+        const isClsLike =
+            rest.includes('x-quang') ||
+            rest.includes('xquang') ||
+            rest.includes('siêu âm') ||
+            rest.includes('sieu am') ||
+            rest.includes('xét nghiệm') ||
+            rest.includes('xet nghiem') ||
+            rest.includes('ct ') ||
+            rest.includes('mri');
+        return !isClsLike;
+    }
+    return false;
+}
+
+/** Format CLS / payment step names for timeline display. */
+function formatFlowStepLabel(rawName: string, opts?: { forcePayment?: boolean }): string {
+    const raw = (rawName || '').trim();
+    if (!raw) return opts?.forcePayment ? 'Thanh toán' : 'Bước';
+
+    if (isPaymentStepName(raw) || isExamPaymentStepName(raw)) {
+        // Normalize "Thanh toán X" → "Thanh toán: X"
+        if (raw.includes(':')) return raw;
+        const remainder = raw
+            .replace(/^thanh toán\s+/i, '')
+            .replace(/^thanh toan\s+/i, '')
+            .trim();
+        return remainder ? `Thanh toán: ${remainder}` : raw;
+    }
+
+    if (opts?.forcePayment) {
+        return `Thanh toán: ${raw}`;
+    }
+    return raw;
+}
+
+function pickLiveServiceCode(rec: Record<string, unknown>): string {
+    if (typeof rec.service_code === 'string' && rec.service_code.trim()) {
+        return rec.service_code.trim().toLowerCase();
+    }
+    const nested = asRecord(rec.service);
+    if (nested && typeof nested.service_code === 'string' && nested.service_code.trim()) {
+        return nested.service_code.trim().toLowerCase();
+    }
+    return '';
+}
+
+/**
+ * BE often creates a payment companion with the same bare service name.
+ * Mark later duplicates (by service_code / bare name) as payment for display.
+ */
+function detectUnlabeledPaymentStepIds(steps: unknown[]): Set<string> {
+    type Entry = {
+        id: string;
+        key: string;
+        createdAt: number;
+        isPayment: boolean;
+        index: number;
+    };
+
+    const entries: Entry[] = [];
+    steps.forEach((item, index) => {
+        const rec = asRecord(item);
+        if (!rec) return;
+        const status = String(rec.step_status || '').toUpperCase();
+        if (status === 'CANCELLED' || status === 'CANCELED') return;
+        const id = typeof rec.step_id === 'string' ? rec.step_id : '';
+        if (!id) return;
+        const stepName = String(rec.step_name || '').trim();
+        if (!stepName || isDefaultBookingStepName(stepName) || isDefaultExamStepName(stepName)) {
+            return;
+        }
+        const stepType = String(rec.step_type || '').toUpperCase();
+        const roomType = String(rec.room_type || '').toUpperCase();
+        const nameIsPayment = isPaymentStepName(stepName) || isExamPaymentStepName(stepName);
+        const typedPayment =
+            !nameIsPayment &&
+            (stepType === 'PAYMENT' || roomType === 'CASHIER' || roomType === 'PAYMENT');
+        const code = pickLiveServiceCode(rec);
+        const key = code
+            ? `code:${code}`
+            : `name:${stripPaymentPrefix(stepName) || normalizeStepLabel(stepName)}`;
+        const createdRaw = rec.create_at ?? rec.created_at ?? rec.updated_at;
+        const createdAt = createdRaw ? new Date(createdRaw as string | number).getTime() : NaN;
+        entries.push({
+            id,
+            key,
+            createdAt: Number.isFinite(createdAt) ? createdAt : index,
+            isPayment: nameIsPayment || typedPayment,
+            index,
+        });
+    });
+
+    const groups = new Map<string, Entry[]>();
+    for (const e of entries) {
+        const list = groups.get(e.key) || [];
+        list.push(e);
+        groups.set(e.key, list);
+    }
+
+    const paymentIds = new Set<string>();
+    for (const list of groups.values()) {
+        if (list.length < 2) continue;
+        if (list.some((e) => e.isPayment)) {
+            list.filter((e) => e.isPayment).forEach((e) => paymentIds.add(e.id));
+            continue;
+        }
+        const sorted = [...list].sort(
+            (a, b) => a.createdAt - b.createdAt || a.index - b.index || a.id.localeCompare(b.id)
+        );
+        for (let i = 1; i < sorted.length; i++) {
+            paymentIds.add(sorted[i].id);
+        }
+    }
+    return paymentIds;
 }
 
 function isProtectedBaseStep(step: Record<string, unknown>): boolean {
@@ -130,6 +284,43 @@ function findLiveExamStepId(steps: unknown[]): string {
 function asRecord(value: unknown): Record<string, unknown> | null {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
     return value as Record<string, unknown>;
+}
+
+/** Pull a display name from staff_info / staff / account shaped objects. */
+function extractPersonName(person: Record<string, unknown> | null | undefined): string {
+    if (!person) return '';
+    const account = asRecord(person.account);
+    const profile = asRecord(person.profile) || asRecord(account?.profile);
+    const candidates = [
+        person.full_name,
+        person.fullName,
+        person.name,
+        person.doctor_name,
+        person.staff_name,
+        person.user_name,
+        account?.full_name,
+        account?.fullName,
+        account?.name,
+        account?.user_name,
+        profile?.full_name,
+        profile?.fullName,
+        profile?.name,
+    ];
+    for (const value of candidates) {
+        if (typeof value === 'string' && value.trim()) return value.trim();
+    }
+    return '';
+}
+
+function isUnassignedStaffLabel(label: string): boolean {
+    const n = label.trim().toLowerCase();
+    return (
+        !n ||
+        n.includes('chưa phân công') ||
+        n.includes('chua phan cong') ||
+        n.includes('chưa có bác sĩ') ||
+        n.includes('chua co bac si')
+    );
 }
 
 function extractServiceOptions(raw: unknown): ServiceOption[] {
@@ -356,41 +547,6 @@ function expandDraftsWithPaymentSteps(
     return result;
 }
 
-function extractFlowList(raw: unknown): Record<string, unknown>[] {
-    if (!raw) return [];
-    if (Array.isArray(raw)) return raw as Record<string, unknown>[];
-    if (typeof raw === 'object') {
-        const rec = raw as Record<string, unknown>;
-        if (Array.isArray(rec.data)) {
-            return rec.data as Record<string, unknown>[];
-        }
-        if (rec.data && typeof rec.data === 'object' && Array.isArray((rec.data as Record<string, unknown>).data)) {
-            return (rec.data as Record<string, unknown>).data as Record<string, unknown>[];
-        }
-    }
-    return [];
-}
-
-function pickBestActiveFlow(flows: Record<string, unknown>[]): Record<string, unknown> | null {
-    if (flows.length === 0) return null;
-
-    const flowsWithActiveSteps = flows.filter((f) => {
-        const steps = (f.steps as Record<string, unknown>[]) || [];
-        return steps.some((s) => {
-            const st = ((s.step_status as string) || '').toUpperCase();
-            return ['PENDING', 'IN_PROGRESS', 'PROCESSING', 'ONGOING', 'CURRENT'].includes(st);
-        });
-    });
-
-    const candidates = flowsWithActiveSteps.length > 0 ? flowsWithActiveSteps : flows;
-
-    return candidates.sort((a, b) => {
-        const timeA = new Date((a.create_at || a.created_at || 0) as string | number).getTime();
-        const timeB = new Date((b.create_at || b.created_at || 0) as string | number).getTime();
-        return timeB - timeA;
-    })[0] || null;
-}
-
 function pickStepOrderNumber(rec: Record<string, unknown>): number | null {
     for (const key of ['docNo', 'doc_no', 'order', 'sequence', 'seq', 'step_order']) {
         const val = rec[key];
@@ -452,13 +608,30 @@ function pickLiveRequiredStepId(step: Record<string, unknown> | null | undefined
 
 /**
  * Order live flow steps for timeline display.
- * Avoid blind reverse — that pushes PAYMENT steps to the top when BE returns
- * services-first then payments (or already oldest-first).
+ * Spine: Đặt khám → Thanh toán khám chuyên khoa → Khám bệnh → (CLS service → payment)…
  */
-function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
+export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
     if (!Array.isArray(steps) || steps.length <= 1) return steps;
 
-    const rows = steps.map((item, index) => {
+    const unlabeledPaymentIds = detectUnlabeledPaymentStepIds(steps);
+
+    type Row = {
+        item: unknown;
+        index: number;
+        orderNum: number | null;
+        createdAt: number;
+        dependsOn: string[];
+        stepId: string;
+        stepName: string;
+        stepNameLower: string;
+        serviceCode: string;
+        isPayment: boolean;
+        isExamPayment: boolean;
+        isBooking: boolean;
+        isExam: boolean;
+    };
+
+    const rows: Row[] = steps.map((item, index) => {
         const rec = asRecord(item) || {};
         const orderNum = pickStepOrderNumber(rec);
         const createdRaw = rec.create_at ?? rec.created_at ?? rec.updated_at;
@@ -472,122 +645,168 @@ function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
             (typeof rec.template_step_id === 'string' && rec.template_step_id) ||
             (typeof rec.step_id === 'string' && rec.step_id) ||
             `idx-${index}`;
+        const liveStepId = typeof rec.step_id === 'string' ? rec.step_id : '';
         const stepName = String(rec.step_name || '').trim();
-        const stepNameLower = stepName.toLowerCase();
-        // Name-only: room/step_type from BE can mis-tag clinical steps as PAYMENT/CASHIER
-        const isPayment = stepNameLower.startsWith('thanh toán');
+        const stepNameLower = normalizeStepLabel(stepName);
+        const stepType = String(rec.step_type || '').toUpperCase();
+        const roomType = String(rec.room_type || '').toUpperCase();
+        // Prefer name-based payment detection; step_type only as fallback (BE may mis-tag clinics)
+        const nameIsPayment = isPaymentStepName(stepName) || isExamPaymentStepName(stepName);
+        const typedPayment =
+            !nameIsPayment &&
+            (stepType === 'PAYMENT' || roomType === 'CASHIER' || roomType === 'PAYMENT') &&
+            !isDefaultExamStepName(stepName) &&
+            !isDefaultBookingStepName(stepName);
+        const unlabeledPayment = Boolean(liveStepId && unlabeledPaymentIds.has(liveStepId));
+        const isPayment = nameIsPayment || typedPayment || unlabeledPayment;
+        const isExamPayment = isExamPaymentStepName(stepName);
 
-        return { item, index, orderNum, createdAt, dependsOn, stepId, stepName, stepNameLower, isPayment };
+        return {
+            item,
+            index,
+            orderNum,
+            createdAt,
+            dependsOn,
+            stepId,
+            stepName,
+            stepNameLower,
+            serviceCode: pickLiveServiceCode(rec),
+            isPayment: isPayment || isExamPayment,
+            isExamPayment,
+            isBooking: isDefaultBookingStepName(stepName),
+            isExam: isDefaultExamStepName(stepName),
+        };
     });
 
-    // 1) Pair "Thanh toán: X" immediately after service step "X"
-    const namedPayments = rows.filter(
-        (r) => r.isPayment && r.stepNameLower.startsWith('thanh toán:')
-    );
-    if (namedPayments.length > 0) {
+    const sortStable = (a: Row, b: Row) => {
+        if (a.orderNum != null && b.orderNum != null && a.orderNum !== b.orderNum) {
+            return a.orderNum - b.orderNum;
+        }
+        if (a.orderNum != null && b.orderNum == null) return -1;
+        if (b.orderNum != null && a.orderNum == null) return 1;
+        if (Number.isFinite(a.createdAt) && Number.isFinite(b.createdAt) && a.createdAt !== b.createdAt) {
+            return a.createdAt - b.createdAt;
+        }
+        return a.index - b.index;
+    };
+
+    const paymentTargetKey = (row: Row): string => {
+        if (row.serviceCode) return `code:${row.serviceCode}`;
+        return `name:${stripPaymentPrefix(row.stepName)}`;
+    };
+
+    const serviceKey = (row: Row): string => {
+        if (row.serviceCode) return `code:${row.serviceCode}`;
+        return `name:${row.stepNameLower}`;
+    };
+
+    /**
+     * Pair each CLS service with its payment AFTER it.
+     * Matches "Thanh toán: X" / "Thanh toán X" to service "X" (and by service_code).
+     */
+    const orderServiceThenPayment = (block: Row[]): Row[] => {
+        if (block.length <= 1) return block;
+
         const used = new Set<number>();
-        const result: typeof rows = [];
+        const result: Row[] = [];
+        const payments = block.filter((r) => r.isPayment && !r.isExamPayment);
+        const services = [...block.filter((r) => !r.isPayment)].sort(sortStable);
 
-        const services = rows.filter((r) => !r.isPayment);
-        const orderedServices = [...services].sort((a, b) => {
-            if (a.orderNum != null && b.orderNum != null) return a.orderNum - b.orderNum;
-            if (Number.isFinite(a.createdAt) && Number.isFinite(b.createdAt) && a.createdAt !== b.createdAt) {
-                return a.createdAt - b.createdAt;
-            }
-            return a.index - b.index;
-        });
-
-        const findPaymentFor = (svcName: string) => {
-            const exact = `thanh toán: ${svcName}`;
-            return namedPayments.find((p) => {
+        const findPaymentFor = (svc: Row): Row | undefined => {
+            const svcKeys = new Set([serviceKey(svc), `name:${svc.stepNameLower}`]);
+            return payments.find((p) => {
                 if (used.has(p.index)) return false;
-                // Exact match only — avoid loose includes() swapping pairs
-                return p.stepNameLower === exact || p.stepNameLower === `thanh toan: ${svcName}`;
+                const target = paymentTargetKey(p);
+                if (svcKeys.has(target)) return true;
+                // Fuzzy: payment target contained in / equals service name
+                const payRest = stripPaymentPrefix(p.stepName);
+                return (
+                    payRest === svc.stepNameLower ||
+                    svc.stepNameLower.includes(payRest) ||
+                    payRest.includes(svc.stepNameLower)
+                );
             });
         };
 
-        orderedServices.forEach((svc) => {
+        services.forEach((svc) => {
             result.push(svc);
             used.add(svc.index);
-            const pay = findPaymentFor(svc.stepNameLower);
+            const pay = findPaymentFor(svc);
             if (pay) {
                 result.push(pay);
                 used.add(pay.index);
             }
         });
 
-        // Unmatched payments: try place after service by parsing "Thanh toán: {name}"
-        namedPayments.forEach((pay) => {
-            if (used.has(pay.index)) return;
-            const target = pay.stepNameLower.replace(/^thanh toán:\s*/i, '').trim();
-            const svcIdx = result.findIndex(
-                (r) => !r.isPayment && r.stepNameLower === target
-            );
-            if (svcIdx >= 0) {
-                result.splice(svcIdx + 1, 0, pay);
-            } else {
-                result.push(pay);
-            }
-            used.add(pay.index);
-        });
+        // Remaining payments: try insert after matching service already in result
+        payments
+            .filter((p) => !used.has(p.index))
+            .sort(sortStable)
+            .forEach((pay) => {
+                const payRest = stripPaymentPrefix(pay.stepName);
+                const svcIdx = result.findIndex(
+                    (r) =>
+                        !r.isPayment &&
+                        (serviceKey(r) === paymentTargetKey(pay) ||
+                            r.stepNameLower === payRest ||
+                            r.stepNameLower.includes(payRest) ||
+                            payRest.includes(r.stepNameLower))
+                );
+                if (svcIdx >= 0) {
+                    // Place right after service (and after an already-paired payment if any)
+                    let insertAt = svcIdx + 1;
+                    while (insertAt < result.length && result[insertAt].isPayment) insertAt += 1;
+                    result.splice(insertAt, 0, pay);
+                } else {
+                    result.push(pay);
+                }
+                used.add(pay.index);
+            });
 
-        rows.forEach((r) => {
+        block.forEach((r) => {
             if (!used.has(r.index)) result.push(r);
         });
 
-        if (result.length === rows.length) {
-            return result.map((r) => r.item);
-        }
-    }
+        return result;
+    };
 
-    // 2) Explicit order / template_step_id (step_1, step_2, ...)
-    if (rows.some((r) => r.orderNum != null)) {
-        return [...rows]
-            .sort((a, b) => {
-                if (a.orderNum != null && b.orderNum != null) return a.orderNum - b.orderNum;
-                if (a.orderNum != null) return -1;
-                if (b.orderNum != null) return 1;
-                return a.index - b.index;
-            })
-            .map((r) => r.item);
-    }
+    const booking = rows.filter((r) => r.isBooking).sort(sortStable);
+    const examPay = rows
+        .filter((r) => r.isExamPayment && !r.isBooking && !r.isExam)
+        .sort(sortStable);
+    const exam = rows.filter((r) => r.isExam && !r.isBooking).sort(sortStable);
 
-    // 3) Topological order via depends_on (service → its payment)
-    const byId = new Map(rows.map((r) => [r.stepId, r]));
-    const hasDeps = rows.some((r) => r.dependsOn.length > 0);
-    if (hasDeps) {
-        const visited = new Set<string>();
-        const result: typeof rows = [];
+    // Drop duplicate CLS payment steps for the same service (createOrder + createStepParent)
+    const restRaw = rows.filter((r) => !r.isBooking && !r.isExam && !r.isExamPayment);
+    const restPreferred = (() => {
+        const byKey = new Map<string, Row>();
+        const nonPay: Row[] = [];
+        restRaw.forEach((r) => {
+            if (!r.isPayment) {
+                nonPay.push(r);
+                return;
+            }
+            const key = paymentTargetKey(r);
+            const prev = byKey.get(key);
+            if (!prev) {
+                byKey.set(key, r);
+                return;
+            }
+            const prevRec = asRecord(prev.item);
+            const nextRec = asRecord(r.item);
+            const prevRoom = Boolean(prevRec?.room_id || asRecord(prevRec?.room_info)?.room_id);
+            const nextRoom = Boolean(nextRec?.room_id || asRecord(nextRec?.room_info)?.room_id);
+            if (nextRoom && !prevRoom) byKey.set(key, r);
+            else if (nextRoom === prevRoom && (r.created_at || 0) > (prev.created_at || 0)) {
+                byKey.set(key, r);
+            }
+        });
+        return [...nonPay, ...byKey.values()];
+    })();
 
-        const visit = (row: (typeof rows)[number]) => {
-            if (visited.has(row.stepId)) return;
-            visited.add(row.stepId);
-            row.dependsOn.forEach((depId) => {
-                const dep = byId.get(depId);
-                if (dep) visit(dep);
-            });
-            result.push(row);
-        };
-
-        rows.forEach((row) => visit(row));
-        if (result.length === rows.length) {
-            return result.map((r) => r.item);
-        }
-    }
-
-    // 4) created_at ascending (oldest first = assign order)
-    if (rows.some((r) => Number.isFinite(r.createdAt) && r.createdAt > 0)) {
-        return [...rows]
-            .sort((a, b) => {
-                const ta = Number.isFinite(a.createdAt) ? a.createdAt : Number.MAX_SAFE_INTEGER;
-                const tb = Number.isFinite(b.createdAt) ? b.createdAt : Number.MAX_SAFE_INTEGER;
-                return ta - tb || a.index - b.index;
-            })
-            .map((r) => r.item);
-    }
-
-    // 5) Keep API order — do NOT reverse
-    return steps;
+    return [...booking, ...examPay, ...exam, ...orderServiceThenPayment(restPreferred)].map(
+        (r) => r.item
+    );
 }
 
 function getIconForStep(specialtyName: string, roomName: string, label: string): NodeIcon {
@@ -627,26 +846,31 @@ function mapStepStatusToNodeStatus(stepStatus: string, isPatientDone?: boolean):
         return 'completed';
     }
 
-    if (['PENDING', 'IN_PROGRESS', 'PROCESSING', 'CURRENT', 'DOING', 'EXAMINING', 'ACTIVE', 'ONGOING'].includes(st)) {
-        return 'pending';
+    if (['IN_PROGRESS', 'PROCESSING', 'CURRENT', 'DOING', 'EXAMINING', 'ACTIVE', 'ONGOING'].includes(st)) {
+        return 'current';
     }
 
-    return 'current';
+    // PENDING / waiting / unknown → gray default
+    return 'pending';
 }
 
 function nodeStyles(status: WorkflowStepStatus) {
     switch (status) {
         case 'completed':
+            // COMPLETED → green
             return {
                 ring: 'bg-[#10B981] shadow-[0_0_0_4px_rgba(16,185,129,0.2)] border-transparent text-white',
                 line: 'bg-[#10B981]',
             };
-        case 'pending':
+        case 'current':
+            // IN_PROGRESS → blue
             return {
                 ring: 'bg-[#2563EB] shadow-[0_0_0_4px_rgba(37,99,235,0.25)] border-transparent text-white',
                 line: 'bg-[#2563EB]',
             };
+        case 'pending':
         default:
+            // PENDING → gray default
             return {
                 ring: 'bg-[#F1F5F9] border border-[#CBD5E1] text-[#94A3B8]',
                 line: 'bg-[#E2E8F0]',
@@ -711,13 +935,19 @@ function getRoomTypeValue(room: unknown): string {
     return '';
 }
 
-export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
+export function WorkflowDiagram({
+    patientId,
+    patient,
+    refreshKey = 0,
+    onFlowResolved,
+}: WorkflowDiagramProps) {
     const accessToken = useAuthStore((s) => s.accessToken);
     const authUser = useAuthStore((s) => s.user);
     const authProfile = useAuthStore((s) => s.profile);
-    const [isLoading, startFetch] = useTransition();
+    const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [flowData, setFlowData] = useState<Record<string, unknown> | null>(null);
+    const flowIdRef = useRef<string>('');
     const [templates, setTemplates] = useState<ProcessTemplate[]>([]);
     const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
     const [draftSteps, setDraftSteps] = useState<DraftStep[]>([]);
@@ -794,14 +1024,20 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
         throw lastError;
     };
 
-    const rawFlowSteps = useMemo(() => {
-        const steps = flowData?.steps;
-        return Array.isArray(steps) ? steps : [];
-    }, [flowData]);
+    const rawFlowSteps = useMemo(() => extractFlowSteps(flowData), [flowData]);
     const orderedFlowSteps = useMemo(() => {
         return orderFlowStepsForTimeline(rawFlowSteps);
     }, [rawFlowSteps]);
+    const unlabeledPaymentStepIds = useMemo(
+        () => detectUnlabeledPaymentStepIds(orderedFlowSteps),
+        [orderedFlowSteps]
+    );
     const hasLiveSteps = rawFlowSteps.length > 0;
+
+    useEffect(() => {
+        const id = typeof flowData?.flow_id === 'string' ? flowData.flow_id : '';
+        if (id) flowIdRef.current = id;
+    }, [flowData]);
 
     // Get rooms, staff and shifts from Zustand stores
     const { rooms, fetchRooms } = useRoomStore();
@@ -1052,17 +1288,10 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
             });
 
             if (staff) {
-                const stAny = staff as unknown as Record<string, unknown>;
-                const accAny = (staff.account || {}) as unknown as Record<string, unknown>;
-                const profAny = (accAny.profile || {}) as Record<string, unknown>;
-
                 const name =
+                    extractPersonName(staff as unknown as Record<string, unknown>) ||
                     staff.full_name ||
-                    (stAny.name as string) ||
-                    (accAny.full_name as string) ||
-                    (profAny.full_name as string) ||
                     staff.account?.user_name ||
-                    (accAny.user_name as string) ||
                     staff.account?.email;
 
                 if (name && name.trim()) return name;
@@ -1072,11 +1301,12 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
             const doctorInSpecialty = staffs.find(
                 (st) => (roomSpecialtyId && st.specialty_id === roomSpecialtyId) || (st.account?.role as string) === 'DOCTOR'
             );
-            if (doctorInSpecialty?.full_name) {
-                return doctorInSpecialty.full_name;
-            }
-            if (doctorInSpecialty?.account?.user_name) {
-                return doctorInSpecialty.account.user_name;
+            const specialtyName =
+                extractPersonName(doctorInSpecialty as unknown as Record<string, unknown>) ||
+                doctorInSpecialty?.full_name ||
+                doctorInSpecialty?.account?.user_name;
+            if (specialtyName && specialtyName.trim()) {
+                return specialtyName;
             }
         }
 
@@ -1169,7 +1399,90 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
         return doctorInSpecialty?.staff_id || '';
     };
 
+    const findStaffByAnyId = (sId: string) => {
+        if (!sId) return undefined;
+        return staffs.find((st) => {
+            const stAny = st as unknown as Record<string, unknown>;
+            const accAny = (st.account || {}) as unknown as Record<string, unknown>;
+            const profAny = (accAny.profile || {}) as Record<string, unknown>;
+            return (
+                st.staff_id === sId ||
+                stAny.id === sId ||
+                stAny.account_id === sId ||
+                stAny.user_id === sId ||
+                stAny.staff_code === sId ||
+                accAny.id === sId ||
+                accAny.account_id === sId ||
+                accAny.user_id === sId ||
+                accAny.email === sId ||
+                accAny.user_name === sId ||
+                profAny.id === sId
+            );
+        });
+    };
 
+    const resolveStaffNameById = (sId: string): string => {
+        const staff = findStaffByAnyId(sId);
+        if (!staff) return '';
+        return (
+            extractPersonName(staff as unknown as Record<string, unknown>) ||
+            staff.full_name ||
+            staff.account?.user_name ||
+            staff.account?.email ||
+            ''
+        );
+    };
+
+    /** Resolve display name + staff id when BE omits staff_info on a live step. */
+    const resolveLiveStepStaff = (
+        step: Record<string, unknown>
+    ): { staffName: string; staffId: string } => {
+        const staffInfo = asRecord(step.staff_info) || asRecord(step.staff);
+        const roomInfo = asRecord(step.room_info);
+
+        const fromInfo = extractPersonName(staffInfo);
+        const staffIdFromStep =
+            (typeof step.staff_id === 'string' && step.staff_id.trim()) ||
+            (typeof staffInfo?.staff_id === 'string' && staffInfo.staff_id.trim()) ||
+            (typeof staffInfo?.id === 'string' && staffInfo.id.trim()) ||
+            '';
+
+        if (fromInfo) {
+            return { staffName: fromInfo, staffId: staffIdFromStep };
+        }
+
+        if (staffIdFromStep) {
+            const byId = resolveStaffNameById(staffIdFromStep);
+            if (byId) return { staffName: byId, staffId: staffIdFromStep };
+        }
+
+        const roomCandidates = [
+            typeof step.room_id === 'string' ? step.room_id : '',
+            typeof roomInfo?.room_id === 'string' ? roomInfo.room_id : '',
+            typeof roomInfo?.room_name === 'string' ? roomInfo.room_name : '',
+        ].filter(Boolean);
+
+        for (const roomKey of roomCandidates) {
+            const dutyName = getStaffOnDutyForRoom(roomKey);
+            if (dutyName && !isUnassignedStaffLabel(dutyName)) {
+                const dutyId = pickDoctorOnDutyForRoom(roomKey) || staffIdFromStep;
+                return { staffName: dutyName, staffId: dutyId };
+            }
+
+            const dutyId = pickDoctorOnDutyForRoom(roomKey);
+            if (dutyId) {
+                const dutyNameById = resolveStaffNameById(dutyId);
+                if (dutyNameById) {
+                    return { staffName: dutyNameById, staffId: dutyId };
+                }
+            }
+        }
+
+        return {
+            staffName: 'Chưa phân công bác sĩ trực',
+            staffId: staffIdFromStep,
+        };
+    };
 
     const handleEditingSpecialtyChange = (specialtyId: string) => {
         setEditingSpecialtyId(specialtyId);
@@ -1210,22 +1523,19 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
     };
 
     const reloadFlow = async (): Promise<Record<string, unknown> | null> => {
-        if (!accessToken || !patientId) return null;
+        const resolvedPatientId = (patient?.patientId || '').trim();
+        if (!accessToken || !resolvedPatientId) return null;
         try {
-            const flowRes = await clinicalService.getActiveFlowByPatientId(patientId, accessToken);
-            let flowObj: Record<string, unknown> | null = null;
-            if (flowRes?.data) {
-                const raw = flowRes.data as unknown;
-                const list = extractFlowList(raw);
-                if (list.length > 0) {
-                    flowObj = pickBestActiveFlow(list);
-                } else if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-                    const rec = raw as Record<string, unknown>;
-                    flowObj = (rec.data && typeof rec.data === 'object' && !Array.isArray(rec.data))
-                        ? (rec.data as Record<string, unknown>)
-                        : rec;
-                }
-            }
+            const preferredFlowId =
+                flowIdRef.current ||
+                (typeof flowData?.flow_id === 'string' && flowData.flow_id) ||
+                patient?.flowId ||
+                '';
+            const flowObj = await resolvePatientFlow(accessToken, {
+                flowId: preferredFlowId,
+                patientId: resolvedPatientId,
+                bookingId: patient?.bookingId,
+            });
             setFlowData(flowObj);
             return flowObj;
         } catch (err) {
@@ -1395,62 +1705,79 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
     };
 
     useEffect(() => {
-        if (!accessToken || !patientId) return;
+        if (!accessToken) return;
+        // BE active-flow requires real patient_id — never queue_id (patient.id)
+        const resolvedPatientId = (patient?.patientId || '').trim();
+        if (!resolvedPatientId) {
+            setError('Thiếu patient_id — không tải được quy trình.');
+            setFlowData(null);
+            return;
+        }
+
+        let cancelled = false;
+        setError(null);
+        setIsLoading(true);
 
         const loadData = async () => {
-            startFetch(async () => {
-                try {
-                    setError(null);
-                    // Fetch Active Flow
-                    const flowRes = await clinicalService.getActiveFlowByPatientId(patientId, accessToken);
-                    let flowObj: Record<string, unknown> | null = null;
-                    if (flowRes?.data) {
-                        const raw = flowRes.data as unknown;
-                        const list = extractFlowList(raw);
-                        if (list.length > 0) {
-                            flowObj = pickBestActiveFlow(list);
-                        } else if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-                            const rec = raw as Record<string, unknown>;
-                            flowObj = (rec.data && typeof rec.data === 'object' && !Array.isArray(rec.data))
-                                ? (rec.data as Record<string, unknown>)
-                                : rec;
-                        }
+            try {
+                const flowObj = await resolvePatientFlow(accessToken, {
+                    // Prefer booking (current queue). Stale sparse flowId is ignored when poorer.
+                    flowId: patient?.flowId,
+                    patientId: resolvedPatientId,
+                    bookingId: patient?.bookingId,
+                });
+                if (cancelled) return;
+                setFlowData(flowObj);
+                if (!flowObj) {
+                    setError('Không tìm thấy flow đang chạy cho bệnh nhân.');
+                } else {
+                    const flowId =
+                        typeof flowObj.flow_id === 'string' ? flowObj.flow_id : '';
+                    const bookingId =
+                        typeof flowObj.booking_id === 'string' ? flowObj.booking_id : '';
+                    if (flowId) flowIdRef.current = flowId;
+                    if (flowId || bookingId) {
+                        onFlowResolved?.({ flowId, bookingId });
                     }
-                    setFlowData(flowObj);
+                }
 
-                    // Fetch Templates
-                    try {
-                        const tplRes = await clinicalService.getProcessTemplates(accessToken);
-                        let tplList: ProcessTemplate[] = [];
-                        if (tplRes?.data) {
-                            const tData = tplRes.data as unknown;
-                            if (Array.isArray(tData)) {
-                                tplList = tData as ProcessTemplate[];
-                            } else if (tData && typeof tData === 'object') {
-                                const rec = tData as Record<string, unknown>;
-                                if (Array.isArray(rec.data)) {
-                                    tplList = rec.data as ProcessTemplate[];
-                                } else if (Array.isArray(rec.templates)) {
-                                    tplList = rec.templates as ProcessTemplate[];
-                                }
+                try {
+                    const tplRes = await clinicalService.getProcessTemplates(accessToken);
+                    if (cancelled) return;
+                    let tplList: ProcessTemplate[] = [];
+                    if (tplRes?.data) {
+                        const tData = tplRes.data as unknown;
+                        if (Array.isArray(tData)) {
+                            tplList = tData as ProcessTemplate[];
+                        } else if (tData && typeof tData === 'object') {
+                            const rec = tData as Record<string, unknown>;
+                            if (Array.isArray(rec.data)) {
+                                tplList = rec.data as ProcessTemplate[];
+                            } else if (Array.isArray(rec.templates)) {
+                                tplList = rec.templates as ProcessTemplate[];
                             }
                         }
-                        setTemplates(tplList);
-                        // Live steps (incl. BE default Đặt khám / Khám bệnh) are source of truth.
-                        // Do not auto-draft a template — doctor explicitly appends via "Thêm flow vào template".
-                    } catch {
-                        // ignore template fetch error if any
                     }
-                } catch (err) {
-                    console.error('Failed to fetch active flow:', err);
-                    setError('Không thể tải quy trình.');
+                    setTemplates(tplList);
+                } catch {
+                    // ignore template fetch error if any
                 }
-            });
+            } catch (err) {
+                if (cancelled) return;
+                console.error('Failed to fetch active flow:', err);
+                setError('Không thể tải quy trình.');
+                setFlowData(null);
+            } finally {
+                if (!cancelled) setIsLoading(false);
+            }
         };
 
-        loadData();
+        void loadData();
+        return () => {
+            cancelled = true;
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [patientId, accessToken]);
+    }, [patientId, patient?.patientId, patient?.flowId, patient?.bookingId, accessToken, refreshKey]);
 
 
 
@@ -1722,60 +2049,43 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
 
     const appendLiveSteps = () => {
         const seenIds = new Set<string>();
-        const seenNames = new Set<string>();
 
         orderedFlowSteps.forEach((stepItem, index) => {
             const step = stepItem as Record<string, unknown>;
             const stepStatus = ((step.step_status as string) || '').toUpperCase();
-            if (stepStatus === 'CANCELLED') return;
+            if (stepStatus === 'CANCELLED' || stepStatus === 'CANCELED') return;
 
+            // Drop cancelled / exact step_id duplicates only (same name can be service + payment)
             const stepId = (step.step_id as string) || `api-step-${index}`;
             if (seenIds.has(stepId)) return;
             seenIds.add(stepId);
 
             const specialtyInfo = step.specialty_info as Record<string, unknown> | undefined;
             const roomInfo = step.room_info as Record<string, unknown> | undefined;
-            const staffInfo = step.staff_info as Record<string, unknown> | undefined;
 
             const specialtyName = (specialtyInfo?.specialty_name as string) || '';
             const roomName = (roomInfo?.room_name as string) || '';
-            const label = (step.step_name as string) || roomName || specialtyName || `Bước ${index + 1}`;
+            const rawLabel =
+                (step.step_name as string) || roomName || specialtyName || `Bước ${index + 1}`;
+            const stepType = String(step.step_type || '').toUpperCase();
+            const roomType = String(step.room_type || '').toUpperCase();
+            const forcePayment =
+                unlabeledPaymentStepIds.has(stepId) ||
+                stepType === 'PAYMENT' ||
+                roomType === 'CASHIER' ||
+                roomType === 'PAYMENT';
+            // CLS payment companions → "Thanh toán: {tên dịch vụ}"
+            let label = formatFlowStepLabel(rawLabel, { forcePayment });
 
-            // Drop exact name duplicates (common after assign + parent double-create)
-            const nameKey = label.trim().toLowerCase();
-            if (nameKey && seenNames.has(nameKey)) return;
-            if (nameKey) seenNames.add(nameKey);
+            // Disambiguate multiple "Khám bệnh" from different active flows
+            if (isDefaultExamStepName(rawLabel)) {
+                const bits = [roomName, specialtyName].filter(Boolean);
+                if (bits.length > 0) label = `${rawLabel} · ${bits.join(' · ')}`;
+            }
 
             const status = mapStepStatusToNodeStatus(stepStatus, isPatientDone);
 
-            let staffName = (staffInfo?.full_name as string) || '';
-
-            if (!staffName) {
-                const sId = (step.staff_id as string) || (staffInfo?.staff_id as string);
-                if (sId) {
-                    const foundStaff = staffs.find(
-                        (st) =>
-                            st.staff_id === sId ||
-                            (st as unknown as Record<string, unknown>).id === sId ||
-                            (st as unknown as Record<string, unknown>).account_id === sId
-                    );
-                    if (foundStaff?.full_name) {
-                        staffName = foundStaff.full_name;
-                    }
-                }
-            }
-
-            if (!staffName) {
-                const stepRoomId = (step.room_id as string) || (roomInfo?.room_id as string) || '';
-                const dutyStaffName = getStaffOnDutyForRoom(stepRoomId);
-                if (dutyStaffName) {
-                    staffName = dutyStaffName;
-                }
-            }
-
-            if (!staffName) {
-                staffName = 'Chưa phân công';
-            }
+            const { staffName, staffId: resolvedStaffId } = resolveLiveStepStaff(step);
 
             dynamicSteps.push({
                 id: stepId,
@@ -1790,7 +2100,7 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                     roomId: (step.room_id as string) || (roomInfo?.room_id as string) || '',
                     specialtyName,
                     specialtyId: (specialtyInfo?.specialty_id as string) || '',
-                    staffId: (step.staff_id as string) || (staffInfo?.staff_id as string) || '',
+                    staffId: resolvedStaffId,
                     paymentStatus: (step.payment_status as string) || '',
                     docNo: String(step.docNo || ''),
                 },
@@ -1954,7 +2264,7 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                                 const step = stepItem as Record<string, unknown>;
                                 const stepId = (step.step_id as string) || `step-${idx}`;
                                 const stepStatus = ((step.step_status as string) || '').toUpperCase();
-                                if (stepStatus === 'CANCELLED') return null;
+                                if (stepStatus === 'CANCELLED' || stepStatus === 'CANCELED') return null;
 
                                 const canEditStatus = canCurrentDoctorEditStepStatus(step);
 
@@ -1963,7 +2273,14 @@ export function WorkflowDiagram({ patientId, patient }: WorkflowDiagramProps) {
                                 const specialtyInfo = step.specialty_info as Record<string, unknown> | undefined;
                                 const roomName = (roomInfo?.room_name as string) || '';
                                 const specialtyName = (specialtyInfo?.specialty_name as string) || '';
-                                const stepName = (step.step_name as string) || roomName || `Bước ${idx + 1}`;
+                                const rawStepName = (step.step_name as string) || roomName || `Bước ${idx + 1}`;
+                                const stepName =
+                                    dynamicSteps.find((n) => n.id === stepId)?.label ||
+                                    formatFlowStepLabel(rawStepName, {
+                                        forcePayment:
+                                            unlabeledPaymentStepIds.has(stepId) ||
+                                            String(step.step_type || '').toUpperCase() === 'PAYMENT',
+                                    });
 
                                 return (
                                     <div key={stepId} className="p-4 flex items-center justify-between gap-4 bg-white">

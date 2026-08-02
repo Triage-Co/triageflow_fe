@@ -28,8 +28,9 @@ export default function DoctorPatientPage({ params }: { params: Promise<{ id: st
         if (!id) return;
 
         // 1. Check Zustand cache first (client-only, safe in useEffect)
+        // Re-fetch when cache thiếu bookingId/flowId (schema mới / patient cũ trong persist)
         const cached = getPatientData(id);
-        if (cached) {
+        if (cached?.bookingId && cached?.flowId && cached?.patientId) {
             const timer = setTimeout(() => {
                 setPatient(cached);
                 setIsLoading(false);
@@ -37,7 +38,7 @@ export default function DoctorPatientPage({ params }: { params: Promise<{ id: st
             return () => clearTimeout(timer);
         }
 
-        // 2. No cache — fetch from API
+        // 2. Fetch from API (also refreshes stale cache)
         if (!accessToken) return;
 
         const fetchPatient = async () => {

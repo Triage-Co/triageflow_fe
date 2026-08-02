@@ -50,23 +50,22 @@ function toBoolean(value: unknown, fallback = false): boolean {
     return fallback;
 }
 
-function normalizeTemplateSteps(rawSteps: unknown, parentTemplateId?: string): TemplateStep[] {
+function normalizeTemplateSteps(rawSteps: unknown, _parentTemplateId?: string): TemplateStep[] {
     if (!Array.isArray(rawSteps)) return [];
 
     const normalized = rawSteps.map((rawStep, index) => {
         const record = (rawStep && typeof rawStep === 'object' ? rawStep : {}) as Record<string, unknown>;
-        const templateStepId = pickString(record, ['template_step_id', 'step_id', 'id']) || `step_${index + 1}`;
+        // BE TemplateStepDto.template_id is the step key (example: "step_1")
+        const stepKey =
+            pickString(record, ['template_id', 'templateId', 'template_step_id', 'step_id']) ||
+            `step_${index + 1}`;
         const stepName = pickString(record, ['step_name', 'name', 'label']) || `Bước ${index + 1}`;
         const roomType = normalizeRoomType(pickString(record, ['room_type', 'roomType']));
         const stepType = normalizeStepType(pickString(record, ['step_type', 'stepType']), roomType);
-        const templateId =
-            pickString(record, ['template_id', 'templateId']) ||
-            parentTemplateId ||
-            templateStepId;
 
         return {
-            template_id: templateId,
-            template_step_id: templateStepId,
+            template_id: stepKey,
+            template_step_id: stepKey,
             step_name: stepName,
             room_type: roomType,
             step_type: stepType,
@@ -77,11 +76,11 @@ function normalizeTemplateSteps(rawSteps: unknown, parentTemplateId?: string): T
         } satisfies TemplateStep;
     });
 
-    const validIds = new Set(normalized.map((step) => step.template_step_id));
+    const validIds = new Set(normalized.map((step) => step.template_id));
     return normalized.map((step) => ({
         ...step,
         depends_on: Array.from(new Set(step.depends_on)).filter(
-            (depId) => depId !== step.template_step_id && validIds.has(depId)
+            (depId) => depId !== step.template_id && validIds.has(depId)
         ),
     }));
 }
@@ -175,7 +174,22 @@ export const useProcessStore = create<ProcessStore>()(
             createTemplate: async (data: CreateTemplateDto, token: string) => {
                 set({ isLoading: true, error: null }, false, 'createTemplate/pending');
                 try {
-                    const res = await processService.createTemplate(data, token);
+                    // TemplateStepDto requires template_id (step key); forbids template_step_id
+                    const sanitized: CreateTemplateDto = {
+                        name: data.name,
+                        steps: (data.steps || []).map((step, idx) => {
+                            const { template_step_id: _uiOnly, ...rest } = step as TemplateStep;
+                            const stepKey =
+                                String(rest.template_id || _uiOnly || '').trim() || `step_${idx + 1}`;
+                            return {
+                                ...rest,
+                                template_id: stepKey,
+                                depends_on: Array.isArray(rest.depends_on) ? rest.depends_on : [],
+                                sub_steps: Array.isArray(rest.sub_steps) ? rest.sub_steps : [],
+                            };
+                        }),
+                    };
+                    const res = await processService.createTemplate(sanitized, token);
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const rawObj = res.data as any;
                     const candidate: ProcessTemplate = (rawObj && typeof rawObj === 'object' && rawObj.data)
@@ -225,7 +239,26 @@ export const useProcessStore = create<ProcessStore>()(
             updateTemplate: async (id: string, data: UpdateTemplateDto, token: string) => {
                 set({ isLoading: true, error: null }, false, 'updateTemplate/pending');
                 try {
-                    const res = await processService.updateTemplate(id, data, token);
+                    const sanitized: UpdateTemplateDto = {
+                        ...data,
+                        steps: data.steps
+                            ? data.steps.map((step, idx) => {
+                                  const { template_step_id: _uiOnly, ...rest } = step as TemplateStep;
+                                  const stepKey =
+                                      String(rest.template_id || _uiOnly || '').trim() ||
+                                      `step_${idx + 1}`;
+                                  return {
+                                      ...rest,
+                                      template_id: stepKey,
+                                      depends_on: Array.isArray(rest.depends_on)
+                                          ? rest.depends_on
+                                          : [],
+                                      sub_steps: Array.isArray(rest.sub_steps) ? rest.sub_steps : [],
+                                  };
+                              })
+                            : undefined,
+                    };
+                    const res = await processService.updateTemplate(id, sanitized, token);
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const rawObj = res.data as any;
                     const updatedTemplate = normalizeTemplate(

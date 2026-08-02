@@ -265,8 +265,11 @@ export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient 
         return 'Đang chờ';
     };
 
-    const booking = item.step.flow.booking;
-    const patientObj = booking.patient;
+    const booking = item.step?.flow?.booking;
+    const patientObj = booking?.patient;
+    if (!booking || !patientObj) {
+        throw new Error('Queue patient thiếu booking/patient trong response.');
+    }
     const patientRecord = asRecord(patientObj);
     const accountRecord = asRecord(patientObj.account);
     const flowRecord = asRecord(item.step.flow);
@@ -353,6 +356,7 @@ export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient 
         },
         visitType: 'Khám mới',
         flowId: item.step.flow.flow_id,
+        bookingId: booking.booking_id,
         templateId,
         workflowSteps,
         patientId: patientObj.patient_id,
@@ -368,6 +372,131 @@ export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient 
             },
         },
     };
+}
+
+export function extractFlowList(raw: unknown): Record<string, unknown>[] {
+    if (!raw) return [];
+
+    const asFlows = (items: unknown[]): Record<string, unknown>[] =>
+        items.filter((item): item is Record<string, unknown> => {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+            const rec = item as Record<string, unknown>;
+            return typeof rec.flow_id === 'string' || Array.isArray(rec.steps);
+        });
+
+    if (Array.isArray(raw)) return asFlows(raw);
+
+    if (typeof raw === 'object') {
+        const rec = raw as Record<string, unknown>;
+
+        // ApiResponse envelope: { code, data: Flow[] }
+        if (Array.isArray(rec.data)) return asFlows(rec.data);
+
+        // Nested: { data: { data: Flow[] } } or { data: Flow }
+        if (rec.data && typeof rec.data === 'object' && !Array.isArray(rec.data)) {
+            const nested = rec.data as Record<string, unknown>;
+            if (Array.isArray(nested.data)) return asFlows(nested.data);
+            if (typeof nested.flow_id === 'string' || Array.isArray(nested.steps)) {
+                return [nested];
+            }
+        }
+
+        // Single flow object
+        if (typeof rec.flow_id === 'string' || Array.isArray(rec.steps)) {
+            return [rec];
+        }
+    }
+    return [];
+}
+
+/** Ensure `steps` is always a concrete array on the flow object. */
+export function normalizeFlowRecord(flow: Record<string, unknown>): Record<string, unknown> {
+    const steps = extractFlowSteps(flow);
+    return {
+        ...flow,
+        steps: Array.isArray(steps) ? [...steps] : [],
+    };
+}
+
+/**
+ * Pick one visit flow from GET /api/flow/patient/{id}/active (array).
+ * Prefer booking_id / flow_id when provided; otherwise the newest flow by date.
+ */
+export function pickBestActiveFlow(
+    flows: Record<string, unknown>[],
+    preferredFlowId?: string,
+    preferredBookingId?: string
+): Record<string, unknown> | null {
+    if (flows.length === 0) return null;
+
+    const normalized = flows.map(normalizeFlowRecord);
+
+    if (preferredBookingId) {
+        const byBooking = normalized.find((f) => f.booking_id === preferredBookingId);
+        if (byBooking) return byBooking;
+    }
+
+    if (preferredFlowId) {
+        const preferred = normalized.find((f) => f.flow_id === preferredFlowId);
+        if (preferred) return preferred;
+    }
+
+    // Newest visit by date, then create_at
+    return (
+        [...normalized].sort((a, b) => {
+            const dateA = String(a.date || '');
+            const dateB = String(b.date || '');
+            if (dateA !== dateB) return dateB.localeCompare(dateA);
+            const timeA = new Date((a.create_at || a.created_at || 0) as string | number).getTime();
+            const timeB = new Date((b.create_at || b.created_at || 0) as string | number).getTime();
+            return timeB - timeA;
+        })[0] || null
+    );
+}
+
+/** Fetch the full active-flow list for a patient (no get-by-id). */
+export async function fetchPatientActiveFlows(
+    token: string,
+    patientId: string
+): Promise<Record<string, unknown>[]> {
+    const id = patientId.trim();
+    if (!id) return [];
+
+    const active = await clinicalService.getActiveFlowByPatientId(id, token);
+    const list = extractFlowList(active?.data);
+    if (list.length > 0) return list.map(normalizeFlowRecord);
+
+    const fromEnvelope = extractFlowList(active);
+    return fromEnvelope.map(normalizeFlowRecord);
+}
+
+/**
+ * Resolve visit flow from GET /api/flow/patient/{patient_id}/active.
+ * Uses only the latest (or preferred booking/flow) visit — not a merge of all flows.
+ */
+export async function resolvePatientFlow(
+    token: string,
+    options: { flowId?: string; patientId?: string; bookingId?: string }
+): Promise<Record<string, unknown> | null> {
+    const patientId = (options.patientId || '').trim();
+    if (!patientId) return null;
+
+    const list = await fetchPatientActiveFlows(token, patientId);
+    if (list.length === 0) return null;
+
+    return pickBestActiveFlow(
+        list,
+        (options.flowId || '').trim(),
+        (options.bookingId || '').trim()
+    );
+}
+
+export function extractFlowSteps(flow: Record<string, unknown> | null | undefined): unknown[] {
+    if (!flow) return [];
+    if (Array.isArray(flow.steps)) return flow.steps as unknown[];
+    const nested = flow.data && typeof flow.data === 'object' ? (flow.data as Record<string, unknown>) : null;
+    if (nested && Array.isArray(nested.steps)) return nested.steps as unknown[];
+    return [];
 }
 
 export const clinicalService = {

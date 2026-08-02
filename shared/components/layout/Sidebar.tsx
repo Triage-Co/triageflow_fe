@@ -92,6 +92,7 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
         { label: 'Hàng chờ bệnh nhân', href: '/admin/queue', icon: ListOrdered },
         { label: 'Cấu hình AI', href: '/admin/ai-config', icon: Cpu },
         { label: 'Quy trình khám bệnh', href: '/admin/process', icon: Stethoscope },
+        { label: 'Quản lý dịch vụ', href: '/admin/services', icon: FlaskConical },
         { label: 'Quản lý người dùng', href: '/admin/users', icon: Users },
         { label: 'Quản lý phòng khám', href: '/admin/rooms', icon: Home },
         { label: 'Quản lý nhân viên', href: '/admin/staff', icon: UserCheck },
