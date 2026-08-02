@@ -50,9 +50,16 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 interface LeftPanelProps {
     patient: Patient;
     isOpen: boolean;
+    flowRefreshKey?: number;
+    onPatientUpdate?: (patient: Patient) => void;
 }
 
-export function LeftPatientPanel({ patient, isOpen }: LeftPanelProps) {
+export function LeftPatientPanel({
+    patient,
+    isOpen,
+    flowRefreshKey = 0,
+    onPatientUpdate,
+}: LeftPanelProps) {
     const user = useAuthStore((s) => s.user);
     const accessToken = useAuthStore((s) => s.accessToken);
     const isReadOnly = user?.role === 'NURSE';
@@ -300,7 +307,25 @@ export function LeftPatientPanel({ patient, isOpen }: LeftPanelProps) {
                     <div className="flex-1 overflow-y-auto px-5 pb-5 space-y-3">
                         {/* ── Process tab ── */}
                         {tab === 'process' && (
-                            <WorkflowDiagram patientId={patient.patientId || patient.id} patient={patient} />
+                            <WorkflowDiagram
+                                patientId={patient.patientId || ''}
+                                patient={patient}
+                                refreshKey={flowRefreshKey}
+                                onFlowResolved={({ flowId, bookingId }) => {
+                                    if (!onPatientUpdate) return;
+                                    if (
+                                        patient.flowId === flowId &&
+                                        patient.bookingId === bookingId
+                                    ) {
+                                        return;
+                                    }
+                                    onPatientUpdate({
+                                        ...patient,
+                                        flowId: flowId || patient.flowId,
+                                        bookingId: bookingId || patient.bookingId,
+                                    });
+                                }}
+                            />
                         )}
 
                         {/* ── Info tab ── */}
