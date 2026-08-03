@@ -139,7 +139,7 @@ function stripPaymentPrefix(name: string): string {
  * e.g. "Thanh toán khám chuyên khoa", "Thanh toán viện phí".
  * Do NOT treat CLS fees like "Thanh toán: Khám ngoại khoa" as exam payment.
  */
-function isExamPaymentStepName(name: string): boolean {
+export function isExamPaymentStepName(name: string): boolean {
     if (!isPaymentStepName(name)) return false;
     const rest = stripPaymentPrefix(name);
     if (!rest) return true;
@@ -630,7 +630,7 @@ function pickLiveRequiredStepId(step: Record<string, unknown> | null | undefined
 
 /**
  * Order live flow steps for timeline display.
- * Spine: Đặt khám → Thanh toán khám chuyên khoa → Khám bệnh → (CLS service → payment)…
+ * Spine: Thanh toán khám chuyên khoa → Khám bệnh → (template: Đăng ký → Khám chuyên khoa → CLS…)
  */
 export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
     if (!Array.isArray(steps) || steps.length <= 1) return steps;
@@ -643,7 +643,10 @@ export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
         orderNum: number | null;
         createdAt: number;
         dependsOn: string[];
+        requiredStepId: string;
         stepId: string;
+        liveStepId: string;
+        templateStepId: string;
         stepName: string;
         stepNameLower: string;
         serviceCode: string;
@@ -651,6 +654,25 @@ export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
         isExamPayment: boolean;
         isBooking: boolean;
         isExam: boolean;
+    };
+
+    /** Admin template / registration-first rank (lower = earlier). */
+    const templateLikeRank = (nameLower: string): number => {
+        if (
+            nameLower.includes('đăng ký') ||
+            nameLower.includes('dang ky') ||
+            nameLower.includes('phân loại') ||
+            nameLower.includes('phan loai') ||
+            nameLower.includes('tiếp đón') ||
+            nameLower.includes('tiep don') ||
+            nameLower.includes('tiếp nhận') ||
+            nameLower.includes('tiep nhan')
+        ) {
+            return 0;
+        }
+        if (nameLower.includes('triage')) return 1;
+        if (nameLower.includes('chuyên khoa') || nameLower.includes('chuyen khoa')) return 2;
+        return 40;
     };
 
     const rows: Row[] = steps.map((item, index) => {
@@ -663,11 +685,10 @@ export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
         const dependsOn = Array.isArray(rec.depends_on)
             ? (rec.depends_on as unknown[]).filter((d): d is string => typeof d === 'string')
             : [];
-        const stepId =
-            (typeof rec.template_step_id === 'string' && rec.template_step_id) ||
-            (typeof rec.step_id === 'string' && rec.step_id) ||
-            `idx-${index}`;
-        const liveStepId = typeof rec.step_id === 'string' ? rec.step_id : '';
+        const templateStepId =
+            typeof rec.template_step_id === 'string' ? rec.template_step_id.trim() : '';
+        const liveStepId = typeof rec.step_id === 'string' ? rec.step_id.trim() : '';
+        const stepId = templateStepId || liveStepId || `idx-${index}`;
         const stepName = String(rec.step_name || '').trim();
         const stepNameLower = normalizeStepLabel(stepName);
         const stepType = String(rec.step_type || '').toUpperCase();
@@ -689,7 +710,10 @@ export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
             orderNum,
             createdAt,
             dependsOn,
+            requiredStepId: pickLiveRequiredStepId(rec),
             stepId,
+            liveStepId,
+            templateStepId,
             stepName,
             stepNameLower,
             serviceCode: pickLiveServiceCode(rec),
@@ -700,15 +724,16 @@ export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
         };
     });
 
+    /** Prefer template order (step_N / depends_on / đăng ký→khám) over createdAt (often inverted). */
     const sortStable = (a: Row, b: Row) => {
         if (a.orderNum != null && b.orderNum != null && a.orderNum !== b.orderNum) {
             return a.orderNum - b.orderNum;
         }
         if (a.orderNum != null && b.orderNum == null) return -1;
         if (b.orderNum != null && a.orderNum == null) return 1;
-        if (Number.isFinite(a.createdAt) && Number.isFinite(b.createdAt) && a.createdAt !== b.createdAt) {
-            return a.createdAt - b.createdAt;
-        }
+        const ra = templateLikeRank(a.stepNameLower);
+        const rb = templateLikeRank(b.stepNameLower);
+        if (ra !== rb) return ra - rb;
         return a.index - b.index;
     };
 
@@ -723,16 +748,70 @@ export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
     };
 
     /**
-     * Pair each CLS service with its payment AFTER it.
-     * Matches "Thanh toán: X" / "Thanh toán X" to service "X" (and by service_code).
+     * Order template / CLS block by depends_on + template rank, then attach payment after its service.
      */
-    const orderServiceThenPayment = (block: Row[]): Row[] => {
+    const orderRestBlock = (block: Row[]): Row[] => {
         if (block.length <= 1) return block;
 
+        const idToRow = new Map<string, Row>();
+        block.forEach((r) => {
+            if (r.liveStepId) idToRow.set(r.liveStepId, r);
+            if (r.templateStepId) idToRow.set(r.templateStepId, r);
+            if (r.stepId) idToRow.set(r.stepId, r);
+        });
+
+        const preds = new Map<number, Set<number>>();
+        block.forEach((r) => preds.set(r.index, new Set()));
+
+        const addEdge = (from: Row, to: Row) => {
+            // from must come before to
+            if (from.index === to.index) return;
+            preds.get(to.index)?.add(from.index);
+        };
+
+        block.forEach((r) => {
+            const depIds = [
+                ...r.dependsOn,
+                ...(r.requiredStepId ? [r.requiredStepId] : []),
+            ];
+            depIds.forEach((depId) => {
+                const pred = idToRow.get(depId);
+                if (pred) addEdge(pred, r);
+            });
+        });
+
+        // Kahn topo; tie-break with sortStable (đăng ký before khám chuyên khoa)
+        const pending = new Set(block.map((r) => r.index));
+        const ordered: Row[] = [];
+        while (pending.size > 0) {
+            const ready = block
+                .filter((r) => pending.has(r.index))
+                .filter((r) => {
+                    const p = preds.get(r.index);
+                    if (!p) return true;
+                    for (const predIdx of p) {
+                        if (pending.has(predIdx)) return false;
+                    }
+                    return true;
+                })
+                .sort(sortStable);
+
+            if (ready.length === 0) {
+                // Cycle / unresolved — flush remaining by template rank
+                const rest = block.filter((r) => pending.has(r.index)).sort(sortStable);
+                ordered.push(...rest);
+                break;
+            }
+
+            const next = ready[0];
+            ordered.push(next);
+            pending.delete(next.index);
+        }
+
+        // Re-walk: service then its CLS payment companion (exam payments already excluded)
         const used = new Set<number>();
         const result: Row[] = [];
-        const payments = block.filter((r) => r.isPayment && !r.isExamPayment);
-        const services = [...block.filter((r) => !r.isPayment)].sort(sortStable);
+        const payments = ordered.filter((r) => r.isPayment && !r.isExamPayment);
 
         const findPaymentFor = (svc: Row): Row | undefined => {
             const svcKeys = new Set([serviceKey(svc), `name:${svc.stepNameLower}`]);
@@ -740,7 +819,6 @@ export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
                 if (used.has(p.index)) return false;
                 const target = paymentTargetKey(p);
                 if (svcKeys.has(target)) return true;
-                // Fuzzy: payment target contained in / equals service name
                 const payRest = stripPaymentPrefix(p.stepName);
                 return (
                     payRest === svc.stepNameLower ||
@@ -750,43 +828,25 @@ export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
             });
         };
 
-        services.forEach((svc) => {
-            result.push(svc);
-            used.add(svc.index);
-            const pay = findPaymentFor(svc);
-            if (pay) {
-                result.push(pay);
-                used.add(pay.index);
+        ordered.forEach((row) => {
+            if (used.has(row.index)) return;
+            if (row.isPayment && !row.isExamPayment) return; // attach after service
+            result.push(row);
+            used.add(row.index);
+            if (!row.isPayment) {
+                const pay = findPaymentFor(row);
+                if (pay) {
+                    result.push(pay);
+                    used.add(pay.index);
+                }
             }
         });
 
-        // Remaining payments: try insert after matching service already in result
-        payments
-            .filter((p) => !used.has(p.index))
-            .sort(sortStable)
-            .forEach((pay) => {
-                const payRest = stripPaymentPrefix(pay.stepName);
-                const svcIdx = result.findIndex(
-                    (r) =>
-                        !r.isPayment &&
-                        (serviceKey(r) === paymentTargetKey(pay) ||
-                            r.stepNameLower === payRest ||
-                            r.stepNameLower.includes(payRest) ||
-                            payRest.includes(r.stepNameLower))
-                );
-                if (svcIdx >= 0) {
-                    // Place right after service (and after an already-paired payment if any)
-                    let insertAt = svcIdx + 1;
-                    while (insertAt < result.length && result[insertAt].isPayment) insertAt += 1;
-                    result.splice(insertAt, 0, pay);
-                } else {
-                    result.push(pay);
-                }
-                used.add(pay.index);
-            });
-
-        block.forEach((r) => {
-            if (!used.has(r.index)) result.push(r);
+        ordered.forEach((r) => {
+            if (!used.has(r.index)) {
+                result.push(r);
+                used.add(r.index);
+            }
         });
 
         return result;
@@ -826,9 +886,8 @@ export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
         return [...nonPay, ...byKey.values()];
     })();
 
-    return [...booking, ...examPay, ...exam, ...orderServiceThenPayment(restPreferred)].map(
-        (r) => r.item
-    );
+    // Defaults first (pay → khám bệnh), then template order (đăng ký → khám chuyên khoa → CLS)
+    return [...booking, ...examPay, ...exam, ...orderRestBlock(restPreferred)].map((r) => r.item);
 }
 
 function getIconForStep(specialtyName: string, roomName: string, label: string): NodeIcon {
@@ -862,28 +921,35 @@ function getIconForStep(specialtyName: string, roomName: string, label: string):
 
 function mapStepStatusToNodeStatus(
     stepStatus: string,
-    isPatientDone?: boolean,
+    _isPatientDone?: boolean,
     paymentStatus?: string,
     stepName?: string
 ): WorkflowStepStatus {
-    if (isPaidPaymentStatus(paymentStatus)) return 'completed';
-    if (isPatientDone) return 'completed';
-
     const st = (stepStatus || '').toUpperCase().trim();
+    const name = stepName || '';
+    const isPaymentLike =
+        isPaymentStepName(name) ||
+        isExamPaymentStepName(name);
+
+    // payment_status only colors PAYMENT steps — never paint clinical steps green
+    if (isPaymentLike && isPaidPaymentStatus(paymentStatus)) {
+        return 'completed';
+    }
+
     if (['COMPLETED', 'DONE', 'SUCCESSED', 'FINISHED'].includes(st)) {
         return 'completed';
     }
 
-    // Soft-cancelled after lấy số / pay — treat exam payment as completed on UI
+    // Soft-cancelled exam/queue payment after lấy số → still show as completed
     if (
         (st === 'CANCELLED' || st === 'CANCELED') &&
-        (isPaidPaymentStatus(paymentStatus) || isExamPaymentStepName(stepName || ''))
+        isExamPaymentStepName(name)
     ) {
         return 'completed';
     }
 
     if (['IN_PROGRESS', 'PROCESSING', 'CURRENT', 'DOING', 'EXAMINING', 'ACTIVE', 'ONGOING'].includes(st)) {
-        return 'current';
+        return 'current'; // blue
     }
 
     // PENDING / waiting / unknown → gray default

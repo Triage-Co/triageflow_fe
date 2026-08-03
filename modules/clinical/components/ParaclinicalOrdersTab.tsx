@@ -29,7 +29,10 @@ import {
     extractFlowSteps,
     resolvePatientFlow,
 } from '@/modules/clinical/services/clinicalService';
-import { orderFlowStepsForTimeline } from '@/modules/clinical/components/WorkflowDiagram';
+import {
+    isExamPaymentStepName,
+    orderFlowStepsForTimeline,
+} from '@/modules/clinical/components/WorkflowDiagram';
 import { mapRoomTypeToStepType, normalizeRoomType } from '@/modules/admin/types/process.types';
 import { useAuthStore } from '@/store/authStore';
 import { useRoomStore } from '@/modules/admin/store/roomStore';
@@ -183,21 +186,23 @@ function displayClsStepName(step: ServiceStepCard): string {
 
 function stepStatusMeta(status?: string): { label: string; className: string } {
     const s = (status || 'PENDING').toUpperCase();
-    if (['COMPLETED', 'DONE', 'FINISHED'].includes(s)) {
+    if (['COMPLETED', 'DONE', 'FINISHED', 'SUCCESSED'].includes(s)) {
         return {
             label: 'Hoàn tất',
             className: 'bg-emerald-50 text-emerald-700 border-emerald-100',
         };
     }
-    if (['IN_PROGRESS', 'PROCESSING', 'ONGOING', 'CURRENT'].includes(s)) {
+    if (['IN_PROGRESS', 'PROCESSING', 'ONGOING', 'CURRENT', 'ACTIVE'].includes(s)) {
         return {
             label: 'Đang thực hiện',
-            className: 'bg-amber-50 text-amber-700 border-amber-100',
+            // IN_PROGRESS → blue (match flow timeline)
+            className: 'bg-blue-50 text-blue-700 border-blue-100',
         };
     }
     return {
         label: 'Chờ thực hiện',
-        className: 'bg-sky-50 text-sky-700 border-sky-100',
+        // PENDING → gray default (match flow timeline)
+        className: 'bg-slate-50 text-slate-600 border-slate-200',
     };
 }
 
@@ -256,6 +261,7 @@ function findPaymentCompanionCards(
     return cards.filter(
         (c) =>
             c.is_payment &&
+            !isExamPaymentStepName(c.step_name || '') &&
             c.step_id !== serviceStep.step_id &&
             normalizeServiceKey(c.step_name, c.service_code) === key
     );
@@ -263,27 +269,36 @@ function findPaymentCompanionCards(
 
 /**
  * Stable CLS list order: keep flow sequence, always place service before its payment.
- * Prevents BE / array order from showing "Thanh toán: X" above "X".
+ * Exam/lấy-số payment stays in timeline spine position (not pulled after "Khám chuyên khoa").
  */
 function orderClsCardsServiceThenPayment(cards: ServiceStepCard[]): ServiceStepCard[] {
     if (cards.length <= 1) return cards;
 
     const used = new Set<string>();
     const result: ServiceStepCard[] = [];
-    const payments = cards.filter((c) => c.is_payment);
+    const clsPayments = cards.filter(
+        (c) => c.is_payment && !isExamPaymentStepName(c.step_name || '')
+    );
 
     const findPaymentFor = (svc: ServiceStepCard): ServiceStepCard | undefined => {
         const key = normalizeServiceKey(svc.step_name, svc.service_code);
-        return payments.find(
+        return clsPayments.find(
             (p) =>
                 !used.has(p.step_id) &&
                 normalizeServiceKey(p.step_name, p.service_code) === key
         );
     };
 
-    // Walk in current (timeline) order; emit each service then its payment
     for (const card of cards) {
         if (used.has(card.step_id)) continue;
+
+        // Preserve exam-queue payment where timeline placed it
+        if (isExamPaymentStepName(card.step_name || '')) {
+            result.push(card);
+            used.add(card.step_id);
+            continue;
+        }
+
         if (card.is_payment) continue;
 
         result.push(card);
@@ -296,7 +311,6 @@ function orderClsCardsServiceThenPayment(cards: ServiceStepCard[]): ServiceStepC
         }
     }
 
-    // Orphan payments / leftovers — keep relative input order
     for (const card of cards) {
         if (used.has(card.step_id)) continue;
         result.push(card);
