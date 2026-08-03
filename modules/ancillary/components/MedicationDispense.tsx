@@ -147,7 +147,7 @@ export function MedicationDispense({
                 return (
                     <span className="px-3 py-1 bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 rounded-xl text-xs font-bold flex items-center gap-1.5">
                         <Clock className="w-4 h-4 text-neutral-500" />
-                        Chưa đến 
+                        Chờ nhận đơn
                     </span>
                 );
             case 'PROCESSING':
