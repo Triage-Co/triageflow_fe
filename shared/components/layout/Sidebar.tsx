@@ -26,6 +26,9 @@ import {
     UserPlus,
     Search,
     Stethoscope,
+    QrCode,
+    FilePlus,
+    Package,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { authService } from '@/shared/services/authService';
@@ -40,7 +43,7 @@ interface NavItem {
 const NAV_BY_ROLE: Record<string, NavItem[]> = {
     DOCTOR: [
         { label: 'Danh sách bệnh nhân', href: '/doctor', icon: LayoutDashboard },
-        { label: 'Tiếp nhận bệnh nhân', href: '/lab', icon: FlaskConical },
+        { label: 'Tiếp nhận khám', href: '/lab', icon: FlaskConical },
         { label: 'Thanh toán', href: '/cashier', icon: CreditCard },
         { label: 'Thông báo', href: '/doctor/notification', icon: Bell },
         { label: 'Cài đặt', href: '/doctor/setting', icon: Settings },
@@ -59,20 +62,38 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
         { label: 'Cài đặt', href: '/settings', icon: Settings },
     ],
     LAB_STAFF: [
-        { label: 'Tiếp Nhận Bệnh Nhân', href: '/lab', icon: UserCheck },
+        { label: 'Tiếp Nhận Khám', href: '/lab', icon: UserCheck },
         { label: 'Danh Sách Bệnh Nhân', href: '/lab/patients', icon: LayoutDashboard },
         { label: 'Thông báo', href: '/lab/notification', icon: Bell },
         { label: 'Cài đặt', href: '/settings', icon: Settings },
     ],
     LAB_TECHNICIAN: [
-        { label: 'Tiếp Nhận Bệnh Nhân', href: '/lab', icon: UserCheck },
+        { label: 'Tiếp Nhận Khám', href: '/lab', icon: UserCheck },
         { label: 'Danh Sách Bệnh Nhân', href: '/lab/patients', icon: LayoutDashboard },
         { label: 'Thông báo', href: '/lab/notification', icon: Bell },
         { label: 'Cài đặt', href: '/settings', icon: Settings },
     ],
     PHARMACY_STAFF: [
-        { label: 'Tiếp Nhận Bệnh Nhân', href: '/pharmacy', icon: Pill },
-        { label: 'Danh Sách Bệnh Nhân', href: '/pharmacy/patients', icon: LayoutDashboard },
+        { label: 'Tiếp nhận đơn tại quầy', href: '/pharmacy/checkin', icon: QrCode },
+        { label: 'Quản lý & Cấp phát đơn', href: '/pharmacy', icon: Pill },
+        { label: 'Thanh toán', href: '/cashier', icon: CreditCard },
+        { label: 'Danh mục dược phẩm', href: '/pharmacy/medicines', icon: Package },
+        { label: 'Thông báo', href: '/notifications', icon: Bell },
+        { label: 'Cài đặt', href: '/settings', icon: Settings },
+    ],
+    PHARMACIST: [
+        { label: 'Tiếp nhận đơn tại quầy', href: '/pharmacy/checkin', icon: QrCode },
+        { label: 'Quản lý & Cấp phát đơn', href: '/pharmacy', icon: Pill },
+        { label: 'Thanh toán', href: '/cashier', icon: CreditCard },
+        { label: 'Danh mục dược phẩm', href: '/pharmacy/medicines', icon: Package },
+        { label: 'Thông báo', href: '/notifications', icon: Bell },
+        { label: 'Cài đặt', href: '/settings', icon: Settings },
+    ],
+    PHARMACY: [
+        { label: 'Tiếp nhận đơn tại quầy', href: '/pharmacy/checkin', icon: QrCode },
+        { label: 'Quản lý & Cấp phát đơn', href: '/pharmacy', icon: Pill },
+        { label: 'Thanh toán', href: '/cashier', icon: CreditCard },
+        { label: 'Danh mục dược phẩm', href: '/pharmacy/medicines', icon: Package },
         { label: 'Thông báo', href: '/notifications', icon: Bell },
         { label: 'Cài đặt', href: '/settings', icon: Settings },
     ],
@@ -119,7 +140,9 @@ const ROLE_LABELS: Record<string, string> = {
     ADMIN: 'Quản trị',
     LAB_STAFF: 'Xét nghiệm',
     LAB_TECHNICIAN: 'Xét nghiệm',
-    PHARMACY_STAFF: 'Dược',
+    PHARMACY_STAFF: 'Dược sĩ',
+    PHARMACIST: 'Dược sĩ',
+    PHARMACY: 'Dược sĩ',
     CASHIER: 'Thu ngân',
     USER: 'Bệnh nhân',
 };

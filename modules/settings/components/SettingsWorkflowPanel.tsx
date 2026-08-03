@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import {
     User,
     Printer,
@@ -12,6 +13,8 @@ import {
     CheckCircle2,
     Loader2,
     ArrowRight,
+    FilePlus,
+    Pill
 } from 'lucide-react';
 
 export function SettingsWorkflowPanel() {
@@ -273,7 +276,28 @@ export function SettingsWorkflowPanel() {
                     </div>
                 </div>
 
-                {/* ── Section 5: 🔒 Bảo mật matching Screenshot 2 ── */}
+                {/* ── Section 5: 💊 Kê đơn thuốc mới (Dược phẩm) ── */}
+                <div className="bg-white rounded-[24px] border border-slate-200/80 p-6 md:p-8 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.03)] space-y-4">
+                    <div className="flex items-center gap-2 mb-1">
+                        <FilePlus className="w-5 h-5 text-[#8B7CF6]" />
+                        <h3 className="font-bold text-slate-800 text-base">Kê đơn thuốc mới</h3>
+                    </div>
+                    <p className="text-xs text-slate-500 font-medium">
+                        Tạo và kê đơn thuốc mới trực tiếp tại quầy nhà thuốc hoặc bổ sung theo chỉ định.
+                    </p>
+                    <div className="pt-2">
+                        <Link
+                            href="/pharmacy/create"
+                            className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs transition-colors cursor-pointer border border-indigo-200"
+                        >
+                            <FilePlus className="w-4 h-4 text-indigo-600" />
+                            <span>Mở giao diện Kê đơn thuốc mới</span>
+                            <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                        </Link>
+                    </div>
+                </div>
+
+                {/* ── Section 6: 🔒 Bảo mật matching Screenshot 2 ── */}
                 <div className="bg-white rounded-[24px] border border-slate-200/80 p-6 md:p-8 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.03)] space-y-4">
                     <div className="flex items-center gap-2 mb-2">
                         <Lock className="w-5 h-5 text-[#8B7CF6]" />

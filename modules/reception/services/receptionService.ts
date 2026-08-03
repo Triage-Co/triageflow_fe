@@ -733,7 +733,7 @@ export const receptionService = {
         if (!accountId) {
             const baseUser = buildUserNameFromFullName(data.full_name, 'bn');
             const user_name = `${baseUser}${cleanCitizenId.slice(-6)}`.toLowerCase();
-            const email = data.email?.trim() || `bn.${cleanCitizenId.slice(-8)}@patient.triageflow.systems`;
+            const email = data.email?.trim() || `bn.${cleanCitizenId.slice(-8)}@patient.triageflow.me`;
             const suffix = cleanCitizenId.slice(-6) || '000000';
             const password = `Patient@${suffix}`;
             const phone = data.phone?.trim() || (`09${cleanCitizenId.slice(-8)}`).padEnd(10, '0');

@@ -240,7 +240,7 @@ export function ReceptionRegisterForm() {
         setError(null);
         try {
             let patientId = existingAccount?.patient_id;
-            const email = form.email || `bn.${form.citizen_id.slice(-8)}@patient.triageflow.systems`;
+            const email = form.email || `bn.${form.citizen_id.slice(-8)}@patient.triageflow.me`;
             
             if (!patientId) {
                 const suffix = form.citizen_id.slice(-6);
@@ -325,13 +325,20 @@ export function ReceptionRegisterForm() {
             }
 
             if (!paymentData) {
+                const getSafeUrl = (path: string) => {
+                    const hostname = window.location.hostname;
+                    const isIp = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(hostname);
+                    const origin = isIp ? `http://localhost:${window.location.port || '3000'}` : window.location.origin;
+                    return `${origin}${path}`;
+                };
+
                 const tx = await receptionService.createTransaction(
                     {
                         transType: 'BOOKING_PAYMENT_1',
                         amount: 200000,
                         clientId: bookingId,
-                        returnUrl: `${window.location.origin}/reception`,
-                        cancelUrl: `${window.location.origin}/reception`,
+                        returnUrl: getSafeUrl('/reception'),
+                        cancelUrl: getSafeUrl('/reception'),
                     },
                     accessToken,
                 );
@@ -643,7 +650,7 @@ export function ReceptionRegisterForm() {
                 return;
             }
             if (!form.email) {
-                update('email', `bn.${form.citizen_id.slice(-8)}@patient.triageflow.systems`);
+                update('email', `bn.${form.citizen_id.slice(-8)}@patient.triageflow.me`);
             }
             setStep(2);
         } else if (step === 2) {
@@ -723,7 +730,7 @@ export function ReceptionRegisterForm() {
         startTransition(async () => {
             try {
                 let patientId = existingAccount?.patient_id;
-                const email = form.email || `bn.${form.citizen_id.slice(-8)}@patient.triageflow.systems`;
+                const email = form.email || `bn.${form.citizen_id.slice(-8)}@patient.triageflow.me`;
 
                 if (!patientId) {
                     const suffix = form.citizen_id.slice(-6);

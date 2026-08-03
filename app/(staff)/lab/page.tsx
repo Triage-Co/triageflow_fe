@@ -5,10 +5,10 @@ import { PatientCheckinPanel } from '@/modules/shared/components/PatientCheckinP
 
 export default function LabPage() {
     return (
-        <EMRWorkspaceLayout activeTabId="lab" activeTabName="Tiếp Nhận Bệnh Nhân">
+        <EMRWorkspaceLayout activeTabId="lab" activeTabName="Tiếp Nhận Khám">
             <PatientCheckinPanel
                 moduleType="LAB"
-                title="Tiếp Nhận Bệnh Nhân"
+                title="Tiếp Nhận Khám"
                 subtitle="Quét mã QR bệnh nhân hoặc nhập mã lượt khám để tiếp nhận"
             />
         </EMRWorkspaceLayout>

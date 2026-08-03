@@ -5,7 +5,7 @@ import { resolveApiError } from '@/shared/utils/apiError';
 
 const API_BASE_URL =
     typeof window === 'undefined'
-        ? (process.env.NEXT_PUBLIC_API_URL || 'https://triageflow.systems')
+        ? (process.env.NEXT_PUBLIC_API_URL || 'https://triageflow.me')
         : '';
 
 export interface ApiResponse<T> {
@@ -30,14 +30,34 @@ export interface RequestOptions extends RequestInit {
     suppressLogError?: boolean;
 }
 
+function getAuthHeader(): Record<string, string> {
+    if (typeof window === 'undefined') return {};
+    try {
+        const authStorage = localStorage.getItem('auth-storage');
+        if (authStorage) {
+            const parsed = JSON.parse(authStorage);
+            const token = parsed?.state?.accessToken;
+            if (token) return { Authorization: `Bearer ${token}` };
+        }
+        const legacyToken = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
+        if (legacyToken) return { Authorization: `Bearer ${legacyToken}` };
+    } catch {
+        // ignore
+    }
+    return {};
+}
+
 async function request<T>(
     path: string,
     options?: RequestOptions,
 ): Promise<ApiResponse<T>> {
     const { headers: extraHeaders, suppressLogError, ...restOptions } = options ?? {};
+    const authHeaders = getAuthHeader();
+
     const res = await fetch(`${API_BASE_URL}${path}`, {
         headers: {
             'Content-Type': 'application/json',
+            ...authHeaders,
             ...extraHeaders,
         },
         ...restOptions,
