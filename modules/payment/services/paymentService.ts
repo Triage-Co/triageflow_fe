@@ -34,14 +34,6 @@ export const paymentService = {
         token?: string
     ): Promise<any> {
         try {
-            const getSafeUrl = (path: string) => {
-                if (typeof window === 'undefined') return `https://triageflow.me${path}`;
-                const hostname = window.location.hostname;
-                const isIp = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(hostname);
-                const origin = isIp ? `http://localhost:${window.location.port || '3000'}` : window.location.origin;
-                return `${origin}${path}`;
-            };
-
             const res = await apiClient.post<any>(
                 '/api/transaction',
                 {
@@ -49,8 +41,8 @@ export const paymentService = {
                     service_order_id: prescriptionId,
                     transType: 'BOOKING_PAYMENT_1',
                     amount: amount || 100000,
-                    returnUrl: getSafeUrl('/pharmacy'),
-                    cancelUrl: getSafeUrl('/pharmacy'),
+                    returnUrl: 'https://triageflow.me/pharmacy',
+                    cancelUrl: 'https://triageflow.me/pharmacy',
                 },
                 token ? { headers: { Authorization: `Bearer ${token}` } } : { suppressLogError: true }
             );

@@ -48,7 +48,17 @@ interface PatientRx {
     rawPrescription: Prescription;
 }
 
-export function PaymentWorkflowPanel() {
+export interface PaymentWorkflowPanelProps {
+    presetPrescriptionId?: string;
+    onClose?: () => void;
+    onPaymentSuccess?: (updatedPrescription: Prescription) => void;
+}
+
+export function PaymentWorkflowPanel({
+    presetPrescriptionId,
+    onClose,
+    onPaymentSuccess,
+}: PaymentWorkflowPanelProps = {}) {
     const router = useRouter();
     const [patients, setPatients] = useState<PatientRx[]>([]);
     const [loading, setLoading] = useState(true);
@@ -84,8 +94,14 @@ export function PaymentWorkflowPanel() {
 
             setPatients(mapped);
 
-            // Auto select matching search code from URL parameter
-            if (typeof window !== 'undefined') {
+            if (presetPrescriptionId) {
+                const match = mapped.find((item) => item.id === presetPrescriptionId);
+                if (match) {
+                    setSelectedPatientId(match.id);
+                } else if (mapped.length > 0) {
+                    setSelectedPatientId(mapped[0].id);
+                }
+            } else if (typeof window !== 'undefined') {
                 const urlParams = new URLSearchParams(window.location.search);
                 const searchCode = urlParams.get('search');
                 if (searchCode) {
@@ -318,7 +334,7 @@ export function PaymentWorkflowPanel() {
         setIsProcessing(true);
         try {
             // Call Backend API to update status to paid
-            await paymentService.payPrescriptionOffline(activePatient.id);
+            const updated = await paymentService.payPrescriptionOffline(activePatient.id);
             setIsProcessing(false);
             setPaymentSuccess(true);
             broadcastPaymentDisplaySync({
@@ -329,6 +345,9 @@ export function PaymentWorkflowPanel() {
                 rxCode: activePatient.rxCode,
                 totalAmount,
             });
+            if (onPaymentSuccess) {
+                onPaymentSuccess(updated);
+            }
         } catch (err: any) {
             console.error('[PaymentWorkflowPanel] Payment failed:', err);
             setIsProcessing(false);
@@ -341,6 +360,9 @@ export function PaymentWorkflowPanel() {
                 rxCode: activePatient.rxCode,
                 totalAmount,
             });
+            if (onPaymentSuccess) {
+                onPaymentSuccess(activePatient.rawPrescription);
+            }
         }
     };
 
@@ -353,7 +375,7 @@ export function PaymentWorkflowPanel() {
     };
 
     return (
-        <div className="flex-1 flex flex-col overflow-y-auto bg-white rounded-tl-[48px] rounded-bl-[48px] p-6 md:p-10">
+        <div className="flex-1 flex flex-col overflow-y-auto no-scrollbar bg-white dark:bg-neutral-900 rounded-3xl p-4 md:p-8 h-full w-full">
             <div className="max-w-6xl w-full mx-auto space-y-6">
                 {/* ── Page Header Title & Patient Display Launcher ── */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -361,12 +383,20 @@ export function PaymentWorkflowPanel() {
                         <h1 className="text-2xl lg:text-3xl font-extrabold text-slate-800 tracking-tight">
                             Thanh Toán Đơn Thuốc
                         </h1>
-                        <p className="text-xs lg:text-sm text-slate-400 font-medium mt-1">
-                            {step === 1 ? 'Nối dữ liệu API trực tiếp · Quản lý thanh toán tại quầy thu ngân' : 'Quầy phát thuốc - Thu ngân'}
-                        </p>
                     </div>
 
                     <div className="flex items-center gap-2">
+                        {onClose && (
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="px-4 py-2.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs transition cursor-pointer flex items-center gap-1.5 border border-slate-300 shadow-sm"
+                            >
+                                <ArrowLeft className="w-4 h-4" />
+                                <span>Quay lại đơn thuốc</span>
+                            </button>
+                        )}
+
                         <button
                             type="button"
                             onClick={fetchLivePrescriptions}
@@ -433,25 +463,31 @@ export function PaymentWorkflowPanel() {
                                 {/* Card 1: Chọn Bệnh Nhân */}
                                 <div className="bg-white rounded-[24px] border border-slate-200/80 p-6 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.03)] space-y-4">
                                     <div className="flex items-center justify-between">
-                                        <h3 className="text-sm font-bold text-slate-800">Chọn Bệnh Nhân / Đơn Thuốc</h3>
-                                        <span className="text-xs text-amber-600 font-bold bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">Chờ thanh toán ({patients.length})</span>
+                                        <h3 className="text-sm font-bold text-slate-800">
+                                            {presetPrescriptionId ? 'Thông tin Bệnh Nhân' : 'Chọn Bệnh Nhân / Đơn Thuốc'}
+                                        </h3>
+                                        <span className="text-xs text-amber-600 font-bold bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
+                                            {presetPrescriptionId ? 'Đơn thuốc hiện tại' : `Chờ thanh toán (${patients.length})`}
+                                        </span>
                                     </div>
 
-                                    {/* Select Dropdown */}
-                                    <div className="relative">
-                                        <select
-                                            value={selectedPatientId}
-                                            onChange={(e) => setSelectedPatientId(e.target.value)}
-                                            className="w-full bg-slate-50 border border-slate-200 rounded-[16px] px-4 py-3.5 text-sm font-bold text-slate-800 appearance-none outline-none focus:border-[#8B7CF6] focus:bg-white focus:ring-4 focus:ring-purple-500/10 transition cursor-pointer"
-                                        >
-                                            {patients.map((p) => (
-                                                <option key={p.id} value={p.id}>
-                                                    {p.code} - {p.patientName} ({p.rxCode} · {p.rawPrescription.status})
-                                                </option>
-                                            ))}
-                                        </select>
-                                        <ChevronDown className="w-5 h-5 text-slate-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-                                    </div>
+                                    {/* Select Dropdown (hidden when presetPrescriptionId is provided) */}
+                                    {!presetPrescriptionId && (
+                                        <div className="relative">
+                                            <select
+                                                value={selectedPatientId}
+                                                onChange={(e) => setSelectedPatientId(e.target.value)}
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-[16px] px-4 py-3.5 text-sm font-bold text-slate-800 appearance-none outline-none focus:border-[#8B7CF6] focus:bg-white focus:ring-4 focus:ring-purple-500/10 transition cursor-pointer"
+                                            >
+                                                {patients.map((p) => (
+                                                    <option key={p.id} value={p.id}>
+                                                        {p.code} - {p.patientName} ({p.rxCode} · {p.rawPrescription.status})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <ChevronDown className="w-5 h-5 text-slate-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                        </div>
+                                    )}
 
                                     {/* Active Patient Selected Pill matching Screenshot 1 */}
                                     {activePatient && (

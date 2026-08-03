@@ -184,6 +184,19 @@ export function PatientPaymentDisplay({
         };
     }, []);
 
+    // Auto-return to IDLE video waiting screen after 10 seconds of payment success
+    useEffect(() => {
+        if (displayStatus === 'success' || statusSuccess) {
+            const timer = setTimeout(() => {
+                setDisplayStatus('idle');
+                setStatusSuccess(false);
+                broadcastPaymentDisplaySync({ status: 'idle' });
+            }, 10000);
+
+            return () => clearTimeout(timer);
+        }
+    }, [displayStatus, statusSuccess]);
+
     // Sync state changes if passed directly as props
     useEffect(() => {
         if (initialPrescriptionId) setPrescriptionId(initialPrescriptionId);
@@ -292,75 +305,106 @@ export function PatientPaymentDisplay({
     // ═══════════════════════════════════════════════════════════════════════════
     // ── 1. IDLE / WAITING NEXT SCREEN (7-Eleven POS Customer Display Style) ──
     // ═══════════════════════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ── 1. IDLE / WAITING SCREEN (Clinical Hospital Kiosk Signage Style) ──
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ── 1. IDLE / WAITING SCREEN (Clinical Animated Medical Kiosk Display) ──
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ── 1. IDLE / WAITING SCREEN (Emerald Green Animated Medical Kiosk Display) ──
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ── 1. IDLE / WAITING SCREEN (Fresh White & Clinical Green Hospital Kiosk) ──
+    // ═══════════════════════════════════════════════════════════════════════════
     if (displayStatus === 'idle') {
         return (
             <div className={cn(
-                "w-full h-full max-h-screen overflow-hidden bg-black flex flex-col justify-between p-6 md:p-10 font-['Be_Vietnam_Pro'] antialiased text-white relative shadow-2xl rounded-[32px] border border-neutral-800"
+                "w-full h-full max-h-screen overflow-hidden bg-gradient-to-br from-emerald-50/60 via-slate-50 to-teal-50/40 flex flex-col justify-between p-6 md:p-10 font-['Be_Vietnam_Pro'] antialiased text-slate-800 relative rounded-3xl border border-emerald-200/80 shadow-md"
             )}>
-                {/* Full-screen Looping Video Background */}
-                <video
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    className="absolute inset-0 w-full h-full object-cover z-0 opacity-90"
-                >
-                    <source
-                        src="https://res.cloudinary.com/dev4uz63q/video/upload/v1785735254/T%E1%BA%A1o_video_ch%E1%BB%9D_cho_c%C3%A1c_m%C3%A0n_h_gyusud.mp4"
-                        type="video/mp4"
-                    />
-                </video>
+                {/* Soft Animated Green Ambient Glow Orbs */}
+                <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[650px] h-[650px] bg-emerald-400/20 rounded-full blur-3xl animate-pulse z-0 pointer-events-none" />
+                <div className="absolute bottom-10 right-10 w-96 h-96 bg-teal-300/20 rounded-full blur-3xl animate-pulse z-0 pointer-events-none" style={{ animationDuration: '4s' }} />
 
-                {/* Dark Overlay Gradient for maximum readability */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/60 z-10 backdrop-blur-[2px]" />
+                {/* Clean Subtle Grid Pattern */}
+                <div 
+                    className="absolute inset-0 z-0 opacity-15 pointer-events-none" 
+                    style={{ 
+                        backgroundImage: `radial-gradient(circle at 1px 1px, rgba(16,185,129,0.3) 1px, transparent 0)`, 
+                        backgroundSize: '32px 32px' 
+                    }} 
+                />
 
-                {/* Clean Top Header (z-20) */}
-                <div className="relative z-20 flex items-center justify-between pb-4 border-b border-white/20 shrink-0">
-                    <div>
-                        <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-white flex items-center gap-3 drop-shadow-md">
-                            <span className="p-2 bg-indigo-600/90 rounded-2xl shadow-lg shadow-indigo-500/30 backdrop-blur-md">
-                                <Cross className="w-6 h-6 text-white" />
-                            </span>
-                            BỆNH VIỆN ĐA KHOA TRIAGEFLOW
-                        </h1>
-                        <p className="text-xs text-indigo-200 font-medium mt-1 drop-shadow">
-                            Hệ thống màn hình hiển thị phụ tại quầy nhà thuốc & thu ngân
-                        </p>
+                {/* Fresh Hospital Green Header */}
+                <div className="relative z-20 flex items-center justify-between pb-5 border-b border-emerald-200/80 shrink-0">
+                    <div className="flex items-center gap-3.5">
+                        <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-md shadow-emerald-600/25 shrink-0">
+                            <Cross className="w-6 h-6 text-white" />
+                        </div>
+                        <div>
+                            <h1 className="text-xl md:text-2xl font-black tracking-tight text-slate-900">
+                                BỆNH VIỆN ĐA KHOA TRIAGEFLOW
+                            </h1>
+                            <p className="text-xs md:text-sm text-emerald-800 font-bold mt-0.5">
+                                Hệ thống màn hình hiển thị phụ tại quầy nhà thuốc & thu ngân
+                            </p>
+                        </div>
                     </div>
 
-                    <div className="flex items-center gap-3 bg-emerald-500/20 border border-emerald-400/40 px-4 py-2 rounded-full text-emerald-300 font-bold text-xs shadow-lg backdrop-blur-md">
+                    <div className="px-5 py-2.5 bg-emerald-100/90 border border-emerald-300 text-emerald-900 rounded-full font-black text-xs md:text-sm flex items-center gap-2.5 shadow-sm">
                         <span className="relative flex h-3 w-3">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-600"></span>
                         </span>
                         <span>QUẦY SẴN SÀNG CHỜ GIAO DỊCH</span>
                     </div>
                 </div>
 
-                {/* Main Hero Center Overlay Box */}
-                <div className="relative z-20 flex-1 flex flex-col items-center justify-center text-center p-6 space-y-6 my-auto">
-                    <div className="bg-black/50 border border-white/20 rounded-3xl p-8 backdrop-blur-xl max-w-2xl space-y-4 shadow-2xl">
-                        <div className="w-16 h-16 rounded-2xl bg-indigo-600/90 text-white flex items-center justify-center mx-auto shadow-lg shadow-indigo-500/40 border border-indigo-400/40">
-                            <CreditCard className="w-8 h-8" />
+                {/* Main Animated Waiting Panel */}
+                <div className="relative z-20 flex-1 flex flex-col items-center justify-center text-center p-6 my-auto">
+                    <div className="w-full max-w-xl bg-white/95 border border-emerald-200/90 backdrop-blur-md rounded-3xl p-8 md:p-10 shadow-xl space-y-6 text-slate-800">
+                        {/* Animated Green Icon Ring */}
+                        <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
+                            <div className="absolute inset-0 rounded-full bg-emerald-400/30 animate-ping opacity-75" style={{ animationDuration: '3s' }} />
+                            <div className="w-16 h-16 rounded-2xl bg-emerald-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-emerald-600/30 border border-emerald-400/40 relative z-10">
+                                <CreditCard className="w-8 h-8" />
+                            </div>
                         </div>
-                        <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight leading-tight drop-shadow">
-                            CHỜ GIAO DỊCH TIẾP THEO
-                        </h2>
-                        <p className="text-sm md:text-base text-indigo-100 font-medium leading-relaxed drop-shadow">
-                            Vui lòng chuẩn bị <strong className="text-amber-300 font-bold">Mã Đơn Thuốc</strong> hoặc <strong className="text-amber-300 font-bold">Mã Bệnh Nhân (BN)</strong> khi tới lượt thanh toán.
-                        </p>
+
+                        <div className="space-y-2">
+                            <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight leading-tight">
+                                Xin chào quý khách
+                            </h2>
+                            <p className="text-xs md:text-sm text-emerald-800 font-bold">
+                                Quầy thu ngân & nhà thuốc sẵn sàng tiếp nhận bệnh nhân
+                            </p>
+                        </div>
+
+                        <div className="bg-emerald-50/80 border border-emerald-200/80 rounded-2xl p-5 text-xs md:text-sm text-slate-700 leading-relaxed font-semibold space-y-2 text-left shadow-xs">
+                            <p className="font-extrabold text-emerald-950 text-sm md:text-base">Vui lòng chuẩn bị:</p>
+                            <ul className="list-disc list-inside space-y-1 text-slate-800 text-sm md:text-base">
+                                <li><strong className="text-emerald-900 font-black">Mã đơn thuốc</strong></li>
+                                <li>hoặc <strong className="text-emerald-900 font-black">Mã bệnh nhân (BN)</strong></li>
+                            </ul>
+                            <p className="pt-1 text-xs text-slate-600 font-bold">khi tới lượt thanh toán tại quầy.</p>
+                        </div>
+
+                        <div className="inline-flex items-center gap-2 text-xs font-bold text-emerald-800 bg-emerald-100/60 px-4 py-1.5 rounded-full border border-emerald-200">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                            <span>Hệ thống đang sẵn sàng tiếp nhận</span>
+                        </div>
                     </div>
                 </div>
 
-                {/* Bottom Status & Real-time Clock */}
-                <div className="relative z-20 pt-4 border-t border-white/20 flex flex-col md:flex-row items-center justify-between gap-2 text-xs font-medium text-slate-200 shrink-0 backdrop-blur-sm">
-                    <div className="flex items-center gap-2 drop-shadow">
-                        <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
+                {/* Clean Hospital Footer Status Bar */}
+                <div className="relative z-20 pt-4 border-t border-emerald-200/80 flex flex-col md:flex-row items-center justify-between gap-3 text-xs md:text-sm font-bold text-slate-600 shrink-0">
+                    <div className="flex items-center gap-2 text-slate-700">
+                        <ShieldCheck className="w-4 h-4 text-emerald-600" />
                         <span>TriageFlow OPD · Màn hình tự động chuyển sang hóa đơn khi Dược sĩ bấm Thanh toán</span>
                     </div>
-                    <div className="flex items-center gap-4 font-mono font-bold text-white drop-shadow">
+                    <div className="flex items-center gap-4 font-mono font-black text-slate-800">
                         <span>{currentDate}</span>
-                        <span className="text-emerald-400 bg-black/60 px-3 py-1 rounded-lg border border-emerald-500/40">{currentTime}</span>
+                        <span className="bg-emerald-100/90 border border-emerald-300 px-3 py-1 rounded-xl text-emerald-900 shadow-xs">{currentTime}</span>
                     </div>
                 </div>
             </div>
@@ -368,66 +412,8 @@ export function PatientPaymentDisplay({
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // ── 2. SUCCESS / TRANSACTION COMPLETED VIEW ──
+    // ── 2. ACTIVE & SUCCESS TRANSACTION DISPLAY VIEW (Clean White Theme) ──
     // ═══════════════════════════════════════════════════════════════════════════
-    if (displayStatus === 'success' || statusSuccess) {
-        return (
-            <div className={cn(
-                "w-full h-full max-h-screen overflow-hidden bg-emerald-950/90 dark:bg-emerald-950 flex flex-col justify-between p-6 md:p-10 font-['Be_Vietnam_Pro'] antialiased text-white relative shadow-2xl rounded-[32px] border border-emerald-800/50"
-            )}>
-                {/* Header */}
-                <div className="flex items-center justify-between pb-6 border-b border-emerald-800/60 shrink-0">
-                    <div>
-                        <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-white flex items-center gap-3">
-                            <span className="p-2 bg-emerald-600 rounded-2xl shadow-lg shadow-emerald-500/30">
-                                <Cross className="w-6 h-6 text-white" />
-                            </span>
-                            BỆNH VIỆN ĐA KHOA TRIAGEFLOW
-                        </h1>
-                        <p className="text-xs text-emerald-200 font-medium mt-1">Cổng xác nhận thanh toán đơn thuốc tại quầy</p>
-                    </div>
-
-                    <div className="px-4 py-2 bg-emerald-500 text-white rounded-full font-bold text-xs shadow-md flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>ĐÃ THU TIỀN THÀNH CÔNG</span>
-                    </div>
-                </div>
-
-                {/* Main Success Hero Content */}
-                <div className="flex-1 flex flex-col items-center justify-center text-center p-6 space-y-6 my-auto">
-                    <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-2xl shadow-emerald-500/40 border-4 border-emerald-400/40 animate-bounce">
-                        <Check className="w-16 h-16 md:w-20 md:h-20 stroke-[3]" />
-                    </div>
-
-                    <div className="space-y-2">
-                        <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight">
-                            THANH TOÁN THÀNH CÔNG!
-                        </h2>
-                        <p className="text-base md:text-xl text-emerald-200 font-medium">
-                            Cảm ơn bệnh nhân <strong className="text-white font-bold">{patientName}</strong> ({rxCode})
-                        </p>
-                    </div>
-
-                    <div className="bg-emerald-900/60 border border-emerald-700/60 rounded-2xl px-8 py-4 text-center space-y-1 shadow-inner">
-                        <span className="text-xs font-semibold text-emerald-300 uppercase tracking-wider">Tổng số tiền đã thu</span>
-                        <p className="text-3xl md:text-4xl font-extrabold text-white">
-                            {finalAmountToPay.toLocaleString('vi-VN')} đ
-                        </p>
-                    </div>
-
-                    <p className="text-xs md:text-sm text-emerald-300 font-semibold bg-emerald-900/40 px-6 py-2.5 rounded-full border border-emerald-700/40">
-                        💊 Vui lòng di chuyển sang Quầy Cấp Phát Thuốc để nhận thuốc kê đơn.
-                    </p>
-                </div>
-
-                {/* Footer Bar */}
-                <div className="pt-4 border-t border-emerald-800/60 flex items-center justify-between text-xs font-medium text-emerald-300 shrink-0">
-                    <span>Hóa đơn điện tử & Lịch sử thanh toán đã được lưu trên hệ thống TriageFlow.</span>
-                    <span className="font-mono font-bold">{currentTime}</span>
-                </div>
-            </div>
-        );
-    }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // ── 3. ACTIVE TRANSACTION DISPLAY VIEW ──
@@ -508,8 +494,39 @@ export function PatientPaymentDisplay({
                         </div>
                     </div>
 
-                    {/* Dynamic Payment Area: Cash vs PayOS QR Code */}
-                    {method !== 'qr' ? (
+                    {/* Dynamic Payment Area: Success Status Card vs Cash vs PayOS QR Code */}
+                    {statusSuccess || displayStatus === 'success' ? (
+                        /* SUCCESS PAYMENT CARD (REPLACES QR CODE / CASH BOX) */
+                        <div className="bg-emerald-50/70 dark:bg-emerald-950/40 rounded-2xl border border-emerald-200 dark:border-emerald-800 p-6 shadow-xs flex flex-col items-center justify-center text-center space-y-4 flex-1 min-h-0">
+                            <div className="w-14 h-14 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold shadow-xs">
+                                <Check className="w-8 h-8 stroke-[3]" />
+                            </div>
+
+                            <div className="space-y-1">
+                                <span className="px-3 py-0.5 bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-semibold text-xs rounded-full">
+                                    ✓ ĐÃ THU TIỀN THÀNH CÔNG
+                                </span>
+                                <h3 className="text-2xl font-bold text-emerald-950 dark:text-emerald-100 tracking-tight pt-1">
+                                    Thanh toán thành công!
+                                </h3>
+                                <p className="text-xs text-emerald-800 dark:text-emerald-300 font-medium">
+                                    Cảm ơn bệnh nhân <strong className="text-slate-900 dark:text-white font-semibold">{patientName}</strong> ({rxCode})
+                                </p>
+                            </div>
+
+                            <div className="w-full bg-emerald-600 text-white rounded-xl p-3.5 text-center space-y-0.5 shadow-xs">
+                                <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-100">Tổng số tiền đã thanh toán</span>
+                                <p className="text-2xl font-bold">
+                                    {finalAmountToPay.toLocaleString('vi-VN')} đ
+                                </p>
+                            </div>
+
+                            <div className="p-3 bg-white/90 dark:bg-neutral-900/90 rounded-xl border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-900 dark:text-emerald-200 font-medium leading-relaxed text-center space-y-1 shadow-xs">
+                                <p>💊 Vui lòng di chuyển sang Quầy Cấp Phát Thuốc để nhận thuốc kê đơn.</p>
+                                <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">Tự động trở về màn hình chờ sau 10 giây...</p>
+                            </div>
+                        </div>
+                    ) : method !== 'qr' ? (
                         /* CASH PAYMENT BOX (CUSTOMER DISPLAY) */
                         <div className="bg-gradient-to-br from-emerald-50/80 via-white to-emerald-50/30 dark:from-emerald-950/40 dark:via-neutral-900 dark:to-neutral-900 rounded-2xl border border-emerald-200 dark:border-emerald-900/60 p-6 shadow-sm flex flex-col items-center justify-center text-center space-y-4 flex-1 min-h-0">
                             <div className="w-16 h-16 rounded-2xl bg-emerald-500 text-white flex items-center justify-center font-bold shadow-lg shadow-emerald-500/20">

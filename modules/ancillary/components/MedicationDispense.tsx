@@ -25,6 +25,7 @@ import {
 import { Prescription, PrescriptionStatusEnum } from '@/shared/types/prescription.types';
 import { pharmacyService } from '../services/pharmacyService';
 import { PharmacyPayOsPanel } from './PharmacyPayOsPanel';
+import { PaymentWorkflowPanel } from '@/modules/payment/components/PaymentWorkflowPanel';
 import { broadcastPaymentDisplaySync } from '@/modules/payment/utils/paymentSync';
 
 interface MedicationDispenseProps {
@@ -64,6 +65,25 @@ export function MedicationDispense({
                 <p className="text-sm text-neutral-500 dark:text-neutral-400 max-w-md mt-1">
                     Vui lòng chọn đơn thuốc từ danh sách bên trái hoặc quét mã QR trên ứng dụng Bệnh nhân để bắt đầu xử lý cấp phát.
                 </p>
+            </div>
+        );
+    }
+
+    if (showPayOsPanel) {
+        return (
+            <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-3xl h-full overflow-hidden flex flex-col shadow-sm">
+                <PaymentWorkflowPanel
+                    presetPrescriptionId={prescription.prescription_id}
+                    onClose={() => {
+                        setShowPayOsPanel(false);
+                        broadcastPaymentDisplaySync({ status: 'idle' });
+                    }}
+                    onPaymentSuccess={(updated) => {
+                        setSuccessMessage('Thanh toán đơn thuốc thành công! Trạng thái đã tự động chuyển sang "Đang soạn thuốc".');
+                        setShowPayOsPanel(false);
+                        if (onStatusChange) onStatusChange(updated);
+                    }}
+                />
             </div>
         );
     }
@@ -167,7 +187,7 @@ export function MedicationDispense({
     };
 
     return (
-        <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-3xl p-6 shadow-sm flex flex-col h-full overflow-y-auto">
+        <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-3xl p-6 shadow-sm flex flex-col h-full overflow-y-auto no-scrollbar">
             {/* Header Info */}
             <div className="flex flex-wrap items-start justify-between gap-4 pb-5 border-b border-neutral-200 dark:border-neutral-800">
                 <div className="flex items-center gap-4">
@@ -313,72 +333,30 @@ export function MedicationDispense({
             {/* Pharmacist Action Bar */}
             <div className="mt-6 pt-5 border-t border-neutral-200 dark:border-neutral-800">
                 {prescription.status === 'PENDING' && (
-                    <div className="space-y-4">
-                        {showPayOsPanel ? (
-                            <PharmacyPayOsPanel
-                                prescription={prescription}
-                                onPaymentSuccess={(updated) => {
-                                    setSuccessMessage('Thanh toán đơn thuốc thành công qua PayOS! Trạng thái đã tự động chuyển sang "Đang soạn thuốc".');
-                                    setShowPayOsPanel(false);
-                                    if (onStatusChange) onStatusChange(updated);
-                                }}
-                                onCancel={() => {
-                                    setShowPayOsPanel(false);
-                                    broadcastPaymentDisplaySync({ status: 'idle' });
-                                }}
-                            />
-                        ) : (
-                            <div className="p-5 bg-gradient-to-r from-amber-50/90 via-orange-50/50 to-amber-50/30 dark:from-amber-950/40 dark:via-neutral-900 dark:to-neutral-900 border border-amber-200/90 dark:border-amber-800/60 rounded-3xl shadow-xs space-y-4">
-                                <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-amber-200/80 dark:border-amber-900/40">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center font-bold shadow-md shadow-amber-500/20 shrink-0">
-                                            <Wallet className="w-5 h-5" />
-                                        </div>
-                                        <div>
-                                            <h4 className="text-sm font-bold text-amber-950 dark:text-amber-200 flex items-center gap-2">
-                                                Đơn thuốc chưa thanh toán
-                                                <span className="text-amber-600 dark:text-amber-400 font-extrabold text-base">
-                                                    ({prescription.total_amount?.toLocaleString('vi-VN')} đ)
-                                                </span>
-                                            </h4>
-                                            <p className="text-xs text-amber-800/80 dark:text-amber-400 mt-0.5">
-                                                Tạo mã VietQR / PayOS trực tiếp cho bệnh nhân quét chuyển khoản, hoặc xác nhận thu tiền mặt tại quầy nhà thuốc.
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 shrink-0">
-                                        Chưa đến 
-                                    </span>
-                                </div>
-
-                                <div className="flex flex-wrap items-center justify-end gap-2.5 pt-1">
-                                    <button
-                                        onClick={handleGoToPayment}
-                                        className="px-4 py-2.5 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-                                    >
-                                        <CreditCard className="w-4 h-4 text-neutral-500" />
-                                        Chuyển Thu ngân
-                                    </button>
-
-                                    <button
-                                        onClick={handlePayOffline}
-                                        disabled={actionLoading}
-                                        className="px-4.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-sm cursor-pointer"
-                                    >
-                                        {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />}
-                                        Thanh toán tiền mặt
-                                    </button>
-
-                                    <button
-                                        onClick={() => setShowPayOsPanel(true)}
-                                        className="px-5 py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-md shadow-amber-600/20 cursor-pointer"
-                                    >
-                                        <QrCode className="w-4 h-4" />
-                                        Thanh toán PayOS / VietQR
-                                    </button>
-                                </div>
+                    <div className="p-4 bg-gradient-to-r from-purple-50/90 via-indigo-50/50 to-purple-50/30 dark:from-purple-950/40 dark:via-neutral-900 dark:to-neutral-900 border border-purple-200/90 dark:border-purple-800/60 rounded-3xl shadow-xs flex flex-wrap items-center justify-between gap-4">
+                        {/* Left: Total Price */}
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-2xl bg-[#7C6CF5] text-white flex items-center justify-center font-bold shadow-md shadow-purple-500/20 shrink-0">
+                                <Wallet className="w-5 h-5" />
                             </div>
-                        )}
+                            <div>
+                                <span className="text-[11px] font-bold text-purple-800/80 dark:text-purple-300 uppercase tracking-wider">Tổng thanh toán</span>
+                                <h4 className="text-xl font-black text-[#7C6CF5] dark:text-purple-400 leading-tight">
+                                    {prescription.total_amount?.toLocaleString('vi-VN')} đ
+                                </h4>
+                            </div>
+                        </div>
+
+                        {/* Right: Single Purple "Thanh toán" Button */}
+                        <div className="flex items-center gap-2.5">
+                            <button
+                                onClick={handleGoToPayment}
+                                className="px-6 py-3 bg-[#7C6CF5] hover:bg-[#6C5CE7] active:scale-95 text-white rounded-2xl text-xs font-black transition-all flex items-center gap-2 shadow-md shadow-purple-500/25 cursor-pointer"
+                            >
+                                <CreditCard className="w-4 h-4" />
+                                <span>Thanh toán</span>
+                            </button>
+                        </div>
                     </div>
                 )}
 

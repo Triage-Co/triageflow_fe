@@ -112,7 +112,7 @@ export function PharmacyQueue({
                 return (
                     <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 px-2 py-0.5 rounded-full">
                         <Clock className="w-3 h-3 text-neutral-500" />
-                        Chưa đến 
+                        Chờ nhận đơn
                     </span>
                 );
             case 'PROCESSING':
@@ -241,7 +241,7 @@ export function PharmacyQueue({
                                 : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200'
                         }`}
                     >
-                        Chưa đến ({countByStatus('PENDING')})
+                        Chờ nhận đơn ({countByStatus('PENDING')})
                     </button>
                     <button
                         onClick={() => setActiveStatus('PROCESSING')}
@@ -277,7 +277,7 @@ export function PharmacyQueue({
             </div>
 
             {/* Prescriptions List */}
-            <div className="mt-4 flex-1 overflow-y-auto space-y-2.5 pr-1">
+            <div className="mt-4 flex-1 overflow-y-auto no-scrollbar space-y-2.5 pr-1">
                 {loading ? (
                     <div className="py-12 text-center text-neutral-400">
                         <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-500" />

@@ -76,7 +76,6 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
     PHARMACY_STAFF: [
         { label: 'Tiếp nhận đơn tại quầy', href: '/pharmacy/checkin', icon: QrCode },
         { label: 'Quản lý & Cấp phát đơn', href: '/pharmacy', icon: Pill },
-        { label: 'Thanh toán', href: '/cashier', icon: CreditCard },
         { label: 'Danh mục dược phẩm', href: '/pharmacy/medicines', icon: Package },
         { label: 'Thông báo', href: '/notifications', icon: Bell },
         { label: 'Cài đặt', href: '/settings', icon: Settings },
@@ -84,7 +83,6 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
     PHARMACIST: [
         { label: 'Tiếp nhận đơn tại quầy', href: '/pharmacy/checkin', icon: QrCode },
         { label: 'Quản lý & Cấp phát đơn', href: '/pharmacy', icon: Pill },
-        { label: 'Thanh toán', href: '/cashier', icon: CreditCard },
         { label: 'Danh mục dược phẩm', href: '/pharmacy/medicines', icon: Package },
         { label: 'Thông báo', href: '/notifications', icon: Bell },
         { label: 'Cài đặt', href: '/settings', icon: Settings },
@@ -92,7 +90,6 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
     PHARMACY: [
         { label: 'Tiếp nhận đơn tại quầy', href: '/pharmacy/checkin', icon: QrCode },
         { label: 'Quản lý & Cấp phát đơn', href: '/pharmacy', icon: Pill },
-        { label: 'Thanh toán', href: '/cashier', icon: CreditCard },
         { label: 'Danh mục dược phẩm', href: '/pharmacy/medicines', icon: Package },
         { label: 'Thông báo', href: '/notifications', icon: Bell },
         { label: 'Cài đặt', href: '/settings', icon: Settings },

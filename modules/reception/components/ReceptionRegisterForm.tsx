@@ -325,20 +325,13 @@ export function ReceptionRegisterForm() {
             }
 
             if (!paymentData) {
-                const getSafeUrl = (path: string) => {
-                    const hostname = window.location.hostname;
-                    const isIp = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(hostname);
-                    const origin = isIp ? `http://localhost:${window.location.port || '3000'}` : window.location.origin;
-                    return `${origin}${path}`;
-                };
-
                 const tx = await receptionService.createTransaction(
                     {
                         transType: 'BOOKING_PAYMENT_1',
                         amount: 200000,
                         clientId: bookingId,
-                        returnUrl: getSafeUrl('/reception'),
-                        cancelUrl: getSafeUrl('/reception'),
+                        returnUrl: 'https://triageflow.me/reception',
+                        cancelUrl: 'https://triageflow.me/reception',
                     },
                     accessToken,
                 );
