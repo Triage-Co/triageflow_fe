@@ -362,36 +362,29 @@ export function PatientPaymentDisplay({
 
                 {/* Main Animated Waiting Panel */}
                 <div className="relative z-20 flex-1 flex flex-col items-center justify-center text-center p-6 my-auto">
-                    <div className="w-full max-w-xl bg-white/95 border border-emerald-200/90 backdrop-blur-md rounded-3xl p-8 md:p-10 shadow-xl space-y-6 text-slate-800">
+                    <div className="w-full max-w-lg bg-white border border-emerald-200/90 rounded-3xl p-8 md:p-10 shadow-lg space-y-5 text-slate-800">
                         {/* Animated Green Icon Ring */}
-                        <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
+                        <div className="relative w-16 h-16 mx-auto flex items-center justify-center">
                             <div className="absolute inset-0 rounded-full bg-emerald-400/30 animate-ping opacity-75" style={{ animationDuration: '3s' }} />
-                            <div className="w-16 h-16 rounded-2xl bg-emerald-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-emerald-600/30 border border-emerald-400/40 relative z-10">
-                                <CreditCard className="w-8 h-8" />
+                            <div className="w-14 h-14 rounded-2xl bg-emerald-600 text-white flex items-center justify-center mx-auto shadow-md shadow-emerald-600/30 relative z-10">
+                                <CreditCard className="w-7 h-7" />
                             </div>
                         </div>
 
                         <div className="space-y-2">
-                            <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight leading-tight">
+                            <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
                                 Xin chào quý khách
                             </h2>
-                            <p className="text-xs md:text-sm text-emerald-800 font-bold">
-                                Quầy thu ngân & nhà thuốc sẵn sàng tiếp nhận bệnh nhân
+                            <p className="text-sm md:text-base text-slate-600 font-semibold">
+                                Vui lòng chuẩn bị <strong className="text-emerald-800 font-bold">Mã đơn thuốc</strong> hoặc <strong className="text-emerald-800 font-bold">Mã bệnh nhân</strong>
                             </p>
                         </div>
 
-                        <div className="bg-emerald-50/80 border border-emerald-200/80 rounded-2xl p-5 text-xs md:text-sm text-slate-700 leading-relaxed font-semibold space-y-2 text-left shadow-xs">
-                            <p className="font-extrabold text-emerald-950 text-sm md:text-base">Vui lòng chuẩn bị:</p>
-                            <ul className="list-disc list-inside space-y-1 text-slate-800 text-sm md:text-base">
-                                <li><strong className="text-emerald-900 font-black">Mã đơn thuốc</strong></li>
-                                <li>hoặc <strong className="text-emerald-900 font-black">Mã bệnh nhân (BN)</strong></li>
-                            </ul>
-                            <p className="pt-1 text-xs text-slate-600 font-bold">khi tới lượt thanh toán tại quầy.</p>
-                        </div>
-
-                        <div className="inline-flex items-center gap-2 text-xs font-bold text-emerald-800 bg-emerald-100/60 px-4 py-1.5 rounded-full border border-emerald-200">
-                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-pulse"></span>
-                            <span>Hệ thống đang sẵn sàng tiếp nhận</span>
+                        <div className="pt-2">
+                            <div className="inline-flex items-center gap-2 text-xs font-bold text-emerald-800 bg-emerald-50 px-4 py-1.5 rounded-full border border-emerald-200">
+                                <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
+                                <span>Quầy sẵn sàng tiếp nhận</span>
+                            </div>
                         </div>
                     </div>
                 </div>
