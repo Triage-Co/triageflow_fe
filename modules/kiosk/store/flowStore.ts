@@ -232,7 +232,6 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
           return true;
         }
 
-        // Sắp xếp các bước theo thứ tự phụ thuộc (topological sort) dựa trên depends_on để đảm bảo lộ trình hiển thị đúng
         const sortStepsTopologically = (steps: any[]) => {
           const sorted: any[] = [];
           const visited = new Set<string>();
@@ -245,7 +244,7 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
               return;
             }
             if (visited.has(stepId)) return;
-            if (temp.has(stepId)) return; // Tránh loop tuần hoàn
+            if (temp.has(stepId)) return;
 
             temp.add(stepId);
 
@@ -269,14 +268,10 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
         };
 
         stepsArray = sortStepsTopologically(stepsArray);
-
-        // Gọi API chi tiết GET /api/step/{step_id}/patient/{patient_id} cho từng step chưa hoàn thành để nạp STT thật (sử dụng cache)
         const detailedSteps = await Promise.allSettled(
           stepsArray.map(async (step: any) => {
             const stepId = step.step_id || step.id;
             if (!stepId) return step;
-
-            // Bỏ qua lấy chi tiết với các bước đã hoàn thành hoặc huỷ để giảm tải request trùng lặp
             const isCompletedOrCancelled = step.step_status === 'COMPLETED' || step.step_status === 'CANCELLED';
             if (isCompletedOrCancelled) {
               return step;
@@ -309,8 +304,6 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
           else if (step.step_status === 'IN_PROGRESS') status = 'in_progress';
           else if (step.step_status === 'PENDING') status = 'pending';
           else if (step.step_status === 'WAITING') status = 'waiting';
-
-          // Lấy queue_number thật từ mảng queues (TUYỆT ĐỐI KHÔNG DÙNG docNo)
           const queueObj = Array.isArray(step.queues) && step.queues.length > 0 ? step.queues[0] : null;
           const queueNoStr = queueObj?.queue_number ? `${queueObj.queue_number}` : undefined;
 
@@ -342,9 +335,6 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
     return promise;
   },
 
-  // Quy trình 2 bước tra cứu chi tiết phiếu khám:
-  // BƯỚC 1: Lấy step_id từ API GET /api/flow/patient/{patient_id}/active/kiosk (hoặc GET /api/flow/patient/{patient_id})
-  // BƯỚC 2: Gọi API GET /api/step/{step_id}/patient/{patient_id} nạp dữ liệu chi tiết phiếu khám thật (KHÔNG HARDCODE)
   fetchActiveTicketForPatient: async (patientId: string) => {
     const cacheKey = patientId;
     if (activeTicketRequests.has(cacheKey)) {
@@ -357,7 +347,6 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
 
     const promise = (async () => {
       try {
-        // 1. Gọi Bước 1 lấy active flow kiosk của bệnh nhân
         let flowRes: any = null;
         try {
           flowRes = await getActivePatientFlowKioskWithCache(patientId);
@@ -366,8 +355,6 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
         }
 
         const flowData: any = flowRes && (flowRes as any)?.data !== undefined ? (flowRes as any).data : flowRes;
-
-        // Nếu API trả về thành công nhưng data rỗng [] -> Bệnh nhân chưa có phiếu khám hôm nay -> DỪNG NGAY
         const isEmpty = !flowData || (Array.isArray(flowData) && flowData.length === 0);
         if (isEmpty) {
           set({ activeTicket: null, routeSteps: [] });
@@ -375,12 +362,10 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
           return false;
         }
 
-        // Lấy flow có status === 'IN_PROGRESS' và mới nhất (create_at gần nhất)
         let activeFlow = null;
         if (Array.isArray(flowData)) {
           const inProgressFlows = flowData.filter((f: any) => f.status === 'IN_PROGRESS');
           if (inProgressFlows.length > 0) {
-            // Sắp xếp theo create_at giảm dần
             inProgressFlows.sort((a: any, b: any) => {
               const timeA = a.create_at ? new Date(a.create_at).getTime() : 0;
               const timeB = b.create_at ? new Date(b.create_at).getTime() : 0;
@@ -393,9 +378,6 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
         } else {
           activeFlow = flowData;
         }
-
-        // Tìm active step trong activeFlow theo thứ tự từ trên xuống dưới
-        // Bỏ qua các bước COMPLETED / CANCELLED và kiểm tra depends_on
         let stepId: string | null = null;
         if (activeFlow && Array.isArray(activeFlow.steps)) {
           const activeSteps = activeFlow.steps.filter(
@@ -404,7 +386,6 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
 
           const currentActiveStep = activeSteps.find((s: any) => {
             if (!s.depends_on || s.depends_on.length === 0) return true;
-            // Tất cả các dependencies phải đã COMPLETED hoặc CANCELLED
             return s.depends_on.every((depId: string) => {
               const depStep = activeFlow.steps.find((fs: any) => fs.step_id === depId);
               return !depStep || depStep.step_status === 'COMPLETED' || depStep.step_status === 'CANCELLED';
@@ -421,11 +402,7 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
           kioskState.showToast('Bạn chưa có phiếu khám hôm nay!', 'info');
           return false;
         }
-
-        // Nạp lộ trình bác sĩ chỉ định nếu có lượt khám active
-        get().fetchDoctorRouteSteps(patientId, activeFlow).catch(() => {});
-
-        // 2. Gọi Bước 2 lấy chi tiết step theo GET /api/step/{step_id}/patient/{patient_id} (sử dụng cache)
+        get().fetchDoctorRouteSteps(patientId, activeFlow).catch(() => { });
         const stepData = await getStepDetailWithCache(stepId, patientId);
 
         if (!stepData) {
@@ -438,8 +415,6 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
         const specialtyObj = stepData.specialty_info || stepData.specialty || roomObj?.specialty;
         const staffObj = stepData.staff_info || stepData.staff;
         const slotObj = stepData.flow?.booking?.slot;
-
-        // Tính thời gian chờ = giờ bắt đầu slot - giờ hiện tại
         const computeWaitMinutes = (startTimeStr: string | undefined): number => {
           if (!startTimeStr) return 0;
           const now = new Date();
@@ -448,8 +423,6 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
           const diffMs = slotStart.getTime() - now.getTime();
           return Math.max(0, Math.floor(diffMs / 60000));
         };
-
-        // Map dữ liệu 100% từ API Bước 2, KHÔNG dùng chuỗi giả định hardcode
         const generatedTicket: TicketData = {
           ticketNumber: queueObj?.queue_number ?? '',
           patientName: authPatientInfo?.fullName ?? '',
@@ -504,7 +477,6 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
     return promise;
   },
 
-  // Xác nhận Thanh toán & Gọi API sinh STT /api/booking/generate
   verifyPaymentAndIssueTicket: async () => {
     const kioskState = useKioskStore.getState();
     let stepId = get().activeStepId;
@@ -515,12 +487,11 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
     kioskState.setLoading(true, 'Đang xác nhận thanh toán & sinh Số thứ tự (STT)...');
 
     try {
-      // Nếu chưa có stepId (trường hợp đặt gói khám), ta phân giải từ active flow của bệnh nhân
       if (!stepId && get().activeBookingId && patientId) {
         try {
           const flowRes = await flowService.getActivePatientFlowKiosk(patientId);
           const flowData: any = flowRes && (flowRes as any)?.data !== undefined ? (flowRes as any).data : flowRes;
-          
+
           let activeFlow = null;
           if (Array.isArray(flowData)) {
             const inProgressFlows = flowData.filter((f: any) => f.status === 'IN_PROGRESS');

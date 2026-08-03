@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { packageBookingService, ExamPackage, ExamPackageDetail, RoomSlot } from '../services/packageBookingService';
+import { packageBookingService } from '../services/packageBookingService';
+import { ExamPackage, ExamPackageDetail, RoomSlot } from '../types/packageBooking.types';
 import { useAuthStore } from './authStore';
 import { useKioskStore } from './kioskStore';
 import { useFlowStore } from './flowStore';
@@ -104,8 +105,7 @@ export const usePackageBookingStore = create<PackageBookingStoreState>((set, get
     try {
       const response = await packageBookingService.getRoomSlots(date);
       const list = (response as any)?.data || response || [];
-      // Lọc các slots có trạng thái AVAILABLE
-      const availableSlots = Array.isArray(list) 
+      const availableSlots = Array.isArray(list)
         ? list.filter((s: RoomSlot) => s.status === 'AVAILABLE')
         : [];
       set({ slots: availableSlots });
@@ -160,10 +160,8 @@ export const usePackageBookingStore = create<PackageBookingStoreState>((set, get
         const dataBody = resData.data || resData;
         const bookingId = dataBody.booking_id;
         const paymentData = dataBody.payment?.data || dataBody.payment;
-
-        // Cập nhật thông tin thanh toán cho flowStore (truyền stepId là "" vì chưa tạo flow steps)
         flowStore.setBookingPaymentState('', bookingId || '', paymentData, patientId);
-        
+
         kioskState.navigateToView('payment');
         kioskState.showToast('Đặt gói khám thành công! Vui lòng quét mã QR thanh toán.', 'success');
         return true;
