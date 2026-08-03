@@ -386,10 +386,6 @@ export function PatientCheckinPanel({
                     )}
                 </div>
             </div>
-                        </button>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
