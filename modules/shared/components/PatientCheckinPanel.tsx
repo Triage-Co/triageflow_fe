@@ -41,71 +41,7 @@ interface PatientRecord {
     }[];
 }
 
-const INITIAL_PATIENT_LIST: PatientRecord[] = [
-    {
-        stt: 'P001',
-        name: 'Nguyễn Văn An',
-        rxCode: 'RX-2024-001',
-        paymentStatus: 'Đã Thanh Toán',
-        status: 'Đang Chuẩn Bị',
-        doctorName: 'BS. Trần Thị B',
-        waitTime: '15 phút',
-        medicines: [
-            { name: 'Amoxicillin 500mg', dosage: 'Liều lượng: 500mg', usage: 'Hướng dẫn: Uống 2 lần/ngày sau ăn', quantity: '20 viên' },
-            { name: 'Paracetamol 500mg', dosage: 'Liều lượng: 500mg', usage: 'Hướng dẫn: Uống 1 viên khi sốt > 38.5°C', quantity: '20 viên' },
-            { name: 'Vitamin C 500mg', dosage: 'Liều lượng: 500mg', usage: 'Hướng dẫn: Uống 1 viên/ngày sáng', quantity: '20 viên' },
-        ],
-    },
-    {
-        stt: 'P002',
-        name: 'Trần Thị Mai',
-        rxCode: 'RX-2024-002',
-        paymentStatus: 'Đã Xác Nhận',
-        status: 'Sẵn Sàng',
-        doctorName: 'BS. Nguyễn Văn A',
-        waitTime: '10 phút',
-        medicines: [
-            { name: 'Nexium Mups 40mg', dosage: 'Liều lượng: 40mg', usage: 'Hướng dẫn: Uống trước ăn sáng 30 phút', quantity: '14 viên' },
-            { name: 'Gaviscon Dual Action', dosage: 'Liều lượng: 10ml', usage: 'Hướng dẫn: Uống 1 gói sau ăn 1 tiếng', quantity: '20 gói' },
-        ],
-    },
-    {
-        stt: 'P003',
-        name: 'Phạm Văn Đức',
-        rxCode: 'RX-2024-003',
-        paymentStatus: 'Đã Thanh Toán',
-        status: 'Đang Chờ',
-        doctorName: 'BS. Lê Văn C',
-        waitTime: '20 phút',
-        medicines: [
-            { name: 'Amlodipine 5mg', dosage: 'Liều lượng: 5mg', usage: 'Hướng dẫn: Uống 1 viên vào buổi sáng', quantity: '30 viên' },
-        ],
-    },
-    {
-        stt: 'E001',
-        name: 'Lê Thị Hương',
-        rxCode: 'RX-2024-004',
-        paymentStatus: 'Đã Xác Nhận',
-        status: 'Đã Check-in',
-        doctorName: 'BS. Phạm Thị D',
-        waitTime: '5 phút',
-        medicines: [
-            { name: 'Ibuprofen 400mg', dosage: 'Liều lượng: 400mg', usage: 'Hướng dẫn: Uống 1 viên sau ăn', quantity: '10 viên' },
-        ],
-    },
-    {
-        stt: 'D001',
-        name: 'Nguyễn Thành Trung',
-        rxCode: 'RX-2026-004',
-        paymentStatus: 'Đã Xác Nhận',
-        status: 'Đã Check-in',
-        doctorName: 'BS. Hoàn Văn E',
-        waitTime: '8 phút',
-        medicines: [
-            { name: 'Paracetamol 500mg', dosage: 'Liều lượng: 500mg', usage: 'Hướng dẫn: Uống 1 viên khi đau', quantity: '10 viên' },
-        ],
-    },
-];
+
 
 interface PatientCheckinPanelProps {
     moduleType?: 'LAB' | 'PHARMACY';
@@ -118,7 +54,8 @@ export function PatientCheckinPanel({
     title = 'Tiếp Nhận Đơn Thuốc',
     subtitle = 'Quét mã QR đơn thuốc hoặc nhập mã lượt khám để tiếp nhận',
 }: PatientCheckinPanelProps) {
-    const [patientList, setPatientList] = useState<PatientRecord[]>(INITIAL_PATIENT_LIST);
+    const [patientList, setPatientList] = useState<PatientRecord[]>([]);
+    const [isLoadingApi, setIsLoadingApi] = useState(true);
     const [searchCode, setSearchCode] = useState('');
     const [isScanning, setIsScanning] = useState(false);
     const [selectedPatientForModal, setSelectedPatientForModal] = useState<PatientRecord | null>(null);
@@ -135,42 +72,57 @@ export function PatientCheckinPanel({
     const [showFilterPopover, setShowFilterPopover] = useState(false);
     const [showSortPopover, setShowSortPopover] = useState(false);
 
-    useEffect(() => {
-        let isMounted = true;
-        const loadApiPrescriptions = async () => {
-            try {
-                const list = await pharmacyService.getPrescriptions();
-                // ONLY show paid prescriptions (PROCESSING, PREPARED, DISPENSED), hiding PENDING, CANCELLED, EXPIRED
-                const paidList = list.filter(
-                    (p) => p.status === 'PROCESSING' || p.status === 'PREPARED' || p.status === 'DISPENSED'
-                );
+    const loadApiPrescriptions = async () => {
+        setIsLoadingApi(true);
+        try {
+            const list = await pharmacyService.getPrescriptions();
+            // ONLY show paid prescriptions (PROCESSING, PREPARED, DISPENSED), hiding PENDING, CANCELLED, EXPIRED
+            const paidList = list.filter(
+                (p) => p.status === 'PROCESSING' || p.status === 'PREPARED' || p.status === 'DISPENSED'
+            );
 
-                if (isMounted && paidList && paidList.length > 0) {
-                    const mapped: PatientRecord[] = paidList.map((item, idx) => ({
-                        stt: `P${(idx + 1).toString().padStart(3, '0')}`,
-                        name: item.patient_name || 'Nguyễn Thị Hoa',
-                        rxCode: item.prescription_code,
-                        paymentStatus: 'Đã Thanh Toán',
-                        status: item.status === 'PREPARED' ? 'Sẵn Sàng' : item.status === 'PROCESSING' ? 'Đang Chuẩn Bị' : 'Đã Check-in',
-                        doctorName: item.prescribed_by_name || 'BS. Nguyễn Thế Hiển',
-                        waitTime: `${10 + idx * 5} phút`,
-                        medicines: item.prescriptionDetails?.map((d) => ({
-                            name: d.medicine?.medicine_name || 'Thuốc kê đơn',
-                            dosage: `Liều lượng: ${d.quantity} ${d.medicine?.unit || 'Viên'}`,
-                            usage: `Hướng dẫn: ${d.dosage_instruction || 'Dùng theo chỉ định'}`,
-                            quantity: `${d.quantity} ${d.medicine?.unit || 'Viên'}`
-                        })) || [
-                            { name: 'Paracetamol 500mg', dosage: 'Liều lượng: 500mg', usage: 'Hướng dẫn: Uống sau ăn', quantity: '10 viên' }
-                        ]
-                    }));
-                    setPatientList(mapped);
-                }
-            } catch (e) {
-                // Keep default
+            if (paidList && paidList.length > 0) {
+                const mapped: PatientRecord[] = paidList.map((item, idx) => ({
+                    stt: `P${(idx + 1).toString().padStart(3, '0')}`,
+                    name: item.patient_name || 'Bệnh nhân',
+                    rxCode: item.prescription_code,
+                    paymentStatus: 'Đã Thanh Toán',
+                    status: item.status === 'PREPARED' ? 'Sẵn Sàng' : item.status === 'PROCESSING' ? 'Đang Chuẩn Bị' : 'Đã Check-in',
+                    doctorName: item.prescribed_by_name || 'BS. Thăm Khám',
+                    waitTime: `${Math.max(5, (idx + 1) * 5)} phút`,
+                    medicines: item.prescriptionDetails?.map((d) => ({
+                        name: d.medicine?.medicine_name || 'Thuốc kê đơn',
+                        dosage: `Liều lượng: ${d.quantity} ${d.medicine?.unit || 'Viên'}`,
+                        usage: `Hướng dẫn: ${d.dosage_instruction || 'Dùng theo chỉ định'}`,
+                        quantity: `${d.quantity} ${d.medicine?.unit || 'Viên'}`
+                    })) || []
+                }));
+                setPatientList(mapped);
+            } else {
+                setPatientList([]);
             }
+        } catch (e) {
+            console.error('[PatientCheckinPanel] API fetch error:', e);
+            setPatientList([]);
+        } finally {
+            setIsLoadingApi(false);
+        }
+    };
+
+    useEffect(() => {
+        void loadApiPrescriptions();
+
+        const handleStorageChange = () => {
+            void loadApiPrescriptions();
         };
-        loadApiPrescriptions();
-        return () => { isMounted = false; };
+
+        window.addEventListener('storage', handleStorageChange);
+        window.addEventListener('triageflow_prescription_paid', handleStorageChange);
+
+        return () => {
+            window.removeEventListener('storage', handleStorageChange);
+            window.removeEventListener('triageflow_prescription_paid', handleStorageChange);
+        };
     }, []);
 
     // Filter + Search + Sort + Pagination calculation
@@ -239,37 +191,69 @@ export function PatientCheckinPanel({
 
     const hasActiveFilters = tableSearchQuery || filterStatus !== 'ALL' || filterPayment !== 'ALL';
 
-    const handleStartScan = () => {
+    const handleStartScan = async () => {
         setIsScanning(true);
-        setTimeout(() => {
+        try {
+            if (patientList.length > 0) {
+                const found = patientList[0];
+                setSelectedPatientForModal(found);
+            }
+        } finally {
             setIsScanning(false);
-            const found = patientList[0];
-            setSelectedPatientForModal(found);
-        }, 1200);
+        }
     };
 
-    const handleManualSearch = () => {
+    const handleManualSearch = async () => {
         if (!searchCode.trim()) return;
-        const found = patientList.find(
-            (p) => p.stt.toLowerCase() === searchCode.trim().toLowerCase() || p.rxCode.toLowerCase() === searchCode.trim().toLowerCase()
-        ) || patientList[0];
-        setSelectedPatientForModal(found);
+        setIsScanning(true);
+        try {
+            const rx = await pharmacyService.scanPrescription(searchCode.trim());
+            if (rx) {
+                const record: PatientRecord = {
+                    stt: `P-SCAN`,
+                    name: rx.patient_name || 'Bệnh nhân',
+                    rxCode: rx.prescription_code,
+                    paymentStatus: 'Đã Thanh Toán',
+                    status: rx.status === 'PREPARED' ? 'Sẵn Sàng' : rx.status === 'PROCESSING' ? 'Đang Chuẩn Bị' : 'Đã Check-in',
+                    doctorName: rx.prescribed_by_name || 'BS. Thăm Khám',
+                    waitTime: 'Vừa tiếp nhận',
+                    medicines: rx.prescriptionDetails?.map((d) => ({
+                        name: d.medicine?.medicine_name || 'Thuốc kê đơn',
+                        dosage: `Liều lượng: ${d.quantity} ${d.medicine?.unit || 'Viên'}`,
+                        usage: `Hướng dẫn: ${d.dosage_instruction || 'Dùng theo chỉ định'}`,
+                        quantity: `${d.quantity} ${d.medicine?.unit || 'Viên'}`
+                    })) || []
+                };
+                setSelectedPatientForModal(record);
+            }
+        } catch (e) {
+            console.error('[PatientCheckinPanel] Scan error:', e);
+        } finally {
+            setIsScanning(false);
+        }
     };
 
-    const handleReadyToDeliver = () => {
+    const handleReadyToDeliver = async () => {
         if (!selectedPatientForModal) return;
 
-        setPatientList((prev) =>
-            prev.map((p) =>
-                p.stt === selectedPatientForModal.stt
-                    ? { ...p, status: 'Sẵn Sàng' }
-                    : p
-            )
-        );
+        try {
+            // CALL REAL BACKEND API ENDPOINT
+            await pharmacyService.preparePrescription(selectedPatientForModal.rxCode);
 
-        setToastMessage(`Đã cập nhật đơn thuốc ${selectedPatientForModal.rxCode} sang trạng thái Sẵn Sàng Giao Thuốc!`);
-        setSelectedPatientForModal(null);
-        setTimeout(() => setToastMessage(null), 3500);
+            setPatientList((prev) =>
+                prev.map((p) =>
+                    p.rxCode === selectedPatientForModal.rxCode || p.stt === selectedPatientForModal.stt
+                        ? { ...p, status: 'Sẵn Sàng' }
+                        : p
+                )
+            );
+
+            setToastMessage(`Đã cập nhật đơn thuốc ${selectedPatientForModal.rxCode} sang trạng thái Sẵn Sàng Giao Thuốc!`);
+            setSelectedPatientForModal(null);
+            setTimeout(() => setToastMessage(null), 3500);
+        } catch (err: any) {
+            console.error('[PatientCheckinPanel] Prepare API error:', err);
+        }
     };
 
     return (
