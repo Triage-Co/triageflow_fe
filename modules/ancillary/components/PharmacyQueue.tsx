@@ -110,9 +110,9 @@ export function PharmacyQueue({
         switch (status) {
             case 'PENDING':
                 return (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-full">
-                        <Clock className="w-3 h-3" />
-                        Chờ thanh toán
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 px-2 py-0.5 rounded-full">
+                        <Clock className="w-3 h-3 text-neutral-500" />
+                        Chưa đến 
                     </span>
                 );
             case 'PROCESSING':
@@ -237,11 +237,11 @@ export function PharmacyQueue({
                         onClick={() => setActiveStatus('PENDING')}
                         className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1 cursor-pointer ${
                             activeStatus === 'PENDING'
-                                ? 'bg-amber-600 text-white'
-                                : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100'
+                                ? 'bg-neutral-600 text-white'
+                                : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200'
                         }`}
                     >
-                        Chờ trả tiền ({countByStatus('PENDING')})
+                        Chưa đến ({countByStatus('PENDING')})
                     </button>
                     <button
                         onClick={() => setActiveStatus('PROCESSING')}

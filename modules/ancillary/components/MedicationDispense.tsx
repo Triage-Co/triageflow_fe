@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Pill,
@@ -42,12 +42,14 @@ export function MedicationDispense({
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+    useEffect(() => {
+        setShowPayOsPanel(false);
+        setError(null);
+        setSuccessMessage(null);
+    }, [prescription?.prescription_id]);
+
     const handleGoToPayment = () => {
-        if (prescription?.prescription_code) {
-            router.push(`/cashier?search=${encodeURIComponent(prescription.prescription_code)}`);
-        } else {
-            router.push('/cashier');
-        }
+        setShowPayOsPanel(true);
     };
 
     if (!prescription) {
@@ -123,9 +125,9 @@ export function MedicationDispense({
         switch (status) {
             case 'PENDING':
                 return (
-                    <span className="px-3 py-1 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 rounded-xl text-xs font-bold flex items-center gap-1.5">
-                        <Clock className="w-4 h-4" />
-                        Chờ thanh toán (PENDING)
+                    <span className="px-3 py-1 bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                        <Clock className="w-4 h-4 text-neutral-500" />
+                        Chưa đến 
                     </span>
                 );
             case 'PROCESSING':
@@ -344,8 +346,8 @@ export function MedicationDispense({
                                             </p>
                                         </div>
                                     </div>
-                                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-200/80 dark:bg-amber-950 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-800 shrink-0">
-                                        Chờ thanh toán
+                                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 shrink-0">
+                                        Chưa đến 
                                     </span>
                                 </div>
 
