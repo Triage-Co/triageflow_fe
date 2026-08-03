@@ -25,23 +25,29 @@ import {
 import { cn } from '@/lib/utils';
 import { pharmacyService } from '@/modules/ancillary/services/pharmacyService';
 
+interface MedicineDetailItem {
+    name: string;
+    activeIngredient?: string;
+    dosage: string;
+    usage: string;
+    quantity: string;
+    unitPrice?: number;
+    subTotal?: number;
+}
+
 interface PatientRecord {
     stt: string;
     name: string;
     rxCode: string;
+    patientCode?: string;
     paymentStatus: 'Đã Thanh Toán' | 'Đã Xác Nhận';
     status: 'Đang Chuẩn Bị' | 'Sẵn Sàng' | 'Đang Chờ' | 'Đã Check-in';
     doctorName: string;
+    diagnosisNote?: string;
+    totalAmount?: number;
     waitTime: string;
-    medicines: {
-        name: string;
-        dosage: string;
-        usage: string;
-        quantity: string;
-    }[];
+    medicines: MedicineDetailItem[];
 }
-
-
 
 interface PatientCheckinPanelProps {
     moduleType?: 'LAB' | 'PHARMACY';
@@ -61,7 +67,27 @@ export function PatientCheckinPanel({
     const [selectedPatientForModal, setSelectedPatientForModal] = useState<PatientRecord | null>(null);
     const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-
+    const mapPrescriptionToRecord = (item: any, idx: number): PatientRecord => ({
+        stt: `P${(idx + 1).toString().padStart(3, '0')}`,
+        name: item.patient_name || item.visitSession?.patient?.full_name || 'Bệnh nhân',
+        rxCode: item.prescription_code,
+        patientCode: item.patient_code || item.visitSession?.patient?.patient_code || 'BN-OPD',
+        paymentStatus: 'Đã Thanh Toán',
+        status: item.status === 'PREPARED' ? 'Sẵn Sàng' : item.status === 'PROCESSING' ? 'Đang Chuẩn Bị' : 'Đã Check-in',
+        doctorName: item.prescribed_by_name || item.doctor?.full_name || 'BS. Thăm Khám',
+        diagnosisNote: item.diagnosis_note || 'Chẩn đoán lâm sàng theo đơn',
+        totalAmount: item.total_amount || 0,
+        waitTime: `${Math.max(5, (idx + 1) * 5)} phút`,
+        medicines: item.prescriptionDetails?.map((d: any) => ({
+            name: d.medicine?.medicine_name || 'Thuốc kê đơn',
+            activeIngredient: d.medicine?.active_ingredient || d.medicine?.description,
+            dosage: `Liều lượng: ${d.quantity} ${d.medicine?.unit || 'Viên'}`,
+            usage: d.dosage_instruction || 'Dùng theo chỉ định bác sĩ',
+            quantity: `${d.quantity} ${d.medicine?.unit || 'Viên'}`,
+            unitPrice: d.unit_price || d.medicine?.unit_price || 0,
+            subTotal: d.sub_total || (d.quantity * (d.unit_price || d.medicine?.unit_price || 0))
+        })) || []
+    });
 
     const loadApiPrescriptions = async () => {
         setIsLoadingApi(true);
@@ -73,21 +99,7 @@ export function PatientCheckinPanel({
             );
 
             if (paidList && paidList.length > 0) {
-                const mapped: PatientRecord[] = paidList.map((item, idx) => ({
-                    stt: `P${(idx + 1).toString().padStart(3, '0')}`,
-                    name: item.patient_name || 'Bệnh nhân',
-                    rxCode: item.prescription_code,
-                    paymentStatus: 'Đã Thanh Toán',
-                    status: item.status === 'PREPARED' ? 'Sẵn Sàng' : item.status === 'PROCESSING' ? 'Đang Chuẩn Bị' : 'Đã Check-in',
-                    doctorName: item.prescribed_by_name || 'BS. Thăm Khám',
-                    waitTime: `${Math.max(5, (idx + 1) * 5)} phút`,
-                    medicines: item.prescriptionDetails?.map((d) => ({
-                        name: d.medicine?.medicine_name || 'Thuốc kê đơn',
-                        dosage: `Liều lượng: ${d.quantity} ${d.medicine?.unit || 'Viên'}`,
-                        usage: `Hướng dẫn: ${d.dosage_instruction || 'Dùng theo chỉ định'}`,
-                        quantity: `${d.quantity} ${d.medicine?.unit || 'Viên'}`
-                    })) || []
-                }));
+                const mapped: PatientRecord[] = paidList.map((item, idx) => mapPrescriptionToRecord(item, idx));
                 setPatientList(mapped);
             } else {
                 setPatientList([]);
@@ -116,7 +128,6 @@ export function PatientCheckinPanel({
         };
     }, []);
 
-
     const handleStartScan = async () => {
         setIsScanning(true);
         try {
@@ -135,50 +146,13 @@ export function PatientCheckinPanel({
         try {
             const rx = await pharmacyService.scanPrescription(searchCode.trim());
             if (rx) {
-                const record: PatientRecord = {
-                    stt: `P-SCAN`,
-                    name: rx.patient_name || 'Bệnh nhân',
-                    rxCode: rx.prescription_code,
-                    paymentStatus: 'Đã Thanh Toán',
-                    status: rx.status === 'PREPARED' ? 'Sẵn Sàng' : rx.status === 'PROCESSING' ? 'Đang Chuẩn Bị' : 'Đã Check-in',
-                    doctorName: rx.prescribed_by_name || 'BS. Thăm Khám',
-                    waitTime: 'Vừa tiếp nhận',
-                    medicines: rx.prescriptionDetails?.map((d) => ({
-                        name: d.medicine?.medicine_name || 'Thuốc kê đơn',
-                        dosage: `Liều lượng: ${d.quantity} ${d.medicine?.unit || 'Viên'}`,
-                        usage: `Hướng dẫn: ${d.dosage_instruction || 'Dùng theo chỉ định'}`,
-                        quantity: `${d.quantity} ${d.medicine?.unit || 'Viên'}`
-                    })) || []
-                };
+                const record = mapPrescriptionToRecord(rx, 0);
                 setSelectedPatientForModal(record);
             }
         } catch (e) {
             console.error('[PatientCheckinPanel] Scan error:', e);
         } finally {
             setIsScanning(false);
-        }
-    };
-
-    const handleReadyToDeliver = async () => {
-        if (!selectedPatientForModal) return;
-
-        try {
-            // CALL REAL BACKEND API ENDPOINT
-            await pharmacyService.preparePrescription(selectedPatientForModal.rxCode);
-
-            setPatientList((prev) =>
-                prev.map((p) =>
-                    p.rxCode === selectedPatientForModal.rxCode || p.stt === selectedPatientForModal.stt
-                        ? { ...p, status: 'Sẵn Sàng' }
-                        : p
-                )
-            );
-
-            setToastMessage(`Đã cập nhật đơn thuốc ${selectedPatientForModal.rxCode} sang trạng thái Sẵn Sàng Giao Thuốc!`);
-            setSelectedPatientForModal(null);
-            setTimeout(() => setToastMessage(null), 3500);
-        } catch (err: any) {
-            console.error('[PatientCheckinPanel] Prepare API error:', err);
         }
     };
 
@@ -286,7 +260,7 @@ export function PatientCheckinPanel({
                         </div>
                     ) : (
                         /* Active Prescription Detail Panel */
-                        <div className="flex-1 flex flex-col justify-between overflow-y-auto space-y-6">
+                        <div className="flex-1 flex flex-col justify-between overflow-y-auto space-y-5">
                             {/* Panel Header */}
                             <div className="flex items-center justify-between border-b border-slate-100 pb-4 shrink-0">
                                 <div>
@@ -303,18 +277,25 @@ export function PatientCheckinPanel({
                             </div>
 
                             {/* Patient Info Banner Card */}
-                            <div className="bg-[#F5F3FF] rounded-[20px] p-4 flex items-center justify-between border border-purple-100 shrink-0">
+                            <div className="bg-[#F5F3FF] rounded-[20px] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-purple-100 shrink-0">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-11 h-11 rounded-2xl bg-[#8B7CF6] text-white flex items-center justify-center font-bold text-sm shadow-xs">
+                                    <div className="w-11 h-11 rounded-2xl bg-[#8B7CF6] text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
                                         <User className="w-5 h-5" />
                                     </div>
                                     <div>
-                                        <p className="font-extrabold text-slate-900 text-base">{selectedPatientForModal.name}</p>
-                                        <p className="text-xs text-slate-500 font-semibold">Mã STT: {selectedPatientForModal.stt}</p>
+                                        <div className="flex items-center gap-2">
+                                            <p className="font-extrabold text-slate-900 text-base">{selectedPatientForModal.name}</p>
+                                            {selectedPatientForModal.patientCode && (
+                                                <span className="text-[10px] font-extrabold bg-purple-200/60 text-purple-800 px-2 py-0.5 rounded-md">
+                                                    {selectedPatientForModal.patientCode}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-slate-500 font-semibold">Chẩn đoán: {selectedPatientForModal.diagnosisNote || 'Theo chỉ định bác sĩ'}</p>
                                     </div>
                                 </div>
 
-                                <div className="text-right">
+                                <div className="text-left sm:text-right shrink-0">
                                     <p className="text-[11px] text-slate-400 font-semibold">Bác sĩ kê đơn</p>
                                     <p className="text-xs font-extrabold text-slate-800">{selectedPatientForModal.doctorName}</p>
                                 </div>
@@ -347,41 +328,61 @@ export function PatientCheckinPanel({
                                 </div>
                             </div>
 
-                            {/* Section Title: Danh Sách Thuốc */}
-                            <div className="space-y-3 flex-1 overflow-y-auto">
-                                <div className="flex items-center gap-2">
-                                    <Package className="w-4 h-4 text-[#7C6CF5]" />
-                                    <h4 className="font-extrabold text-slate-800 text-xs">Danh Sách Thuốc Kê Đơn ({selectedPatientForModal.medicines.length} loại)</h4>
+                            {/* Section Title & Detailed Medicine List */}
+                            <div className="space-y-3 flex-1 overflow-y-auto pr-1">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Package className="w-4 h-4 text-[#7C6CF5]" />
+                                        <h4 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider">
+                                            Danh Sách Thuốc Kê Đơn ({selectedPatientForModal.medicines.length} loại)
+                                        </h4>
+                                    </div>
+                                    {selectedPatientForModal.totalAmount && selectedPatientForModal.totalAmount > 0 && (
+                                        <span className="text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
+                                            Tổng: {selectedPatientForModal.totalAmount.toLocaleString('vi-VN')} đ
+                                        </span>
+                                    )}
                                 </div>
 
-                                <div className="space-y-2.5">
+                                <div className="space-y-3">
                                     {selectedPatientForModal.medicines.map((med, idx) => (
                                         <div
                                             key={idx}
-                                            className="p-3.5 rounded-[16px] border border-slate-100 bg-slate-50/60 flex items-center justify-between gap-3"
+                                            className="p-4 rounded-[18px] border border-slate-200/80 bg-slate-50/70 hover:bg-white hover:shadow-md transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                                         >
-                                            <div>
-                                                <p className="font-extrabold text-slate-800 text-xs">{med.name}</p>
-                                                <p className="text-[11px] text-slate-400 font-medium mt-0.5">{med.dosage}</p>
-                                                <p className="text-[11px] text-slate-600 font-bold">{med.usage}</p>
+                                            <div className="space-y-1">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <p className="font-black text-slate-900 text-sm">{med.name}</p>
+                                                    {med.activeIngredient && (
+                                                        <span className="text-[10px] font-bold bg-purple-100 text-purple-800 px-2 py-0.5 rounded-md">
+                                                            {med.activeIngredient}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-slate-600 font-semibold flex items-center gap-1">
+                                                    <span className="text-slate-400">HDSD:</span> {med.usage}
+                                                </p>
+                                                {med.unitPrice && med.unitPrice > 0 && (
+                                                    <p className="text-[11px] text-slate-400 font-medium">
+                                                        Đơn giá: {med.unitPrice.toLocaleString('vi-VN')} đ/viên
+                                                    </p>
+                                                )}
                                             </div>
 
-                                            <span className="px-3 py-1.5 rounded-full bg-purple-100 text-[#7C6CF5] font-extrabold text-xs shrink-0">
-                                                {med.quantity}
-                                            </span>
+                                            <div className="flex items-center sm:flex-col sm:items-end justify-between gap-1 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-200">
+                                                <span className="px-3.5 py-1.5 rounded-full bg-[#7C6CF5] text-white font-black text-xs shadow-xs">
+                                                    {med.quantity}
+                                                </span>
+                                                {med.subTotal && med.subTotal > 0 && (
+                                                    <span className="text-xs font-extrabold text-slate-700">
+                                                        {med.subTotal.toLocaleString('vi-VN')} đ
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
-
-                            {/* Bottom Primary Button */}
-                            <button
-                                onClick={handleReadyToDeliver}
-                                className="w-full py-4 rounded-[20px] bg-[#7C6CF5] hover:bg-[#6b5be3] text-white font-extrabold text-sm shadow-lg shadow-purple-500/25 transition active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer shrink-0"
-                            >
-                                <CheckCircle2 className="w-5 h-5" />
-                                <span>Xác Nhận Sẵn Sàng Giao Thuốc</span>
-                            </button>
                         </div>
                     )}
                 </div>
