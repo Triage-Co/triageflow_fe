@@ -5,7 +5,6 @@ import { cn } from '@/lib/utils';
 
 interface RegisterStepperProps {
   currentStep: AIRegisterStep;
-  onStepClick?: (step: AIRegisterStep) => void;
 }
 
 const STEPS: { id: AIRegisterStep; stepNo: number; label: string }[] = [
@@ -21,7 +20,7 @@ const STEP_ORDER: Record<AIRegisterStep, number> = {
   quiz_detail: 2,
   ai_result: 3,
   doctor_select: 4,
-  confirm_info: 5
+  confirm_info: 4,
 };
 
 export const RegisterStepper: React.FC<RegisterStepperProps> = ({ currentStep }) => {

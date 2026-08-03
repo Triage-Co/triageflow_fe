@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { useFlowStore } from '../store/flowStore';
 import { useAuthStore } from '../store/authStore';
 import { ServiceOrderModal } from '../components/ServiceOrderModal';
-import { PaymentQrModal } from '../components/PaymentQrModal';
+import { ServicePaymentQrModal } from '../modals/ServicePaymentQrModal';
 
 export const DoctorRouteView: React.FC = () => {
   const navigateToView = useKioskStore((state) => state.navigateToView);
@@ -299,7 +299,7 @@ export const DoctorRouteView: React.FC = () => {
       />
 
       {/* Popup 2: Hiển thị mã QR thanh toán */}
-      <PaymentQrModal
+      <ServicePaymentQrModal
         isOpen={isQrModalOpen}
         onClose={() => {
           setIsQrModalOpen(false);

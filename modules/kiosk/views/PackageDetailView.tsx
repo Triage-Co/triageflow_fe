@@ -152,11 +152,6 @@ export const PackageDetailView: React.FC = () => {
           </div>
         )}
       </div>
-
-      {/* Footer Info */}
-      <div className="text-center text-xs font-semibold text-neutral-400 pb-2">
-        Hệ thống Kiosk tự động • Vui lòng nhấn "Tiếp tục" ở góc trên để chọn lịch khám
-      </div>
     </div>
   );
 };

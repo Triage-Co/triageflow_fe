@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, CreditCard, ShoppingBag, Loader2 } from 'lucide-react';
 import { ServiceOrder } from '../types/flow.types';
+import { formatVND } from '../utils/kioskHelpers';
 
 interface ServiceOrderModalProps {
   isOpen: boolean;
@@ -21,10 +22,6 @@ export const ServiceOrderModal: React.FC<ServiceOrderModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  const formatCurrency = (formatVal: number) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(formatVal);
-  };
-
   const unpaidOrders = pendingServiceOrders.filter((order) => {
     if (activeBookingId && order.booking_id !== activeBookingId) {
       return false;
@@ -35,7 +32,7 @@ export const ServiceOrderModal: React.FC<ServiceOrderModalProps> = ({
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-[32px] border border-slate-200 shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-        
+
         {/* Header */}
         <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-blue-50/50 to-white">
           <div className="flex items-center gap-3">
@@ -64,12 +61,16 @@ export const ServiceOrderModal: React.FC<ServiceOrderModalProps> = ({
             </div>
           ) : unpaidOrders.length > 0 ? (
             unpaidOrders.map((order) => {
-              // Tính tổng tiền dựa trên giá của các chi tiết chưa thanh toán
-              let calculatedTotalPrice = 0;
+              const pendingDetails = order.serviceOrderDetails.filter((d) => d.status === 'PENDING');
+              const calculatedTotalPrice = pendingDetails.reduce(
+                (sum, d) => sum + (d.price_at_order || 0) * (d.quantity || 1),
+                0
+              );
+              const displayTotal = calculatedTotalPrice > 0 ? calculatedTotalPrice : order.total_price;
 
               return (
                 <div key={order.service_order_id} className="bg-slate-50/50 border border-slate-100 rounded-3xl p-5 hover:border-blue-200 transition-all flex flex-col justify-between gap-4">
-                  
+
                   {/* Bill Details */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between text-xs">
@@ -85,27 +86,23 @@ export const ServiceOrderModal: React.FC<ServiceOrderModalProps> = ({
 
                     {/* Services Items list inside Order */}
                     <div className="space-y-2">
-                      {order.serviceOrderDetails
-                        .filter((detail) => detail.status === 'PENDING')
-                        .map((detail) => {
-                          const resolvedInfo = {
-                            name: detail.name || order.name || 'Dịch vụ chỉ định',
-                            price: detail.price_at_order || 0
-                          };
-                          calculatedTotalPrice += resolvedInfo.price * (detail.quantity || 1);
-
-                          return (
-                            <div key={detail.service_order_detail_id} className="flex justify-between items-start text-xs py-1">
-                              <div className="space-y-0.5 max-w-[70%]">
-                                <p className="font-extrabold text-slate-800">{resolvedInfo.name}</p>
-                                <p className="text-[10px] text-slate-400 font-bold">Số lượng: {detail.quantity || 1}</p>
-                              </div>
-                              <span className="font-black text-slate-700">
-                                {formatCurrency(resolvedInfo.price * (detail.quantity || 1))}
-                              </span>
+                      {pendingDetails.map((detail) => {
+                        const resolvedInfo = {
+                          name: detail.name || order.name || 'Dịch vụ chỉ định',
+                          price: detail.price_at_order || 0
+                        };
+                        return (
+                          <div key={detail.service_order_detail_id} className="flex justify-between items-start text-xs py-1">
+                            <div className="space-y-0.5 max-w-[70%]">
+                              <p className="font-extrabold text-slate-800">{resolvedInfo.name}</p>
+                              <p className="text-[10px] text-slate-400 font-bold">Số lượng: {detail.quantity || 1}</p>
                             </div>
-                          );
-                        })}
+                            <span className="font-black text-slate-700">
+                              {formatVND(resolvedInfo.price * (detail.quantity || 1))}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -114,12 +111,12 @@ export const ServiceOrderModal: React.FC<ServiceOrderModalProps> = ({
                     <div className="space-y-0.5">
                       <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">Tổng thanh toán</span>
                       <span className="text-xl font-black text-slate-900">
-                        {formatCurrency(calculatedTotalPrice > 0 ? calculatedTotalPrice : order.total_price)}
+                        {formatVND(displayTotal)}
                       </span>
                     </div>
 
                     <button
-                      onClick={() => onSelectPay(order.service_order_id, order.qr_code, calculatedTotalPrice > 0 ? calculatedTotalPrice : order.total_price)}
+                      onClick={() => onSelectPay(order.service_order_id, order.qr_code, displayTotal)}
                       className="px-6 py-3.5 bg-[#155DFC] hover:bg-blue-700 active:scale-95 text-white rounded-2xl font-black text-xs shadow-lg shadow-blue-500/25 transition-all cursor-pointer flex items-center gap-2"
                     >
                       <CreditCard className="w-4 h-4" /> Thanh toán QR ngay

@@ -2,7 +2,6 @@
 
 import React, { useEffect } from 'react';
 import { useKioskStore } from '../store/kioskStore';
-import { BlurBlob } from '../components/BlurBlob';
 import { Toast } from '../components/Toast';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { QRScannerModal } from '../modals/QRScannerModal';
@@ -45,7 +44,8 @@ export const KioskRoot: React.FC = () => {
       <LoadingSpinner />
 
       {/* Background Glowing Decorations */}
-      <BlurBlob />
+      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-300/20 blur-[120px] rounded-full pointer-events-none z-0" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-rose-200/25 blur-[150px] rounded-full pointer-events-none z-0" />
 
       {/* Header Branding - Chỉ hiển thị tại trang chủ */}
       {currentView === 'home' && (

@@ -13,7 +13,7 @@ export const PackageSelectView: React.FC = () => {
   }, [fetchPackages]);
 
   return (
-    <div className="w-full min-h-screen p-6 lg:p-10 z-10 select-none flex flex-col justify-between max-w-7xl mx-auto space-y-8">
+    <div className="w-full min-h-screen p-6 lg:p-8 z-10 select-none flex flex-col gap-6 max-w-7xl mx-auto">
       {/* Top Header Bar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -32,15 +32,10 @@ export const PackageSelectView: React.FC = () => {
             </p>
           </div>
         </div>
-
-        <div className="hidden sm:flex items-center gap-2 bg-teal-50/80 px-4 py-2 rounded-2xl border border-teal-100/60">
-          <BriefcaseMedical className="w-5 h-5 text-teal-600" />
-          <span className="text-xs font-extrabold text-teal-600">Gói Dịch Vụ Kiosk</span>
-        </div>
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col justify-center items-center py-4">
+      <div className="flex-1">
         {isFetchingPackages ? (
           <div className="flex flex-col items-center justify-center space-y-4">
             <Loader2 className="w-12 h-12 text-teal-600 animate-spin" />
@@ -86,11 +81,6 @@ export const PackageSelectView: React.FC = () => {
             ))}
           </div>
         )}
-      </div>
-
-      {/* Footer Info */}
-      <div className="text-center text-xs font-semibold text-neutral-400 pb-2">
-        Hệ thống Kiosk tự động • Chọn gói khám để tiếp tục xem chi tiết
       </div>
     </div>
   );

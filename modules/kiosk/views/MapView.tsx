@@ -6,7 +6,7 @@ import { useFlowStore } from '../store/flowStore';
 import { FloorMap } from '@/modules/navigation/components/FloorMap';
 import { useBuildingMap } from '@/modules/navigation/hooks/useWayfinding';
 import { fetchRoute } from '@/modules/navigation/services/navigationService';
-import { RoomPickerModal } from '../components/RoomPickerModal';
+import { RoomPickerModal } from '../modals/RoomPickerModal';
 import { useNavigationStore } from '@/modules/navigation/store/navigationStore';
 import { ArrowLeft, MapPin, Search, Navigation, RotateCcw, Loader2 } from 'lucide-react';
 

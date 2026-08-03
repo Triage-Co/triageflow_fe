@@ -17,3 +17,7 @@ export const getActivePatientId = (state: {
 }): string => {
   return state.patientId || state.citizenId || state.patientInfo?.idNumber || '';
 };
+
+export const formatVND = (amount: number): string => {
+  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+};

@@ -51,14 +51,8 @@ export const BookingModeView: React.FC = () => {
             </p>
           </div>
         </div>
-
-        <div className="hidden sm:flex items-center gap-2 bg-blue-50/80 px-4 py-2 rounded-2xl border border-blue-100/60">
-          <Stethoscope className="w-5 h-5 text-[#155DFC]" />
-          <span className="text-xs font-extrabold text-[#155DFC]">Kiosk Đăng Ký Khám</span>
-        </div>
       </div>
 
-      {/* Main Options Grid (Widescreen Kiosk Touch Cards) */}
       <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch my-auto py-4">
         {/* Option 1: Đặt lịch khám trực tiếp */}
         <button
@@ -70,9 +64,6 @@ export const BookingModeView: React.FC = () => {
             <div className="w-16 h-16 rounded-3xl bg-blue-50 text-[#155DFC] group-hover:bg-[#155DFC] group-hover:text-white flex items-center justify-center transition-all duration-300 shadow-inner group-hover:shadow-lg group-hover:shadow-blue-500/30">
               <CalendarCheck className="w-8 h-8" strokeWidth={2} />
             </div>
-            <span className="px-3 py-1 rounded-full bg-blue-50 text-[#155DFC] font-extrabold text-[10px] uppercase tracking-wider border border-blue-100">
-              Nhanh chóng
-            </span>
           </div>
 
           <div className="space-y-3 my-6">
@@ -104,9 +95,6 @@ export const BookingModeView: React.FC = () => {
             <div className="w-16 h-16 rounded-3xl bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white flex items-center justify-center transition-all duration-300 shadow-inner group-hover:shadow-lg group-hover:shadow-indigo-500/30">
               <Sparkles className="w-8 h-8" strokeWidth={2} />
             </div>
-            <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 font-extrabold text-[10px] uppercase tracking-wider border border-indigo-100">
-              Khuyên dùng
-            </span>
           </div>
 
           <div className="space-y-3 my-6">
@@ -138,9 +126,6 @@ export const BookingModeView: React.FC = () => {
             <div className="w-16 h-16 rounded-3xl bg-teal-50 text-teal-600 group-hover:bg-teal-600 group-hover:text-white flex items-center justify-center transition-all duration-300 shadow-inner group-hover:shadow-lg group-hover:shadow-teal-500/30">
               <BriefcaseMedical className="w-8 h-8" strokeWidth={2} />
             </div>
-            <span className="px-3 py-1 rounded-full bg-teal-50 text-teal-600 font-extrabold text-[10px] uppercase tracking-wider border border-teal-100">
-              Toàn diện
-            </span>
           </div>
 
           <div className="space-y-3 my-6">
@@ -161,11 +146,6 @@ export const BookingModeView: React.FC = () => {
             </div>
           </div>
         </button>
-      </div>
-
-      {/* Footer Info */}
-      <div className="text-center text-xs font-semibold text-neutral-400 pb-2">
-        Hệ thống Kiosk tự động • Vui lòng chạm vào thẻ để tiếp tục
       </div>
     </div>
   );
