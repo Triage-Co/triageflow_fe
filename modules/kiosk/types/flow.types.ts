@@ -182,25 +182,29 @@ export interface PendingPaymentStep {
 export interface ServiceOrderDetail {
   service_order_detail_id: string;
   service_order_id: string;
-  service_id: string;
+  service_id?: string | null;
   price_at_order: number;
   quantity: number;
   status: string;
   created_at: string;
   updated_at: string;
-  service: {
+  name?: string | null;
+  service?: {
     service_id: string;
     service_code: string;
     service_name: string;
     price: number;
     is_active: boolean;
-  };
+  } | null;
 }
 
 export interface ServiceOrder {
   service_order_id: string;
   booking_id: string;
+  name: string;
   status: string;
+  qr_code: string;
+  payment_status: string;
   total_price: number;
   created_at: string;
   updated_at: string;

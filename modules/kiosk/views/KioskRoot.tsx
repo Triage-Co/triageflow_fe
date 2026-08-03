@@ -19,6 +19,9 @@ import { MapView } from './MapView';
 import { PaymentView } from './PaymentView';
 import { SupportView } from './SupportView';
 import { PendingBillsView } from './PendingBillsView';
+import { PackageSelectView } from './PackageSelectView';
+import { PackageDetailView } from './PackageDetailView';
+import { PackageSlotSelectView } from './PackageSlotSelectView';
 
 export const KioskRoot: React.FC = () => {
   const currentView = useKioskStore((state) => state.currentView);
@@ -76,6 +79,9 @@ export const KioskRoot: React.FC = () => {
         {currentView === 'payment' && <PaymentView />}
         {currentView === 'support' && <SupportView />}
         {currentView === 'pending_bills' && <PendingBillsView />}
+        {currentView === 'package_select' && <PackageSelectView />}
+        {currentView === 'package_detail' && <PackageDetailView />}
+        {currentView === 'package_slot_select' && <PackageSlotSelectView />}
       </main>
       {/* Global Modals */}
       <QRScannerModal />

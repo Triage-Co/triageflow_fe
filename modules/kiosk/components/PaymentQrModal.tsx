@@ -7,7 +7,13 @@ import { useKioskStore } from '../store/kioskStore';
 interface PaymentQrModalProps {
   isOpen: boolean;
   onClose: () => void;
-  qrResult: TransactionQrResult | null;
+  qrResult: {
+    qrCode: string;
+    amount: number;
+    accountNumber?: string;
+    accountName?: string;
+    description?: string;
+  } | null;
   patientId: string;
   serviceOrderId: string;
   onPaymentSuccess: () => void;
@@ -39,8 +45,12 @@ export const PaymentQrModal: React.FC<PaymentQrModalProps> = ({
         const data = (res as any)?.data || res;
         const pendingOrders = Array.isArray(data) ? data : [];
 
-        // Nếu không còn tìm thấy serviceOrderId trong danh sách chờ thanh toán
-        const isPaid = !pendingOrders.some(order => order.service_order_id === serviceOrderId);
+        // Nếu không còn tìm thấy serviceOrderId hoặc tìm thấy nhưng toàn bộ chi tiết dịch vụ đã được thanh toán (status === 'PAID')
+        const currentOrder = pendingOrders.find(order => order.service_order_id === serviceOrderId);
+        const isPaid = !currentOrder || (
+          Array.isArray(currentOrder.serviceOrderDetails) && 
+          currentOrder.serviceOrderDetails.every((detail: any) => detail.status === 'PAID')
+        );
 
         if (isPaid) {
           clearInterval(intervalId);
@@ -100,22 +110,28 @@ export const PaymentQrModal: React.FC<PaymentQrModalProps> = ({
         </div>
 
         {/* Bank info */}
-        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100/80 space-y-2 text-xs font-semibold text-slate-600">
-          <div className="flex justify-between">
+        {(qrResult.accountNumber || qrResult.accountName || qrResult.description) && (
+          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100/80 space-y-2 text-xs font-semibold text-slate-600">
+            {qrResult.accountNumber && (
+              <div className="flex justify-between">
+                <span>Số tài khoản:</span>
+                <span className="font-extrabold text-slate-800">{qrResult.accountNumber}</span>
+              </div>
+            )}
+            {qrResult.accountName && (
+              <div className="flex justify-between">
+                <span>Chủ tài khoản:</span>
+                <span className="font-extrabold text-slate-800">{qrResult.accountName}</span>
+              </div>
+            )}
+            {qrResult.description && (
+              <div className="flex justify-between">
+                <span>Nội dung chuyển khoản:</span>
+                <span className="font-extrabold text-slate-800">{qrResult.description}</span>
+              </div>
+            )}
           </div>
-          <div className="flex justify-between">
-            <span>Số tài khoản:</span>
-            <span className="font-extrabold text-slate-800">{qrResult.accountNumber}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Chủ tài khoản:</span>
-            <span className="font-extrabold text-slate-800">{qrResult.accountName}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Nội dung chuyển khoản:</span>
-            <span className="font-extrabold text-slate-800">{qrResult.description}</span>
-          </div>
-        </div>
+        )}
 
         {/* Polling Indicator */}
         <div className="flex items-center justify-center gap-2 text-[10px] text-neutral-400 font-bold">

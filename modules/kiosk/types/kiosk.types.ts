@@ -9,7 +9,10 @@ export type ActiveView =
   | 'map'
   | 'payment'
   | 'support'
-  | 'pending_bills';
+  | 'pending_bills'
+  | 'package_select'
+  | 'package_detail'
+  | 'package_slot_select';
 
 export type ActiveModal =
   | null

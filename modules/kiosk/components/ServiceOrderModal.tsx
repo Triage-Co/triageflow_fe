@@ -1,23 +1,23 @@
 import React from 'react';
 import { X, CreditCard, ShoppingBag, Loader2 } from 'lucide-react';
-import { ServiceOrder, ServiceItem } from '../types/flow.types';
+import { ServiceOrder } from '../types/flow.types';
 
 interface ServiceOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
   pendingServiceOrders: ServiceOrder[];
-  allServicesList: ServiceItem[];
-  onSelectPay: (serviceOrderId: string, amount: number) => void;
+  onSelectPay: (serviceOrderId: string, qrCode: string, amount: number) => void;
   isFetching: boolean;
+  activeBookingId?: string | null;
 }
 
 export const ServiceOrderModal: React.FC<ServiceOrderModalProps> = ({
   isOpen,
   onClose,
   pendingServiceOrders,
-  allServicesList,
   onSelectPay,
   isFetching,
+  activeBookingId,
 }) => {
   if (!isOpen) return null;
 
@@ -25,14 +25,12 @@ export const ServiceOrderModal: React.FC<ServiceOrderModalProps> = ({
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(formatVal);
   };
 
-  // Tra cứu giá từ danh sách dịch vụ chi tiết (mức độ ưu tiên cao nhất)
-  const getServicePriceAndName = (serviceId: string, fallbackPrice: number, fallbackName: string) => {
-    const matched = allServicesList.find((s) => s.service_id === serviceId);
-    return {
-      price: matched ? matched.price : fallbackPrice,
-      name: matched ? matched.service_name : fallbackName,
-    };
-  };
+  const unpaidOrders = pendingServiceOrders.filter((order) => {
+    if (activeBookingId && order.booking_id !== activeBookingId) {
+      return false;
+    }
+    return order.serviceOrderDetails.some((detail) => detail.status === 'PENDING');
+  });
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -64,9 +62,9 @@ export const ServiceOrderModal: React.FC<ServiceOrderModalProps> = ({
               <Loader2 className="w-10 h-10 text-[#155DFC] animate-spin" />
               <p className="text-slate-500 font-bold text-xs">Đang tải danh sách hóa đơn chỉ định...</p>
             </div>
-          ) : pendingServiceOrders.length > 0 ? (
-            pendingServiceOrders.map((order) => {
-              // Tính tổng tiền dựa trên giá khớp từ API dịch vụ chi tiết
+          ) : unpaidOrders.length > 0 ? (
+            unpaidOrders.map((order) => {
+              // Tính tổng tiền dựa trên giá của các chi tiết chưa thanh toán
               let calculatedTotalPrice = 0;
 
               return (
@@ -87,26 +85,27 @@ export const ServiceOrderModal: React.FC<ServiceOrderModalProps> = ({
 
                     {/* Services Items list inside Order */}
                     <div className="space-y-2">
-                      {order.serviceOrderDetails.map((detail) => {
-                        const resolvedInfo = getServicePriceAndName(
-                          detail.service_id,
-                          detail.price_at_order,
-                          detail.service?.service_name ?? 'Dịch vụ chỉ định'
-                        );
-                        calculatedTotalPrice += resolvedInfo.price * (detail.quantity || 1);
+                      {order.serviceOrderDetails
+                        .filter((detail) => detail.status === 'PENDING')
+                        .map((detail) => {
+                          const resolvedInfo = {
+                            name: detail.name || order.name || 'Dịch vụ chỉ định',
+                            price: detail.price_at_order || 0
+                          };
+                          calculatedTotalPrice += resolvedInfo.price * (detail.quantity || 1);
 
-                        return (
-                          <div key={detail.service_order_detail_id} className="flex justify-between items-start text-xs py-1">
-                            <div className="space-y-0.5 max-w-[70%]">
-                              <p className="font-extrabold text-slate-800">{resolvedInfo.name}</p>
-                              <p className="text-[10px] text-slate-400 font-bold">Số lượng: {detail.quantity || 1}</p>
+                          return (
+                            <div key={detail.service_order_detail_id} className="flex justify-between items-start text-xs py-1">
+                              <div className="space-y-0.5 max-w-[70%]">
+                                <p className="font-extrabold text-slate-800">{resolvedInfo.name}</p>
+                                <p className="text-[10px] text-slate-400 font-bold">Số lượng: {detail.quantity || 1}</p>
+                              </div>
+                              <span className="font-black text-slate-700">
+                                {formatCurrency(resolvedInfo.price * (detail.quantity || 1))}
+                              </span>
                             </div>
-                            <span className="font-black text-slate-700">
-                              {formatCurrency(resolvedInfo.price * (detail.quantity || 1))}
-                            </span>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
                     </div>
                   </div>
 
@@ -120,7 +119,7 @@ export const ServiceOrderModal: React.FC<ServiceOrderModalProps> = ({
                     </div>
 
                     <button
-                      onClick={() => onSelectPay(order.service_order_id, calculatedTotalPrice > 0 ? calculatedTotalPrice : order.total_price)}
+                      onClick={() => onSelectPay(order.service_order_id, order.qr_code, calculatedTotalPrice > 0 ? calculatedTotalPrice : order.total_price)}
                       className="px-6 py-3.5 bg-[#155DFC] hover:bg-blue-700 active:scale-95 text-white rounded-2xl font-black text-xs shadow-lg shadow-blue-500/25 transition-all cursor-pointer flex items-center gap-2"
                     >
                       <CreditCard className="w-4 h-4" /> Thanh toán QR ngay

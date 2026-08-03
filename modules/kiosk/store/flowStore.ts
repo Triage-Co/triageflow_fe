@@ -21,10 +21,8 @@ interface FlowStoreState {
 
   // Service Order payment
   pendingServiceOrders: ServiceOrder[];
-  allServicesList: ServiceItem[];
   isFetchingServiceOrders: boolean;
   activeTransactionQr: TransactionQrResult | null;
-  isCreatingTransaction: boolean;
 
   setBookingPaymentState: (stepId: string, bookingId: string, paymentData: BookingPaymentData, patientId: string) => void;
   setPaymentMethod: (method: PaymentMethod | null) => void;
@@ -38,7 +36,6 @@ interface FlowStoreState {
   resetFlow: () => void;
 
   fetchPendingServiceOrders: (patientId: string) => Promise<void>;
-  createServiceOrderTransaction: (serviceOrderId: string, amount: number, patientId: string) => Promise<TransactionQrResult | null>;
   clearTransactionQr: () => void;
 }
 
@@ -104,10 +101,8 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
   selectedPendingStep: null,
 
   pendingServiceOrders: [],
-  allServicesList: [],
   isFetchingServiceOrders: false,
   activeTransactionQr: null,
-  isCreatingTransaction: false,
 
   resetFlow: () => {
     set({
@@ -123,10 +118,8 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
       isFetchingPendingSteps: false,
       selectedPendingStep: null,
       pendingServiceOrders: [],
-      allServicesList: [],
       isFetchingServiceOrders: false,
       activeTransactionQr: null,
-      isCreatingTransaction: false,
     });
   },
 
@@ -215,21 +208,22 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
         }
 
         let stepsArray: any[] = [];
+        let activeFlowObj: any = null;
         if (Array.isArray(rawRes)) {
           const inProgressFlows = rawRes.filter((f: any) => f.status === 'IN_PROGRESS');
-          let activeFlow = null;
           if (inProgressFlows.length > 0) {
             inProgressFlows.sort((a: any, b: any) => {
               const timeA = a.create_at ? new Date(a.create_at).getTime() : 0;
               const timeB = b.create_at ? new Date(b.create_at).getTime() : 0;
               return timeB - timeA;
             });
-            activeFlow = inProgressFlows[0];
+            activeFlowObj = inProgressFlows[0];
           } else {
-            activeFlow = rawRes[0];
+            activeFlowObj = rawRes[0];
           }
-          stepsArray = activeFlow?.steps || [];
+          stepsArray = activeFlowObj?.steps || [];
         } else if (rawRes) {
+          activeFlowObj = rawRes;
           stepsArray = Array.isArray(rawRes.steps) ? rawRes.steps : (rawRes.step_id ? [rawRes] : []);
         }
 
@@ -237,6 +231,44 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
           set({ routeSteps: [] });
           return true;
         }
+
+        // Sắp xếp các bước theo thứ tự phụ thuộc (topological sort) dựa trên depends_on để đảm bảo lộ trình hiển thị đúng
+        const sortStepsTopologically = (steps: any[]) => {
+          const sorted: any[] = [];
+          const visited = new Set<string>();
+          const temp = new Set<string>();
+
+          const visit = (step: any) => {
+            const stepId = step.step_id || step.id;
+            if (!stepId) {
+              if (!sorted.includes(step)) sorted.push(step);
+              return;
+            }
+            if (visited.has(stepId)) return;
+            if (temp.has(stepId)) return; // Tránh loop tuần hoàn
+
+            temp.add(stepId);
+
+            const deps = step.depends_on || [];
+            for (const depId of deps) {
+              const depStep = steps.find(s => (s.step_id || s.id) === depId);
+              if (depStep) {
+                visit(depStep);
+              }
+            }
+
+            temp.delete(stepId);
+            visited.add(stepId);
+            sorted.push(step);
+          };
+
+          for (const step of steps) {
+            visit(step);
+          }
+          return sorted;
+        };
+
+        stepsArray = sortStepsTopologically(stepsArray);
 
         // Gọi API chi tiết GET /api/step/{step_id}/patient/{patient_id} cho từng step chưa hoàn thành để nạp STT thật (sử dụng cache)
         const detailedSteps = await Promise.allSettled(
@@ -284,7 +316,7 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
 
           return {
             id: index + 1,
-            title: specialtyName || roomName || `Bước ${index + 1}`,
+            title: step.step_name || specialtyName || roomName || `Bước ${index + 1}`,
             subtitle: staffName || specialtyName || '',
             room: roomName || undefined,
             location: undefined,
@@ -293,7 +325,10 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
           };
         });
 
-        set({ routeSteps: mappedRouteSteps });
+        set({
+          routeSteps: mappedRouteSteps,
+          activeBookingId: activeFlowObj?.booking_id || activeFlowObj?.bookingId || null
+        });
         return true;
       } catch (error) {
         console.error('Lỗi nạp lộ trình bác sĩ chỉ định:', error);
@@ -436,6 +471,7 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
 
         set({
           activeStepId: stepData.step_id,
+          activeBookingId: activeFlow?.booking_id || stepData.flow?.booking_id || stepData.flow_id || null,
           activeTicket: generatedTicket,
         });
 
@@ -471,17 +507,52 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
   // Xác nhận Thanh toán & Gọi API sinh STT /api/booking/generate
   verifyPaymentAndIssueTicket: async () => {
     const kioskState = useKioskStore.getState();
-    const stepId = get().activeStepId;
-
-    if (!stepId) {
-      await get().payBill();
-      return true;
-    }
+    let stepId = get().activeStepId;
+    const authState = useAuthStore.getState();
+    const patientId = authState.patientId || authState.citizenId || authState.patientInfo?.idNumber;
 
     set({ isPaymentChecking: true });
     kioskState.setLoading(true, 'Đang xác nhận thanh toán & sinh Số thứ tự (STT)...');
 
     try {
+      // Nếu chưa có stepId (trường hợp đặt gói khám), ta phân giải từ active flow của bệnh nhân
+      if (!stepId && get().activeBookingId && patientId) {
+        try {
+          const flowRes = await flowService.getActivePatientFlowKiosk(patientId);
+          const flowData: any = flowRes && (flowRes as any)?.data !== undefined ? (flowRes as any).data : flowRes;
+          
+          let activeFlow = null;
+          if (Array.isArray(flowData)) {
+            const inProgressFlows = flowData.filter((f: any) => f.status === 'IN_PROGRESS');
+            if (inProgressFlows.length > 0) {
+              inProgressFlows.sort((a: any, b: any) => {
+                const timeA = a.create_at ? new Date(a.create_at).getTime() : 0;
+                const timeB = b.create_at ? new Date(b.create_at).getTime() : 0;
+                return timeB - timeA;
+              });
+              activeFlow = inProgressFlows[0];
+            }
+          } else if (flowData && flowData.status === 'IN_PROGRESS') {
+            activeFlow = flowData;
+          }
+
+          if (activeFlow && Array.isArray(activeFlow.steps) && activeFlow.steps.length > 0) {
+            stepId = activeFlow.steps[0].step_id || activeFlow.steps[0].id || null;
+            if (stepId) {
+              set({ activeStepId: stepId });
+            }
+          }
+        } catch (e) {
+          console.warn('Lỗi khi phân giải active flow cho gói khám:', e);
+        }
+      }
+
+      if (!stepId) {
+        set({ isPaymentChecking: false });
+        kioskState.setLoading(false);
+        await get().payBill();
+        return true;
+      }
       const generateRes = await flowService.fetchBookingGenerate(stepId);
       const generateData: any = generateRes.data || generateRes;
 
@@ -569,46 +640,17 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
   fetchPendingServiceOrders: async (patientId) => {
     set({ isFetchingServiceOrders: true });
     try {
-      const [soRes, servicesRes] = await Promise.all([
-        flowService.getPendingServiceOrders(patientId),
-        flowService.getAllServices(1, 100)
-      ]);
+      const soRes = await flowService.getPendingServiceOrders(patientId);
       const soData = (soRes as any)?.data || soRes;
-      const servicesData = (servicesRes as any)?.data?.data || (servicesRes as any)?.data || servicesRes;
 
       set({
         pendingServiceOrders: Array.isArray(soData) ? soData : [],
-        allServicesList: Array.isArray(servicesData) ? servicesData : []
       });
     } catch (error) {
       console.error('Error fetching pending service orders:', error);
-      set({ pendingServiceOrders: [], allServicesList: [] });
+      set({ pendingServiceOrders: [] });
     } finally {
       set({ isFetchingServiceOrders: false });
-    }
-  },
-
-  createServiceOrderTransaction: async (serviceOrderId, amount, patientId) => {
-    set({ isCreatingTransaction: true });
-    try {
-      const payload = {
-        transType: 'APPOINTMENT_PAYMENT',
-        amount,
-        clientId: patientId,
-        returnUrl: 'https://www.youtube.com/shorts/8Y9-C4UYE_g',
-        cancelUrl: 'https://www.youtube.com/watch?v=TQM8bUHOEuE',
-        service_order_id: serviceOrderId
-      };
-      const res = await flowService.createTransactionQr(payload);
-      const data = (res as any)?.data || res;
-      set({ activeTransactionQr: data });
-      return data;
-    } catch (error) {
-      console.error('Error creating transaction QR:', error);
-      useKioskStore.getState().showToast('Tạo QR thanh toán thất bại!', 'error');
-      return null;
-    } finally {
-      set({ isCreatingTransaction: false });
     }
   },
 

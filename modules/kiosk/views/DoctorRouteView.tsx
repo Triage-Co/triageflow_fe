@@ -12,6 +12,7 @@ export const DoctorRouteView: React.FC = () => {
   const navigateToMap = useKioskStore((state) => state.navigateToMap);
   const routeSteps = useFlowStore((state) => state.routeSteps);
   const activeTicket = useFlowStore((state) => state.activeTicket);
+  const activeBookingId = useFlowStore((state) => state.activeBookingId);
   const selectedDoctor = useKioskStore((state) => state.selectedDoctor);
   const showToast = useKioskStore((state) => state.showToast);
 
@@ -23,11 +24,9 @@ export const DoctorRouteView: React.FC = () => {
   const [selectedServiceOrderId, setSelectedServiceOrderId] = useState<string>('');
 
   const pendingServiceOrders = useFlowStore((state) => state.pendingServiceOrders);
-  const allServicesList = useFlowStore((state) => state.allServicesList);
   const isFetchingServiceOrders = useFlowStore((state) => state.isFetchingServiceOrders);
   const activeTransactionQr = useFlowStore((state) => state.activeTransactionQr);
   const fetchPendingServiceOrders = useFlowStore((state) => state.fetchPendingServiceOrders);
-  const createServiceOrderTransaction = useFlowStore((state) => state.createServiceOrderTransaction);
   const clearTransactionQr = useFlowStore((state) => state.clearTransactionQr);
 
   const handleOpenServiceOrders = async () => {
@@ -37,18 +36,28 @@ export const DoctorRouteView: React.FC = () => {
     }
   };
 
-  const handleSelectPay = async (serviceOrderId: string, amount: number) => {
+  const handleSelectPay = (serviceOrderId: string, qrCode: string, amount: number) => {
     if (patientId) {
       setSelectedServiceOrderId(serviceOrderId);
-      const res = await createServiceOrderTransaction(serviceOrderId, amount, patientId);
-      if (res) {
-        setIsQrModalOpen(true);
-      }
+      // Gán trực tiếp dữ liệu QR động từ service_order vào store
+      useFlowStore.setState({
+        activeTransactionQr: {
+          qrCode,
+          amount,
+        } as any
+      });
+      setIsQrModalOpen(true);
     }
   };
 
   const handlePaymentSuccess = () => {
     if (patientId) {
+      // Đóng modal danh sách dịch vụ thanh toán
+      setIsServiceOrderModalOpen(false);
+      
+      // Làm mới danh sách đơn dịch vụ chưa thanh toán
+      fetchPendingServiceOrders(patientId);
+
       // Re-fetch flow and active ticket to refresh page data
       useFlowStore.getState().fetchActiveTicketForPatient(patientId);
       useFlowStore.getState().fetchDoctorRouteSteps(patientId);
@@ -284,9 +293,9 @@ export const DoctorRouteView: React.FC = () => {
         isOpen={isServiceOrderModalOpen}
         onClose={() => setIsServiceOrderModalOpen(false)}
         pendingServiceOrders={pendingServiceOrders}
-        allServicesList={allServicesList}
         onSelectPay={handleSelectPay}
         isFetching={isFetchingServiceOrders}
+        activeBookingId={activeBookingId}
       />
 
       {/* Popup 2: Hiển thị mã QR thanh toán */}

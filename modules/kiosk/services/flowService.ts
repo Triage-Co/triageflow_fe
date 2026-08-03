@@ -42,9 +42,12 @@ export const flowService = {
     );
   },
 
-  getActivePatientFlowKiosk: async (patientId: string, token?: string) => {
+  getActivePatientFlowKiosk: async (patientId: string, date?: string, token?: string) => {
+    const url = `/api/flow/patient/${encodeURIComponent(patientId)}/active/kiosk${
+      date ? `?date=${encodeURIComponent(date)}` : ''
+    }`;
     return apiClient.get<ActiveFlowKioskResponseData>(
-      `/api/flow/patient/${encodeURIComponent(patientId)}/active/kiosk`,
+      url,
       { headers: getAuthHeaders(token) }
     );
   },
@@ -79,30 +82,4 @@ export const flowService = {
     );
   },
 
-  // GET /api/service
-  getAllServices: async (page = 1, limit = 100, token?: string) => {
-    return apiClient.get<{ data: ServiceItem[] }>(
-      `/api/service?page=${page}&limit=${limit}`,
-      { headers: getAuthHeaders(token) }
-    );
-  },
-
-  // POST /api/transaction
-  createTransactionQr: async (
-    payload: {
-      transType: string;
-      amount: number;
-      clientId: string;
-      returnUrl: string;
-      cancelUrl: string;
-      service_order_id: string;
-    },
-    token?: string
-  ) => {
-    return apiClient.post<TransactionQrResult>(
-      '/api/transaction',
-      payload,
-      { headers: getAuthHeaders(token) }
-    );
-  },
 };
