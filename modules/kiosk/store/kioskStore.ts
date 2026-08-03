@@ -10,6 +10,7 @@ import { useAuthStore } from './authStore';
 import { useTriageStore } from './triageStore';
 import { useBookingStore } from './bookingStore';
 import { useFlowStore } from './flowStore';
+import { usePackageBookingStore } from './packageBookingStore';
 
 export interface KioskStoreState {
   currentView: ActiveView;
@@ -163,6 +164,7 @@ export const useKioskStore = create<KioskStoreState>((set, get) => ({
     useTriageStore.getState().resetTriageFlow();
     useBookingStore.getState().resetBooking();
     useFlowStore.getState().resetFlow();
+    usePackageBookingStore.getState().resetStore();
 
     set({
       currentView: 'home',

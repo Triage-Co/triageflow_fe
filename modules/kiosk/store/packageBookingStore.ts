@@ -4,6 +4,7 @@ import { ExamPackage, ExamPackageDetail, RoomSlot } from '../types/packageBookin
 import { useAuthStore } from './authStore';
 import { useKioskStore } from './kioskStore';
 import { useFlowStore } from './flowStore';
+import { getActivePatientId } from '../utils/kioskHelpers';
 
 interface PackageBookingStoreState {
   packages: ExamPackage[];
@@ -28,7 +29,7 @@ interface PackageBookingStoreState {
   resetStore: () => void;
 }
 
-export const usePackageBookingStore = create<PackageBookingStoreState>((set, get) => ({
+const initialState = {
   packages: [],
   isFetchingPackages: false,
   selectedPackageId: null,
@@ -39,20 +40,13 @@ export const usePackageBookingStore = create<PackageBookingStoreState>((set, get
   isFetchingSlots: false,
   selectedSlotId: null,
   isBookingProcessing: false,
+};
+
+export const usePackageBookingStore = create<PackageBookingStoreState>((set, get) => ({
+  ...initialState,
 
   resetStore: () => {
-    set({
-      packages: [],
-      isFetchingPackages: false,
-      selectedPackageId: null,
-      selectedPackageDetail: null,
-      isFetchingPackageDetail: false,
-      selectedDate: null,
-      slots: [],
-      isFetchingSlots: false,
-      selectedSlotId: null,
-      isBookingProcessing: false,
-    });
+    set(initialState);
   },
 
   fetchPackages: async () => {
@@ -127,7 +121,7 @@ export const usePackageBookingStore = create<PackageBookingStoreState>((set, get
     const kioskState = useKioskStore.getState();
     const flowStore = useFlowStore.getState();
 
-    const patientId = authState.patientId || authState.citizenId || authState.patientInfo?.idNumber;
+    const patientId = getActivePatientId(authState);
     const { selectedSlotId, selectedPackageId, selectedPackageDetail } = get();
 
     if (!patientId) {

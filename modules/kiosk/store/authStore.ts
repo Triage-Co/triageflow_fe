@@ -14,19 +14,18 @@ interface AuthStoreState {
   clearAuth: () => void;
 }
 
-export const useAuthStore = create<AuthStoreState>((set) => ({
+const initialState = {
   authToken: undefined,
   patientId: undefined,
   citizenId: undefined,
   patientInfo: null,
+};
+
+export const useAuthStore = create<AuthStoreState>((set) => ({
+  ...initialState,
 
   clearAuth: () => {
-    set({
-      authToken: undefined,
-      patientId: undefined,
-      citizenId: undefined,
-      patientInfo: null,
-    });
+    set(initialState);
   },
 
   loginCitizen: async (citizenId: string) => {

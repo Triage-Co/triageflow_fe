@@ -5,6 +5,7 @@ import { useAuthStore } from './authStore';
 import { useTriageStore } from './triageStore';
 import { useKioskStore } from './kioskStore';
 import { useFlowStore } from '@/modules/kiosk/store/flowStore';
+import { getActivePatientId } from '../utils/kioskHelpers';
 
 interface BookingStoreState {
   specialties: SpecialtyItem[];
@@ -23,7 +24,7 @@ interface BookingStoreState {
   resetBooking: () => void;
 }
 
-export const useBookingStore = create<BookingStoreState>((set, get) => ({
+const initialState = {
   specialties: [],
   isFetchingSpecialties: false,
   availableDoctors: [],
@@ -31,17 +32,26 @@ export const useBookingStore = create<BookingStoreState>((set, get) => ({
   selectedSlotId: null,
   isDoctorLoading: false,
   isBookingProcessing: false,
+};
+
+const handleBookingSuccess = (response: any, patientId: string) => {
+  const flowStore = useFlowStore.getState();
+  const kioskState = useKioskStore.getState();
+
+  const resData = response.data || (response as any);
+  const stepId = resData.step_id;
+  const bookingId = resData.booking_id || resData.data?.booking_id;
+  const paymentData: BookingPaymentData = resData.payment?.data || resData.payment;
+
+  flowStore.setBookingPaymentState(stepId || '', bookingId || '', paymentData, patientId);
+  kioskState.navigateToView('payment');
+};
+
+export const useBookingStore = create<BookingStoreState>((set, get) => ({
+  ...initialState,
 
   resetBooking: () => {
-    set({
-      specialties: [],
-      isFetchingSpecialties: false,
-      availableDoctors: [],
-      availableSlots: [],
-      selectedSlotId: null,
-      isDoctorLoading: false,
-      isBookingProcessing: false,
-    });
+    set(initialState);
   },
 
   fetchSpecialties: async () => {
@@ -94,7 +104,7 @@ export const useBookingStore = create<BookingStoreState>((set, get) => ({
     const kioskState = useKioskStore.getState();
     const flowStore = useFlowStore.getState();
 
-    const patientId = authState.patientId || authState.citizenId || authState.patientInfo?.idNumber;
+    const patientId = getActivePatientId(authState);
     const interviewToken = triageState.interviewToken;
 
     if (!patientId || !interviewToken) {
@@ -109,13 +119,7 @@ export const useBookingStore = create<BookingStoreState>((set, get) => ({
       const response = await bookingService.createAutoBooking(patientId, interviewToken);
 
       if (response && (response.status === 'success' || response.code === 200 || response.data)) {
-        const resData = response.data || (response as any);
-        const stepId = resData.step_id;
-        const bookingId = resData.booking_id || resData.data?.booking_id;
-        const paymentData: BookingPaymentData = resData.payment?.data || resData.payment;
-
-        flowStore.setBookingPaymentState(stepId || '', bookingId || '', paymentData, patientId);
-        kioskState.navigateToView('payment');
+        handleBookingSuccess(response, patientId);
         kioskState.showToast('Khởi tạo lịch khám & mã VietQR thành công!', 'success');
         return true;
       } else {
@@ -126,14 +130,11 @@ export const useBookingStore = create<BookingStoreState>((set, get) => ({
       console.warn('Lỗi khi thực hiện Auto Booking:', error?.message || error);
       const errorMsg = error?.message || 'Lỗi kết nối khi tự động xếp phòng!';
       kioskState.showToast(errorMsg, 'error');
-
-      // Tự động chuyển sang bước chọn Bác sĩ thủ công nếu không xếp slot tự động được
       try {
         const mainSpecialtyCode = useTriageStore.getState().recommendedSpecialists[0]?.specialty_code || 'SP_20';
         get().fetchDoctorsAndSlots(mainSpecialtyCode);
         kioskState.setAIRegisterStep('doctor_select');
       } catch (e) {
-        // ignore fallback error
       }
       return false;
     } finally {
@@ -147,7 +148,7 @@ export const useBookingStore = create<BookingStoreState>((set, get) => ({
     const kioskState = useKioskStore.getState();
     const flowStore = useFlowStore.getState();
 
-    const patientId = authState.patientId || authState.citizenId || authState.patientInfo?.idNumber;
+    const patientId = getActivePatientId(authState);
 
     if (!patientId || !slotId) {
       kioskState.showToast('Vui lòng chọn khung giờ khám hợp lệ!', 'error');
@@ -161,13 +162,7 @@ export const useBookingStore = create<BookingStoreState>((set, get) => ({
       const response = await bookingService.createBooking(patientId, slotId);
 
       if (response && (response.status === 'success' || response.code === 200 || response.data)) {
-        const resData = response.data || (response as any);
-        const stepId = resData.step_id;
-        const bookingId = resData.booking_id || resData.data?.booking_id;
-        const paymentData: BookingPaymentData = resData.payment?.data || resData.payment;
-
-        flowStore.setBookingPaymentState(stepId || '', bookingId || '', paymentData, patientId);
-        kioskState.navigateToView('payment');
+        handleBookingSuccess(response, patientId);
         kioskState.showToast('Đặt lịch thành công! Vui lòng quét mã QR thanh toán.', 'success');
         return true;
       } else {
