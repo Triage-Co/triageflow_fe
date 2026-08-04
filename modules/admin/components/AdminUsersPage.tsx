@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils';
 import { useAdminStore } from '../store/adminStore';
 import { useAuthStore } from '@/modules/auth/store/authStore';
 import type { BanDuration } from '../types/admin.types';
+import { getCompactPages } from '../utils/pagination';
 
 /* ─── Config ────────────────────────────────────────────────────────────── */
 
@@ -59,14 +60,6 @@ const displayGender = (genderVal?: string) => {
     if (g === 'MALE') return 'Nam';
     if (g === 'FEMALE') return 'Nữ';
     return 'Khác';
-};
-
-const getCompactPages = (totalPages: number): Array<number | 'ellipsis'> => {
-    if (totalPages <= 6) {
-        return Array.from({ length: totalPages }, (_, idx) => idx + 1);
-    }
-
-    return [1, 2, 'ellipsis', totalPages - 1, totalPages];
 };
 
 /* ─── Component ──────────────────────────────────────────────────────────── */
@@ -417,7 +410,7 @@ export function AdminUsersPage() {
                                         >
                                             Trước
                                         </button>
-                                        {getCompactPages(totalPages).map((page, idx) => (
+                                        {getCompactPages(currentPage, totalPages).map((page, idx) => (
                                             page === 'ellipsis' ? (
                                                 <span key={`ellipsis-${idx}`} className="px-1 text-sm font-bold text-[#ADADAD] select-none">...</span>
                                             ) : (
