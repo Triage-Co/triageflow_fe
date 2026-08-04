@@ -3,10 +3,53 @@ import type {
     WorkflowStep,
     WorkflowStepStatus,
 } from '@/modules/clinical/types/clinical.types';
+import type { TemplateStep } from '@/modules/admin/types/process.types';
+import {
+    normalizeRoomType,
+    normalizeStepType,
+} from '@/modules/admin/types/process.types';
 
 
 // ── API Services & DTOs ──────────────────────────────────────────────────────
 import { apiClient } from '@/shared/services/apiClient';
+
+/** @deprecated Kept for draft/UI helpers; assign-by-id no longer sends body. */
+export type AssignTemplateStepPayload = Omit<TemplateStep, 'template_step_id'>;
+
+/** @deprecated Assign now uses path params only. */
+export interface AssignTemplateRequestDto {
+    templates: AssignTemplateStepPayload[];
+}
+
+/**
+ * Map template/draft steps → legacy assign body shape (unused by new assign-by-id API).
+ * Kept for local draft preview / room-staff matching after assign.
+ */
+export function mapTemplateStepsToAssignPayload(
+    steps: TemplateStep[] | undefined | null,
+    parentTemplateId?: string
+): AssignTemplateStepPayload[] {
+    if (!Array.isArray(steps) || steps.length === 0) return [];
+
+    return steps.map((step, idx) => {
+        const templateStepId = step.template_step_id?.trim() || `step_${idx + 1}`;
+        const roomType = normalizeRoomType(step.room_type);
+        const uniqueStepKey =
+            templateStepId ||
+            (step.template_id || parentTemplateId || `step_${idx + 1}`).trim();
+
+        return {
+            template_id: uniqueStepKey,
+            service_code: (step.service_code || 'NONE').trim(),
+            step_name: step.step_name?.trim() || `Bước ${idx + 1}`,
+            step_type: normalizeStepType(step.step_type, roomType),
+            room_type: roomType,
+            requires_payment: Boolean(step.requires_payment),
+            depends_on: Array.isArray(step.depends_on) ? step.depends_on.filter(Boolean) : [],
+            sub_steps: [],
+        };
+    });
+}
 
 
 
@@ -249,8 +292,11 @@ export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient 
         return 'Đang chờ';
     };
 
-    const booking = item.step.flow.booking;
-    const patientObj = booking.patient;
+    const booking = item.step?.flow?.booking;
+    const patientObj = booking?.patient;
+    if (!booking || !patientObj) {
+        throw new Error('Queue patient thiếu booking/patient trong response.');
+    }
     const patientRecord = asRecord(patientObj);
     const accountRecord = asRecord(patientObj.account);
     const flowRecord = asRecord(item.step.flow);
@@ -337,6 +383,7 @@ export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient 
         },
         visitType: 'Khám mới',
         flowId: item.step.flow.flow_id,
+        bookingId: booking.booking_id,
         templateId,
         workflowSteps,
         patientId: patientObj.patient_id,
@@ -352,6 +399,131 @@ export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient 
             },
         },
     };
+}
+
+export function extractFlowList(raw: unknown): Record<string, unknown>[] {
+    if (!raw) return [];
+
+    const asFlows = (items: unknown[]): Record<string, unknown>[] =>
+        items.filter((item): item is Record<string, unknown> => {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+            const rec = item as Record<string, unknown>;
+            return typeof rec.flow_id === 'string' || Array.isArray(rec.steps);
+        });
+
+    if (Array.isArray(raw)) return asFlows(raw);
+
+    if (typeof raw === 'object') {
+        const rec = raw as Record<string, unknown>;
+
+        // ApiResponse envelope: { code, data: Flow[] }
+        if (Array.isArray(rec.data)) return asFlows(rec.data);
+
+        // Nested: { data: { data: Flow[] } } or { data: Flow }
+        if (rec.data && typeof rec.data === 'object' && !Array.isArray(rec.data)) {
+            const nested = rec.data as Record<string, unknown>;
+            if (Array.isArray(nested.data)) return asFlows(nested.data);
+            if (typeof nested.flow_id === 'string' || Array.isArray(nested.steps)) {
+                return [nested];
+            }
+        }
+
+        // Single flow object
+        if (typeof rec.flow_id === 'string' || Array.isArray(rec.steps)) {
+            return [rec];
+        }
+    }
+    return [];
+}
+
+/** Ensure `steps` is always a concrete array on the flow object. */
+export function normalizeFlowRecord(flow: Record<string, unknown>): Record<string, unknown> {
+    const steps = extractFlowSteps(flow);
+    return {
+        ...flow,
+        steps: Array.isArray(steps) ? [...steps] : [],
+    };
+}
+
+/**
+ * Pick one visit flow from GET /api/flow/patient/{id}/active (array).
+ * Prefer booking_id / flow_id when provided; otherwise the newest flow by date.
+ */
+export function pickBestActiveFlow(
+    flows: Record<string, unknown>[],
+    preferredFlowId?: string,
+    preferredBookingId?: string
+): Record<string, unknown> | null {
+    if (flows.length === 0) return null;
+
+    const normalized = flows.map(normalizeFlowRecord);
+
+    if (preferredBookingId) {
+        const byBooking = normalized.find((f) => f.booking_id === preferredBookingId);
+        if (byBooking) return byBooking;
+    }
+
+    if (preferredFlowId) {
+        const preferred = normalized.find((f) => f.flow_id === preferredFlowId);
+        if (preferred) return preferred;
+    }
+
+    // Newest visit by date, then create_at
+    return (
+        [...normalized].sort((a, b) => {
+            const dateA = String(a.date || '');
+            const dateB = String(b.date || '');
+            if (dateA !== dateB) return dateB.localeCompare(dateA);
+            const timeA = new Date((a.create_at || a.created_at || 0) as string | number).getTime();
+            const timeB = new Date((b.create_at || b.created_at || 0) as string | number).getTime();
+            return timeB - timeA;
+        })[0] || null
+    );
+}
+
+/** Fetch the full active-flow list for a patient (no get-by-id). */
+export async function fetchPatientActiveFlows(
+    token: string,
+    patientId: string
+): Promise<Record<string, unknown>[]> {
+    const id = patientId.trim();
+    if (!id) return [];
+
+    const active = await clinicalService.getActiveFlowByPatientId(id, token);
+    const list = extractFlowList(active?.data);
+    if (list.length > 0) return list.map(normalizeFlowRecord);
+
+    const fromEnvelope = extractFlowList(active);
+    return fromEnvelope.map(normalizeFlowRecord);
+}
+
+/**
+ * Resolve visit flow from GET /api/flow/patient/{patient_id}/active.
+ * Uses only the latest (or preferred booking/flow) visit — not a merge of all flows.
+ */
+export async function resolvePatientFlow(
+    token: string,
+    options: { flowId?: string; patientId?: string; bookingId?: string }
+): Promise<Record<string, unknown> | null> {
+    const patientId = (options.patientId || '').trim();
+    if (!patientId) return null;
+
+    const list = await fetchPatientActiveFlows(token, patientId);
+    if (list.length === 0) return null;
+
+    return pickBestActiveFlow(
+        list,
+        (options.flowId || '').trim(),
+        (options.bookingId || '').trim()
+    );
+}
+
+export function extractFlowSteps(flow: Record<string, unknown> | null | undefined): unknown[] {
+    if (!flow) return [];
+    if (Array.isArray(flow.steps)) return flow.steps as unknown[];
+    const nested = flow.data && typeof flow.data === 'object' ? (flow.data as Record<string, unknown>) : null;
+    if (nested && Array.isArray(nested.steps)) return nested.steps as unknown[];
+    return [];
 }
 
 export const clinicalService = {
@@ -372,12 +544,18 @@ export const clinicalService = {
             headers: { Authorization: `Bearer ${token}` },
         }),
 
+    /**
+     * [DOCTOR - ADMIN] Append a saved template onto a visit flow by template_id.
+     * POST /api/flow/assign/{flow_id}/template/{template_id} — no body.
+     */
     assignTemplateToFlow: (flowId: string, templateId: string, token: string) =>
-        apiClient.post<unknown>(`/api/flow/assign/${flowId}`, {
-            template_id: templateId,
-        }, {
-            headers: { Authorization: `Bearer ${token}` },
-        }),
+        apiClient.post<unknown>(
+            `/api/flow/assign/${flowId}/template/${templateId}`,
+            {},
+            {
+                headers: { Authorization: `Bearer ${token}` },
+            }
+        ),
 
     getActiveFlowByPatientId: (patientId: string, token: string) =>
         apiClient.get<unknown>(`/api/flow/patient/${patientId}/active`, {
@@ -404,12 +582,28 @@ export const clinicalService = {
             headers: { Authorization: `Bearer ${token}` },
         }),
 
+    getServices: (token: string, page = 1, limit = 100) =>
+        apiClient.get<unknown>(`/api/service?page=${page}&limit=${limit}`, {
+            headers: { Authorization: `Bearer ${token}` },
+        }),
+
     updateVisitSession: (visitSessionId: string, body: Record<string, unknown>, token: string) =>
         apiClient.patch<unknown>(`/api/visit-session/${visitSessionId}`, body, {
             headers: { Authorization: `Bearer ${token}` },
         }),
 
-    createStepParent: (body: { flow_id: string; room_id: string; staff_id?: string; step_status?: string }, token: string) =>
+    createStepParent: (
+        body: {
+            flow_id: string;
+            service_code: string;
+            step_name: string;
+            room_id?: string;
+            staff_id?: string;
+            step_status?: string;
+            step_type?: string;
+        },
+        token: string
+    ) =>
         apiClient.post<unknown>('/api/step/parent', body, {
             headers: { Authorization: `Bearer ${token}` },
         }),
@@ -423,6 +617,28 @@ export const clinicalService = {
         apiClient.patch<unknown>(`/api/step/${stepId}/status`, {
             step_status: stepStatus,
         }, {
+            headers: { Authorization: `Bearer ${token}` },
+        }),
+
+    /** Create runtime edge: waiting step cannot proceed until required completes. */
+    createStepDependency: (
+        body: { waiting_step_id: string; required_step_id: string },
+        token: string
+    ) =>
+        apiClient.post<unknown>('/api/step/dependency', body, {
+            headers: { Authorization: `Bearer ${token}` },
+        }),
+
+    /** Replace required predecessor for a waiting step. */
+    updateStepDependency: (
+        body: {
+            waiting_step_id: string;
+            old_required_step_id: string;
+            new_required_step_id: string;
+        },
+        token: string
+    ) =>
+        apiClient.patch<unknown>('/api/step/dependency', body, {
             headers: { Authorization: `Bearer ${token}` },
         }),
 };

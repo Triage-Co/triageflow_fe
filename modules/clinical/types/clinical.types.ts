@@ -46,6 +46,7 @@ export interface Patient {
     insurance: { hasInsurance: boolean; coverage: string };
     visitType: 'Tái khám' | 'Khám mới' | 'Cấp cứu';
     flowId?: string;
+    bookingId?: string;
     templateId?: string;
     workflowSteps?: WorkflowStep[];
     // EMR-specific fields

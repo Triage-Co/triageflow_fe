@@ -5,9 +5,7 @@ import { EMRPageLayout } from '@/shared/components/layout/EMRPageLayout';
 import { notFound } from 'next/navigation';
 import {
     clinicalService,
-    extractWorkflowStepsFromResponse,
     mapBackendPatientToFrontend,
-    pickFirstTemplateId,
 } from '@/modules/clinical/services/clinicalService';
 import { useAuthStore } from '@/modules/auth/store/authStore';
 import { usePatientTabsStore } from '@/modules/clinical/store/clinicalStore';
@@ -30,8 +28,9 @@ export default function DoctorPatientPage({ params }: { params: Promise<{ id: st
         if (!id) return;
 
         // 1. Check Zustand cache first (client-only, safe in useEffect)
+        // Re-fetch when cache thiếu bookingId/flowId (schema mới / patient cũ trong persist)
         const cached = getPatientData(id);
-        if (cached) {
+        if (cached?.bookingId && cached?.flowId && cached?.patientId) {
             const timer = setTimeout(() => {
                 setPatient(cached);
                 setIsLoading(false);
@@ -39,7 +38,7 @@ export default function DoctorPatientPage({ params }: { params: Promise<{ id: st
             return () => clearTimeout(timer);
         }
 
-        // 2. No cache — fetch from API
+        // 2. Fetch from API (also refreshes stale cache)
         if (!accessToken) return;
 
         const fetchPatient = async () => {
@@ -72,39 +71,8 @@ export default function DoctorPatientPage({ params }: { params: Promise<{ id: st
                         return;
                     }
 
-                    const mapped = mapBackendPatientToFrontend(res.data);
-                    let finalPatient = mapped;
-
-                    if (mapped.flowId) {
-                        let templateId = mapped.templateId;
-
-                        if (!templateId) {
-                            try {
-                                const templatesRes = await clinicalService.getProcessTemplates(accessToken);
-                                templateId = pickFirstTemplateId(templatesRes.data);
-                            } catch (e) {
-                                console.error('Failed to pre-fetch templates on load:', e);
-                            }
-                        }
-
-                        if (templateId) {
-                            try {
-                                const assignRes = await clinicalService.assignTemplateToFlow(mapped.flowId, templateId, accessToken);
-                                const workflowSteps = extractWorkflowStepsFromResponse(assignRes.data);
-                                finalPatient = {
-                                    ...mapped,
-                                    templateId,
-                                    workflowSteps: workflowSteps.length > 0 ? workflowSteps : mapped.workflowSteps,
-                                };
-                            } catch {
-                                finalPatient = {
-                                    ...mapped,
-                                    templateId,
-                                };
-                            }
-                        }
-                    }
-
+                    // No auto-assign: doctor picks template in Quy trình and assigns via new API body
+                    const finalPatient = mapBackendPatientToFrontend(res.data);
                     setPatient(finalPatient);
                     setPatientData(id, finalPatient);
                 } else {

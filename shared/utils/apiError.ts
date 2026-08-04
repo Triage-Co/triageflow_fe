@@ -37,6 +37,25 @@ export function resolveApiError(
     const detail = body.detail as Record<string, unknown> | undefined;
     const nestedResponse = detail?.response as Record<string, unknown> | undefined;
 
+    // NestJS BadRequestException({ message, errors }) puts object in `message`
+    if (body.message && typeof body.message === 'object') {
+        const msgObj = body.message as Record<string, unknown>;
+        const main =
+            (typeof msgObj.message === 'string' && msgObj.message) || fallback;
+        const errors = Array.isArray(msgObj.errors) ? msgObj.errors : [];
+        const errorLines = errors
+            .map((e) => {
+                if (!e || typeof e !== 'object') return null;
+                const item = e as Record<string, unknown>;
+                return typeof item.message === 'string' ? item.message : null;
+            })
+            .filter(Boolean) as string[];
+        return {
+            message: main,
+            detail: errorLines.length > 0 ? errorLines.join('\n') : undefined,
+        };
+    }
+
     const genericMessage =
         (typeof nestedResponse?.message === 'string' && nestedResponse.message) ||
         (typeof detail?.message === 'string' && detail.message) ||

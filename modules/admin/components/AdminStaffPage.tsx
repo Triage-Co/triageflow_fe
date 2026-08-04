@@ -22,6 +22,7 @@ import { useStaffStore } from '../store/staffStore';
 import { useRoomStore } from '../store/roomStore';
 import { useAuthStore } from '@/modules/auth/store/authStore';
 import type { Staff, CreateStaffDto, UpdateStaffDto } from '../types/staff.types';
+import { getCompactPages } from '../utils/pagination';
 
 /* ─── Role Badges Configuration ───────────────────────────────────────────── */
 
@@ -44,14 +45,6 @@ const getRoleBadge = (role: string) => {
             {config.label}
         </span>
     );
-};
-
-const getCompactPages = (totalPages: number): Array<number | 'ellipsis'> => {
-    if (totalPages <= 6) {
-        return Array.from({ length: totalPages }, (_, idx) => idx + 1);
-    }
-
-    return [1, 2, 'ellipsis', totalPages - 1, totalPages];
 };
 
 /* ─── Component ──────────────────────────────────────────────────────────── */
@@ -518,7 +511,7 @@ export function AdminStaffPage() {
                                         >
                                             Trước
                                         </button>
-                                        {getCompactPages(totalPages).map((page, idx) => (
+                                        {getCompactPages(currentPage, totalPages).map((page, idx) => (
                                             page === 'ellipsis' ? (
                                                 <span key={`ellipsis-${idx}`} className="px-1 text-sm font-bold text-[#ADADAD] select-none">...</span>
                                             ) : (

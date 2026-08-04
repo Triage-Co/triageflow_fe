@@ -35,6 +35,13 @@ export function PatientDetailPage({
     clinicName = 'PK. Nội tổng quát 1',
 }: PatientDetailPageProps) {
     const [activeTab, setActiveTab] = useState<DetailTab>('process');
+    const [flowRefreshKey, setFlowRefreshKey] = useState(0);
+    const [flowSnapshot, setFlowSnapshot] = useState<Record<string, unknown> | null>(null);
+
+    const handleFlowChanged = (flow: Record<string, unknown> | null) => {
+        setFlowSnapshot(flow);
+        setFlowRefreshKey((prev) => prev + 1);
+    };
 
     const tabToggle = (
         <div className="bg-white rounded-[24px] border border-neutral-100 p-1.5 flex gap-1">
@@ -109,7 +116,14 @@ export function PatientDetailPage({
 
                     {tabToggle}
 
-                    {activeTab === 'process' && <WorkflowDiagram patientId={patient.patientId || patient.id} patient={patient} />}
+                    {activeTab === 'process' && (
+                        <WorkflowDiagram
+                            patientId={patient.patientId || patient.id}
+                            patient={patient}
+                            refreshKey={flowRefreshKey}
+                            onFlowChanged={handleFlowChanged}
+                        />
+                    )}
                 </div>
 
                 {/* ── RIGHT CONTENT ─── */}
@@ -176,6 +190,9 @@ export function PatientDetailPage({
                             patient={patient}
                             labOrders={MOCK_LAB_ORDERS}
                             diagnosis={MOCK_DIAGNOSIS}
+                            flowRefreshKey={flowRefreshKey}
+                            flowSnapshot={flowSnapshot}
+                            onFlowChanged={handleFlowChanged}
                         />
                     )}
                 </div>

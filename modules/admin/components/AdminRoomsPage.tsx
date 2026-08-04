@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { useRoomStore } from '../store/roomStore';
 import { useAuthStore } from '@/modules/auth/store/authStore';
 import type { HospitalRoom, Specialty } from '../types/room.types';
+import { getCompactPages } from '../utils/pagination';
 
 /* ─── Specialty Helpers ─────────────────────────────────────────────────────── */
 
@@ -38,14 +39,6 @@ const getSpecialtyCode = (room: HospitalRoom, specialties: Specialty[]): string 
     const found = specialties.find((s) => s.specialty_id === room.specialty_id);
     if (found?.specialty_code) return found.specialty_code;
     return 'N/A';
-};
-
-const getCompactPages = (totalPages: number): Array<number | 'ellipsis'> => {
-    if (totalPages <= 6) {
-        return Array.from({ length: totalPages }, (_, idx) => idx + 1);
-    }
-
-    return [1, 2, 'ellipsis', totalPages - 1, totalPages];
 };
 
 /* ─── Component ──────────────────────────────────────────────────────────── */
@@ -404,7 +397,7 @@ export function AdminRoomsPage() {
                                         >
                                             Trước
                                         </button>
-                                        {getCompactPages(totalPages).map((page, idx) => (
+                                        {getCompactPages(currentPage, totalPages).map((page, idx) => (
                                             page === 'ellipsis' ? (
                                                 <span key={`ellipsis-${idx}`} className="px-1 text-sm font-bold text-[#ADADAD] select-none">...</span>
                                             ) : (

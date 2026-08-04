@@ -15,7 +15,7 @@ import type { Patient, ClinicalStage, LabOrder } from '@/modules/clinical/types/
 import { Badge } from '@/shared/components/ui/Badge';
 import { Input } from '@/shared/components/ui/Input';
 import { cn } from '@/lib/utils';
-import { ParaclinicalPanel } from './ParaclinicalPanel';
+import { ParaclinicalOrdersTab } from './ParaclinicalOrdersTab';
 import { DoctorPrescriptionTab } from './DoctorPrescriptionTab';
 
 const STAGE_TABS: {
@@ -23,17 +23,20 @@ const STAGE_TABS: {
     label: string;
     Icon: typeof Stethoscope;
 }[] = [
-    { key: 'examination', label: 'Khám bệnh', Icon: Stethoscope },
-    { key: 'paraclinical', label: 'Cận lâm sàng', Icon: Microscope },
-    { key: 'diagnosis', label: 'Chẩn đoán & điều trị', Icon: ClipboardList },
-    { key: 'procedure', label: 'Thủ thuật', Icon: Syringe },
-    { key: 'prescription', label: 'Đơn thuốc', Icon: Pill },
-];
+        { key: 'examination', label: 'Khám bệnh', Icon: Stethoscope },
+        { key: 'paraclinical', label: 'Cận lâm sàng', Icon: Microscope },
+        { key: 'diagnosis', label: 'Chẩn đoán & điều trị', Icon: ClipboardList },
+        { key: 'procedure', label: 'Thủ thuật', Icon: Syringe },
+        { key: 'prescription', label: 'Đơn thuốc', Icon: Pill },
+    ];
 
 interface ClinicalProcessPanelProps {
     patient: Patient;
     labOrders: LabOrder[];
     diagnosis?: { code: string; description: string };
+    flowRefreshKey?: number;
+    flowSnapshot?: Record<string, unknown> | null;
+    onFlowChanged?: (flow: Record<string, unknown> | null) => void;
 }
 
 function StagePlaceholder({ title }: { title: string }) {
@@ -47,8 +50,11 @@ function StagePlaceholder({ title }: { title: string }) {
 
 export function ClinicalProcessPanel({
     patient,
-    labOrders,
+    labOrders: _labOrders,
     diagnosis = { code: 'J02.9', description: 'Đau hố chậu phải' },
+    flowRefreshKey = 0,
+    flowSnapshot = null,
+    onFlowChanged,
 }: ClinicalProcessPanelProps) {
     const [activeStage, setActiveStage] = useState<ClinicalStage>('paraclinical');
 
@@ -131,7 +137,14 @@ export function ClinicalProcessPanel({
 
             {/* Stage content */}
             <div className="flex-1 min-h-0">
-                {activeStage === 'paraclinical' && <ParaclinicalPanel orders={labOrders} />}
+                {activeStage === 'paraclinical' && (
+                    <ParaclinicalOrdersTab
+                        patient={patient}
+                        refreshKey={flowRefreshKey}
+                        flowSnapshot={flowSnapshot}
+                        onFlowChanged={onFlowChanged}
+                    />
+                )}
                 {activeStage === 'examination' && (
                     <StagePlaceholder title="Khám bệnh" />
                 )}
