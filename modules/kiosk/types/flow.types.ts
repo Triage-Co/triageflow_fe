@@ -9,46 +9,6 @@ export interface RouteStepItem {
   status: 'completed' | 'in_progress' | 'waiting' | 'pending';
 }
 
-export interface BookingGenerateResponseData {
-  slot?: {
-    slot_id: string;
-    slot_index?: number;
-    shift_id?: string;
-    start_time: string;
-    end_time: string;
-    capacity?: number;
-    max_capacity?: number;
-    status?: string;
-  };
-  room?: {
-    room_id: string;
-    room_name: string;
-    room_type?: string;
-    physical_room_id?: string | null;
-    specialty_id?: string;
-    specialty?: {
-      specialty_id: string;
-      specialty_code: string;
-      specialty_name: string;
-      description?: string | null;
-    };
-  };
-  specialty?: {
-    specialty_id: string;
-    specialty_code: string;
-    specialty_name: string;
-    description?: string | null;
-  };
-  queue?: Array<{
-    queue_id: string;
-    step_id: string;
-    queue_number: string;
-    status: string;
-  }>;
-  queue_number?: string;
-  queueNo?: string;
-  message?: string;
-}
 
 export interface StepDetailResponseData {
   step_id?: string;

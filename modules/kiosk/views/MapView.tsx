@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useKioskStore } from '../store/kioskStore';
 import { useFlowStore } from '../store/flowStore';
 import { FloorMap } from '@/modules/navigation/components/FloorMap';
@@ -16,17 +16,15 @@ interface RoomOption {
   roomLabel: string;
   floorNumber: number;
   type: string;
+  areaId?: string | null;
 }
 
 export const MapView: React.FC = () => {
   const goHome = useKioskStore((state) => state.goHome);
   const navigateToView = useKioskStore((state) => state.navigateToView);
   const mapNavigationRoomId = useKioskStore((state) => state.mapNavigationRoomId);
-  const activeTicket = useFlowStore((state) => state.activeTicket);
-
-  const targetRoomCode = activeTicket?.roomNumber || null;
-  const targetSpecialty = activeTicket?.clinicName || null;
-  const targetAreaId = (activeTicket as any)?.areaId || null;
+  const showToast = useKioskStore((state) => state.showToast);
+  const toastTriggeredRef = useRef<string | null>(null);
 
   // Map data and states for routing
   const { rawMap } = useBuildingMap(2);
@@ -36,26 +34,16 @@ export const MapView: React.FC = () => {
   const [modalType, setModalType] = useState<'start' | 'target' | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
 
-  const KIOSK_PHARMACY_ROOM_ID = '2bb6af59-495d-4c89-bc42-ad72d8bbac87';
+  const targetRoomCode = targetRoom?.roomCode || mapNavigationRoomId || null;
+  const targetAreaId = targetRoom?.areaId || null;
 
-  const normalizeString = (str: string): string => {
-    return str
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '') // loại bỏ dấu Tiếng Việt
-      .replace(/\s+/g, '') // loại bỏ khoảng trắng
-      .replace(/phong/g, '') // loại bỏ từ 'phong'
-      .replace(/p\.?/g, '') // loại bỏ tiền tố 'p' hoặc 'p.'
-      .trim();
-  };
 
-  // Tự động thiết lập điểm xuất phát là Nhà Thuốc và điểm đích dựa trên phiếu khám
+  const KIOSK_RECEPTION_A_ID = 'ce336956-b026-4979-8094-2c7bf7a5a53a';
+
+  // Tự động thiết lập điểm xuất phát là Sảnh Tiếp Đón A và điểm đích dựa trên phiếu khám
   useEffect(() => {
     console.log('MapView Auto-Routing Debug:', {
       mapNavigationRoomId,
-      targetRoomCode,
-      targetSpecialty,
-      activeTicket,
       rawMap: !!rawMap
     });
 
@@ -63,9 +51,9 @@ export const MapView: React.FC = () => {
       let foundStart: RoomOption | null = null;
       let foundTarget: RoomOption | null = null;
 
-      // Tìm Nhà Thuốc mặc định
+      // Tìm Sảnh Tiếp Đón A mặc định
       for (const floor of rawMap.floors) {
-        const room = floor.rooms.find((r) => r.id === KIOSK_PHARMACY_ROOM_ID);
+        const room = floor.rooms.find((r) => r.id === KIOSK_RECEPTION_A_ID);
         if (room) {
           foundStart = {
             id: room.id,
@@ -73,35 +61,20 @@ export const MapView: React.FC = () => {
             roomLabel: room.roomLabel,
             floorNumber: floor.floorNumber,
             type: room.type,
+            areaId: room.areaId,
           };
           break;
         }
       }
 
-      // Tìm Phòng khám đích dựa trên mapNavigationRoomId, roomNumber hoặc clinicName (chuyên khoa)
-      if (mapNavigationRoomId || targetRoomCode || targetSpecialty) {
-        const normTargetCode = targetRoomCode ? normalizeString(targetRoomCode) : '';
-        const normSpecialty = targetSpecialty ? normalizeString(targetSpecialty) : '';
+      // Tìm Phòng khám đích dựa trên mapNavigationRoomId (stripped label)
+      if (mapNavigationRoomId) {
+        const targetLabel = mapNavigationRoomId.toLowerCase().trim();
 
         for (const floor of rawMap.floors) {
-          const room = floor.rooms.find((r) => {
-            if (mapNavigationRoomId && r.id === mapNavigationRoomId) return true;
-            
-            const normLabel = normalizeString(r.roomLabel);
-            const normCode = normalizeString(r.roomCode);
-
-            // 1. So khớp theo tên phòng (ví dụ: "Phòng 109" -> "109")
-            if (normTargetCode && (normLabel === normTargetCode || normCode === normTargetCode || normLabel.includes(normTargetCode) || normCode.includes(normTargetCode))) {
-              return true;
-            }
-
-            // 2. So khớp theo Chuyên khoa (ví dụ: "Tiêu hóa" khớp với "Nội tiêu hóa 1")
-            if (normSpecialty && (normLabel.includes(normSpecialty) || normCode.includes(normSpecialty))) {
-              return true;
-            }
-
-            return false;
-          });
+          const room = floor.rooms.find(
+            (r) => r.roomLabel.toLowerCase().trim() === targetLabel
+          );
           if (room) {
             foundTarget = {
               id: room.id,
@@ -109,9 +82,15 @@ export const MapView: React.FC = () => {
               roomLabel: room.roomLabel,
               floorNumber: floor.floorNumber,
               type: room.type,
+              areaId: room.areaId,
             };
             break;
           }
+        }
+
+        if (!foundTarget && toastTriggeredRef.current !== mapNavigationRoomId) {
+          showToast(`Không tìm thấy phòng khám "${mapNavigationRoomId}" trên bản đồ. Vui lòng chọn thủ công!`, 'error');
+          toastTriggeredRef.current = mapNavigationRoomId;
         }
       }
 
@@ -120,14 +99,12 @@ export const MapView: React.FC = () => {
       }
       if (foundTarget) {
         setTargetRoom(foundTarget);
-        // Ưu tiên hiển thị tầng của phòng khám đích
         useNavigationStore.getState().setActiveFloor(foundTarget.floorNumber);
       } else if (foundStart) {
-        // Fallback hiển thị tầng của Quầy Tiếp Nhận
         useNavigationStore.getState().setActiveFloor(foundStart.floorNumber);
       }
     }
-  }, [rawMap, mapNavigationRoomId, targetRoomCode, targetSpecialty, activeTicket]);
+  }, [rawMap, mapNavigationRoomId, showToast]);
 
   // Fetch route when both start and target are selected
   useEffect(() => {
@@ -285,20 +262,6 @@ export const MapView: React.FC = () => {
         )}
       </div>
 
-      {/* Target Destination Info Badge (Default Expo Target if active ticket exists) */}
-      {targetRoomCode && !startRoom && !targetRoom && (
-        <div className="absolute bottom-6 left-6 z-20 bg-white/95 backdrop-blur-md px-4 py-3 rounded-2xl border border-slate-200 shadow-lg flex items-center gap-3">
-          <div className="w-3 h-3 rounded-full bg-[#155DFC] animate-ping" />
-          <div>
-            <p className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400">
-              Điểm cần đến của bạn
-            </p>
-            <p className="text-sm font-black text-slate-800">
-              Phòng {targetRoomCode}
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* Room Selection Popup Modal */}
       {rawMap && (

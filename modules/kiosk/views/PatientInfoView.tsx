@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useFlowStore } from '../store/flowStore';
+import { stripRoomName } from '../utils/flowHelpers';
 
 export const PatientInfoView: React.FC = () => {
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
@@ -293,7 +294,7 @@ export const PatientInfoView: React.FC = () => {
             </div>
 
             <button
-              onClick={() => navigateToMap(activeTicket?.roomId)}
+              onClick={() => navigateToMap(stripRoomName(activeTicket?.roomNumber || ''))}
               className="w-full py-3.5 bg-white text-[#155DFC] rounded-2xl font-black text-xs lg:text-sm flex items-center justify-center gap-2 shadow-md hover:bg-blue-50 transition-all cursor-pointer mt-4"
             >
               <Navigation className="w-4 h-4 rotate-45" /> Xem đường đi

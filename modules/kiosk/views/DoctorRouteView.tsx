@@ -4,6 +4,7 @@ import { ArrowLeft, MapPin, Navigation, QrCode, CheckCircle2, Clock, User } from
 import { cn } from '@/lib/utils';
 import { useFlowStore } from '../store/flowStore';
 import { useAuthStore } from '../store/authStore';
+import { stripRoomName } from '../utils/flowHelpers';
 import { ServiceOrderModal } from '../components/ServiceOrderModal';
 import { ServicePaymentQrModal } from '../modals/ServicePaymentQrModal';
 
@@ -156,7 +157,7 @@ export const DoctorRouteView: React.FC = () => {
             )}
 
             <button
-              onClick={() => navigateToMap(activeTicket?.roomId)}
+              onClick={() => navigateToMap(stripRoomName(activeTicket?.roomNumber || ''))}
               className="w-full py-4 bg-white text-[#155DFC] rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-md hover:bg-blue-50 transition-all cursor-pointer mt-4"
             >
               <Navigation className="w-4 h-4 rotate-45" /> Xem đường đi

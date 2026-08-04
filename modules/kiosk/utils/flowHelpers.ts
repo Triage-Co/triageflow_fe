@@ -176,3 +176,14 @@ export const createPaymentBill = (
     bookingId
   };
 };
+
+export const stripRoomName = (roomName: string): string => {
+  const match = roomName.match(/^Phòng\s+(.+)$/i);
+  if (!match) return roomName;
+  const rest = match[1];
+  // Ký tự đầu sau "Phòng" là số hoặc ký hiệu -> giữ nguyên
+  if (/^[\d\W]/.test(rest)) return roomName;
+  // Ký tự đầu là chữ -> bỏ "Phòng"
+  return rest;
+};
+

@@ -3,6 +3,7 @@ import { useKioskStore } from '../store/kioskStore';
 import { ArrowLeft, Clock, MapPin } from 'lucide-react';
 
 import { useFlowStore } from '../store/flowStore';
+import { stripRoomName } from '../utils/flowHelpers';
 
 export const QueueView: React.FC = () => {
   const goHome = useKioskStore((state) => state.goHome);
@@ -74,7 +75,7 @@ export const QueueView: React.FC = () => {
             </div>
 
             <button 
-              onClick={() => navigateToMap(activeTicket?.roomId)}
+              onClick={() => navigateToMap(stripRoomName(activeTicket?.roomNumber || ''))}
               className="px-4 py-2.5 bg-[#4F80E1] text-white rounded-xl font-bold text-xs shadow-md hover:bg-blue-600 transition-colors cursor-pointer"
             >
               Xem đường đi

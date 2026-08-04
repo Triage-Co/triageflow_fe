@@ -1,7 +1,6 @@
 import { kioskApiClient } from './kioskApiClient';
 import {
   ActiveFlowKioskResponseData,
-  BookingGenerateResponseData,
   StepDetailResponseData,
   PatientFlowItem,
   StepDetailPatientResponseData,
@@ -36,12 +35,6 @@ export const flowService = {
     );
   },
 
-  fetchBookingGenerate: async (stepId: string, token?: string) => {
-    return kioskApiClient.get<BookingGenerateResponseData>(
-      `/api/booking/generate?step-id=${encodeURIComponent(stepId)}`,
-      { token }
-    );
-  },
 
   fetchStepDetail: async (stepId: string, token?: string) => {
     return kioskApiClient.get<StepDetailResponseData>(
