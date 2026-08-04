@@ -34,7 +34,12 @@ export const flowService = {
       { token }
     );
   },
-
+  fetchBookingGenerate: async (stepId: string, token?: string) => {
+    return kioskApiClient.get<any>(
+      `/api/booking/generate?step-id=${encodeURIComponent(stepId)}`,
+      { token }
+    );
+  },
 
   fetchStepDetail: async (stepId: string, token?: string) => {
     return kioskApiClient.get<StepDetailResponseData>(

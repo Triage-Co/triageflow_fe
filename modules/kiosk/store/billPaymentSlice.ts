@@ -91,6 +91,7 @@ export const createBillPaymentSlice: StateCreator<
     const kioskState = useKioskStore.getState();
     const authState = useAuthStore.getState();
     const patientId = getActivePatientId(authState);
+    const stepId = get().activeStepId;
 
     if (!patientId) {
       kioskState.showToast('Không xác định được bệnh nhân. Vui lòng quét lại CCCD!', 'error');
@@ -98,15 +99,28 @@ export const createBillPaymentSlice: StateCreator<
     }
 
     set({ isPaymentChecking: true });
-    kioskState.setLoading(true, 'Đang xác nhận thanh toán & cấp Số thứ tự...');
-
-    // Retry logic: BE cần thời gian xử lý sau khi thanh toán
-    const MAX_RETRIES = 3;
-    const RETRY_DELAY_MS = 1500;
-
-    const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    kioskState.setLoading(true, 'Đang xác nhận thanh toán...');
 
     try {
+      // 1. Gọi chạy ngầm API sinh STT / generate nếu có stepId (Direct/AI Booking)
+      if (stepId) {
+        try {
+          await flowService.fetchBookingGenerate(stepId);
+        } catch (generateError: any) {
+          console.warn('Lỗi khi gọi API generate ngầm:', generateError);
+          kioskState.showToast(
+            'Chưa ghi nhận giao dịch từ ngân hàng. Nếu bạn đã quét mã, vui lòng đợi vài giây và bấm lại!',
+            'error'
+          );
+          set({ isPaymentChecking: false });
+          kioskState.setLoading(false);
+          return false;
+        }
+      }
+      const MAX_RETRIES = 3;
+      const RETRY_DELAY_MS = 1500;
+      const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
       let success = false;
 
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -129,7 +143,7 @@ export const createBillPaymentSlice: StateCreator<
         return true;
       } else {
         kioskState.showToast(
-          'Chưa ghi nhận giao dịch từ ngân hàng. Nếu bạn đã quét mã, vui lòng đợi vài giây và bấm lại!',
+          'Không thể tải thông tin phiếu khám sau khi thanh toán. Vui lòng kiểm tra lại!',
           'error'
         );
         return false;
