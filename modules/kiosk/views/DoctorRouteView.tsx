@@ -1,10 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { useKioskStore } from '../store/kioskStore';
-import { ArrowLeft, MapPin, Navigation, QrCode, CheckCircle2, Clock, User } from 'lucide-react';
+import { ArrowLeft, MapPin, Navigation, RotateCw, CheckCircle2, Clock, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFlowStore } from '../store/flowStore';
 import { useAuthStore } from '../store/authStore';
-import { stripRoomName } from '../utils/flowHelpers';
+import { 
+  stripRoomName, 
+  activeFlowKioskRequests, 
+  doctorRouteRequests, 
+  activeTicketRequests, 
+  stepDetailRequests 
+} from '../utils/flowHelpers';
 import { ServiceOrderModal } from '../components/ServiceOrderModal';
 import { ServicePaymentQrModal } from '../modals/ServicePaymentQrModal';
 
@@ -29,6 +35,33 @@ export const DoctorRouteView: React.FC = () => {
   const activeTransactionQr = useFlowStore((state) => state.activeTransactionQr);
   const fetchPendingServiceOrders = useFlowStore((state) => state.fetchPendingServiceOrders);
   const clearTransactionQr = useFlowStore((state) => state.clearTransactionQr);
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    if (!patientId) return;
+    setIsRefreshing(true);
+    showToast('Đang cập nhật lộ trình mới nhất...', 'info');
+
+    // Xóa cache tạm để bắt buộc kéo data mới từ BE
+    activeFlowKioskRequests.clear();
+    doctorRouteRequests.clear();
+    activeTicketRequests.clear();
+    stepDetailRequests.clear();
+
+    try {
+      await Promise.all([
+        useFlowStore.getState().fetchActiveTicketForPatient(patientId),
+        useFlowStore.getState().fetchDoctorRouteSteps(patientId)
+      ]);
+      showToast('Cập nhật lộ trình thành công!', 'success');
+    } catch (error) {
+      console.error('Lỗi khi cập nhật lộ trình:', error);
+      showToast('Cập nhật lộ trình thất bại. Vui lòng thử lại!', 'error');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const handleOpenServiceOrders = async () => {
     if (patientId) {
@@ -73,6 +106,8 @@ export const DoctorRouteView: React.FC = () => {
 
   const currentStepItem = routeSteps.find(s => s.status === 'in_progress') || routeSteps.find(s => s.status === 'pending') || routeSteps[0];
   const activeQueueNo = currentStepItem?.queueNo || activeTicket?.ticketNumber || undefined;
+  
+  const isPaymentStep = currentStepItem?.title?.toLowerCase().trim().startsWith('thanh toán') || false;
 
   return (
     <div className="flex-1 min-h-0 px-8 py-6 z-10 flex flex-col gap-5">
@@ -99,10 +134,12 @@ export const DoctorRouteView: React.FC = () => {
           </button>
 
           <button
-            onClick={() => showToast('Đang mở Master QR Lộ trình...', 'info')}
-            className="flex items-center gap-2 px-5 py-2.5 bg-white rounded-2xl text-xs lg:text-sm font-extrabold text-[#1E2939] shadow-sm border border-neutral-200 hover:bg-neutral-50 transition-all cursor-pointer"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center gap-2 px-5 py-2.5 bg-white rounded-2xl text-xs lg:text-sm font-extrabold text-[#1E2939] shadow-sm border border-neutral-200 hover:bg-neutral-50 active:scale-95 disabled:opacity-60 transition-all cursor-pointer"
           >
-            <QrCode className="w-4 h-4 text-[#155DFC]" /> Master QR
+            <RotateCw className={cn("w-4 h-4 text-[#155DFC]", isRefreshing && "animate-spin")} />
+            Cập nhật
           </button>
         </div>
       </div>
@@ -114,7 +151,7 @@ export const DoctorRouteView: React.FC = () => {
           <div className="bg-[#4F80E1] text-white rounded-[28px] p-6 shadow-xl flex flex-col justify-between flex-1 h-full">
             {currentStepItem ? (
               <div className="space-y-4">
-                <span className="text-xs font-black text-blue-100 uppercase tracking-wider block">Điểm đến hiện tại</span>
+                <span className="text-xs font-black text-blue-100 uppercase tracking-wider block">{isPaymentStep ? 'Thanh toán hiện tại' : 'Điểm đến hiện tại'}</span>
 
                 <div className="space-y-1">
                   <h3 className="text-3xl lg:text-4xl font-black">{currentStepItem.title}</h3>
@@ -157,8 +194,14 @@ export const DoctorRouteView: React.FC = () => {
             )}
 
             <button
-              onClick={() => navigateToMap(stripRoomName(activeTicket?.roomNumber || ''))}
-              className="w-full py-4 bg-white text-[#155DFC] rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-md hover:bg-blue-50 transition-all cursor-pointer mt-4"
+              onClick={() => !isPaymentStep && navigateToMap(stripRoomName(currentStepItem?.room || ''))}
+              disabled={isPaymentStep}
+              className={cn(
+                "w-full py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-md transition-all mt-4",
+                isPaymentStep
+                  ? "bg-blue-300/40 text-blue-100/60 border border-blue-300/20 cursor-not-allowed shadow-none"
+                  : "bg-white text-[#155DFC] hover:bg-blue-50 active:scale-95 cursor-pointer"
+              )}
             >
               <Navigation className="w-4 h-4 rotate-45" /> Xem đường đi
             </button>

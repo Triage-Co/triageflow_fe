@@ -99,6 +99,10 @@ export const mapApiToTicketData = (stepData: any, patientInfo: any, bookingId: s
   const slotObj = stepData.flow?.booking?.slot;
 
   const queueNumber = queueObj?.queue_number ?? stepData.queue_number ?? stepData.queueNo ?? '';
+  const stepName = stepData.step_name ?? '';
+  const isPaymentStep = stepName.toLowerCase().trim().startsWith('thanh toán');
+
+  const roomNumber = isPaymentStep ? '---' : (roomObj?.room_name ?? '');
 
   return {
     ticketNumber: queueNumber,
@@ -108,7 +112,7 @@ export const mapApiToTicketData = (stepData: any, patientInfo: any, bookingId: s
       ? new Date(stepData.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
       : new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
     clinicName: specialtyObj?.specialty_name ?? '',
-    roomNumber: roomObj?.room_name ?? '',
+    roomNumber: roomNumber,
     location: '',
     doctorName: staffObj?.full_name ?? '',
     status: stepData.step_status === 'COMPLETED' ? 'completed' : 'waiting',
@@ -118,7 +122,8 @@ export const mapApiToTicketData = (stepData: any, patientInfo: any, bookingId: s
     stepId: stepData.step_id,
     bookingId: bookingId || stepData.flow_id || undefined,
     startTime: slotObj?.start_time ?? '',
-    roomId: roomObj?.physical_room_id || roomObj?.room_id || stepData.room_id || undefined
+    roomId: isPaymentStep ? undefined : (roomObj?.physical_room_id || roomObj?.room_id || stepData.room_id || undefined),
+    stepName: stepName,
   };
 };
 
@@ -127,7 +132,10 @@ export const mapApiToRouteSteps = (detailedSteps: any[]): RouteStepItem[] => {
     const step = result.status === 'fulfilled' ? result.value : result;
 
     const roomObj = step.room_info || step.room || step.flow?.booking?.slot?.shift?.room;
-    const roomName = roomObj?.room_name || '';
+    const stepName = step.step_name || '';
+    const isPaymentStep = stepName.toLowerCase().trim().startsWith('thanh toán');
+
+    const roomName = isPaymentStep ? '---' : (roomObj?.room_name || '');
 
     const specialtyObj = step.specialty_info || step.specialty || roomObj?.specialty;
     const specialtyName = specialtyObj?.specialty_name || '';
@@ -146,7 +154,7 @@ export const mapApiToRouteSteps = (detailedSteps: any[]): RouteStepItem[] => {
 
     return {
       id: index + 1,
-      title: step.step_name || specialtyName || roomName || `Bước ${index + 1}`,
+      title: stepName || specialtyName || roomName || `Bước ${index + 1}`,
       subtitle: staffName || specialtyName || '',
       room: roomName || undefined,
       location: undefined,

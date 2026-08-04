@@ -74,6 +74,7 @@ export interface TicketData {
   bookingId?: string;
   startTime?: string;
   roomId?: string;
+  stepName?: string;
 }
 
 export interface PaymentItem {
