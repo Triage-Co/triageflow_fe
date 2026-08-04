@@ -209,11 +209,6 @@ export const SpecialtySelectView: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* Footer Info */}
-      <div className="text-center text-xs font-semibold text-neutral-400">
-        Bệnh viện Kiosk • Chọn chuyên khoa để đăng ký khám bệnh
-      </div>
     </div>
   );
 };

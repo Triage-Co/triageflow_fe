@@ -156,7 +156,7 @@ export function buildFloorSlab(scene: THREE.Scene, floorData: FloorData3D) {
 
     const slabMat = createSlabMaterial();
     const slabMesh = new THREE.Mesh(slabGeo, slabMat);
-    slabMesh.position.y = -0.5;
+    slabMesh.position.y = 0;
     slabMesh.receiveShadow = true;
     scene.add(slabMesh);
   } else {

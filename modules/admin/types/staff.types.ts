@@ -2,7 +2,7 @@ export interface StaffAccount {
     avatar: string | null;
     user_name: string;
     email: string;
-    role: 'DOCTOR' | 'RECEPTIONIST' | 'DOCTOR' | 'LAB_STAFF' | 'PHARMACY_STAFF' | 'CASHIER' | 'ADMIN' | 'NURSE';
+    role: 'DOCTOR' | 'RECEPTIONIST' | 'LAB_STAFF' | 'LAB_TECHNICIAN' | 'PHARMACY_STAFF' | 'PHARMACIST' | 'CASHIER' | 'ADMIN' | 'NURSE';
     gender: 'MALE' | 'FEMALE' | 'OTHER';
     phone: string;
     is_banned: boolean;

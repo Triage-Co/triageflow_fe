@@ -28,6 +28,7 @@ import {
     getQuestionType,
     isGroupMultipleQuestion,
     localizeInfermedicaQuestion,
+    localizeInfermedicaQuestionAsync,
 } from '@/modules/reception/utils/infermedicaInterviewI18n';
 import {
     resolveFinalDepartment,
@@ -215,7 +216,7 @@ async function ensurePatientForTriage(params: {
     );
 }
 
-function buildPendingSession(params: {
+async function buildPendingSession(params: {
     interviewToken: string;
     evidence: InfermedicaEvidence[];
     question: InfermedicaQuestion;
@@ -223,16 +224,17 @@ function buildPendingSession(params: {
     requiredQuestions: number;
     isEmergency?: boolean;
     base?: SymptomTriageSession;
-}): SymptomTriageSession {
+}): Promise<SymptomTriageSession> {
     const { interviewToken, evidence, question, questionsAnswered, requiredQuestions, isEmergency, base } =
         params;
+    const localizedQuestion = await localizeInfermedicaQuestionAsync(question);
     return {
         interview_token: interviewToken,
         evidence: sanitizeEvidenceForApi(evidence),
         triage_level: null,
         triage_label: null,
         recommended_specialist: null,
-        pending_question: localizeInfermedicaQuestion(question),
+        pending_question: localizedQuestion,
         pending_item_index: 0,
         recommended_department_id: base?.recommended_department_id ?? null,
         recommended_department_label: base?.recommended_department_label ?? null,
@@ -410,7 +412,7 @@ export const symptomTriageService = {
         });
 
         return {
-            session: buildPendingSession({
+            session: await buildPendingSession({
                 interviewToken,
                 evidence,
                 question,
@@ -559,7 +561,7 @@ export const symptomTriageService = {
                 next_type: nextQuestion.type,
             });
             return {
-                session: buildPendingSession({
+                session: await buildPendingSession({
                     interviewToken,
                     evidence,
                     question: nextQuestion,

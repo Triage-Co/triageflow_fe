@@ -12,7 +12,7 @@ export interface ApiBoundary {
   roomId: string | null;
   areaId: string | null;
   seqNo: number;
-  boundaryType: 'WALL' | 'DOOR' | 'WINDOW' | 'CORRIDOR' | 'OPENING';
+  boundaryType: 'WALL' | 'DOOR' | 'WINDOW' | 'OPEN';
   adjacentRoomId: string | null;
   hasWall: boolean;
   doorId: string | null;
@@ -28,9 +28,9 @@ export interface ApiRoom {
   floorId: string;
   roomCode: string;
   roomLabel: string;
-  type: string; // e.g. "CONSULTATION", "WAITING", "RESTROOM", "OTHER"
   heightMeters: number;
   areaId?: string | null;
+  type?: string;
   centerGeom: {
     type: 'Point';
     coordinates: [number, number]; // [lng, lat]
@@ -70,6 +70,14 @@ export interface ApiNode {
   };
 }
 
+export interface ApiEdge {
+  id: string;
+  fromNodeId: string;
+  toNodeId: string;
+  distance?: number;
+  active?: boolean;
+}
+
 export interface ApiArea {
   id: string;
   floorId: string;
@@ -104,6 +112,7 @@ export interface ApiFloor {
   areas?: ApiArea[];
   standaloneBoundaries?: ApiBoundary[];
   nodes?: ApiNode[];
+  edges?: ApiEdge[];
 }
 
 export interface BuildingMapData {
@@ -116,4 +125,35 @@ export interface BuildingMapResponse {
   message: string;
   status: string;
   data: BuildingMapData;
+}
+
+export type RouteLocationType = 'ROOM' | 'POI' | 'NODE';
+
+export interface RoutePathNode {
+  id: string;
+  type: string;
+  coords: [number, number]; // [lng, lat]
+  metadata?: Record<string, unknown> | null;
+  floorId: string;
+  floorNumber: number;
+}
+
+export interface RouteResult {
+  totalDistance: number;
+  path: RoutePathNode[];
+}
+
+export interface FetchRouteParams {
+  startType: RouteLocationType;
+  startId: string;
+  targetType: RouteLocationType;
+  targetId: string;
+}
+
+/** MPRSS corridor algorithm debug geometry layers */
+export interface CorridorDebugSteps {
+  pbPoints: [number, number][];
+  tinEdges: [[number, number], [number, number]][];
+  zigzagEdges: [[number, number], [number, number]][];
+  pmidPoints: [number, number][];
 }

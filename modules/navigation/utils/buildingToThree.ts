@@ -10,7 +10,7 @@ export interface WallSegment {
   startZ: number;
   endX: number;
   endZ: number;
-  boundaryType: 'WALL' | 'DOOR' | 'WINDOW' | 'CORRIDOR' | 'OPENING';
+  boundaryType: 'WALL' | 'DOOR' | 'WINDOW' | 'OPEN';
   length: number;
   angle: number;
   centerX: number;
@@ -50,7 +50,6 @@ export interface RoomData {
   id: string;
   roomCode: string;
   roomLabel: string;
-  type: string;
   areaId: string | null;
   /** Polygon outline points (x = East/West, z = North/South) */
   points: { x: number; z: number }[];
@@ -75,6 +74,8 @@ export interface FloorData3D {
   floorOutlinePoints: { x: number; z: number }[];
   floorWidth: number;
   floorHeight: number;
+  floorId?: string;
+  floorNumber?: number;
   bounds: {
     minX: number;
     maxX: number;
@@ -82,6 +83,35 @@ export interface FloorData3D {
     maxZ: number;
   };
   standaloneWalls: WallSegment[];
+  /** Shift applied when converting GeoJSON lng/lat → local meters */
+  centerShiftX: number;
+  centerShiftZ: number;
+}
+
+/** Convert WGS84 lng/lat to local Three.js XZ using the same shift as floorToRoomData */
+export function lngLatToLocal(
+  lng: number,
+  lat: number,
+  centerShiftX: number,
+  centerShiftZ: number
+): { x: number; z: number } {
+  return {
+    x: lng * DEG_TO_METER_X - centerShiftX,
+    z: -(lat * DEG_TO_METER_Z) - centerShiftZ,
+  };
+}
+
+/** Inverse of lngLatToLocal */
+export function localToLngLat(
+  x: number,
+  z: number,
+  centerShiftX: number,
+  centerShiftZ: number
+): { lng: number; lat: number } {
+  return {
+    lng: (x + centerShiftX) / DEG_TO_METER_X,
+    lat: -((z + centerShiftZ) / DEG_TO_METER_Z),
+  };
 }
 
 // ─── Area Colors ─────────────────────────────────────────────────────────────
@@ -114,19 +144,6 @@ function getRoomIcon(label: string): string {
   if (l.includes('tiêm chủng')) return '💉';
   if (l.includes('tiếp nhận')) return '🏥';
   return '🏥';
-}
-
-function getRoomColor(type: string): string {
-  switch (type) {
-    case 'CONSULTATION':
-      return '#e0f2fe';
-    case 'WAITING':
-      return '#f0fdf4';
-    case 'RESTROOM':
-      return '#fef2f2';
-    default:
-      return '#f1f5f9';
-  }
 }
 
 // ─── Boundary → Wall Segment ───────────────────────────────────────────────────
@@ -282,7 +299,6 @@ export function floorToRoomData(floor: ApiFloor): FloorData3D {
       id: room.id,
       roomCode: room.roomCode,
       roomLabel: room.roomLabel,
-      type: room.type,
       areaId: room.areaId ?? null,
       points: centeredPoints,
       walls,
@@ -291,7 +307,7 @@ export function floorToRoomData(floor: ApiFloor): FloorData3D {
       width,
       depth,
       height: 2.5,
-      color: getRoomColor(room.type),
+      color: '#f1f5f9',
       pinColor: '#155DFC',
       pinIcon: getRoomIcon(room.roomLabel),
     };
@@ -417,6 +433,10 @@ export function floorToRoomData(floor: ApiFloor): FloorData3D {
     floorOutlinePoints,
     floorWidth: globalMaxX - globalMinX,
     floorHeight: globalMaxZ - globalMinZ,
+    floorId: floor.id,
+    floorNumber: floor.floorNumber,
+    centerShiftX,
+    centerShiftZ,
     bounds: {
       minX: globalMinX - centerShiftX,
       maxX: globalMaxX - centerShiftX,

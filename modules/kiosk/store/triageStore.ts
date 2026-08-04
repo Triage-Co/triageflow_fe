@@ -11,6 +11,7 @@ import {
     InfermedicaRecommendedSpecialist
 } from '../types/triage.types';
 import { deepseekTranslationService } from '../services/deepseekTranslationService';
+import { calculateAgeFromDob } from '../utils/kioskHelpers';
 
 const compileGlobalStaticSymptomMap = (): Record<string, string> => {
     const map: Record<string, string> = {};
@@ -30,6 +31,21 @@ const compileGlobalStaticSymptomMap = (): Record<string, string> => {
 };
 
 const GLOBAL_STATIC_SYMPTOM_MAP = compileGlobalStaticSymptomMap();
+
+const cleanId = (id: string | number | undefined): string => {
+    if (!id) return '';
+    return String(id).replace(/^s_/i, '').trim().toLowerCase();
+};
+
+const findSymptomInDataset = (dataset: Record<string, any>, targetId: string) => {
+    for (const zone of Object.values(dataset)) {
+        if (zone.symptoms && Array.isArray(zone.symptoms)) {
+            const found = zone.symptoms.find((s: any) => cleanId(s.id) === targetId);
+            if (found) return found;
+        }
+    }
+    return null;
+};
 
 interface TriageStoreState {
     currentRegionSymptoms: SymptomItem[];
@@ -59,7 +75,7 @@ interface TriageStoreState {
     resetTriageFlow: () => void;
 }
 
-export const useTriageStore = create<TriageStoreState>((set, get) => ({
+const initialState = {
     currentRegionSymptoms: [],
     isApiLoading: false,
     selectedSymptoms: [],
@@ -67,25 +83,17 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
     symptomDuration: '',
     painLevel: 0,
     hasEmergency: false,
-
     accumulatedEvidence: [],
     interviewToken: null,
     currentQuestion: null,
     recommendedSpecialists: [],
+};
+
+export const useTriageStore = create<TriageStoreState>((set, get) => ({
+    ...initialState,
 
     clearTriage: () => {
-        set({
-            currentRegionSymptoms: [],
-            selectedSymptoms: [],
-            symptomLabelToIdMap: {},
-            symptomDuration: '',
-            painLevel: 0,
-            hasEmergency: false,
-            accumulatedEvidence: [],
-            interviewToken: null,
-            currentQuestion: null,
-            recommendedSpecialists: []
-        });
+        set(initialState);
     },
     resetTriageFlow: () => {
         get().clearTriage();
@@ -113,14 +121,7 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
 
         const englishPhrase = foundKey ? foundKey : regionId;
 
-        let patientAge = 30;
-        if (dob) {
-            const dobParts = dob.split('/');
-            if (dobParts.length === 3) {
-                const parsedYear = parseInt(dobParts[2], 10);
-                if (!isNaN(parsedYear)) patientAge = 2026 - parsedYear;
-            }
-        }
+        const patientAge = calculateAgeFromDob(dob);
 
         set({ isApiLoading: true });
         try {
@@ -129,21 +130,6 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
             if (response && response.status === 'success' && Array.isArray(response.data)) {
                 const mergedList = [...get().currentRegionSymptoms];
                 let hasNewUpdates = false;
-
-                const cleanId = (id: string | number | undefined): string => {
-                    if (!id) return '';
-                    return String(id).replace(/^s_/i, '').trim().toLowerCase();
-                };
-
-                const findSymptomInDataset = (dataset: Record<string, any>, targetId: string) => {
-                    for (const zone of Object.values(dataset)) {
-                        if (zone.symptoms && Array.isArray(zone.symptoms)) {
-                            const found = zone.symptoms.find((s: any) => cleanId(s.id) === targetId);
-                            if (found) return found;
-                        }
-                    }
-                    return null;
-                };
 
                 const currentGenderDataset = gender === 'female' ? femaleSymptomDataset : maleSymptomDataset;
                 const oppositeGenderDataset = gender === 'female' ? maleSymptomDataset : femaleSymptomDataset;
@@ -207,15 +193,7 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
 
         set({ accumulatedEvidence: initialEvidence });
 
-        let patientAge = 30;
-        const dob = authState.patientInfo?.dob;
-        if (dob) {
-            const dobParts = dob.split('/');
-            if (dobParts.length === 3) {
-                const parsedYear = parseInt(dobParts[2], 10);
-                if (!isNaN(parsedYear)) patientAge = 2026 - parsedYear;
-            }
-        }
+        const patientAge = calculateAgeFromDob(authState.patientInfo?.dob);
 
         const payload = {
             sex: kioskState.selectedGender === 'female' ? 'female' : 'male',
@@ -279,20 +257,10 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
         if (!token) return;
 
         set({ isApiLoading: true });
-
-        // Cộng dồn toàn bộ mảng câu trả lời mới vào kho dữ liệu cũ
         const updatedEvidence = [...get().accumulatedEvidence, ...answers];
         set({ accumulatedEvidence: updatedEvidence });
 
-        let patientAge = 30;
-        const dob = authState.patientInfo?.dob;
-        if (dob) {
-            const dobParts = dob.split('/');
-            if (dobParts.length === 3) {
-                const parsedYear = parseInt(dobParts[2], 10);
-                if (!isNaN(parsedYear)) patientAge = 2026 - parsedYear;
-            }
-        }
+        const patientAge = calculateAgeFromDob(authState.patientInfo?.dob);
 
         const payload = {
             sex: kioskState.selectedGender === 'female' ? 'female' : 'male',

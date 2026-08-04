@@ -1,11 +1,11 @@
 'use client';
 
+import { useAuthStore } from '@/modules/auth/store/authStore';
 import { useEffect, useState, useTransition } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Loader2, AlertCircle, CreditCard, Copy, Check } from 'lucide-react';
 import { formatCaughtError } from '@/shared/utils/apiError';
 import { ApiError } from '@/shared/services/apiClient';
-import { useAuthStore } from '@/modules/auth/store/authStore';
 import { receptionService } from '@/modules/reception/services/receptionService';
 import {
     getTodayDateString,

@@ -42,14 +42,18 @@ export function AdminCreateUserPage() {
         setIsCreating(true);
         setCreateError(null);
         try {
-            const STAFF_ROLES = ['DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_STAFF', 'LAB_TECHNICIAN', 'PHARMACY_STAFF', 'CASHIER', 'ADMIN'];
+            const STAFF_ROLES = ['DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_STAFF', 'LAB_TECHNICIAN', 'PHARMACY_STAFF', 'PHARMACIST', 'CASHIER', 'ADMIN'];
+            let sendRole = createForm.role as string;
+            if (sendRole === 'PHARMACY_STAFF') sendRole = 'PHARMACIST';
+            if (sendRole === 'LAB_STAFF') sendRole = 'LAB_TECHNICIAN';
+
             if (STAFF_ROLES.includes(createForm.role) && accessToken) {
                 await staffService.createStaff({
                     user_name: createForm.user_name.trim(),
                     password: createForm.password,
                     full_name: createForm.user_name.trim(),
                     email: createForm.email.trim(),
-                    role: createForm.role,
+                    role: sendRole,
                     gender: createForm.gender,
                     phone: createForm.phone.trim(),
                 }, accessToken);
@@ -188,9 +192,9 @@ export function AdminCreateUserPage() {
                                         <option value="DOCTOR">Bác sĩ</option>
                                         <option value="NURSE">Y tá / Điều dưỡng</option>
                                         <option value="RECEPTIONIST">Lễ tân</option>
-                                        <option value="LAB_STAFF">Xét nghiệm (LAB_STAFF)</option>
                                         <option value="LAB_TECHNICIAN">Kỹ thuật viên Xét nghiệm</option>
-                                        <option value="PHARMACY_STAFF">Dược sĩ</option>
+                                        <option value="PHARMACIST">Dược sĩ (PHARMACIST)</option>
+                                        <option value="PHARMACY_STAFF">Dược sĩ (PHARMACY_STAFF)</option>
                                         <option value="CASHIER">Thu ngân</option>
                                         <option value="ADMIN">Quản trị viên</option>
                                         <option value="USER">Bệnh nhân</option>

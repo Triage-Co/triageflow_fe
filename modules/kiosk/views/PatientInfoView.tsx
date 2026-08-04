@@ -14,12 +14,15 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useFlowStore } from '../store/flowStore';
+import { stripRoomName } from '../utils/flowHelpers';
+import { cn } from '@/lib/utils';
 
 export const PatientInfoView: React.FC = () => {
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   const goHome = useKioskStore((state) => state.goHome);
   const navigateToView = useKioskStore((state) => state.navigateToView);
+  const navigateToMap = useKioskStore((state) => state.navigateToMap);
   const selectedDoctor = useKioskStore((state) => state.selectedDoctor);
   const activeTicket = useFlowStore((state) => state.activeTicket);
   const patientInfo = useAuthStore((state) => state.patientInfo);
@@ -34,6 +37,8 @@ export const PatientInfoView: React.FC = () => {
   const currentCallingNo = activeTicket?.currentCallingNo || ticketNo;
   const waitingCount = activeTicket?.waitingCount ?? 3;
   const estimatedWait = activeTicket?.estimatedWaitMinutes ?? 10;
+  
+  const isPaymentStep = activeTicket?.stepName?.toLowerCase().trim().startsWith('thanh toán') || false;
   
   // Dynamic QR Code for Ticket
   const qrTicketUrl = ticketNo && ticketNo !== '---' 
@@ -177,7 +182,7 @@ export const PatientInfoView: React.FC = () => {
               </div>
 
               <div className="space-y-1 text-sm font-bold text-neutral-700">
-                {roomName && <p className="text-lg font-black text-[#1E2939]">Phòng: {roomName}</p>}
+                {roomName && roomName !== '---' && <p className="text-lg font-black text-[#1E2939]">Phòng: {roomName}</p>}
                 {specialtyName && <p>{specialtyName}</p>}
                 {doctorName && <p className="text-xs text-neutral-500">Bác sĩ: {doctorName}</p>}
               </div>
@@ -284,7 +289,7 @@ export const PatientInfoView: React.FC = () => {
           {/* Card 1: Điểm đến hiện tại (Solid Blue Gradient Card) */}
           <div className="bg-gradient-to-br from-[#77A5F8] to-[#5588EC] text-white rounded-[28px] p-6 shadow-xl flex flex-col justify-between flex-1 space-y-4">
             <div className="space-y-2">
-              <span className="text-xs font-black text-blue-100 uppercase tracking-wider block">Điểm đến hiện tại</span>
+              <span className="text-xs font-black text-blue-100 uppercase tracking-wider block">{isPaymentStep ? 'Thanh toán hiện tại' : 'Điểm đến hiện tại'}</span>
               <h3 className="text-3xl lg:text-4xl font-black text-white">{roomName || '---'}</h3>
               {specialtyName && (
                 <p className="text-base font-bold text-blue-100">{specialtyName}</p>
@@ -292,8 +297,14 @@ export const PatientInfoView: React.FC = () => {
             </div>
 
             <button
-              onClick={() => navigateToView('map')}
-              className="w-full py-3.5 bg-white text-[#155DFC] rounded-2xl font-black text-xs lg:text-sm flex items-center justify-center gap-2 shadow-md hover:bg-blue-50 transition-all cursor-pointer mt-4"
+              onClick={() => !isPaymentStep && navigateToMap(stripRoomName(activeTicket?.roomNumber || ''))}
+              disabled={isPaymentStep}
+              className={cn(
+                "w-full py-3.5 rounded-2xl font-black text-xs lg:text-sm flex items-center justify-center gap-2 shadow-md transition-all mt-4",
+                isPaymentStep 
+                  ? "bg-neutral-100 text-neutral-400 border border-neutral-200 cursor-not-allowed shadow-none" 
+                  : "bg-white text-[#155DFC] hover:bg-blue-50 active:scale-95 cursor-pointer"
+              )}
             >
               <Navigation className="w-4 h-4 rotate-45" /> Xem đường đi
             </button>
@@ -353,21 +364,15 @@ export const PatientInfoView: React.FC = () => {
               </span>
             </div>
 
-            {/* 3 Metric Cards */}
-            <div className="grid grid-cols-3 gap-4">
-              {/* Metric 1 */}
-              <div className="bg-[#F8FAFC] rounded-2xl p-5 border border-neutral-100 text-center space-y-1">
-                <span className="text-xs font-bold text-neutral-400 block">Số đang gọi</span>
-                <span className="text-3xl lg:text-4xl font-black text-[#1E2939] block">{currentCallingNo || '---'}</span>
-              </div>
-
-              {/* Metric 2 (Highlighted Blue) */}
+            {/* 2 Metric Cards */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* Metric 1 (Highlighted Blue) */}
               <div className="bg-[#D6E6FE] rounded-2xl p-5 border-2 border-[#A4C8FF] text-center space-y-1 shadow-sm">
                 <span className="text-xs font-bold text-[#155DFC] block">Số của bạn</span>
                 <span className="text-3xl lg:text-4xl font-black text-[#0F2C59] block">{ticketNo || '---'}</span>
               </div>
 
-              {/* Metric 3 */}
+              {/* Metric 2 */}
               <div className="bg-[#F8FAFC] rounded-2xl p-5 border border-neutral-100 text-center space-y-1">
                 <span className="text-xs font-bold text-neutral-400 block">Thời gian chờ</span>
                 <div className="flex items-baseline justify-center gap-1">

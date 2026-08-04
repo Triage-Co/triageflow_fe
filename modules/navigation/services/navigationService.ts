@@ -1,7 +1,12 @@
 import { apiClient } from '@/shared/services/apiClient';
-import { BuildingMapData } from '../types/navigation.types';
+import {
+  BuildingMapData,
+  FetchRouteParams,
+  RouteResult,
+} from '../types/navigation.types';
 
-export const HARDCODED_BUILDING_ID = '00b03ef8-7702-4b08-a07e-ec887432453c';
+/** Seed building: Tòa G2 – Khoa Khám Bệnh */
+export const HARDCODED_BUILDING_ID = '17854b86-79d1-4c60-b776-784742c2597e';
 
 let cachedBuildingData: BuildingMapData | null = null;
 let buildingDataPromise: Promise<BuildingMapData> | null = null;
@@ -38,4 +43,26 @@ export async function fetchBuildingMap(
     });
 
   return buildingDataPromise;
+}
+
+/**
+ * Finds the shortest indoor path between two locations via backend A*.
+ */
+export async function fetchRoute(params: FetchRouteParams): Promise<RouteResult> {
+  const query = new URLSearchParams({
+    startType: params.startType,
+    startId: params.startId,
+    targetType: params.targetType,
+    targetId: params.targetId,
+  });
+
+  const response = await apiClient.get<RouteResult>(
+    `/api/navigation/route?${query.toString()}`
+  );
+
+  if (!response.data) {
+    throw new Error('Invalid route API response format');
+  }
+
+  return response.data;
 }

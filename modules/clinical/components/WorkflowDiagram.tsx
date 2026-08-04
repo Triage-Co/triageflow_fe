@@ -27,8 +27,18 @@ import {
     extractFlowSteps,
     resolvePatientFlow,
 } from '@/modules/clinical/services/clinicalService';
-import { serviceOrderService } from '@/modules/clinical/services/serviceOrderService';
-import type { ServiceOrderStatus } from '@/modules/clinical/types/serviceOrder.types';
+import {
+    extractServiceOrderList,
+    serviceOrderService,
+} from '@/modules/clinical/services/serviceOrderService';
+import type { ServiceOrder } from '@/modules/clinical/types/serviceOrder.types';
+import {
+    filterOrdersByBookingId,
+    getOrderDisplayName,
+    getOrderRoomType,
+    getOrderServiceCode,
+    getServiceOrderId,
+} from '@/modules/clinical/types/serviceOrder.types';
 import { useAuthStore } from '@/store/authStore';
 import { useRoomStore } from '@/modules/admin/store/roomStore';
 import { useStaffStore } from '@/modules/admin/store/staffStore';
@@ -77,7 +87,7 @@ interface FlowNode {
     roomName?: string;
     staffName?: string;
     detail?: {
-        source: 'live' | 'draft' | 'default';
+        source: 'live' | 'draft' | 'default' | 'service-order';
         stepStatus?: string;
         roomId?: string;
         specialtyName?: string;
@@ -85,6 +95,9 @@ interface FlowNode {
         staffId?: string;
         paymentStatus?: string;
         docNo?: string;
+        serviceOrderId?: string;
+        serviceCode?: string;
+        totalPrice?: number;
     };
 }
 
@@ -95,6 +108,8 @@ interface WorkflowDiagramProps {
     refreshKey?: number;
     /** Sync resolved flow_id / booking_id back to patient context after active-flow fetch. */
     onFlowResolved?: (info: { flowId: string; bookingId: string }) => void;
+    /** Notify parent panels with the latest flow snapshot after step mutations. */
+    onFlowChanged?: (flow: Record<string, unknown> | null) => void;
 }
 
 const DEFAULT_FULL_WORKFLOW: FlowNode[] = [
@@ -136,12 +151,18 @@ function stripPaymentPrefix(name: string): string {
         .trim();
 }
 
+function titleCaseFirstChar(value: string): string {
+    const text = (value || '').trim();
+    if (!text) return text;
+    return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 /**
  * Payment for the specialist exam / queue ticket itself (not CLS).
  * e.g. "Thanh toán khám chuyên khoa", "Thanh toán viện phí".
  * Do NOT treat CLS fees like "Thanh toán: Khám ngoại khoa" as exam payment.
  */
-function isExamPaymentStepName(name: string): boolean {
+export function isExamPaymentStepName(name: string): boolean {
     if (!isPaymentStepName(name)) return false;
     const rest = stripPaymentPrefix(name);
     if (!rest) return true;
@@ -632,7 +653,7 @@ function pickLiveRequiredStepId(step: Record<string, unknown> | null | undefined
 
 /**
  * Order live flow steps for timeline display.
- * Spine: Đặt khám → Thanh toán khám chuyên khoa → Khám bệnh → (CLS service → payment)…
+ * Spine: Thanh toán khám chuyên khoa → Khám bệnh → (template: Đăng ký → Khám chuyên khoa → CLS…)
  */
 export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
     if (!Array.isArray(steps) || steps.length <= 1) return steps;
@@ -645,7 +666,10 @@ export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
         orderNum: number | null;
         createdAt: number;
         dependsOn: string[];
+        requiredStepId: string;
         stepId: string;
+        liveStepId: string;
+        templateStepId: string;
         stepName: string;
         stepNameLower: string;
         serviceCode: string;
@@ -653,6 +677,25 @@ export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
         isExamPayment: boolean;
         isBooking: boolean;
         isExam: boolean;
+    };
+
+    /** Admin template / registration-first rank (lower = earlier). */
+    const templateLikeRank = (nameLower: string): number => {
+        if (
+            nameLower.includes('đăng ký') ||
+            nameLower.includes('dang ky') ||
+            nameLower.includes('phân loại') ||
+            nameLower.includes('phan loai') ||
+            nameLower.includes('tiếp đón') ||
+            nameLower.includes('tiep don') ||
+            nameLower.includes('tiếp nhận') ||
+            nameLower.includes('tiep nhan')
+        ) {
+            return 0;
+        }
+        if (nameLower.includes('triage')) return 1;
+        if (nameLower.includes('chuyên khoa') || nameLower.includes('chuyen khoa')) return 2;
+        return 40;
     };
 
     const rows: Row[] = steps.map((item, index) => {
@@ -665,11 +708,10 @@ export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
         const dependsOn = Array.isArray(rec.depends_on)
             ? (rec.depends_on as unknown[]).filter((d): d is string => typeof d === 'string')
             : [];
-        const stepId =
-            (typeof rec.template_step_id === 'string' && rec.template_step_id) ||
-            (typeof rec.step_id === 'string' && rec.step_id) ||
-            `idx-${index}`;
-        const liveStepId = typeof rec.step_id === 'string' ? rec.step_id : '';
+        const templateStepId =
+            typeof rec.template_step_id === 'string' ? rec.template_step_id.trim() : '';
+        const liveStepId = typeof rec.step_id === 'string' ? rec.step_id.trim() : '';
+        const stepId = templateStepId || liveStepId || `idx-${index}`;
         const stepName = String(rec.step_name || '').trim();
         const stepNameLower = normalizeStepLabel(stepName);
         const stepType = String(rec.step_type || '').toUpperCase();
@@ -691,7 +733,10 @@ export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
             orderNum,
             createdAt,
             dependsOn,
+            requiredStepId: pickLiveRequiredStepId(rec),
             stepId,
+            liveStepId,
+            templateStepId,
             stepName,
             stepNameLower,
             serviceCode: pickLiveServiceCode(rec),
@@ -702,15 +747,16 @@ export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
         };
     });
 
+    /** Prefer template order (step_N / depends_on / đăng ký→khám) over createdAt (often inverted). */
     const sortStable = (a: Row, b: Row) => {
         if (a.orderNum != null && b.orderNum != null && a.orderNum !== b.orderNum) {
             return a.orderNum - b.orderNum;
         }
         if (a.orderNum != null && b.orderNum == null) return -1;
         if (b.orderNum != null && a.orderNum == null) return 1;
-        if (Number.isFinite(a.createdAt) && Number.isFinite(b.createdAt) && a.createdAt !== b.createdAt) {
-            return a.createdAt - b.createdAt;
-        }
+        const ra = templateLikeRank(a.stepNameLower);
+        const rb = templateLikeRank(b.stepNameLower);
+        if (ra !== rb) return ra - rb;
         return a.index - b.index;
     };
 
@@ -725,112 +771,88 @@ export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
     };
 
     /**
-     * Pair each CLS service with its payment AFTER it.
-     * Matches "Thanh toán: X" / "Thanh toán X" to service "X" (and by service_code).
+     * Order template / CLS block by depends_on (BE source of truth).
+     * Do not force service↔payment rewrite — keep API dependency order.
      */
-    const orderServiceThenPayment = (block: Row[]): Row[] => {
+    const orderRestBlock = (block: Row[]): Row[] => {
         if (block.length <= 1) return block;
 
-        const used = new Set<number>();
-        const result: Row[] = [];
-        const payments = block.filter((r) => r.isPayment && !r.isExamPayment);
-        const services = [...block.filter((r) => !r.isPayment)].sort(sortStable);
+        const idToRow = new Map<string, Row>();
+        block.forEach((r) => {
+            if (r.liveStepId) idToRow.set(r.liveStepId, r);
+            if (r.templateStepId) idToRow.set(r.templateStepId, r);
+            if (r.stepId) idToRow.set(r.stepId, r);
+        });
 
-        const findPaymentFor = (svc: Row): Row | undefined => {
-            const svcKeys = new Set([serviceKey(svc), `name:${svc.stepNameLower}`]);
-            return payments.find((p) => {
-                if (used.has(p.index)) return false;
-                const target = paymentTargetKey(p);
-                if (svcKeys.has(target)) return true;
-                // Fuzzy: payment target contained in / equals service name
-                const payRest = stripPaymentPrefix(p.stepName);
-                return (
-                    payRest === svc.stepNameLower ||
-                    svc.stepNameLower.includes(payRest) ||
-                    payRest.includes(svc.stepNameLower)
-                );
-            });
+        const preds = new Map<number, Set<number>>();
+        block.forEach((r) => preds.set(r.index, new Set()));
+
+        const addEdge = (from: Row, to: Row) => {
+            // from must come before to
+            if (from.index === to.index) return;
+            preds.get(to.index)?.add(from.index);
         };
 
-        services.forEach((svc) => {
-            result.push(svc);
-            used.add(svc.index);
-            const pay = findPaymentFor(svc);
-            if (pay) {
-                result.push(pay);
-                used.add(pay.index);
-            }
-        });
-
-        // Remaining payments: try insert after matching service already in result
-        payments
-            .filter((p) => !used.has(p.index))
-            .sort(sortStable)
-            .forEach((pay) => {
-                const payRest = stripPaymentPrefix(pay.stepName);
-                const svcIdx = result.findIndex(
-                    (r) =>
-                        !r.isPayment &&
-                        (serviceKey(r) === paymentTargetKey(pay) ||
-                            r.stepNameLower === payRest ||
-                            r.stepNameLower.includes(payRest) ||
-                            payRest.includes(r.stepNameLower))
-                );
-                if (svcIdx >= 0) {
-                    // Place right after service (and after an already-paired payment if any)
-                    let insertAt = svcIdx + 1;
-                    while (insertAt < result.length && result[insertAt].isPayment) insertAt += 1;
-                    result.splice(insertAt, 0, pay);
-                } else {
-                    result.push(pay);
-                }
-                used.add(pay.index);
-            });
-
         block.forEach((r) => {
-            if (!used.has(r.index)) result.push(r);
+            const depIds = [
+                ...r.dependsOn,
+                ...(r.requiredStepId ? [r.requiredStepId] : []),
+            ];
+            depIds.forEach((depId) => {
+                const pred = idToRow.get(depId);
+                if (pred) addEdge(pred, r);
+            });
         });
 
-        return result;
+        // Kahn topo; tie-break with original API index then template rank
+        const pending = new Set(block.map((r) => r.index));
+        const ordered: Row[] = [];
+        while (pending.size > 0) {
+            const ready = block
+                .filter((r) => pending.has(r.index))
+                .filter((r) => {
+                    const p = preds.get(r.index);
+                    if (!p) return true;
+                    for (const predIdx of p) {
+                        if (pending.has(predIdx)) return false;
+                    }
+                    return true;
+                })
+                .sort((a, b) => {
+                    // Prefer original payload order when ties
+                    if (a.index !== b.index) return a.index - b.index;
+                    return sortStable(a, b);
+                });
+
+            if (ready.length === 0) {
+                const rest = block
+                    .filter((r) => pending.has(r.index))
+                    .sort((a, b) => a.index - b.index);
+                ordered.push(...rest);
+                break;
+            }
+
+            const next = ready[0];
+            ordered.push(next);
+            pending.delete(next.index);
+        }
+
+        return ordered;
     };
 
-    const booking = rows.filter((r) => r.isBooking).sort(sortStable);
+    const booking = rows.filter((r) => r.isBooking).sort((a, b) => a.index - b.index);
     const examPay = rows
         .filter((r) => r.isExamPayment && !r.isBooking && !r.isExam)
-        .sort(sortStable);
-    const exam = rows.filter((r) => r.isExam && !r.isBooking).sort(sortStable);
+        .sort((a, b) => a.index - b.index);
+    const exam = rows.filter((r) => r.isExam && !r.isBooking).sort((a, b) => a.index - b.index);
 
-    // Drop duplicate CLS payment steps for the same service (createOrder + createStepParent)
-    const restRaw = rows.filter((r) => !r.isBooking && !r.isExam && !r.isExamPayment);
-    const restPreferred = (() => {
-        const byKey = new Map<string, Row>();
-        const nonPay: Row[] = [];
-        restRaw.forEach((r) => {
-            if (!r.isPayment) {
-                nonPay.push(r);
-                return;
-            }
-            const key = paymentTargetKey(r);
-            const prev = byKey.get(key);
-            if (!prev) {
-                byKey.set(key, r);
-                return;
-            }
-            const prevRec = asRecord(prev.item);
-            const nextRec = asRecord(r.item);
-            const prevRoom = Boolean(prevRec?.room_id || asRecord(prevRec?.room_info)?.room_id);
-            const nextRoom = Boolean(nextRec?.room_id || asRecord(nextRec?.room_info)?.room_id);
-            if (nextRoom && !prevRoom) byKey.set(key, r);
-            else if (nextRoom === prevRoom && (r.createdAt || 0) > (prev.createdAt || 0)) {
-                byKey.set(key, r);
-            }
-        });
-        return [...nonPay, ...byKey.values()];
-    })();
+    // Keep CLS / other steps; preserve relative order via depends_on + API index
+    const restRaw = rows
+        .filter((r) => !r.isBooking && !r.isExam && !r.isExamPayment)
+        .sort((a, b) => a.index - b.index);
 
-    return [...booking, ...examPay, ...exam, ...orderServiceThenPayment(restPreferred)].map(
-        (r) => r.item
-    );
+    // Defaults first (exam payment → khám bệnh), then CLS by depends_on / API index
+    return [...booking, ...examPay, ...exam, ...orderRestBlock(restRaw)].map((r) => r.item);
 }
 
 function getIconForStep(specialtyName: string, roomName: string, label: string): NodeIcon {
@@ -864,28 +886,35 @@ function getIconForStep(specialtyName: string, roomName: string, label: string):
 
 function mapStepStatusToNodeStatus(
     stepStatus: string,
-    isPatientDone?: boolean,
+    _isPatientDone?: boolean,
     paymentStatus?: string,
     stepName?: string
 ): WorkflowStepStatus {
-    if (isPaidPaymentStatus(paymentStatus)) return 'completed';
-    if (isPatientDone) return 'completed';
-
     const st = (stepStatus || '').toUpperCase().trim();
+    const name = stepName || '';
+    const isPaymentLike =
+        isPaymentStepName(name) ||
+        isExamPaymentStepName(name);
+
+    // payment_status only colors PAYMENT steps — never paint clinical steps green
+    if (isPaymentLike && isPaidPaymentStatus(paymentStatus)) {
+        return 'completed';
+    }
+
     if (['COMPLETED', 'DONE', 'SUCCESSED', 'FINISHED'].includes(st)) {
         return 'completed';
     }
 
-    // Soft-cancelled after lấy số / pay — treat exam payment as completed on UI
+    // Soft-cancelled exam/queue payment after lấy số → still show as completed
     if (
         (st === 'CANCELLED' || st === 'CANCELED') &&
-        (isPaidPaymentStatus(paymentStatus) || isExamPaymentStepName(stepName || ''))
+        isExamPaymentStepName(name)
     ) {
         return 'completed';
     }
 
     if (['IN_PROGRESS', 'PROCESSING', 'CURRENT', 'DOING', 'EXAMINING', 'ACTIVE', 'ONGOING'].includes(st)) {
-        return 'current';
+        return 'current'; // blue
     }
 
     // PENDING / waiting / unknown → gray default
@@ -978,6 +1007,7 @@ export function WorkflowDiagram({
     patient,
     refreshKey = 0,
     onFlowResolved,
+    onFlowChanged,
 }: WorkflowDiagramProps) {
     const accessToken = useAuthStore((s) => s.accessToken);
     const authUser = useAuthStore((s) => s.user);
@@ -985,6 +1015,7 @@ export function WorkflowDiagram({
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [flowData, setFlowData] = useState<Record<string, unknown> | null>(null);
+    const [pendingOrders, setPendingOrders] = useState<ServiceOrder[]>([]);
     const flowIdRef = useRef<string>('');
     const [templates, setTemplates] = useState<ProcessTemplate[]>([]);
     const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
@@ -1001,6 +1032,7 @@ export function WorkflowDiagram({
     const [editingStaffId, setEditingStaffId] = useState<string>('');
     const [selectedSpecialtyId, setSelectedSpecialtyId] = useState<string>('');
     const [selectedRoomId, setSelectedRoomId] = useState<string>('');
+    const [addStepRequirePayment, setAddStepRequirePayment] = useState(true);
     const [selectedStaffId, setSelectedStaffId] = useState<string>('');
     const [selectedServiceCode, setSelectedServiceCode] = useState<string>('');
     const [selectedDraftServiceCode, setSelectedDraftServiceCode] = useState<string>('');
@@ -1587,7 +1619,8 @@ export function WorkflowDiagram({
         setIsActionLoading(true);
         try {
             await clinicalService.updateStepStatus(stepId, 'CANCELLED', accessToken);
-            await reloadFlow();
+            const latestFlow = await reloadFlow();
+            onFlowChanged?.(latestFlow);
         } catch (err) {
             console.error('Failed to cancel step:', err);
             setError('Không thể hủy bước khám.');
@@ -1616,7 +1649,6 @@ export function WorkflowDiagram({
         const hasRoom = Boolean(editingRoomId);
         const hasStatus = Boolean(nextStatus);
 
-        // Payment / some service steps often have no room — allow status-only save
         if (!hasRoom && !hasStatus) {
             setError('Vui lòng chọn phòng hoặc đổi trạng thái trước khi lưu.');
             return;
@@ -1625,6 +1657,7 @@ export function WorkflowDiagram({
         setIsActionLoading(true);
         setError(null);
         try {
+            // Bước thanh toán thường không có phòng — chỉ cập nhật room khi bác sĩ chọn
             if (hasRoom) {
                 const payload: { room_id: string; staff_id?: string } = {
                     room_id: editingRoomId,
@@ -1638,8 +1671,9 @@ export function WorkflowDiagram({
             if (hasStatus) {
                 await updateStepStatusWithFallback(stepId, nextStatus, accessToken);
 
+                // Đồng bộ service order gắn với step (thanh toán / chỉ định)
                 if (linkedOrderId) {
-                    const orderStatus: ServiceOrderStatus =
+                    const orderStatus =
                         nextStatus === 'COMPLETED' || nextStatus === 'DONE'
                             ? 'COMPLETED'
                             : nextStatus === 'CANCELLED' || nextStatus === 'CANCELED'
@@ -1682,18 +1716,20 @@ export function WorkflowDiagram({
             setEditingStepId(null);
             setEditingRequiredStepId('');
             setEditingOldRequiredStepId('');
-            await reloadFlow();
+            const latestFlow = await reloadFlow();
+            onFlowChanged?.(latestFlow);
         } catch (err) {
             console.error('Failed to update step:', err);
-            setError('Không thể cập nhật thông tin bước.');
+            setError(
+                err instanceof Error ? err.message : 'Không thể cập nhật thông tin bước.'
+            );
         } finally {
             setIsActionLoading(false);
         }
     };
 
     const handleAddStep = async () => {
-        const flowId = (flowData?.flow_id as string) || patient?.flowId;
-        if (!flowId || !accessToken || !selectedRoomId) return;
+        if (!accessToken || !selectedRoomId) return;
 
         const room = rooms.find((r) => r.room_id === selectedRoomId);
         const resolvedServiceCode =
@@ -1712,13 +1748,38 @@ export function WorkflowDiagram({
             return;
         }
 
-        const resolvedStaffId = selectedStaffId || pickDoctorOnDutyForRoom(selectedRoomId);
+        const selectedService = serviceOptions.find((s) => s.service_code === resolvedServiceCode);
+        const resolvedStepName =
+            selectedService?.service_name?.trim() ||
+            room?.room_name ||
+            'Bước khám mới';
+
+        const resolvedStaffId =
+            selectedStaffId ||
+            pickDoctorOnDutyForRoom(selectedRoomId) ||
+            authProfile?.account_id ||
+            authUser?.id ||
+            '';
         if (!resolvedStaffId) {
-            setError('Không tìm thấy bác sĩ/nhân viên trực cho phòng đã chọn. Vui lòng chọn phòng khác hoặc phân ca trước.');
+            setError('Không tìm thấy bác sĩ/nhân viên để gán chỉ định.');
             return;
         }
 
-        // Last non-cancelled step before add — new step will wait on it
+        const bookingId =
+            (typeof flowData?.booking_id === 'string' && flowData.booking_id) ||
+            patient?.bookingId ||
+            '';
+        if (!bookingId) {
+            setError('Không tìm thấy booking_id để tạo service order.');
+            return;
+        }
+
+        const specialtyId = selectedSpecialtyId || room?.specialty_id || '';
+        if (!specialtyId) {
+            setError('Vui lòng chọn chuyên khoa / phòng có specialty_id.');
+            return;
+        }
+
         const previousStepId = (() => {
             for (let i = orderedFlowSteps.length - 1; i >= 0; i--) {
                 const live = asRecord(orderedFlowSteps[i]);
@@ -1732,21 +1793,38 @@ export function WorkflowDiagram({
 
         setIsActionLoading(true);
         try {
-            const roomType = normalizeRoomType(getRoomTypeValue(room) || 'CLINICAL_ROOM');
-            const payload = {
-                flow_id: flowId,
-                room_id: selectedRoomId,
-                step_status: 'PENDING' as const,
-                staff_id: resolvedStaffId,
-                service_code: resolvedServiceCode,
-                step_name: room?.room_name || 'Bước khám mới',
-                step_type: mapRoomTypeToStepType(roomType),
-            };
-            await clinicalService.createStepParent(payload, accessToken);
+            await serviceOrderService.createOrder(
+                {
+                    booking_id: bookingId,
+                    assign_by_staff_id: resolvedStaffId,
+                    name: resolvedStepName,
+                    service_code: resolvedServiceCode,
+                    specialty_id: specialtyId,
+                    room_id: selectedRoomId,
+                    is_payment: addStepRequirePayment,
+                },
+                accessToken
+            );
             setSelectedRoomId('');
             setSelectedStaffId('');
             setSelectedServiceCode('');
-            const flowObj = await reloadFlow();
+            setAddStepRequirePayment(true);
+            let flowObj = await reloadFlow();
+
+            try {
+                const resolvedPatientId = (patient?.patientId || '').trim();
+                if (resolvedPatientId) {
+                    const pendingRes = await serviceOrderService.getPendingByPatientId(
+                        resolvedPatientId,
+                        accessToken
+                    );
+                    setPendingOrders(
+                        filterOrdersByBookingId(extractServiceOrderList(pendingRes?.data), bookingId)
+                    );
+                }
+            } catch {
+                // ignore
+            }
 
             if (previousStepId && flowObj) {
                 const liveRaw = Array.isArray(flowObj.steps) ? (flowObj.steps as unknown[]) : [];
@@ -1776,15 +1854,16 @@ export function WorkflowDiagram({
                             { waiting_step_id: newStepId, required_step_id: previousStepId },
                             accessToken
                         );
-                        await reloadFlow();
+                        flowObj = await reloadFlow();
                     } catch (depErr) {
                         console.warn('Failed to link new step dependency', depErr);
                     }
                 }
             }
+            onFlowChanged?.(flowObj);
         } catch (err) {
-            console.error('Failed to add step:', err);
-            setError('Không thể thêm bước khám mới.');
+            console.error('Failed to add service order:', err);
+            setError('Không thể tạo service order.');
         } finally {
             setIsActionLoading(false);
         }
@@ -1814,6 +1893,26 @@ export function WorkflowDiagram({
                 });
                 if (cancelled) return;
                 setFlowData(flowObj);
+                // Do not call onFlowChanged here — parent bumps refreshKey and would loop.
+
+                const bookingIdFromFlow =
+                    (typeof flowObj?.booking_id === 'string' && flowObj.booking_id) ||
+                    patient?.bookingId ||
+                    '';
+
+                try {
+                    const pendingRes = await serviceOrderService.getPendingByPatientId(
+                        resolvedPatientId,
+                        accessToken
+                    );
+                    if (!cancelled) {
+                        const all = extractServiceOrderList(pendingRes?.data);
+                        setPendingOrders(filterOrdersByBookingId(all, bookingIdFromFlow));
+                    }
+                } catch {
+                    if (!cancelled) setPendingOrders([]);
+                }
+
                 if (!flowObj) {
                     setError('Không tìm thấy flow đang chạy cho bệnh nhân.');
                 } else {
@@ -2151,18 +2250,13 @@ export function WorkflowDiagram({
 
             const specialtyName = (specialtyInfo?.specialty_name as string) || '';
             const roomName = (roomInfo?.room_name as string) || '';
+            // Hiển thị đúng step_name từ BE — không strip "Thanh toán"
             const rawLabel =
-                (step.step_name as string) || roomName || specialtyName || `Bước ${index + 1}`;
-            const stepType = String(step.step_type || '').toUpperCase();
-            const roomType = String(step.room_type || '').toUpperCase();
-            const forcePayment =
-                unlabeledPaymentStepIds.has(stepId) ||
-                stepType === 'PAYMENT' ||
-                roomType === 'CASHIER' ||
-                roomType === 'PAYMENT' ||
-                isExamPaymentStepName(rawLabel);
-            // CLS payment companions → "Thanh toán: {tên dịch vụ}"
-            let label = formatFlowStepLabel(rawLabel, { forcePayment });
+                (typeof step.step_name === 'string' && step.step_name.trim()) ||
+                roomName ||
+                specialtyName ||
+                `Bước ${index + 1}`;
+            let label = rawLabel;
 
             // Disambiguate multiple "Khám bệnh" from different active flows
             if (isDefaultExamStepName(rawLabel)) {
@@ -2182,7 +2276,7 @@ export function WorkflowDiagram({
 
             dynamicSteps.push({
                 id: stepId,
-                Icon: getIconForStep(specialtyName, roomName, label),
+                Icon: getIconForStep(specialtyName, roomName, rawLabel),
                 status,
                 label,
                 roomName,
@@ -2199,6 +2293,78 @@ export function WorkflowDiagram({
                 },
             });
         });
+    };
+
+    const appendPendingServiceOrders = () => {
+        const existingLabels = new Set(
+            dynamicSteps.map((n) => normalizeStepLabel(n.label))
+        );
+        const existingCodes = new Set(
+            dynamicSteps
+                .map((n) => (n.detail?.serviceCode || '').trim().toLowerCase())
+                .filter(Boolean)
+        );
+        const existingOrderIds = new Set(
+            orderedFlowSteps
+                .map((item) => {
+                    const rec = asRecord(item);
+                    return typeof rec?.service_order_id === 'string'
+                        ? rec.service_order_id.trim()
+                        : '';
+                })
+                .filter(Boolean)
+        );
+
+        const sorted = [...pendingOrders].sort((a, b) => {
+            const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+            return at - bt;
+        });
+
+        for (const order of sorted) {
+            const id = getServiceOrderId(order);
+            if (!id) continue;
+            if (existingOrderIds.has(id)) continue;
+            const status = String(order.status || '').toUpperCase();
+            if (status === 'CANCELLED' || status === 'CANCELED') continue;
+
+            const code = getOrderServiceCode(order).toLowerCase();
+            const rawName = (order.name || getOrderDisplayName(order) || '').trim();
+            const labelKey = normalizeStepLabel(rawName);
+            if (code && existingCodes.has(code)) continue;
+            if (labelKey && existingLabels.has(labelKey)) continue;
+
+            const roomType = getOrderRoomType(order);
+            const paymentStatus = String(order.payment_status || '');
+            const nodeStatus = mapStepStatusToNodeStatus(
+                String(order.status || 'PENDING'),
+                isPatientDone,
+                paymentStatus,
+                rawName
+            );
+
+            dynamicSteps.push({
+                id: `so-${id}`,
+                Icon: getIconForStep('', roomType, rawName),
+                status: nodeStatus,
+                label: rawName,
+                roomName: order.room_info?.room_name || roomType || undefined,
+                staffName: undefined,
+                detail: {
+                    source: 'service-order',
+                    stepStatus: String(order.status || 'PENDING'),
+                    roomId: order.room_id || order.room_info?.room_id || '',
+                    paymentStatus,
+                    serviceOrderId: id,
+                    serviceCode: code || undefined,
+                    totalPrice:
+                        typeof order.total_price === 'number' ? order.total_price : undefined,
+                },
+            });
+
+            if (code) existingCodes.add(code);
+            if (labelKey) existingLabels.add(labelKey);
+        }
     };
 
     if (selectedTemplateId && draftSteps.length > 0) {
@@ -2229,9 +2395,11 @@ export function WorkflowDiagram({
         });
     } else if (hasLiveSteps) {
         appendLiveSteps();
+        appendPendingServiceOrders();
     } else {
         // Waiting for BE-seeded defaults after booking
         dynamicSteps.push(...DEFAULT_FULL_WORKFLOW);
+        appendPendingServiceOrders();
     }
 
     if (isLoading) {
@@ -2513,11 +2681,12 @@ export function WorkflowDiagram({
                                             {isStepEditing ? (
                                                 <>
                                                     <button
-                                                        onClick={() => handleUpdateStep(stepId)}
+                                                        type="button"
+                                                        onClick={() => void handleUpdateStep(stepId)}
                                                         disabled={isActionLoading}
                                                         className="px-3 py-1.5 bg-brand-500 text-white rounded-xl text-xs font-bold hover:bg-brand-600 transition-colors disabled:opacity-50"
                                                     >
-                                                        Lưu
+                                                        {isActionLoading ? 'Đang lưu...' : 'Lưu'}
                                                     </button>
                                                     <button
                                                         onClick={() => {
@@ -2626,6 +2795,15 @@ export function WorkflowDiagram({
                                 </div>
 
                             </div>
+                            <label className="flex items-center gap-2 text-xs text-neutral-700 cursor-pointer mb-3">
+                                <input
+                                    type="checkbox"
+                                    checked={addStepRequirePayment}
+                                    onChange={(e) => setAddStepRequirePayment(e.target.checked)}
+                                    className="rounded border-neutral-300"
+                                />
+                                Yêu cầu thanh toán
+                            </label>
                             <button
                                 onClick={handleAddStep}
                                 disabled={!selectedRoomId || !selectedServiceCode}
@@ -2636,7 +2814,7 @@ export function WorkflowDiagram({
                                 ) : (
                                     <>
                                         <Plus className="w-4 h-4" />
-                                        Thêm bước vào Quy trình
+                                        Tạo service order
                                     </>
                                 )}
                             </button>

@@ -55,19 +55,20 @@ function matchesQuery(result: PatientSearchResult, rawQuery: string): boolean {
 }
 
 function mapQueueItem(item: BackendQueuePatient): PatientSearchResult {
-    const patientObj = item.step.flow.booking.patient;
+    const patient = item.step.flow.booking.patient;
+    const account = patient.account;
     const queue = mapBackendToQueuePatient(item);
 
     return {
-        accountId: patientObj.patient_id,
+        accountId: patient.patient_id,
         queueId: item.queue_id,
-        name: patientObj.full_name || patientObj.account.user_name || 'Bệnh nhân',
-        citizenId: patientObj.citizen_id || '',
-        phone: patientObj.account.phone || null,
-        email: patientObj.account.email || '',
+        name: patient.full_name || account?.full_name || account?.user_name || 'Bệnh nhân',
+        citizenId: patient.citizen_id || account?.citizen_id || '',
+        phone: account?.phone || null,
+        email: account?.email || '',
         ticketNo: queue.ticketNo,
         specialty: 'Nội khoa',
-        bhyt: patientObj.medical_coverage_id,
+        bhyt: patient.medical_coverage_id,
         priority: queue.priority,
         status: queue.status,
         waitMinutes: queue.waitMinutes,
