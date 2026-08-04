@@ -3,7 +3,10 @@
 import { use, useEffect, useState } from 'react';
 import { EMRPageLayout } from '@/shared/components/layout/EMRPageLayout';
 import { notFound } from 'next/navigation';
-import { clinicalService, mapBackendPatientToFrontend } from '@/modules/clinical/services/clinicalService';
+import {
+    clinicalService,
+    mapBackendPatientToFrontend,
+} from '@/modules/clinical/services/clinicalService';
 import { useAuthStore } from '@/modules/auth/store/authStore';
 import { usePatientTabsStore } from '@/modules/clinical/store/clinicalStore';
 import type { Patient } from '@/modules/clinical/types/clinical.types';
@@ -25,8 +28,9 @@ export default function DoctorPatientPage({ params }: { params: Promise<{ id: st
         if (!id) return;
 
         // 1. Check Zustand cache first (client-only, safe in useEffect)
+        // Re-fetch when cache thiếu bookingId/flowId (schema mới / patient cũ trong persist)
         const cached = getPatientData(id);
-        if (cached) {
+        if (cached?.bookingId && cached?.flowId && cached?.patientId) {
             const timer = setTimeout(() => {
                 setPatient(cached);
                 setIsLoading(false);
@@ -34,7 +38,7 @@ export default function DoctorPatientPage({ params }: { params: Promise<{ id: st
             return () => clearTimeout(timer);
         }
 
-        // 2. No cache — fetch from API
+        // 2. Fetch from API (also refreshes stale cache)
         if (!accessToken) return;
 
         const fetchPatient = async () => {
@@ -42,9 +46,35 @@ export default function DoctorPatientPage({ params }: { params: Promise<{ id: st
                 setError(null);
                 const res = await clinicalService.getPatientByQueueId(id, accessToken);
                 if (res?.data) {
-                    const mapped = mapBackendPatientToFrontend(res.data);
-                    setPatient(mapped);
-                    setPatientData(id, mapped);
+                    // Check if this patient belongs to the logged-in doctor (timezone-safe)
+                    const shiftDateRaw = res.data.step?.flow?.booking?.slot?.shift?.date;
+                    let dateStr = '';
+                    if (shiftDateRaw) {
+                        const d = new Date(shiftDateRaw);
+                        const yyyy = d.getFullYear();
+                        const mm = String(d.getMonth() + 1).padStart(2, '0');
+                        const dd = String(d.getDate()).padStart(2, '0');
+                        dateStr = `${yyyy}-${mm}-${dd}`;
+                    } else {
+                        const d = new Date();
+                        const yyyy = d.getFullYear();
+                        const mm = String(d.getMonth() + 1).padStart(2, '0');
+                        const dd = String(d.getDate()).padStart(2, '0');
+                        dateStr = `${yyyy}-${mm}-${dd}`;
+                    }
+
+                    const doctorPatientsRes = await clinicalService.getPatients(dateStr, accessToken);
+                    const isAssigned = doctorPatientsRes.data?.some(p => p.queue_id === id);
+                    if (!isAssigned) {
+                        setError('Bạn không có quyền xem thông tin bệnh nhân này.');
+                        setIsLoading(false);
+                        return;
+                    }
+
+                    // No auto-assign: doctor picks template in Quy trình and assigns via new API body
+                    const finalPatient = mapBackendPatientToFrontend(res.data);
+                    setPatient(finalPatient);
+                    setPatientData(id, finalPatient);
                 } else {
                     setError('Không tìm thấy thông tin bệnh nhân.');
                 }

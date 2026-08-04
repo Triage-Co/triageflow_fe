@@ -11,6 +11,7 @@ import {
 import { useAuthStore } from '@/modules/auth/store/authStore';
 import { useAdminStore } from '../store/adminStore';
 import { authService } from '@/modules/auth/services/authService';
+import { staffService } from '../services/staffService';
 import type { Gender, StaffRole } from '@/shared/types/auth.types';
 
 /* ─── Component ──────────────────────────────────────────────────────────── */
@@ -41,13 +42,26 @@ export function AdminCreateUserPage() {
         setIsCreating(true);
         setCreateError(null);
         try {
-            await authService.register({
-                user_name: createForm.user_name,
-                email: createForm.email,
-                password: createForm.password,
-                gender: createForm.gender,
-                phone: createForm.phone,
-            });
+            const STAFF_ROLES = ['DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_STAFF', 'LAB_TECHNICIAN', 'PHARMACY_STAFF', 'CASHIER', 'ADMIN'];
+            if (STAFF_ROLES.includes(createForm.role) && accessToken) {
+                await staffService.createStaff({
+                    user_name: createForm.user_name.trim(),
+                    password: createForm.password,
+                    full_name: createForm.user_name.trim(),
+                    email: createForm.email.trim(),
+                    role: createForm.role,
+                    gender: createForm.gender,
+                    phone: createForm.phone.trim(),
+                }, accessToken);
+            } else {
+                await authService.register({
+                    user_name: createForm.user_name,
+                    email: createForm.email,
+                    password: createForm.password,
+                    gender: createForm.gender,
+                    phone: createForm.phone,
+                });
+            }
 
             // Reload accounts list
             if (accessToken) {
@@ -174,7 +188,8 @@ export function AdminCreateUserPage() {
                                         <option value="DOCTOR">Bác sĩ</option>
                                         <option value="NURSE">Y tá / Điều dưỡng</option>
                                         <option value="RECEPTIONIST">Lễ tân</option>
-                                        <option value="LAB_STAFF">Xét nghiệm</option>
+                                        <option value="LAB_STAFF">Xét nghiệm (LAB_STAFF)</option>
+                                        <option value="LAB_TECHNICIAN">Kỹ thuật viên Xét nghiệm</option>
                                         <option value="PHARMACY_STAFF">Dược sĩ</option>
                                         <option value="CASHIER">Thu ngân</option>
                                         <option value="ADMIN">Quản trị viên</option>

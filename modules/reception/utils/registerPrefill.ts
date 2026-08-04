@@ -59,16 +59,18 @@ export function consumeRegisterPrefill(): RegisterPrefill | null {
     }
 }
 
-export function applyRegisterPrefillToForm(
-    prev: {
+export function applyRegisterPrefillToForm<
+    T extends {
         citizen_id: string;
         full_name: string;
         email: string;
         phone: string;
         insurance_id: string;
     },
+>(
+    prev: T,
     prefill: RegisterPrefill,
-) {
+): T {
     return {
         ...prev,
         citizen_id: prefill.citizen_id || prev.citizen_id,

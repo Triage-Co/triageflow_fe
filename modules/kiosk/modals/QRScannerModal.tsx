@@ -57,7 +57,6 @@ export const QRScannerModal: React.FC = () => {
         safeStopScanner(scannerRef.current);
         scannerRef.current = null;
       }
-      setIsScannerActive(false);
       return;
     }
 
@@ -149,7 +148,7 @@ export const QRScannerModal: React.FC = () => {
             selectedCamera.id,
             qrConfig,
             handleSuccessScan,
-            () => {}
+            () => { }
           );
 
           if (isMounted) setIsScannerActive(true);
@@ -161,11 +160,11 @@ export const QRScannerModal: React.FC = () => {
           { facingMode: 'user' },
           qrConfig,
           handleSuccessScan,
-          () => {}
+          () => { }
         );
 
         if (isMounted) setIsScannerActive(true);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.warn('Thử mở camera chính thất bại, thử mở với facingMode environment:', err);
 
         try {
@@ -183,11 +182,11 @@ export const QRScannerModal: React.FC = () => {
             { facingMode: 'environment' },
             qrConfig,
             handleSuccessScan,
-            () => {}
+            () => { }
           );
 
           if (isMounted) setIsScannerActive(true);
-        } catch (finalErr: any) {
+        } catch (finalErr: unknown) {
           console.error('Không thể mở Camera Kiosk:', finalErr);
           if (isMounted) {
             setCameraError('Không thể mở Camera. Vui lòng cấp quyền truy cập camera hoặc sử dụng ô nhập tay bên dưới.');
@@ -276,7 +275,7 @@ export const QRScannerModal: React.FC = () => {
       <div className="bg-white w-full max-w-2xl rounded-[36px] shadow-2xl overflow-hidden border border-neutral-100/50 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300">
         {/* Modal Header */}
         <div className="px-8 py-5 border-b border-neutral-100 flex items-center justify-between bg-neutral-50/50">
-          <button 
+          <button
             onClick={closeModal}
             className="flex items-center gap-2 text-[#4A5565] hover:text-[#1E2939] font-bold text-base transition-colors duration-200 cursor-pointer"
           >
@@ -341,7 +340,7 @@ export const QRScannerModal: React.FC = () => {
               {error && <p className="text-rose-600 text-xs font-bold pt-0.5">{error}</p>}
             </div>
 
-            <PrimaryButton 
+            <PrimaryButton
               onClick={handleManualSubmit}
               isLoading={isLoading}
               className="w-full text-sm"

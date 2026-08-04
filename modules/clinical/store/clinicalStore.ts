@@ -5,9 +5,11 @@ import type { Patient } from '@/modules/clinical/types/clinical.types';
 export interface PatientTab {
     id: string;
     name: string;
+    stt?: string;
 }
 
 interface PatientTabsState {
+    userId: string | null;
     openTabs: PatientTab[];
     patientDataMap: Record<string, Patient>;
     openTab: (tab: PatientTab) => void;
@@ -15,11 +17,13 @@ interface PatientTabsState {
     setPatientData: (id: string, data: Patient) => void;
     getPatientData: (id: string) => Patient | undefined;
     clearAll: () => void;
+    syncForUser: (userId: string | null) => void;
 }
 
 export const usePatientTabsStore = create<PatientTabsState>()(
     persist(
         (set, get) => ({
+            userId: null,
             openTabs: [],
             patientDataMap: {},
 
@@ -30,9 +34,9 @@ export const usePatientTabsStore = create<PatientTabsState>()(
                     set({ openTabs: [...openTabs, tab] });
                 } else {
                     const idx = openTabs.findIndex((t) => t.id === tab.id);
-                    if (idx >= 0 && openTabs[idx].name !== tab.name) {
+                    if (idx >= 0 && (openTabs[idx].name !== tab.name || openTabs[idx].stt !== tab.stt)) {
                         const updated = [...openTabs];
-                        updated[idx] = tab;
+                        updated[idx] = { ...updated[idx], ...tab };
                         set({ openTabs: updated });
                     }
                 }
@@ -67,6 +71,17 @@ export const usePatientTabsStore = create<PatientTabsState>()(
 
             clearAll: () => {
                 set({ openTabs: [], patientDataMap: {} });
+            },
+
+            syncForUser: (userId) => {
+                const state = get();
+                if (state.userId !== userId) {
+                    set({
+                        userId,
+                        openTabs: [],
+                        patientDataMap: {},
+                    });
+                }
             },
         }),
         {
