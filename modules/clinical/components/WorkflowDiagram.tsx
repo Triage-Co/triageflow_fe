@@ -1630,18 +1630,61 @@ export function WorkflowDiagram({
     };
 
     const handleUpdateStep = async (stepId: string) => {
-        if (!accessToken || !editingRoomId) return;
+        if (!accessToken) return;
+
+        const liveStep = orderedFlowSteps
+            .map((item) => asRecord(item))
+            .find((s) => s && String(s.step_id || '') === stepId);
+        const linkedOrderId =
+            typeof liveStep?.service_order_id === 'string'
+                ? liveStep.service_order_id.trim()
+                : '';
+        const nextStatus = (editingStepStatus || '').trim().toUpperCase();
+        const hasRoom = Boolean(editingRoomId);
+        const hasStatus = Boolean(nextStatus);
+
+        if (!hasRoom && !hasStatus) {
+            setError('Vui lòng chọn phòng hoặc đổi trạng thái trước khi lưu.');
+            return;
+        }
+
         setIsActionLoading(true);
+        setError(null);
         try {
-            const payload: { room_id: string; staff_id?: string } = {
-                room_id: editingRoomId,
-            };
-            if (editingStaffId) {
-                payload.staff_id = editingStaffId;
+            // Bước thanh toán thường không có phòng — chỉ cập nhật room khi bác sĩ chọn
+            if (hasRoom) {
+                const payload: { room_id: string; staff_id?: string } = {
+                    room_id: editingRoomId,
+                };
+                if (editingStaffId) {
+                    payload.staff_id = editingStaffId;
+                }
+                await clinicalService.updateStep(stepId, payload, accessToken);
             }
-            await clinicalService.updateStep(stepId, payload, accessToken);
-            if (editingStepStatus) {
-                await updateStepStatusWithFallback(stepId, editingStepStatus, accessToken);
+
+            if (hasStatus) {
+                await updateStepStatusWithFallback(stepId, nextStatus, accessToken);
+
+                // Đồng bộ service order gắn với step (thanh toán / chỉ định)
+                if (linkedOrderId) {
+                    const orderStatus =
+                        nextStatus === 'COMPLETED' || nextStatus === 'DONE'
+                            ? 'COMPLETED'
+                            : nextStatus === 'CANCELLED' || nextStatus === 'CANCELED'
+                              ? 'CANCELLED'
+                              : nextStatus === 'IN_PROGRESS'
+                                ? 'IN_PROGRESS'
+                                : 'PENDING';
+                    try {
+                        await serviceOrderService.updateOrder(
+                            linkedOrderId,
+                            { status: orderStatus },
+                            accessToken
+                        );
+                    } catch (orderErr) {
+                        console.warn('Failed to sync service order status', orderErr);
+                    }
+                }
             }
 
             const nextRequired = editingRequiredStepId.trim();
@@ -1671,7 +1714,9 @@ export function WorkflowDiagram({
             onFlowChanged?.(latestFlow);
         } catch (err) {
             console.error('Failed to update step:', err);
-            setError('Không thể cập nhật thông tin bước.');
+            setError(
+                err instanceof Error ? err.message : 'Không thể cập nhật thông tin bước.'
+            );
         } finally {
             setIsActionLoading(false);
         }
@@ -2630,11 +2675,12 @@ export function WorkflowDiagram({
                                             {isStepEditing ? (
                                                 <>
                                                     <button
-                                                        onClick={() => handleUpdateStep(stepId)}
+                                                        type="button"
+                                                        onClick={() => void handleUpdateStep(stepId)}
                                                         disabled={isActionLoading}
                                                         className="px-3 py-1.5 bg-brand-500 text-white rounded-xl text-xs font-bold hover:bg-brand-600 transition-colors disabled:opacity-50"
                                                     >
-                                                        Lưu
+                                                        {isActionLoading ? 'Đang lưu...' : 'Lưu'}
                                                     </button>
                                                     <button
                                                         onClick={() => {

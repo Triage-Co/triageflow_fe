@@ -197,11 +197,22 @@ export function ParaclinicalOrdersTab({
                 '';
             if (bookingId) setResolvedBookingId(bookingId);
 
-            const pendingRes = await serviceOrderService.getPendingByPatientId(
-                patientId,
-                accessToken
-            );
-            applyPendingOrders(extractServiceOrderList(pendingRes?.data), bookingId);
+            // Pending + full list: order COMPLETED sẽ mất khỏi /pending → gộp thêm getOrders
+            const [pendingRes, allRes] = await Promise.all([
+                serviceOrderService.getPendingByPatientId(patientId, accessToken).catch(() => null),
+                serviceOrderService.getOrders(accessToken, 1, 200).catch(() => null),
+            ]);
+            const merged = [
+                ...extractServiceOrderList(pendingRes?.data),
+                ...extractServiceOrderList(allRes?.data),
+            ];
+            const byId = new Map<string, ServiceOrder>();
+            for (const order of merged) {
+                const id = getServiceOrderId(order);
+                if (!id) continue;
+                byId.set(id, order);
+            }
+            applyPendingOrders([...byId.values()], bookingId);
         } catch (err) {
             setError(
                 err instanceof Error ? err.message : 'Không thể tải danh sách service order.'
@@ -402,7 +413,7 @@ export function ParaclinicalOrdersTab({
                 <div className="flex items-center gap-2 text-neutral-600">
                     <Microscope className="w-4 h-4 text-[#8B7CF6]" />
                     <span className="text-xs font-bold uppercase tracking-wide">
-                        Service order chờ xử lý ({orders.length})
+                        Service order của lượt khám ({orders.length})
                     </span>
                 </div>
                 <button
