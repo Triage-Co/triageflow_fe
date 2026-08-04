@@ -173,6 +173,8 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   const onSelectRoomRef = useRef(onSelectRoom);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const pathMeshRef = useRef<THREE.Mesh | null>(null);
+  const routeLineRef = useRef<THREE.Mesh | null>(null);
+  const routeTextureRef = useRef<THREE.CanvasTexture | THREE.Texture | null>(null);
   const routePathRef = useRef(routePath);
   const nodesGroupRef = useRef<THREE.Group | null>(null);
   const walkableMeshRef = useRef<THREE.Mesh | null>(null);
@@ -415,8 +417,8 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       const { x, z } = lngLatToLocal(
         node.coords[0],
         node.coords[1],
-        floorData.centerShiftX,
-        floorData.centerShiftZ
+        floorData.centerShiftX ?? 0,
+        floorData.centerShiftZ ?? 0
       );
       return new THREE.Vector3(x, 0.4, z);
     });
@@ -556,8 +558,8 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
         previewPoints: editorPreviewPoints,
         errorKeys: new Set(editorErrorKeys),
       },
-      floorData.centerShiftX,
-      floorData.centerShiftZ,
+      floorData.centerShiftX ?? 0,
+      floorData.centerShiftZ ?? 0,
     );
   }, [
     geometryEditMode,
@@ -610,8 +612,8 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       const { x, z } = lngLatToLocal(
         p.coords[0],
         p.coords[1],
-        floorData.centerShiftX,
-        floorData.centerShiftZ
+        floorData.centerShiftX ?? 0,
+        floorData.centerShiftZ ?? 0
       );
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(x, 0.35, z);
@@ -631,8 +633,8 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       populateDebugGroups(
         groups,
         debugSteps,
-        floorData.centerShiftX,
-        floorData.centerShiftZ
+        floorData.centerShiftX ?? 0,
+        floorData.centerShiftZ ?? 0
       );
       debugPopulatedRef.current = true;
     }
@@ -668,8 +670,8 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
     const nodesGroup = buildNodesGroup(
       apiFloor.nodes,
       apiFloor.edges,
-      floorData.centerShiftX,
-      floorData.centerShiftZ
+      floorData.centerShiftX ?? 0,
+      floorData.centerShiftZ ?? 0
     );
     nodesGroup.visible = showNodesRef.current || nodeEditModeRef.current;
     scene.add(nodesGroup);
@@ -677,8 +679,8 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
 
     const walkable = buildWalkableZoneMesh(
       apiFloor,
-      floorData.centerShiftX,
-      floorData.centerShiftZ
+      floorData.centerShiftX ?? 0,
+      floorData.centerShiftZ ?? 0
     );
     if (walkable) {
       walkable.visible =
@@ -837,8 +839,8 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       const nodesGroup = buildNodesGroup(
         apiFloor.nodes,
         apiFloor.edges,
-        floorData.centerShiftX,
-        floorData.centerShiftZ
+        floorData.centerShiftX ?? 0,
+        floorData.centerShiftZ ?? 0
       );
       nodesGroup.visible = showNodesRef.current || nodeEditModeRef.current;
       scene.add(nodesGroup);
@@ -846,8 +848,8 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
 
       const walkable = buildWalkableZoneMesh(
         apiFloor,
-        floorData.centerShiftX,
-        floorData.centerShiftZ
+        floorData.centerShiftX ?? 0,
+        floorData.centerShiftZ ?? 0
       );
       if (walkable) {
         walkable.visible =
@@ -888,8 +890,8 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       populateDebugGroups(
         debugGroups,
         debugStepsRef.current,
-        floorData.centerShiftX,
-        floorData.centerShiftZ
+        floorData.centerShiftX ?? 0,
+        floorData.centerShiftZ ?? 0
       );
       debugPopulatedRef.current = true;
       const flags = showDebugRefs.current;
@@ -937,8 +939,8 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
           const { lng, lat } = localToLngLat(
             pt.x,
             pt.z,
-            floorData.centerShiftX,
-            floorData.centerShiftZ
+            floorData.centerShiftX ?? 0,
+            floorData.centerShiftZ ?? 0
           );
           onPlaceNodeRef.current?.([lng, lat]);
         }
@@ -1016,8 +1018,8 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
         const { lng, lat } = localToLngLat(
           pt.x,
           pt.z,
-          floorData.centerShiftX,
-          floorData.centerShiftZ,
+          floorData.centerShiftX ?? 0,
+          floorData.centerShiftZ ?? 0,
         );
         lngLat = [lng, lat];
       }

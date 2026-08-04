@@ -30,6 +30,7 @@ export interface ApiRoom {
   roomLabel: string;
   heightMeters: number;
   areaId?: string | null;
+  type?: string;
   centerGeom: {
     type: 'Point';
     coordinates: [number, number]; // [lng, lat]
