@@ -27,6 +27,8 @@ import {
     extractFlowSteps,
     resolvePatientFlow,
 } from '@/modules/clinical/services/clinicalService';
+import { serviceOrderService } from '@/modules/clinical/services/serviceOrderService';
+import type { ServiceOrderStatus } from '@/modules/clinical/types/serviceOrder.types';
 import { useAuthStore } from '@/store/authStore';
 import { useRoomStore } from '@/modules/admin/store/roomStore';
 import { useStaffStore } from '@/modules/admin/store/staffStore';
@@ -1595,18 +1597,66 @@ export function WorkflowDiagram({
     };
 
     const handleUpdateStep = async (stepId: string) => {
-        if (!accessToken || !editingRoomId) return;
-        setIsActionLoading(true);
-        try {
-            const payload: { room_id: string; staff_id?: string } = {
-                room_id: editingRoomId,
-            };
-            if (editingStaffId) {
-                payload.staff_id = editingStaffId;
+        if (!accessToken) return;
+
+        const liveStep = orderedFlowSteps
+            .map((item) => asRecord(item))
+            .find((s) => s && String(s.step_id || '') === stepId);
+        const linkedOrderId = (() => {
+            if (!liveStep) return '';
+            if (typeof liveStep.service_order_id === 'string') {
+                return liveStep.service_order_id.trim();
             }
-            await clinicalService.updateStep(stepId, payload, accessToken);
-            if (editingStepStatus) {
-                await updateStepStatusWithFallback(stepId, editingStepStatus, accessToken);
+            if (typeof liveStep.serviceOrderId === 'string') {
+                return liveStep.serviceOrderId.trim();
+            }
+            return '';
+        })();
+        const nextStatus = (editingStepStatus || '').trim().toUpperCase();
+        const hasRoom = Boolean(editingRoomId);
+        const hasStatus = Boolean(nextStatus);
+
+        // Payment / some service steps often have no room — allow status-only save
+        if (!hasRoom && !hasStatus) {
+            setError('Vui lòng chọn phòng hoặc đổi trạng thái trước khi lưu.');
+            return;
+        }
+
+        setIsActionLoading(true);
+        setError(null);
+        try {
+            if (hasRoom) {
+                const payload: { room_id: string; staff_id?: string } = {
+                    room_id: editingRoomId,
+                };
+                if (editingStaffId) {
+                    payload.staff_id = editingStaffId;
+                }
+                await clinicalService.updateStep(stepId, payload, accessToken);
+            }
+
+            if (hasStatus) {
+                await updateStepStatusWithFallback(stepId, nextStatus, accessToken);
+
+                if (linkedOrderId) {
+                    const orderStatus: ServiceOrderStatus =
+                        nextStatus === 'COMPLETED' || nextStatus === 'DONE'
+                            ? 'COMPLETED'
+                            : nextStatus === 'CANCELLED' || nextStatus === 'CANCELED'
+                              ? 'CANCELLED'
+                              : nextStatus === 'IN_PROGRESS'
+                                ? 'IN_PROGRESS'
+                                : 'PENDING';
+                    try {
+                        await serviceOrderService.updateOrder(
+                            linkedOrderId,
+                            { status: orderStatus },
+                            accessToken
+                        );
+                    } catch (orderErr) {
+                        console.warn('Failed to sync service order status', orderErr);
+                    }
+                }
             }
 
             const nextRequired = editingRequiredStepId.trim();

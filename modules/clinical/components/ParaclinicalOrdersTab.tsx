@@ -395,6 +395,10 @@ export function ParaclinicalOrdersTab({ patient, onFlowChanged }: ParaclinicalOr
                 const createdAt = createdRaw
                     ? new Date(createdRaw as string | number).getTime()
                     : NaN;
+                const linkedFromStep =
+                    (typeof live.service_order_id === 'string' && live.service_order_id.trim()) ||
+                    (typeof live.serviceOrderId === 'string' && live.serviceOrderId.trim()) ||
+                    '';
                 const card: ServiceStepCard = {
                     step_id: stepId,
                     step_name: String(live.step_name || 'Dịch vụ'),
@@ -407,8 +411,11 @@ export function ParaclinicalOrdersTab({ patient, onFlowChanged }: ParaclinicalOr
                     step_type: typeof live.step_type === 'string' ? live.step_type : undefined,
                     is_payment: isPaymentStep(live),
                     created_at: Number.isFinite(createdAt) ? createdAt : undefined,
+                    service_order_id: linkedFromStep || undefined,
                 };
-                card.service_order_id = matchServiceOrderId(card, orders);
+                if (!card.service_order_id) {
+                    card.service_order_id = matchServiceOrderId(card, orders);
+                }
                 cards.push(card);
             }
             // Annotate → dedupe → always service then its payment (no shuffle)
@@ -430,7 +437,7 @@ export function ParaclinicalOrdersTab({ patient, onFlowChanged }: ParaclinicalOr
         setIsLoading(true);
         setError(null);
         try {
-            const [flowObj, pendingRes] = await Promise.all([
+            const [flowObj, pendingRes, allRes] = await Promise.all([
                 resolvePatientFlow(accessToken, {
                     flowId: patient.flowId || resolvedFlowId,
                     patientId,
@@ -439,9 +446,19 @@ export function ParaclinicalOrdersTab({ patient, onFlowChanged }: ParaclinicalOr
                 serviceOrderService
                     .getPendingByPatientId(patientId, accessToken)
                     .catch(() => null),
+                // COMPLETED orders drop out of /pending — keep full list for match + display sync
+                serviceOrderService.getOrders(accessToken, 1, 200).catch(() => null),
             ]);
-            const orders = extractServiceOrderList(pendingRes?.data);
-            applyFlowToCards(flowObj, orders);
+            const merged = [
+                ...extractServiceOrderList(pendingRes?.data),
+                ...extractServiceOrderList(allRes?.data),
+            ];
+            const byId = new Map<string, ServiceOrder>();
+            for (const order of merged) {
+                const id = getServiceOrderId(order);
+                if (id) byId.set(id, order);
+            }
+            applyFlowToCards(flowObj, [...byId.values()]);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Không thể tải dịch vụ từ quy trình.');
         } finally {
@@ -638,26 +655,7 @@ export function ParaclinicalOrdersTab({ patient, onFlowChanged }: ParaclinicalOr
                 return;
             }
 
-            if (roomChanged) {
-                await clinicalService.updateStep(
-                    editingStep.step_id,
-                    {
-                        room_id: editRoomId || undefined,
-                        staff_id: staffId || undefined,
-                    },
-                    accessToken
-                );
-            }
-
-            if (statusChanged) {
-                await clinicalService.updateStepStatus(
-                    editingStep.step_id,
-                    editStatus,
-                    accessToken
-                );
-            }
-
-            // Resolve linked service order (pending may miss matches — also try full list)
+            // Resolve linked service order first so status can still save if step API fails
             let orderId = editingStep.service_order_id || '';
             if (!orderId && patientId) {
                 try {
@@ -675,24 +673,58 @@ export function ParaclinicalOrdersTab({ patient, onFlowChanged }: ParaclinicalOr
                 }
             }
 
-            if (orderId) {
+            // Service order is source of truth for indication status — update with minimal payload
+            if (orderId && (statusChanged || roomChanged)) {
+                const room = rooms.find((r) => r.room_id === editRoomId);
+                const soPayload: {
+                    status?: (typeof EDITABLE_STATUSES)[number];
+                    room_id?: string;
+                    specialty_id?: string | null;
+                } = {};
+                if (statusChanged) {
+                    soPayload.status = editStatus as (typeof EDITABLE_STATUSES)[number];
+                }
+                if (roomChanged && editRoomId) {
+                    soPayload.room_id = editRoomId;
+                    soPayload.specialty_id = room?.specialty_id || null;
+                }
+                await serviceOrderService.updateOrder(orderId, soPayload, accessToken);
+            }
+
+            if (roomChanged && editRoomId) {
                 try {
-                    const room = rooms.find((r) => r.room_id === editRoomId);
-                    const bareName = stripClsPaymentPrefix(editingStep.step_name);
-                    await serviceOrderService.updateOrder(
-                        orderId,
+                    await clinicalService.updateStep(
+                        editingStep.step_id,
                         {
-                            room_id: editRoomId || undefined,
-                            specialty_id: room?.specialty_id || null,
-                            status: editStatus as (typeof EDITABLE_STATUSES)[number],
-                            // Keep order name as the CLS service name (not "Thanh toán: …")
-                            name: bareName || undefined,
-                            service_code: editingStep.service_code || undefined,
+                            room_id: editRoomId,
+                            staff_id: staffId || undefined,
                         },
                         accessToken
                     );
-                } catch (orderErr) {
-                    console.warn('Service order update failed; step already updated', orderErr);
+                } catch (stepRoomErr) {
+                    console.warn('Flow step room sync failed; service order already updated', stepRoomErr);
+                }
+            }
+
+            if (statusChanged) {
+                try {
+                    await clinicalService.updateStepStatus(
+                        editingStep.step_id,
+                        editStatus,
+                        accessToken
+                    );
+                } catch (stepStatusErr) {
+                    // When SO already updated, step sync is best-effort
+                    if (orderId) {
+                        console.warn(
+                            'Flow step status sync failed; service order already updated',
+                            stepStatusErr
+                        );
+                    } else {
+                        throw stepStatusErr instanceof Error
+                            ? stepStatusErr
+                            : new Error('Không thể cập nhật trạng thái.');
+                    }
                 }
             }
 
@@ -708,6 +740,19 @@ export function ParaclinicalOrdersTab({ patient, onFlowChanged }: ParaclinicalOr
                         );
                     } catch (payErr) {
                         console.warn('Failed to sync payment companion status', payErr);
+                    }
+                    if (pay.service_order_id) {
+                        try {
+                            await serviceOrderService.updateOrder(
+                                pay.service_order_id,
+                                {
+                                    status: editStatus as (typeof EDITABLE_STATUSES)[number],
+                                },
+                                accessToken
+                            );
+                        } catch (payOrderErr) {
+                            console.warn('Failed to sync payment companion order', payOrderErr);
+                        }
                     }
                 }
             }
