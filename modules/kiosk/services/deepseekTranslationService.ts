@@ -42,7 +42,6 @@ export const deepseekTranslationService = {
       });
     }
 
-    // Clone & update question object
     const updatedQuestion: InfermedicaQuestion = {
       ...question,
       text: translatedText || question.text,

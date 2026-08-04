@@ -1,6 +1,5 @@
 import React from 'react';
 import { useKioskStore } from '../store/kioskStore';
-import { PrimaryButton } from '../components/PrimaryButton';
 import {
   ArrowLeft,
   Wallet,
@@ -115,11 +114,6 @@ export const PaymentView: React.FC = () => {
                 </div>
               )}
             </div>
-
-            <div className="space-y-1">
-              {paymentQrData?.accountName && <p className="text-xs font-bold text-neutral-600">Đơn vị: {paymentQrData.accountName}</p>}
-              {paymentQrData?.accountNumber && <p className="text-[11px] font-semibold text-neutral-400">Số TK: {paymentQrData.accountNumber}</p>}
-            </div>
           </div>
 
           {/* Cột phải: Chi tiết hóa đơn & Nút bấm xác nhận */}
@@ -133,8 +127,6 @@ export const PaymentView: React.FC = () => {
                   <span className="font-bold text-[#1E2939] text-sm break-all">{paymentContentDisplay}</span>
                 </div>
                 <div>
-                  <span className="text-neutral-400 block mb-0.5">Mã bệnh nhân</span>
-                  <span className="font-bold text-[#1E2939] text-sm">{patientCodeDisplay}</span>
                 </div>
                 <div>
                   <span className="text-neutral-400 block mb-0.5">Tổng số tiền</span>
@@ -152,9 +144,6 @@ export const PaymentView: React.FC = () => {
             </div>
 
             <div className="flex gap-3">
-              <PrimaryButton variant="outline" onClick={() => setPaymentMethod(null)}>
-                Đổi phương thức
-              </PrimaryButton>
               <button
                 onClick={verifyPaymentAndIssueTicket}
                 disabled={isPaymentChecking}

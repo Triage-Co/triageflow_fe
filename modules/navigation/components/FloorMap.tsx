@@ -173,3 +173,4 @@ export const FloorMap: React.FC<FloorMapProps> = ({
 };
 
 export default FloorMap;
+

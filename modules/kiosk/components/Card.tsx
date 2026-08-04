@@ -18,6 +18,7 @@ export const Card: React.FC<CardProps> = ({
   return (
     <button
       {...props}
+      aria-label={props['aria-label'] ?? title}
       className={cn(
         "w-full aspect-[4/3] bg-white text-[#1E2939] rounded-[36px] p-8 flex flex-col items-center justify-center text-center shadow-lg border border-neutral-100/80 hover:shadow-2xl hover:scale-[1.04] active:bg-[#155DFC] active:text-white active:border-transparent active:scale-[0.98] transition-all duration-200 group cursor-pointer select-none",
         className

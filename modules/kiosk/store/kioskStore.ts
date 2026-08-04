@@ -10,6 +10,7 @@ import { useAuthStore } from './authStore';
 import { useTriageStore } from './triageStore';
 import { useBookingStore } from './bookingStore';
 import { useFlowStore } from './flowStore';
+import { usePackageBookingStore } from './packageBookingStore';
 
 export interface KioskStoreState {
   currentView: ActiveView;
@@ -24,6 +25,7 @@ export interface KioskStoreState {
   toasts: ToastItem[];
   isLoading: boolean;
   loadingMessage: string;
+  mapNavigationRoomId: string | null;
 
   // Actions
   initialize: () => void;
@@ -40,6 +42,7 @@ export interface KioskStoreState {
   setSelectedDoctor: (doctor: Doctor | null) => void;
   goHome: () => void;
   navigateToView: (view: ActiveView) => void;
+  navigateToMap: (roomId?: string) => void;
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
   removeToast: (id: string) => void;
 }
@@ -57,6 +60,7 @@ export const useKioskStore = create<KioskStoreState>((set, get) => ({
   toasts: [],
   isLoading: false,
   loadingMessage: 'Đang xử lý dữ liệu Kiosk...',
+  mapNavigationRoomId: null,
 
   initialize: () => {
     get().goHome();
@@ -160,6 +164,7 @@ export const useKioskStore = create<KioskStoreState>((set, get) => ({
     useTriageStore.getState().resetTriageFlow();
     useBookingStore.getState().resetBooking();
     useFlowStore.getState().resetFlow();
+    usePackageBookingStore.getState().resetStore();
 
     set({
       currentView: 'home',
@@ -168,10 +173,13 @@ export const useKioskStore = create<KioskStoreState>((set, get) => ({
       aiRegisterStep: 'body_select',
       bookingFlowMode: 'ai',
       isLoading: false,
+      mapNavigationRoomId: null,
     });
   },
 
   navigateToView: (view) => set({ currentView: view }),
+
+  navigateToMap: (roomId) => set({ mapNavigationRoomId: roomId ?? null, currentView: 'map' }),
 
   showToast: (msg, type = 'info') => {
     const id = Date.now().toString();

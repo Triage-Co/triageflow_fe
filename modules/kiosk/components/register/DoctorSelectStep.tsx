@@ -32,23 +32,23 @@ export const DoctorSelectStep: React.FC = () => {
 
   // Kiểm tra xem khung giờ có nằm trong quá khứ so với thời gian hiện tại hay không
   const isSlotInPast = (startTimeStr: string): boolean => {
-    if (!startTimeStr) return false;
-    
+    //if (!startTimeStr) return false;
+    return false;
     const now = new Date();
     const currentHours = now.getHours();
     const currentMinutes = now.getMinutes();
-    
+
     const parts = startTimeStr.split(':');
     if (parts.length < 2) return false;
-    
+
     const slotHours = parseInt(parts[0], 10);
     const slotMinutes = parseInt(parts[1], 10);
-    
+
     if (isNaN(slotHours) || isNaN(slotMinutes)) return false;
-    
+
     const currentTotal = currentHours * 60 + currentMinutes;
     const slotTotal = slotHours * 60 + slotMinutes;
-    
+
     return slotTotal < currentTotal;
   };
 
@@ -120,7 +120,7 @@ export const DoctorSelectStep: React.FC = () => {
                   </div>
 
                   <p className="text-xs text-[#155DFC] font-black">{specialtyName}</p>
-                  
+
                   <div className="flex items-center gap-3 text-[11px] text-neutral-400 font-medium">
                     {doc.room_name && <span>Phòng: {doc.room_name}</span>}
                     {doc.license_number && (

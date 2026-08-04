@@ -11,6 +11,7 @@ import {
   localToLngLat,
 } from '../../utils/buildingToThree';
 import { createWallMaterial, createDoorMaterial } from './threeMaterials';
+import { useNavigationStore } from '../../store/navigationStore';
 import {
   DEFAULT_WALL_HEIGHT,
   addWallSegment,
@@ -97,6 +98,30 @@ interface ProjectedMarker {
   kind: 'default' | 'start' | 'target';
 }
 
+function createArrowTexture(): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 32;
+  const ctx = canvas.getContext('2d')!;
+
+  // Transparent background
+  ctx.fillStyle = 'rgba(0, 0, 0, 0)';
+  ctx.fillRect(0, 0, 128, 32);
+
+  // Draw ">>>" white text on it
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 24px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('>>>', 64, 16);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  // Repeat along the length of the tube
+  texture.repeat.set(35, 1);
+  return texture;
+}
+
 export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   floorData,
   apiFloor = null,
@@ -138,6 +163,7 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [markers, setMarkers] = useState<ProjectedMarker[]>([]);
+  const activeFloor = useNavigationStore((s) => s.activeFloor);
 
   const roomFloorMeshesRef = useRef<Map<string, THREE.Mesh>>(new Map());
   const beaconGroupRef = useRef<THREE.Group | null>(null);
@@ -210,7 +236,7 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   onEditorPointerMoveRef.current = onEditorPointerMove;
   onEditorPointerUpRef.current = onEditorPointerUp;
 
-  const activeHighlightId = selectedRoomId || highlightedRoomId || null;
+  const activeHighlightId = targetRoomId || selectedRoomId || highlightedRoomId || null;
   activeHighlightIdRef.current = activeHighlightId;
 
   const clearPathMesh = () => {
@@ -271,6 +297,99 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
         mat.color.set(originalColor);
       }
     });
+  };
+
+  const drawRouteLine = (scene: THREE.Scene) => {
+    // Clean up previous route line
+    if (routeLineRef.current) {
+      scene.remove(routeLineRef.current);
+      routeLineRef.current.geometry.dispose();
+      if (Array.isArray(routeLineRef.current.material)) {
+        routeLineRef.current.material.forEach((m) => m.dispose());
+      } else {
+        routeLineRef.current.material.dispose();
+      }
+      routeLineRef.current = null;
+    }
+
+    if (routeTextureRef.current) {
+      routeTextureRef.current.dispose();
+      routeTextureRef.current = null;
+    }
+
+    const currentPath = routePathRef.current;
+
+    // If we have a path, draw it
+    if (currentPath && currentPath.length >= 2 && floorData) {
+      const centerShiftX = floorData.centerShiftX ?? 0;
+      const centerShiftZ = floorData.centerShiftZ ?? 0;
+
+      // Filter only points on the CURRENT ACTIVE FLOOR
+      let currentFloorNodes = currentPath.filter((node: any) => {
+        if (node.floorId && floorData.floorId) {
+          return node.floorId === floorData.floorId;
+        }
+        if (node.floorNumber !== undefined && floorData.floorNumber !== undefined) {
+          return Number(node.floorNumber) === Number(floorData.floorNumber);
+        }
+        return true;
+      });
+
+      // Fallback: if filtered nodes are fewer than 2, draw the whole path
+      if (currentFloorNodes.length < 2) {
+        currentFloorNodes = currentPath;
+      }
+
+      if (currentFloorNodes.length >= 2) {
+        const points = currentFloorNodes.map((node: any) => {
+          const [lng, lat] = node.coords;
+          const x = lng * 111320 - centerShiftX;
+          const z = -(lat * 110540) - centerShiftZ;
+          return new THREE.Vector3(x, 0.4, z); // Elevated above the floor to float clearly
+        });
+
+        // Filter out duplicate consecutive points to prevent geometry issues
+        const uniquePoints: THREE.Vector3[] = [];
+        points.forEach((p) => {
+          if (uniquePoints.length === 0) {
+            uniquePoints.push(p);
+          } else {
+            const prev = uniquePoints[uniquePoints.length - 1];
+            if (p.distanceTo(prev) > 0.01) {
+              uniquePoints.push(p);
+            }
+          }
+        });
+
+        if (uniquePoints.length >= 2) {
+          try {
+            const curve = new THREE.CatmullRomCurve3(uniquePoints);
+            // Create a nice glowing thicker 3D Tube for the path
+            const geometry = new THREE.TubeGeometry(curve, 100, 0.3, 8, false);
+
+            const arrowTexture = createArrowTexture();
+            routeTextureRef.current = arrowTexture;
+
+            const material = new THREE.MeshStandardMaterial({
+              color: 0x111111, // Sleek glossy black tube
+              map: arrowTexture,
+              emissive: 0x000000, // Black color has no emission
+              roughness: 0.1, // Shiny surface
+              metalness: 0.9, // Glossy look
+              transparent: true,
+              depthWrite: false, // Prevents Z-sorting issues with slab/rooms
+              side: THREE.DoubleSide, // Always visible from all camera angles
+            });
+            const tube = new THREE.Mesh(geometry, material);
+            tube.renderOrder = 100; // Guaranteed to render after transparent floor slab
+            scene.add(tube);
+            routeLineRef.current = tube;
+          } catch (error) {
+            console.error('Failed to build curve or tube geometry:', error);
+          }
+        }
+      }
+    }
   };
 
   useEffect(() => {
@@ -587,6 +706,7 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
 
     // 1. Scene & Camera
     const scene = new THREE.Scene();
+    sceneRef.current = scene;
     scene.background = new THREE.Color('#f8fafc');
     sceneRef.current = scene;
 
@@ -956,6 +1076,10 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       animationFrameId = requestAnimationFrame(animate);
       controls.update();
 
+      if (routeTextureRef.current) {
+        routeTextureRef.current.offset.x -= 0.015;
+      }
+
       const currentHlId = activeHighlightIdRef.current;
       const startId = startRoomIdRef.current;
       const targetId = targetRoomIdRef.current;
@@ -993,6 +1117,7 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       renderer.render(scene, activeCameraRef.current || camera);
     };
 
+    drawRouteLine(scene);
     animate();
 
     const handleResize = () => {
@@ -1052,6 +1177,7 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       sceneRef.current = null;
       controls.dispose();
       renderer.dispose();
+      sceneRef.current = null;
     };
   }, [floorData]);
 

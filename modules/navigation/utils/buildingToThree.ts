@@ -74,6 +74,10 @@ export interface FloorData3D {
   floorOutlinePoints: { x: number; z: number }[];
   floorWidth: number;
   floorHeight: number;
+  floorId?: string;
+  floorNumber?: number;
+  centerShiftX?: number;
+  centerShiftZ?: number;
   bounds: {
     minX: number;
     maxX: number;
@@ -431,6 +435,10 @@ export function floorToRoomData(floor: ApiFloor): FloorData3D {
     floorOutlinePoints,
     floorWidth: globalMaxX - globalMinX,
     floorHeight: globalMaxZ - globalMinZ,
+    floorId: floor.id,
+    floorNumber: floor.floorNumber,
+    centerShiftX,
+    centerShiftZ,
     bounds: {
       minX: globalMinX - centerShiftX,
       maxX: globalMaxX - centerShiftX,

@@ -9,7 +9,10 @@ export type ActiveView =
   | 'map'
   | 'payment'
   | 'support'
-  | 'pending_bills';
+  | 'pending_bills'
+  | 'package_select'
+  | 'package_detail'
+  | 'package_slot_select';
 
 export type ActiveModal =
   | null
@@ -70,6 +73,8 @@ export interface TicketData {
   stepId?: string;
   bookingId?: string;
   startTime?: string;
+  roomId?: string;
+  stepName?: string;
 }
 
 export interface PaymentItem {
