@@ -4,10 +4,11 @@ import { useState, useEffect, useRef } from 'react';
 import { API_BASE_URL } from '@/shared/constants/config';
 import type { CallNextResponse, CallNextPatient } from '../types/queue.types';
 import { normalizeQueueUpdatePayload } from '../utils/normalizeQueueUpdate';
-import { roomDisplayService } from '../services/roomDisplayService';
-import { useAuthStore } from '@/modules/auth/store/authStore';
 
-import type { RebalanceSuggestionData } from '../types/rebalance.types';
+import type {
+    RebalanceSuggestionData,
+    RebalanceResolvedData,
+} from '../types/rebalance.types';
 
 export type SocketRoomInfo = CallNextResponse['room_info'];
 export type SocketQueuePatient = CallNextPatient;
@@ -16,7 +17,6 @@ export type SocketQueueUpdateData = CallNextResponse;
 interface UseRoomDisplaySocketOptions {
     roomId?: string;
     staffId?: string;
-    token?: string;
 }
 
 interface UseRoomDisplaySocketReturn {
@@ -35,30 +35,28 @@ const SOCKET_URL =
 const EVENT_ON_QUEUE_UPDATE = 'onQueueUpdate';
 /** Event emitted by BE for rebalance load-balancing suggestions */
 const EVENT_ON_REBALANCE_SUGGESTION = 'onRebalanceSuggestion';
+/** Event emitted by BE when a suggestion is confirmed or rejected */
+const EVENT_ON_REBALANCE_RESOLVED = 'onRebalanceResolved';
 
 export { normalizeQueueUpdatePayload };
 
 /**
- * Connects to Socket.IO for TV/kiosk room display.
+ * Connects to Socket.IO for TV/kiosk room display (always anonymous — no auth.token).
  *
  * Join: `joinRoomDisplay` { roomId, staffId }
- * Listen: `onQueueUpdate`, `onRebalanceSuggestion`
+ * Listen: `onQueueUpdate`, `onRebalanceSuggestion`, `onRebalanceResolved`
  *
  * Payload: { room_info, current_patient, upcoming_patients }
  */
 export function useRoomDisplaySocket({
     roomId,
     staffId,
-    token,
 }: UseRoomDisplaySocketOptions): UseRoomDisplaySocketReturn {
     const [data, setData] = useState<SocketQueueUpdateData | null>(null);
     const [rebalanceSuggestions, setRebalanceSuggestions] = useState<RebalanceSuggestionData[]>([]);
     const [isConnected, setIsConnected] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const socketRef = useRef<ReturnType<typeof import('socket.io-client')['io']> | null>(null);
-
-    const storeToken = useAuthStore((s) => s.accessToken);
-    const authToken = token || storeToken || undefined;
 
     // Prune expired suggestions periodically
     useEffect(() => {
@@ -90,8 +88,8 @@ export function useRoomDisplaySocket({
         import('socket.io-client').then(({ io }) => {
             if (cancelled) return;
 
+            // TV display is always anonymous — do not send staff/Supabase JWT
             socket = io(SOCKET_URL, {
-                auth: { token: authToken },
                 transports: ['websocket', 'polling'],
                 reconnection: true,
                 reconnectionAttempts: Infinity,
@@ -137,6 +135,14 @@ export function useRoomDisplaySocket({
                     return [payload, ...prev];
                 });
             });
+
+            socket.on(EVENT_ON_REBALANCE_RESOLVED, (payload: RebalanceResolvedData) => {
+                console.log('[RoomDisplaySocket] onRebalanceResolved:', payload);
+                if (!payload?.suggestion_id) return;
+                setRebalanceSuggestions((prev) =>
+                    prev.filter((s) => s.suggestion_id !== payload.suggestion_id),
+                );
+            });
         });
 
         return () => {
@@ -145,15 +151,14 @@ export function useRoomDisplaySocket({
                 socketRef.current.emit('leaveRoomDisplay', { roomId });
                 socketRef.current.off(EVENT_ON_QUEUE_UPDATE);
                 socketRef.current.off(EVENT_ON_REBALANCE_SUGGESTION);
+                socketRef.current.off(EVENT_ON_REBALANCE_RESOLVED);
                 socketRef.current.off('onError');
                 socketRef.current.disconnect();
                 socketRef.current = null;
             }
             setIsConnected(false);
         };
-    }, [roomId, staffId, authToken]);
+    }, [roomId, staffId]);
 
     return { data, rebalanceSuggestions, isConnected, error };
 }
-
-

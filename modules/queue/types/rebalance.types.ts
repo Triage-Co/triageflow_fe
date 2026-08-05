@@ -11,3 +11,8 @@ export interface RebalanceSuggestionData {
     expires_at: string;
     service_id?: string;
 }
+
+export interface RebalanceResolvedData {
+    suggestion_id: string;
+    status: 'CONFIRMED' | 'REJECTED' | string;
+}

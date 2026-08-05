@@ -64,13 +64,25 @@ export function normalizeQueueUpdatePayload(
             priority_reasons: Array.isArray(p.priority_reasons) ? p.priority_reasons : undefined,
         }));
 
+    const current_patient: CallNextPatient | null = current
+        ? {
+              ...current,
+              queue_number: current.queue_number,
+              patient_name: current.patient_name,
+              queue_id: current.queue_id ? String(current.queue_id) : undefined,
+              status: current.status
+                  ? (String(current.status).toUpperCase() as CallNextPatient['status'])
+                  : undefined,
+          }
+        : null;
+
     return {
         room_info: {
             room_name: String(roomInfo.room_name ?? ''),
             specialty_name: String(roomInfo.specialty_name ?? ''),
             doctor_name: String(roomInfo.doctor_name ?? ''),
         },
-        current_patient: current,
+        current_patient,
         upcoming_patients,
     };
 }
