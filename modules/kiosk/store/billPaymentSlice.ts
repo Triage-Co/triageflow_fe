@@ -1,5 +1,5 @@
 import { StateCreator } from 'zustand';
-import { PaymentBill, PaymentMethod, PendingPaymentStep } from '../types/kiosk.types';
+import { PaymentBill, PaymentMethod, PendingPaymentStep, TicketData } from '../types/kiosk.types';
 import { BookingPaymentData } from '../types/booking.types';
 import { FlowStoreState } from './flowStore';
 import { useAuthStore } from './authStore';
@@ -23,6 +23,7 @@ export interface BillPaymentSlice {
   selectPendingStep: (step: PendingPaymentStep) => void;
   setSelectedPendingStep: (step: PendingPaymentStep | null) => void;
   verifyPaymentAndIssueTicket: () => Promise<boolean>;
+  payBill: () => Promise<void>;
 }
 
 export const createBillPaymentSlice: StateCreator<
@@ -98,6 +99,11 @@ export const createBillPaymentSlice: StateCreator<
       return false;
     }
 
+    if (!stepId) {
+      await get().payBill();
+      return true;
+    }
+
     set({ isPaymentChecking: true });
     kioskState.setLoading(true, 'Đang xác nhận thanh toán...');
 
@@ -159,5 +165,35 @@ export const createBillPaymentSlice: StateCreator<
       set({ isPaymentChecking: false });
       kioskState.setLoading(false);
     }
+  },
+
+  payBill: async () => {
+    const kioskState = useKioskStore.getState();
+    const authPatientInfo = useAuthStore.getState().patientInfo;
+
+    set((s) => {
+      const updatedBill = s.activeBill ? { ...s.activeBill, isPaid: true } : null;
+      const generatedTicket: TicketData = {
+        ticketNumber: 'A' + Math.floor(Math.random() * 90 + 10),
+        clinicName: '',
+        roomNumber: '',
+        location: '',
+        patientName: authPatientInfo?.fullName ?? '',
+        dob: authPatientInfo?.dob ?? '',
+        createdAt: new Date().toLocaleTimeString('vi-VN'),
+        currentCallingNo: '',
+        estimatedWaitMinutes: 15,
+        waitingCount: 0,
+        status: 'waiting'
+      };
+
+      return {
+        activeBill: updatedBill,
+        activeTicket: generatedTicket,
+      } as Partial<FlowStoreState>;
+    });
+
+    kioskState.navigateToView('patient_info');
+    kioskState.showToast('Thanh toán viện phí thành công!', 'success');
   },
 });

@@ -46,7 +46,9 @@ export const createTicketSlice: StateCreator<
         let rawRes: any = preFetchedFlow;
         if (!rawRes) {
           try {
-            rawRes = await getActivePatientFlowKioskWithCache(patientId);
+            const d = new Date();
+            const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            rawRes = await getActivePatientFlowKioskWithCache(patientId, todayStr);
           } catch (e) {
             console.warn('Lấy active kiosk flow cho doctor route không thành công, thử getPatientFlows:', e);
           }
@@ -139,7 +141,9 @@ export const createTicketSlice: StateCreator<
       try {
         let flowRes: any = null;
         try {
-          flowRes = await getActivePatientFlowKioskWithCache(patientId);
+          const d = new Date();
+          const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          flowRes = await getActivePatientFlowKioskWithCache(patientId, todayStr);
         } catch (e: any) {
           console.warn('Lỗi khi lấy active kiosk flow:', e?.message || e);
         }

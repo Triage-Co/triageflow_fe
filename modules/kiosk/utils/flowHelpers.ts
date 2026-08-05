@@ -7,12 +7,12 @@ export const doctorRouteRequests = new Map<string, Promise<boolean>>();
 export const stepDetailRequests = new Map<string, Promise<any>>();
 export const activeFlowKioskRequests = new Map<string, Promise<any>>();
 
-export const getActivePatientFlowKioskWithCache = (patientId: string): Promise<any> => {
-  const cacheKey = patientId;
+export const getActivePatientFlowKioskWithCache = (patientId: string, date?: string): Promise<any> => {
+  const cacheKey = date ? `${patientId}_${date}` : patientId;
   if (activeFlowKioskRequests.has(cacheKey)) {
     return activeFlowKioskRequests.get(cacheKey)!;
   }
-  const promise = flowService.getActivePatientFlowKiosk(patientId)
+  const promise = flowService.getActivePatientFlowKiosk(patientId, date)
     .then(res => (res as any)?.data || res)
     .catch((err) => {
       activeFlowKioskRequests.delete(cacheKey);
@@ -52,6 +52,17 @@ export const sortStepsTopologically = (steps: any[]): any[] => {
   const visited = new Set<string>();
   const temp = new Set<string>();
 
+  const getStatusWeight = (status: string): number => {
+    const s = (status || '').toUpperCase().trim();
+    if (s === 'COMPLETED') return 0;
+    if (s === 'IN_PROGRESS' || s === 'WAITING') return 1;
+    return 2; // PENDING or others
+  };
+
+  const preSortedSteps = [...steps].sort((a, b) => {
+    return getStatusWeight(a.step_status) - getStatusWeight(b.step_status);
+  });
+
   const visit = (step: any) => {
     const stepId = step.step_id || step.id;
     if (!stepId) {
@@ -65,7 +76,7 @@ export const sortStepsTopologically = (steps: any[]): any[] => {
 
     const deps = step.depends_on || [];
     for (const depId of deps) {
-      const depStep = steps.find(s => (s.step_id || s.id) === depId);
+      const depStep = preSortedSteps.find(s => (s.step_id || s.id) === depId);
       if (depStep) {
         visit(depStep);
       }
@@ -76,7 +87,7 @@ export const sortStepsTopologically = (steps: any[]): any[] => {
     sorted.push(step);
   };
 
-  for (const step of steps) {
+  for (const step of preSortedSteps) {
     visit(step);
   }
   return sorted;
