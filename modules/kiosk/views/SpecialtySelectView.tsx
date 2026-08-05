@@ -12,30 +12,95 @@ import {
   Brain,
   Baby,
   Smile,
-  ShieldAlert,
-  Thermometer,
-  Zap,
   Bone,
   Pill,
   Sparkles,
   X,
   CheckCircle2,
+  Droplet,
+  Syringe,
+  Dna,
+  Ear,
+  Hospital,
+  User,
+  Biohazard,
+  Scissors,
+  Ribbon,
+  SmilePlus,
+  Wind,
+  FlaskConical,
 } from 'lucide-react';
 
-// Helper function to map specialty names to icons
-const getSpecialtyIcon = (name: string) => {
-  const lower = name.toLowerCase();
-  if (lower.includes('tim')) return <Heart className="w-8 h-8 text-rose-500" />;
-  if (lower.includes('mắt')) return <Eye className="w-8 h-8 text-sky-500" />;
-  if (lower.includes('thần kinh')) return <Brain className="w-8 h-8 text-purple-500" />;
-  if (lower.includes('nhi') || lower.includes('sơ sinh')) return <Baby className="w-8 h-8 text-amber-500" />;
-  if (lower.includes('răng') || lower.includes('mặt')) return <Smile className="w-8 h-8 text-teal-500" />;
-  if (lower.includes('độc') || lower.includes('nhiễm')) return <ShieldAlert className="w-8 h-8 text-orange-500" />;
-  if (lower.includes('dị ứng') || lower.includes('da')) return <Thermometer className="w-8 h-8 text-pink-500" />;
-  if (lower.includes('cơ xương') || lower.includes('chỉnh hình')) return <Bone className="w-8 h-8 text-indigo-500" />;
-  if (lower.includes('huyết') || lower.includes('mạch')) return <Zap className="w-8 h-8 text-red-500" />;
-  if (lower.includes('dược') || lower.includes('tiêu hóa')) return <Pill className="w-8 h-8 text-emerald-500" />;
-  return <Stethoscope className="w-8 h-8 text-[#155DFC]" />;
+
+export const getSpecialtyIcon = (name: string, className = "w-8 h-8") => {
+  const lower = name.toLowerCase().trim();
+  if (lower.includes('mắt')) {
+    return <Eye className={`${className} text-sky-500`} />;
+  }
+  if (lower.includes('tim')) {
+    return <Heart className={`${className} text-rose-500`} />;
+  }
+  if (lower.includes('mạch máu') || lower.includes('mạch')) {
+    return <Activity className={`${className} text-red-500`} />;
+  }
+  if (lower.includes('thần kinh')) {
+    return <Brain className={`${className} text-purple-500`} />;
+  }
+  if (lower.includes('nhi') || lower.includes('sơ sinh')) {
+    return <Baby className={`${className} text-amber-500`} />;
+  }
+  if (lower.includes('răng') || lower.includes('hàm mặt')) {
+    return <Smile className={`${className} text-teal-500`} />;
+  }
+  if (lower.includes('tai') || lower.includes('mũi') || lower.includes('họng')) {
+    return <Ear className={`${className} text-cyan-500`} />;
+  }
+  if (lower.includes('da') || lower.includes('dị ứng')) {
+    return <Sparkles className={`${className} text-pink-500`} />;
+  }
+  if (lower.includes('xương') || lower.includes('khớp') || lower.includes('chỉnh hình')) {
+    return <Bone className={`${className} text-indigo-500`} />;
+  }
+  if (lower.includes('huyết')) {
+    return <Droplet className={`${className} text-red-600`} />;
+  }
+  if (lower.includes('đái tháo đường') || lower.includes('tiểu đường')) {
+    return <Syringe className={`${className} text-blue-500`} />;
+  }
+  if (lower.includes('nội tiết')) {
+    return <Dna className={`${className} text-violet-500`} />;
+  }
+  if (lower.includes('tiêu hóa')) {
+    return <Pill className={`${className} text-emerald-500`} />;
+  }
+  if (lower.includes('phụ')) {
+    return <User className={`${className} text-fuchsia-500`} />;
+  }
+  if (lower.includes('truyền nhiễm')) {
+    return <Biohazard className={`${className} text-yellow-600`} />;
+  }
+  if (lower.includes('ung bướu') || lower.includes('ung thư')) {
+    return <Ribbon className={`${className} text-pink-600`} />;
+  }
+  if (lower.includes('tâm thần') || lower.includes('tâm lý')) {
+    return <SmilePlus className={`${className} text-violet-400`} />;
+  }
+  if (lower.includes('hô hấp') || lower.includes('phổi')) {
+    return <Wind className={`${className} text-cyan-600`} />;
+  }
+  if (lower.includes('ngoại')) {
+    return <Scissors className={`${className} text-slate-600`} />;
+  }
+  if (lower.includes('độc')) {
+    return <FlaskConical className={`${className} text-lime-600`} />;
+  }
+  if (lower.includes('tiết niệu') || lower.includes('thận')) {
+    return <Droplet className={`${className} text-blue-600`} />;
+  }
+  if (lower.includes('đa khoa')) {
+    return <Hospital className={`${className} text-blue-500`} />;
+  }
+  return <Stethoscope className={`${className} text-[#155DFC]`} />;
 };
 
 export const SpecialtySelectView: React.FC = () => {
@@ -71,11 +136,7 @@ export const SpecialtySelectView: React.FC = () => {
     const specialtyCode = selectedSpecialtyItem.specialty_code;
 
     showToast(`Đang tải danh sách Bác sĩ cho ${selectedSpecialtyItem.specialty_name}...`, 'info');
-
-    // 1. Gọi API lấy danh sách bác sĩ kèm shifts/slots hôm nay
     await fetchDoctorsAndSlots(specialtyCode, todayStr);
-
-    // 2. Chuyển bước sang doctor_select & navigate sang RegisterView
     setAIRegisterStep('doctor_select');
     navigateToView('register');
     setSelectedSpecialtyItem(null);
@@ -88,9 +149,9 @@ export const SpecialtySelectView: React.FC = () => {
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigateToView('booking_mode')}
-            className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-neutral-50 active:scale-95 rounded-2xl text-sm font-bold text-neutral-800 shadow-md border border-neutral-100 transition-all cursor-pointer shrink-0"
+            className="flex items-center gap-2 px-5 py-1 bg-white hover:bg-neutral-50 active:scale-95 rounded-2xl text-sm font-bold text-neutral-800 shadow-md border border-neutral-100 transition-all cursor-pointer shrink-0"
           >
-            <ArrowLeft className="w-5 h-5 text-neutral-600" /> Quay lại
+            <ArrowLeft className="w-12 h-12 text-neutral-600" /> Quay lại
           </button>
           <div>
             <h2 className="text-2xl sm:text-3xl font-black text-[#1E2939] tracking-tight">
@@ -122,7 +183,7 @@ export const SpecialtySelectView: React.FC = () => {
             {Array.from({ length: 15 }).map((_, idx) => (
               <div
                 key={idx}
-                className="h-32 bg-white/60 rounded-3xl animate-pulse border border-neutral-100"
+                className="lg:size-40 bg-white/60 rounded-3xl animate-pulse border border-neutral-100"
               />
             ))}
           </div>
