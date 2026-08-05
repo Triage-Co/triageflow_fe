@@ -1,5 +1,4 @@
 import {
-    getEnvVnptCredentials,
     resolveVnptCredentials,
 } from '@/modules/reception/services/vnptCredentials';
 import type { VnptCredentials } from '@/modules/reception/types/vnpt.types';

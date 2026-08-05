@@ -14,7 +14,9 @@ import { Loader2, AlertCircle } from 'lucide-react';
 export function DoctorDashboard() {
     const router = useRouter();
     const { openTab } = usePatientTabsStore();
+    const user = useAuthStore((s) => s.user);
     const accessToken = useAuthStore((s) => s.accessToken);
+    const basePath = user?.role === 'NURSE' ? '/nurse' : '/doctor';
 
     // Generate tabs: 3 past days + today + 3 future days — timezone-safe
     const dateTabs = useMemo(() => {
@@ -77,8 +79,21 @@ export function DoctorDashboard() {
                     setPatients([]);
                 }
             } catch (err) {
-                setError(err instanceof Error ? err.message : 'Không thể kết nối tới máy chủ.');
-                setPatients([]);
+                const errMsg = err instanceof Error ? err.message : '';
+                if (
+                    errMsg.includes('rỗng') ||
+                    errMsg.includes('empty') ||
+                    errMsg.includes('cơ sở dữ liệu') ||
+                    errMsg.includes('Prisma') ||
+                    errMsg.includes('404') ||
+                    errMsg.includes('500')
+                ) {
+                    setPatients([]);
+                    setError(null);
+                } else {
+                    setError(errMsg || 'Không thể kết nối tới máy chủ.');
+                    setPatients([]);
+                }
             } finally {
                 setIsLoading(false);
             }
@@ -96,8 +111,8 @@ export function DoctorDashboard() {
     }, [patients]);
 
     const handleSelectPatient = (patient: Patient) => {
-        openTab({ id: patient.id, name: patient.name });
-        router.push(`/doctor/${patient.id}`);
+        openTab({ id: patient.id, name: patient.name, stt: patient.stt });
+        router.push(`${basePath}/${patient.id}`);
     };
 
     return (
@@ -151,6 +166,10 @@ export function DoctorDashboard() {
                                 <p className="text-sm text-red-800 font-bold">Lỗi tải dữ liệu</p>
                                 <p className="text-xs text-red-700 font-semibold mt-1">{error}</p>
                             </div>
+                        </div>
+                    ) : patients.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-20 text-neutral-400 gap-3 bg-[#FBFBFF] rounded-3xl border border-neutral-100 border-dashed">
+                            <p className="text-sm font-bold text-neutral-500">Hôm nay không có bệnh nhân đến khám</p>
                         </div>
                     ) : (
                         <PatientTable

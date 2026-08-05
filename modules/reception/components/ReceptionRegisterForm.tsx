@@ -166,8 +166,8 @@ function Stepper({ current }: { current: Step }) {
                                     isActive
                                         ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white'
                                         : isDone
-                                          ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white'
-                                          : 'bg-white border-[#E5E7EB] text-[#9CA3AF]',
+                                            ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white'
+                                            : 'bg-white border-[#E5E7EB] text-[#9CA3AF]',
                                 )}
                             >
                                 {isDone ? <CheckCircle2 className="w-4 h-4" /> : step.num}
@@ -222,51 +222,55 @@ export function ReceptionRegisterForm() {
         if (draftHydratedRef.current) return;
         draftHydratedRef.current = true;
 
-        const prefill = consumeRegisterPrefill();
-        prefillRef.current = prefill;
+        const hydrateTimer = window.setTimeout(() => {
+            const prefill = consumeRegisterPrefill();
+            prefillRef.current = prefill;
 
-        if (prefill) {
-            setForm((prev) => applyRegisterPrefillToForm(prev, prefill));
-            if (prefill.patient_id || prefill.account_id) {
+            if (prefill) {
+                setForm((prev) => applyRegisterPrefillToForm(prev, prefill));
+                if (prefill.patient_id || prefill.account_id) {
+                    setExistingAccount({
+                        account_id: prefill.account_id ?? '',
+                        patient_id: prefill.patient_id,
+                        full_name: prefill.full_name,
+                        citizen_id: prefill.citizen_id,
+                        email: prefill.email ?? '',
+                        dob: '',
+                        gender: 'FEMALE',
+                        role: 'PATIENT',
+                        phone: prefill.phone ?? null,
+                        bhyt: prefill.insurance_id || null,
+                    });
+                }
+                setScanBanner('Đã tải thông tin bệnh nhân từ tra cứu.');
+                return;
+            }
+
+            const draft = loadRegisterStep1Draft();
+            if (!draft) return;
+
+            setForm((prev) => applyRegisterStep1DraftToForm(prev, draft));
+            if (draft.lookup_banner) setLookupBanner(draft.lookup_banner);
+            if (draft.existing_patient_id || draft.existing_account_id) {
                 setExistingAccount({
-                    account_id: prefill.account_id ?? '',
-                    patient_id: prefill.patient_id,
-                    full_name: prefill.full_name,
-                    citizen_id: prefill.citizen_id,
-                    email: prefill.email ?? '',
-                    dob: '',
-                    gender: 'FEMALE',
+                    account_id: draft.existing_account_id ?? '',
+                    patient_id: draft.existing_patient_id ?? undefined,
+                    full_name: draft.full_name,
+                    citizen_id: draft.citizen_id,
+                    email: draft.email,
+                    dob: draft.dob,
+                    gender: draft.gender,
                     role: 'PATIENT',
-                    phone: prefill.phone ?? null,
-                    bhyt: prefill.insurance_id || null,
+                    phone: draft.phone || null,
+                    bhyt: draft.insurance_id || null,
                 });
             }
-            setScanBanner('Đã tải thông tin bệnh nhân từ tra cứu.');
-            return;
-        }
+            if (draft.citizen_id || draft.full_name) {
+                setScanBanner('Đã khôi phục thông tin bệnh nhân từ lần nhập trước.');
+            }
+        }, 0);
 
-        const draft = loadRegisterStep1Draft();
-        if (!draft) return;
-
-        setForm((prev) => applyRegisterStep1DraftToForm(prev, draft));
-        if (draft.lookup_banner) setLookupBanner(draft.lookup_banner);
-        if (draft.existing_patient_id || draft.existing_account_id) {
-            setExistingAccount({
-                account_id: draft.existing_account_id ?? '',
-                patient_id: draft.existing_patient_id ?? undefined,
-                full_name: draft.full_name,
-                citizen_id: draft.citizen_id,
-                email: draft.email,
-                dob: draft.dob,
-                gender: draft.gender,
-                role: 'PATIENT',
-                phone: draft.phone || null,
-                bhyt: draft.insurance_id || null,
-            });
-        }
-        if (draft.citizen_id || draft.full_name) {
-            setScanBanner('Đã khôi phục thông tin bệnh nhân từ lần nhập trước.');
-        }
+        return () => window.clearTimeout(hydrateTimer);
     }, []);
 
     useEffect(() => {
@@ -361,17 +365,17 @@ export function ReceptionRegisterForm() {
                     prev
                         ? { ...prev, patient_id: patientId }
                         : {
-                              account_id: '',
-                              patient_id: patientId,
-                              full_name: form.full_name.trim(),
-                              citizen_id: form.citizen_id.trim(),
-                              email: form.email,
-                              dob: form.dob,
-                              gender: form.gender,
-                              role: 'PATIENT',
-                              phone: form.phone || null,
-                              bhyt: form.insurance_id || null,
-                          },
+                            account_id: '',
+                            patient_id: patientId,
+                            full_name: form.full_name.trim(),
+                            citizen_id: form.citizen_id.trim(),
+                            email: form.email,
+                            dob: form.dob,
+                            gender: form.gender,
+                            role: 'PATIENT',
+                            phone: form.phone || null,
+                            bhyt: form.insurance_id || null,
+                        },
                 );
             })
             .catch(() => {
@@ -465,8 +469,8 @@ export function ReceptionRegisterForm() {
             source === 'image'
                 ? 'Đã phân tích ảnh CCCD và tự động điền thông tin.'
                 : data.ekyc_verified
-                  ? 'Xác thực eKYC thành công! Đã điền thông tin từ CCCD/VNeID.'
-                  : 'Quét thành công! Đã điền thông tin từ CCCD/VNeID.',
+                    ? 'Xác thực eKYC thành công! Đã điền thông tin từ CCCD/VNeID.'
+                    : 'Quét thành công! Đã điền thông tin từ CCCD/VNeID.',
         );
         const cleanCitizenId = data.citizen_id.replace(/\D/g, '');
         setForm((prev) => ({
@@ -931,62 +935,62 @@ export function ReceptionRegisterForm() {
 
                         {/* Footer actions */}
                         {step < 4 && (
-                        <div className="flex items-center justify-between mt-8 pt-4 border-t border-[#F3F4F6]">
-                            {step > 1 ? (
-                                <button
-                                    type="button"
-                                    onClick={handleBack}
-                                    disabled={isPending}
-                                    className="inline-flex items-center gap-1.5 min-h-[44px] px-4 rounded-lg border border-[#E5E7EB] bg-white text-[13px] font-semibold text-[#6B7280] hover:bg-[#F9FAFB] transition-colors"
-                                >
-                                    <ChevronLeft className="w-4 h-4" />
-                                    Quay lại
-                                </button>
-                            ) : (
-                                <div />
-                            )}
-
-                            {step < 3 ? (
-                                <button
-                                    type="button"
-                                    onClick={handleNext}
-                                    disabled={step === 1 ? !step1Valid : !step2Valid}
-                                    className={cn(
-                                        'inline-flex items-center gap-2 min-h-[44px] px-6 py-2.5 rounded-lg text-[13px] font-bold transition-colors',
-                                        (step === 1 ? step1Valid : step2Valid)
-                                            ? 'bg-[#8B7CF6] hover:bg-[#7C6FE0] text-white shadow-[0_2px_8px_rgba(139,124,246,0.3)]'
-                                            : 'bg-[#EDE9FE] text-[#C4B5FD] cursor-not-allowed',
-                                    )}
-                                >
-                                    Tiếp theo
-                                    <ArrowRight className="w-4 h-4" />
-                                </button>
-                            ) : (
-                                <div className="flex items-center gap-2">
+                            <div className="flex items-center justify-between mt-8 pt-4 border-t border-[#F3F4F6]">
+                                {step > 1 ? (
                                     <button
                                         type="button"
-                                        onClick={handleReset}
+                                        onClick={handleBack}
                                         disabled={isPending}
                                         className="inline-flex items-center gap-1.5 min-h-[44px] px-4 rounded-lg border border-[#E5E7EB] bg-white text-[13px] font-semibold text-[#6B7280] hover:bg-[#F9FAFB] transition-colors"
                                     >
-                                        Làm mới
+                                        <ChevronLeft className="w-4 h-4" />
+                                        Quay lại
                                     </button>
+                                ) : (
+                                    <div />
+                                )}
+
+                                {step < 3 ? (
                                     <button
                                         type="button"
-                                        onClick={handleSubmit}
-                                        disabled={isPending || !step2Valid}
-                                        className="inline-flex items-center gap-2 min-h-[44px] px-5 sm:px-6 py-2.5 rounded-lg bg-[#8B7CF6] hover:bg-[#7C6FE0] text-white text-[13px] font-bold shadow-[0_2px_8px_rgba(139,124,246,0.3)] disabled:opacity-50"
-                                    >
-                                        {isPending ? (
-                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                        ) : (
-                                            <CheckCircle2 className="w-4 h-4" />
+                                        onClick={handleNext}
+                                        disabled={step === 1 ? !step1Valid : !step2Valid}
+                                        className={cn(
+                                            'inline-flex items-center gap-2 min-h-[44px] px-6 py-2.5 rounded-lg text-[13px] font-bold transition-colors',
+                                            (step === 1 ? step1Valid : step2Valid)
+                                                ? 'bg-[#8B7CF6] hover:bg-[#7C6FE0] text-white shadow-[0_2px_8px_rgba(139,124,246,0.3)]'
+                                                : 'bg-[#EDE9FE] text-[#C4B5FD] cursor-not-allowed',
                                         )}
-                                        {isPending ? 'Đang xử lý...' : 'Xác nhận & Cấp số thứ tự'}
+                                    >
+                                        Tiếp theo
+                                        <ArrowRight className="w-4 h-4" />
                                     </button>
-                                </div>
-                            )}
-                        </div>
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={handleReset}
+                                            disabled={isPending}
+                                            className="inline-flex items-center gap-1.5 min-h-[44px] px-4 rounded-lg border border-[#E5E7EB] bg-white text-[13px] font-semibold text-[#6B7280] hover:bg-[#F9FAFB] transition-colors"
+                                        >
+                                            Làm mới
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleSubmit}
+                                            disabled={isPending || !step2Valid}
+                                            className="inline-flex items-center gap-2 min-h-[44px] px-5 sm:px-6 py-2.5 rounded-lg bg-[#8B7CF6] hover:bg-[#7C6FE0] text-white text-[13px] font-bold shadow-[0_2px_8px_rgba(139,124,246,0.3)] disabled:opacity-50"
+                                        >
+                                            {isPending ? (
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                            ) : (
+                                                <CheckCircle2 className="w-4 h-4" />
+                                            )}
+                                            {isPending ? 'Đang xử lý...' : 'Xác nhận & Cấp số thứ tự'}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         )}
                     </div>
                 </div>

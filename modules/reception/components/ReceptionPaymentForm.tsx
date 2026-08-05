@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Loader2, AlertCircle, CreditCard, ExternalLink, Copy, Check } from 'lucide-react';
+import { Loader2, AlertCircle, CreditCard, Copy, Check } from 'lucide-react';
 import { formatCaughtError } from '@/shared/utils/apiError';
 import { ApiError } from '@/shared/services/apiClient';
+import { useAuthStore } from '@/modules/auth/store/authStore';
 import { receptionService } from '@/modules/reception/services/receptionService';
 import {
     getTodayDateString,
@@ -82,20 +83,14 @@ export function ReceptionPaymentForm() {
             try {
                 const res = await receptionService.createTransaction(
                     {
-                        transType: 'BOOKING_PAYMENT_1',
+                        booking_id: selected.bookingId!,
                         amount: amountNum,
-                        clientId: selected.bookingId!,
-                        returnUrl: `${origin}/reception/payment?success=1`,
-                        cancelUrl: `${origin}/reception/payment?cancel=1`,
+                        payment_method: 'QR',
                     },
                     accessToken,
                 );
                 const payload = res.data as TransactionQrResponse | null;
-                setQrResult(
-                    payload?.qrCode || payload?.checkoutUrl
-                        ? payload
-                        : (res as unknown as TransactionQrResponse),
-                );
+                setQrResult(payload ?? null);
             } catch (err) {
                 console.error('[Payment] create transaction failed:', err);
                 const apiDetail = err instanceof ApiError ? err.detail : undefined;
@@ -109,8 +104,8 @@ export function ReceptionPaymentForm() {
     }
 
     async function copyQr() {
-        if (!qrResult?.qrCode) return;
-        await navigator.clipboard.writeText(qrResult.qrCode);
+        if (!qrResult?.qr_code) return;
+        await navigator.clipboard.writeText(qrResult.qr_code);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     }
@@ -194,11 +189,11 @@ export function ReceptionPaymentForm() {
                 <div className="mt-6 rounded-[12px] border border-[#EBEBEB] bg-white p-5 shadow-[0_1px_6px_rgba(0,0,0,0.04)]">
                     <h2 className="text-[14px] font-bold text-[#1F2937] mb-4">Mã thanh toán</h2>
 
-                    {qrResult.qrCode && (
+                    {qrResult.qr_code && (
                         <div className="flex flex-col items-center mb-4">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
-                                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrResult.qrCode)}`}
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrResult.qr_code)}`}
                                 alt="QR thanh toán"
                                 width={200}
                                 height={200}
@@ -220,29 +215,12 @@ export function ReceptionPaymentForm() {
                             <div className="flex justify-between">
                                 <span className="text-[#9CA3AF]">Số tiền</span>
                                 <span className="font-bold text-[#1F2937]">
-                                    {qrResult.amount.toLocaleString('vi-VN')} {qrResult.currency ?? 'VND'}
+                                    {qrResult.amount.toLocaleString('vi-VN')} VND
                                 </span>
-                            </div>
-                        )}
-                        {qrResult.status && (
-                            <div className="flex justify-between">
-                                <span className="text-[#9CA3AF]">Trạng thái</span>
-                                <span className="font-semibold text-[#374151]">{qrResult.status}</span>
                             </div>
                         )}
                     </div>
 
-                    {qrResult.checkoutUrl && (
-                        <a
-                            href={qrResult.checkoutUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-[#8B7CF6] px-4 py-2.5 text-sm font-semibold text-[#8B7CF6] hover:bg-[#F5F2FF]"
-                        >
-                            <ExternalLink className="w-4 h-4" />
-                            Mở trang thanh toán
-                        </a>
-                    )}
                 </div>
             )}
         </ReceptionPageShell>

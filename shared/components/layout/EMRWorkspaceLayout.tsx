@@ -2,6 +2,7 @@
 
 import { ReactNode } from 'react';
 import { EMRHeader } from './EMRHeader';
+import { useAuthStore } from '@/store/authStore';
 
 interface EMRWorkspaceLayoutProps {
     activeTabId: string;
@@ -10,7 +11,9 @@ interface EMRWorkspaceLayoutProps {
 }
 
 export function EMRWorkspaceLayout({ activeTabId, activeTabName, children }: EMRWorkspaceLayoutProps) {
-    const showHeader = activeTabId !== 'notification' && activeTabId !== 'setting' && activeTabId !== 'settings';
+    const user = useAuthStore((s) => s.user);
+    const isLabRole = user?.role === 'LAB_TECHNICIAN' || user?.role === 'LAB_STAFF' || activeTabId?.startsWith('lab');
+    const showHeader = !isLabRole && activeTabId !== 'notification' && activeTabId !== 'setting' && activeTabId !== 'settings';
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-[#EEEDFC] via-[#F9ECF2] to-[#E6E9FC] pt-6 pb-5 relative">

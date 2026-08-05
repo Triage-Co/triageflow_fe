@@ -35,6 +35,13 @@ export function PatientDetailPage({
     clinicName = 'PK. Nội tổng quát 1',
 }: PatientDetailPageProps) {
     const [activeTab, setActiveTab] = useState<DetailTab>('process');
+    const [flowRefreshKey, setFlowRefreshKey] = useState(0);
+    const [flowSnapshot, setFlowSnapshot] = useState<Record<string, unknown> | null>(null);
+
+    const handleFlowChanged = (flow: Record<string, unknown> | null) => {
+        setFlowSnapshot(flow);
+        setFlowRefreshKey((prev) => prev + 1);
+    };
 
     const tabToggle = (
         <div className="bg-white rounded-[24px] border border-neutral-100 p-1.5 flex gap-1">
@@ -78,7 +85,9 @@ export function PatientDetailPage({
                                 <User className="w-5 h-5 text-brand-500" />
                             </div>
                             <div className="flex-1 min-w-0">
-                                <p className="font-bold text-neutral-900 text-base leading-snug">{patient.name}</p>
+                                <p className="font-bold text-neutral-900 text-base leading-snug">
+                                    {patient.name} {patient.stt ? `(${patient.stt})` : ''}
+                                </p>
                                 <p className="text-xs text-neutral-400 font-medium mt-0.5">Mã BN: {patient.code}</p>
                                 <div className="mt-3 space-y-1.5">
                                     <div className="flex items-center justify-between text-xs">
@@ -107,7 +116,14 @@ export function PatientDetailPage({
 
                     {tabToggle}
 
-                    {activeTab === 'process' && <WorkflowDiagram />}
+                    {activeTab === 'process' && (
+                        <WorkflowDiagram
+                            patientId={patient.patientId || patient.id}
+                            patient={patient}
+                            refreshKey={flowRefreshKey}
+                            onFlowChanged={handleFlowChanged}
+                        />
+                    )}
                 </div>
 
                 {/* ── RIGHT CONTENT ─── */}
@@ -174,6 +190,9 @@ export function PatientDetailPage({
                             patient={patient}
                             labOrders={MOCK_LAB_ORDERS}
                             diagnosis={MOCK_DIAGNOSIS}
+                            flowRefreshKey={flowRefreshKey}
+                            flowSnapshot={flowSnapshot}
+                            onFlowChanged={handleFlowChanged}
                         />
                     )}
                 </div>
