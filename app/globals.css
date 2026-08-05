@@ -312,3 +312,29 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
   display: none !important;
   pointer-events: none;
 }
+
+/* ── Hide scrollbars globally across all browsers while keeping smooth scrolling ── */
+::-webkit-scrollbar {
+  width: 0px;
+  height: 0px;
+  display: none;
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+
+* {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

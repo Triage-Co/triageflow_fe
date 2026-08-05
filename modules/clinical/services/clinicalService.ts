@@ -193,6 +193,11 @@ export interface BackendQueuePatient {
         step_status: string;
         docNo: number;
         payment_status: string;
+        room_id?: string;   // room assigned to this step (if present)
+        room?: {
+            room_id: string;
+            room_name: string;
+        };
         flow: {
             flow_id: string;
             template_id?: string;
@@ -220,11 +225,14 @@ export interface BackendQueuePatient {
                     dob?: string;
                     gender?: string;
                     citizen_id?: string;
-                    account: {
+                    account?: {
+                        full_name?: string;
                         user_name?: string;
+                        citizen_id?: string;
                         email?: string;
-                        role?: string;
+                        dob?: string;
                         gender?: string;
+                        role?: string;
                         phone?: string | null;
                     };
                 };
@@ -255,13 +263,32 @@ export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient 
         return 'Nam';
     };
 
-    const mapStatus = (status: string, stepStatus?: string): 'Đang chờ' | 'Đang khám' | 'Đã khám' => {
-        if (status === 'COMPLETED' || stepStatus === 'COMPLETED') {
+    /**
+     * Queue lifecycle: PENDING → CALLING → IN_PROGRESS → COMPLETED
+     * Prefer queue.status; fall back to step.step_status for older payloads.
+     */
+    const mapStatus = (
+        status: string,
+        stepStatus?: string,
+    ): 'Đang chờ' | 'Đang gọi' | 'Đang khám' | 'Đã khám' => {
+        const queueStatus = (status || '').toUpperCase();
+        const step = (stepStatus || '').toUpperCase();
+
+        if (queueStatus === 'COMPLETED' || step === 'COMPLETED') {
             return 'Đã khám';
         }
-        if (stepStatus === 'PROCESSING' || stepStatus === 'IN_PROGRESS' || stepStatus === 'ONGOING') {
+        if (queueStatus === 'CALLING') {
+            return 'Đang gọi';
+        }
+        if (
+            queueStatus === 'IN_PROGRESS' ||
+            step === 'PROCESSING' ||
+            step === 'IN_PROGRESS' ||
+            step === 'ONGOING'
+        ) {
             return 'Đang khám';
         }
+        // PENDING / WAITING / SKIPPED / CANCELLED → waiting bucket for list UI
         return 'Đang chờ';
     };
 
@@ -333,14 +360,14 @@ export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient 
 
     return {
         id: item.queue_id,   // use queue_id for routing to /api/doctor/patients/queue/{id}
-        stt: String(qNum || '').padStart(2, '0'),
-        name: patientObj.full_name || patientObj.account.user_name || `Bệnh nhân ${patientObj.patient_id.slice(0, 6)}`,
-        age: calculateAge(patientObj.dob),
-        gender: mapGender(patientObj.gender),
-        code: patientObj.citizen_id || `BN-${patientObj.patient_id.slice(0, 8)}`,
+        stt: String(qNum || item.queue_number || '').padStart(2, '0'),
+        name: patientObj.full_name || patientObj.account?.full_name || patientObj.account?.user_name || `Bệnh nhân ${patientObj.patient_id.slice(0, 6)}`,
+        age: calculateAge(patientObj.dob || patientObj.account?.dob),
+        gender: mapGender(patientObj.gender || patientObj.account?.gender),
+        code: patientObj.citizen_id || patientObj.account?.citizen_id || `BN-${patientObj.patient_id.slice(0, 8)}`,
         priority: 'Bình thường',
-        time: booking.slot.start_time,
-        status: mapStatus(item.status, item.step.step_status),
+        time: booking?.slot?.start_time || '08:00',
+        status: mapStatus(item.status, item.step?.step_status),
         visitReason: visitReasonFromApi || 'Chưa có lý do khám từ hệ thống',
         allergies: splitList(allergyNotes),
         medicalHistory: splitList(medicalHistoryFromApiRaw),
@@ -500,14 +527,16 @@ export function extractFlowSteps(flow: Record<string, unknown> | null | undefine
 }
 
 export const clinicalService = {
-    getPatients: (date: string, token: string) =>
+    getPatients: (date: string, token: string, suppressLogError = true) =>
         apiClient.get<BackendQueuePatient[]>(`/api/doctor/patients?date=${date}`, {
             headers: { Authorization: `Bearer ${token}` },
+            suppressLogError,
         }),
 
-    getPatientByQueueId: (queueId: string, token: string) =>
+    getPatientByQueueId: (queueId: string, token: string, suppressLogError = false) =>
         apiClient.get<BackendQueuePatient>(`/api/doctor/patients/queue/${queueId}`, {
             headers: { Authorization: `Bearer ${token}` },
+            suppressLogError,
         }),
 
     getProcessTemplates: (token: string) =>

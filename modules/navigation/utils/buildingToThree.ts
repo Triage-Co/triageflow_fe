@@ -76,8 +76,6 @@ export interface FloorData3D {
   floorHeight: number;
   floorId?: string;
   floorNumber?: number;
-  centerShiftX?: number;
-  centerShiftZ?: number;
   bounds: {
     minX: number;
     maxX: number;
@@ -445,7 +443,5 @@ export function floorToRoomData(floor: ApiFloor): FloorData3D {
       minZ: globalMinZ - centerShiftZ,
       maxZ: globalMaxZ - centerShiftZ,
     },
-    centerShiftX,
-    centerShiftZ,
   };
 }

@@ -31,7 +31,9 @@ const ROLE_CONFIG: Record<string, { label: string; bg: string; text: string; bor
     NURSE: { label: 'Điều dưỡng', bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-100' },
     RECEPTIONIST: { label: 'Lễ tân', bg: 'bg-purple-50', text: 'text-purple-600', border: 'border-purple-100' },
     LAB_STAFF: { label: 'Kỹ thuật viên XN', bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-100' },
+    LAB_TECHNICIAN: { label: 'Kỹ thuật viên XN', bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-100' },
     PHARMACY_STAFF: { label: 'Dược sĩ', bg: 'bg-pink-50', text: 'text-pink-600', border: 'border-pink-100' },
+    PHARMACIST: { label: 'Dược sĩ', bg: 'bg-pink-50', text: 'text-pink-600', border: 'border-pink-100' },
     CASHIER: { label: 'Thu ngân', bg: 'bg-cyan-50', text: 'text-cyan-600', border: 'border-cyan-100' },
     ADMIN: { label: 'Quản trị viên', bg: 'bg-rose-50', text: 'text-rose-600', border: 'border-rose-100' },
 };
@@ -154,12 +156,16 @@ export function AdminStaffPage() {
         setIsCreating(true);
         setCreateError(null);
 
+        let sendRole = createForm.role;
+        if (sendRole === 'PHARMACY_STAFF') sendRole = 'PHARMACIST';
+        if (sendRole === 'LAB_STAFF') sendRole = 'LAB_TECHNICIAN';
+
         const data: CreateStaffDto = {
             user_name: createForm.user_name.trim(),
             password: createForm.password,
             full_name: createForm.full_name.trim(),
             email: createForm.email.trim(),
-            role: createForm.role,
+            role: sendRole,
             gender: createForm.gender,
             phone: createForm.phone.trim(),
         };
@@ -216,11 +222,15 @@ export function AdminStaffPage() {
         setIsUpdating(true);
         setEditError(null);
 
+        let sendRole = editForm.role;
+        if (sendRole === 'PHARMACY_STAFF') sendRole = 'PHARMACIST';
+        if (sendRole === 'LAB_STAFF') sendRole = 'LAB_TECHNICIAN';
+
         const data: UpdateStaffDto = {
             user_name: editForm.user_name.trim(),
             full_name: editForm.full_name.trim(),
             email: editForm.email.trim(),
-            role: editForm.role,
+            role: sendRole,
             gender: editForm.gender,
             phone: editForm.phone.trim(),
         };
@@ -375,8 +385,8 @@ export function AdminStaffPage() {
                                         <option value="DOCTOR">Bác sĩ</option>
                                         <option value="NURSE">Điều dưỡng</option>
                                         <option value="RECEPTIONIST">Lễ tân</option>
-                                        <option value="LAB_STAFF">Kỹ thuật viên Xét nghiệm</option>
-                                        <option value="PHARMACY_STAFF">Dược sĩ</option>
+                                        <option value="LAB_TECHNICIAN">Kỹ thuật viên Xét nghiệm</option>
+                                        <option value="PHARMACIST">Dược sĩ</option>
                                         <option value="CASHIER">Thu ngân</option>
                                         <option value="ADMIN">Quản trị viên</option>
                                     </select>
@@ -622,8 +632,8 @@ export function AdminStaffPage() {
                                 <option value="DOCTOR">Bác sĩ</option>
                                 <option value="NURSE">Điều dưỡng</option>
                                 <option value="RECEPTIONIST">Lễ tân</option>
-                                <option value="LAB_STAFF">Kỹ thuật viên Xét nghiệm</option>
-                                <option value="PHARMACY_STAFF">Dược sĩ</option>
+                                <option value="LAB_TECHNICIAN">Kỹ thuật viên Xét nghiệm</option>
+                                <option value="PHARMACIST">Dược sĩ</option>
                                 <option value="CASHIER">Thu ngân</option>
                                 <option value="ADMIN">Quản trị viên</option>
                             </select>
@@ -791,8 +801,8 @@ export function AdminStaffPage() {
                                 <option value="DOCTOR">Bác sĩ</option>
                                 <option value="NURSE">Điều dưỡng</option>
                                 <option value="RECEPTIONIST">Lễ tân</option>
-                                <option value="LAB_STAFF">Kỹ thuật viên Xét nghiệm</option>
-                                <option value="PHARMACY_STAFF">Dược sĩ</option>
+                                <option value="LAB_TECHNICIAN">Kỹ thuật viên Xét nghiệm</option>
+                                <option value="PHARMACIST">Dược sĩ</option>
                                 <option value="CASHIER">Thu ngân</option>
                                 <option value="ADMIN">Quản trị viên</option>
                             </select>

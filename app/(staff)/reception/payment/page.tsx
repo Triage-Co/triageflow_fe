@@ -1,17 +1,12 @@
-import { Suspense } from 'react';
-import { ReceptionPaymentForm } from '@/modules/reception/components/ReceptionPaymentForm';
-import { Loader2 } from 'lucide-react';
+'use client';
+
+import { EMRWorkspaceLayout } from '@/shared/components/layout/EMRWorkspaceLayout';
+import { PaymentWorkflowPanel } from '@/modules/payment/components/PaymentWorkflowPanel';
 
 export default function ReceptionPaymentPage() {
     return (
-        <Suspense
-            fallback={
-                <div className="flex-1 flex items-center justify-center py-20">
-                    <Loader2 className="w-8 h-8 animate-spin text-[#8B7CF6]" />
-                </div>
-            }
-        >
-            <ReceptionPaymentForm />
-        </Suspense>
+        <EMRWorkspaceLayout activeTabId="payment" activeTabName="Thanh Toán">
+            <PaymentWorkflowPanel />
+        </EMRWorkspaceLayout>
     );
 }

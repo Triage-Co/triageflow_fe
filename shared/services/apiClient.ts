@@ -4,7 +4,9 @@
 import { resolveApiError } from "@/shared/utils/apiError";
 
 const API_BASE_URL =
-  typeof window === "undefined" ? process.env.NEXT_PUBLIC_API_URL || "" : "";
+  typeof window === 'undefined'
+    ? (process.env.NEXT_PUBLIC_API_URL || 'https://triageflow.me')
+    : '';
 
 export interface ApiResponse<T> {
   code: number;
@@ -24,22 +26,55 @@ export class ApiError extends Error {
   }
 }
 
+export interface RequestOptions extends RequestInit {
+  suppressLogError?: boolean;
+}
+
+function getAuthHeader(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const authStorage = localStorage.getItem('auth-storage');
+    if (authStorage) {
+      const parsed = JSON.parse(authStorage);
+      const token = parsed?.state?.accessToken;
+      if (token) return { Authorization: `Bearer ${token}` };
+    }
+    const legacyToken = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
+    if (legacyToken) return { Authorization: `Bearer ${legacyToken}` };
+  } catch {
+    // ignore
+  }
+  return {};
+}
+
 async function request<T>(
   path: string,
-  options?: RequestInit,
+  options?: RequestOptions,
 ): Promise<ApiResponse<T>> {
-  const { headers: extraHeaders, ...restOptions } = options ?? {};
+  const { headers: extraHeaders, suppressLogError, ...restOptions } = options ?? {};
+  const authHeaders = getAuthHeader();
+
   const res = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
+      ...authHeaders,
       ...extraHeaders,
     },
     ...restOptions,
   });
 
-  const json = await res.json().catch(() => ({}));
+  const text = await res.text().catch(() => '');
+  let json: any = {};
+  try {
+    json = text ? JSON.parse(text) : {};
+  } catch {
+    json = text ? { message: text } : {};
+  }
 
   if (!res.ok) {
+    if (!suppressLogError) {
+      console.error(`[apiClient Error] ${options?.method || 'GET'} ${path} failed with status ${res.status}: ${JSON.stringify(json)}`);
+    }
     const fallback = `Request failed with status ${res.status}`;
     const { message, detail } = resolveApiError(json, fallback);
     throw new ApiError(res.status, message, detail);
@@ -49,23 +84,23 @@ async function request<T>(
 }
 
 export const apiClient = {
-  get: <T>(path: string, init?: RequestInit) =>
-    request<T>(path, { method: "GET", ...init }),
+  get: <T>(path: string, init?: RequestOptions) =>
+    request<T>(path, { method: 'GET', ...init }),
 
-  post: <T>(path: string, body: unknown, init?: RequestInit) =>
+  post: <T>(path: string, body: unknown, init?: RequestOptions) =>
     request<T>(path, {
-      method: "POST",
+      method: 'POST',
       body: JSON.stringify(body),
       ...init,
     }),
 
-  patch: <T>(path: string, body: unknown, init?: RequestInit) =>
+  patch: <T>(path: string, body: unknown, init?: RequestOptions) =>
     request<T>(path, {
-      method: "PATCH",
+      method: 'PATCH',
       body: JSON.stringify(body),
       ...init,
     }),
 
-  delete: <T>(path: string, init?: RequestInit) =>
-    request<T>(path, { method: "DELETE", ...init }),
+  delete: <T>(path: string, init?: RequestOptions) =>
+    request<T>(path, { method: 'DELETE', ...init }),
 };

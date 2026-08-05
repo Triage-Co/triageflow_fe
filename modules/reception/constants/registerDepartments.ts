@@ -8,7 +8,7 @@ export interface RegisterDepartment {
 }
 
 export const REGISTER_DEPARTMENTS: RegisterDepartment[] = [
-    { id: 'noi-khoa', label: 'Nội khoa', keywords: ['nội khoa', 'noi khoa', 'internal', 'da khoa', 'đa khoa', 'nội tiết', 'tiêu hóa', 'dị ứng', 'đái tháo đường', 'huyết học', 'truyền nhiễm', 'thận học', 'ung bướu', 'tiết niệu'] },
+    { id: 'noi-khoa', label: 'Nội khoa', keywords: ['nội khoa', 'noi khoa', 'internal'] },
     { id: 'ngoai-khoa', label: 'Ngoại khoa', keywords: ['ngoại khoa', 'ngoai khoa', 'surgery', 'ngoại', 'phẫu thuật'] },
     { id: 'tim-mach', label: 'Tim mạch', keywords: ['tim mạch', 'tim mach', 'cardio', 'cardiology', 'mạch máu'] },
     { id: 'da-lieu', label: 'Da liễu', keywords: ['da liễu', 'da lieu', 'dermat'] },
@@ -69,7 +69,6 @@ export function translateSpecialtyDisplayName(name?: string | null): string {
     return dept?.label ?? name?.trim() ?? '';
 }
 
-/** Luôn trả về đúng 1 khoa — dùng sau recommend_specialist / triage. */
 /** Map slug AI / form cũ hoặc specialty_id BE → mục trong GET /api/specialty */
 export function resolveCatalogSpecialty(
     departmentKey: string,
@@ -77,15 +76,48 @@ export function resolveCatalogSpecialty(
 ): BackendSpecialtyCatalogItem | null {
     if (!departmentKey || catalog.length === 0) return null;
 
+    const trimmedKey = departmentKey.trim();
+
+    // 1. Direct specialty_id or specialty_code match
     const direct = catalog.find(
-        (item) => item.specialty_id === departmentKey || item.specialty_code === departmentKey,
+        (item) => item.specialty_id === trimmedKey || item.specialty_code === trimmedKey,
     );
     if (direct) return direct;
 
-    const dept = REGISTER_DEPARTMENTS.find((d) => d.id === departmentKey);
-    if (!dept) return null;
+    // 2. Exact specialty_name match (case-insensitive)
+    const exactName = catalog.find(
+        (item) => item.specialty_name.trim().toLowerCase() === trimmedKey.toLowerCase(),
+    );
+    if (exactName) return exactName;
 
-    return catalog.find((item) => matchDepartmentLabel(dept, item.specialty_name)) ?? null;
+    // 3. Match against REGISTER_DEPARTMENTS by id or label
+    const dept = REGISTER_DEPARTMENTS.find(
+        (d) => d.id === trimmedKey || d.label.toLowerCase() === trimmedKey.toLowerCase(),
+    );
+
+    const targetLabel = dept?.label ?? trimmedKey;
+
+    // 3a. Exact match with targetLabel
+    const exactLabel = catalog.find(
+        (item) => item.specialty_name.trim().toLowerCase() === targetLabel.trim().toLowerCase(),
+    );
+    if (exactLabel) return exactLabel;
+
+    // 3b. Substring match (e.g. "Khoa Nội" vs "Nội khoa")
+    const subMatch = catalog.find((item) => {
+        const itemLower = item.specialty_name.trim().toLowerCase();
+        const targetLower = targetLabel.trim().toLowerCase();
+        return itemLower.includes(targetLower) || targetLower.includes(itemLower);
+    });
+    if (subMatch) return subMatch;
+
+    // 3c. Fallback to keyword matching if available
+    if (dept) {
+        const kwMatch = catalog.find((item) => matchDepartmentLabel(dept, item.specialty_name));
+        if (kwMatch) return kwMatch;
+    }
+
+    return null;
 }
 
 /** Chọn chuyên khoa BE tương ứng gợi ý AI (ưu tiên specialty_code → tên → slug). */
@@ -102,30 +134,34 @@ export function resolveAiCatalogSpecialty(
 ): BackendSpecialtyCatalogItem | null {
     if (catalog.length === 0) return null;
 
+    // 1. Prioritize specialty_code if present
     const fromCode = session.recommended_specialist?.specialty_code?.trim();
     if (fromCode) {
-        const byCode = catalog.find((item) => item.specialty_code === fromCode);
+        const byCode = catalog.find(
+            (item) => item.specialty_code === fromCode || item.specialty_id === fromCode,
+        );
         if (byCode) return byCode;
     }
 
-    const label =
-        session.recommended_department_label?.trim() ||
-        translateSpecialtyDisplayName(session.recommended_specialist?.name);
-    if (label) {
-        const exact = catalog.find(
-            (item) => item.specialty_name.toLowerCase() === label.toLowerCase(),
-        );
-        if (exact) return exact;
+    // 2. Try matching recommended_department_label (e.g. "Nội khoa")
+    if (session.recommended_department_label?.trim()) {
+        const byLabel = resolveCatalogSpecialty(session.recommended_department_label.trim(), catalog);
+        if (byLabel) return byLabel;
+    }
 
-        const dept = resolveDepartmentFromSpecialtyName(label);
-        if (dept) {
-            const byDept = catalog.find((item) => matchDepartmentLabel(dept, item.specialty_name));
-            if (byDept) return byDept;
+    // 3. Try matching recommended_specialist name (translated to Vietnamese if needed)
+    if (session.recommended_specialist?.name?.trim()) {
+        const translated = translateSpecialtyDisplayName(session.recommended_specialist.name);
+        if (translated) {
+            const byTranslated = resolveCatalogSpecialty(translated, catalog);
+            if (byTranslated) return byTranslated;
         }
     }
 
-    if (session.recommended_department_id) {
-        return resolveCatalogSpecialty(session.recommended_department_id, catalog);
+    // 4. Try matching recommended_department_id (e.g. "noi-khoa")
+    if (session.recommended_department_id?.trim()) {
+        const byId = resolveCatalogSpecialty(session.recommended_department_id.trim(), catalog);
+        if (byId) return byId;
     }
 
     return null;

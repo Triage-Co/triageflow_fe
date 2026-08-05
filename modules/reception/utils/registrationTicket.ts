@@ -2,54 +2,81 @@ import type { RegistrationResult } from '@/modules/reception/types/reception.typ
 import { formatPhoneDisplay } from '@/modules/reception/utils/receptionSearch';
 
 function buildTicketHtml(result: RegistrationResult): string {
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(result.qrPayload)}`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(result.qrPayload)}`;
+    const now = new Date();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    const dateStr = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+    const printTime = `${timeStr} ${dateStr}`;
 
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Vé khám ${result.ticketNo}</title>
 <style>
-body{font-family:system-ui,sans-serif;padding:24px;max-width:420px;margin:0 auto;color:#1f2937}
-.header{background:#8B7CF6;color:#fff;padding:16px 20px;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:flex-start}
-.brand{font-size:12px;opacity:.9}.hospital{font-size:11px;margin-top:4px;opacity:.85}
-.ticket{font-size:28px;font-weight:800;letter-spacing:.5px}
-.card{border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.06)}
-.body{padding:20px}
-.row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:13px}
-.label{color:#9ca3af}.value{font-weight:600;text-align:right}
-.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:16px 0;font-size:12px}
-.grid div{background:#f9fafb;border-radius:8px;padding:10px}
-.grid strong{display:block;font-size:11px;color:#6b7280;margin-bottom:4px}
-.qr{display:flex;gap:16px;align-items:center;margin:16px 0}
-.qr img{width:100px;height:100px;border:1px solid #e5e7eb;border-radius:8px}
-.note{font-size:11px;color:#6b7280;line-height:1.5}
-.box{padding:12px;border-radius:8px;font-size:12px;margin-top:12px}
-.blue{background:#eff6ff;border:1px solid #bfdbfe}
-.yellow{background:#fffbeb;border:1px solid #fde68a}
-ol{margin:8px 0 0 18px;padding:0}
+body{font-family:'Courier New',Courier,monospace,system-ui,sans-serif;padding:8px;max-width:380px;margin:0 auto;color:#000;background:#fff;letter-spacing:-0.2px}
+.ticket-container{border:2px solid #000;padding:24px 18px;box-sizing:border-box}
+.centered{text-align:center}
+.hospital-name{font-size:13px;font-weight:bold;margin-bottom:4px;text-transform:uppercase}
+.system-name{font-size:10px;font-weight:bold;margin-bottom:4px;text-transform:uppercase}
+.doc-title{font-size:11px;font-weight:bold;margin-bottom:8px;text-transform:uppercase}
+.ticket-box{border:2px solid #000;padding:16px 0;margin:12px auto;width:95%;box-sizing:border-box}
+.ticket-box-title{font-size:11px;font-weight:bold;text-transform:uppercase;margin-bottom:6px;letter-spacing:1px}
+.ticket-number{font-size:46px;font-weight:900;letter-spacing:2px;line-height:1;margin-bottom:10px}
+.priority-box{display:inline-block;border:1px solid #000;padding:4px 10px;font-size:10px;font-weight:bold;text-transform:uppercase}
+.dashed-line{border-top:1px dashed #000;margin:16px 0;width:100%}
+.solid-line{border-top:2px solid #000;margin:16px 0 12px 0;width:100%}
+.info-table{width:100%;border-collapse:collapse;font-size:12px}
+.info-table td{padding:5px 0;vertical-align:middle}
+.info-table .label{text-align:left;font-weight:bold}
+.info-table .value{text-align:right;font-weight:bold}
+.qr-container{margin:18px 0;text-align:center}
+.qr-image{width:160px;height:160px;margin:0 auto 10px auto;display:block;border:2px solid #000;padding:4px}
+.qr-desc{font-size:9px;font-weight:bold;letter-spacing:0.3px;text-transform:uppercase;line-height:1.4}
+.footer-text{font-size:10px;font-weight:bold;text-transform:uppercase;line-height:1.5;margin-bottom:4px}
+.footer-time{font-size:9px;margin-top:12px;font-weight:bold}
 </style></head><body>
-<div class="card">
-<div class="header">
-<div><div class="brand">TriageFlow OPD</div><div class="hospital">Bệnh viện Đa khoa Trung ương</div></div>
-<div class="ticket">${result.ticketNo}</div>
+<div class="ticket-container">
+    <div class="centered hospital-name">BỆNH VIỆN ĐA KHOA TRUNG ƯƠNG</div>
+    <div class="centered system-name">HỆ THỐNG QUẢN LÝ KHÁM BỆNH TRIAGEFLOW OPD</div>
+    <div class="centered doc-title">--- PHIẾU ĐĂNG KÝ KHÁM ---</div>
+    
+    <div class="dashed-line"></div>
+    
+    <div class="ticket-box">
+        <div class="centered ticket-box-title">Số thứ tự khám</div>
+        <div class="centered ticket-number">${result.ticketNo}</div>
+        <div class="centered"><div class="priority-box">Đối tượng: ${result.priority}</div></div>
+    </div>
+    
+    <div class="dashed-line"></div>
+    
+    <table class="info-table">
+        <tr><td class="label">HỌ VÀ TÊN:</td><td class="value">${result.fullName.toUpperCase()}</td></tr>
+        <tr><td class="label">CCCD/CMND:</td><td class="value">${result.citizenId}</td></tr>
+        <tr><td class="label">SỐ ĐIỆN THOẠI:</td><td class="value">${formatPhoneDisplay(result.phone)}</td></tr>
+    </table>
+    
+    <div class="dashed-line"></div>
+    
+    <table class="info-table">
+        <tr><td class="label">KHOA KHÁM:</td><td class="value">${result.specialty.toUpperCase()}</td></tr>
+        <tr><td class="label">BÁC SĨ:</td><td class="value">${result.doctorLabel}</td></tr>
+        <tr><td class="label">PHÒNG KHÁM:</td><td class="value">${result.roomLabel}</td></tr>
+        <tr><td class="label">NGÀY & GIỜ:</td><td class="value">${result.slotTimeLabel || '—'}</td></tr>
+        <tr><td class="label">THANH TOÁN:</td><td class="value">${result.paymentLabel}</td></tr>
+    </table>
+    
+    <div class="dashed-line"></div>
+    
+    <div class="qr-container">
+        <img class="qr-image" src="${qrUrl}" alt="QR" />
+        <div class="qr-desc">Quét mã QR để theo dõi thứ tự & bản đồ chỉ đường</div>
+    </div>
+    
+    <div class="solid-line"></div>
+    
+    <div class="centered footer-text">VUI LÒNG GIỮ PHIẾU NÀY TRONG SUỐT QUÁ TRÌNH KHÁM</div>
+    <div class="centered footer-text">CHÚC QUÝ KHÁCH NHIỀU SỰ KHỎE!</div>
+    <div class="centered footer-time">In lúc: ${printTime}</div>
 </div>
-<div class="body">
-<div class="row"><span class="label">Họ tên</span><span class="value">${result.fullName}</span></div>
-<div class="row"><span class="label">CCCD</span><span class="value">${result.citizenId}</span></div>
-<div class="row"><span class="label">SĐT</span><span class="value">${formatPhoneDisplay(result.phone)}</span></div>
-<div class="row"><span class="label">Chuyên khoa</span><span class="value">${result.specialty}</span></div>
-<div class="row"><span class="label">Ưu tiên</span><span class="value">${result.priority}</span></div>
-<div class="row"><span class="label">Giờ khám</span><span class="value">${result.slotTimeLabel || '—'}</span></div>
-<div class="grid">
-<div><strong>Bác sĩ</strong>${result.doctorLabel}</div>
-<div><strong>Phòng</strong>${result.roomLabel}</div>
-<div><strong>Thanh toán</strong>${result.paymentLabel}</div>
-</div>
-<div class="qr">
-<img src="${qrUrl}" alt="QR" />
-<div class="note">Quét mã QR để theo dõi lượt khám và điều hướng y tế trong bệnh viện.</div>
-</div>
-<div class="box blue"><strong>Hướng dẫn đến phòng khám</strong>
-<ol><li>Đi thẳng đến sảnh chính</li><li>Lên thang máy số 2 lên tầng 2</li><li>Rẽ trái, đi đến ${result.roomLabel}</li></ol></div>
-<div class="box yellow"><strong>Thời gian chờ:</strong> Dự kiến ${result.waitTimeLabel}</div>
-</div></div>
 <script>window.onload=()=>{window.print();}</script></body></html>`;
 }
 

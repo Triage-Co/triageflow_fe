@@ -15,7 +15,7 @@ interface RoomOption {
   roomCode: string;
   roomLabel: string;
   floorNumber: number;
-  type: string;
+  type?: string;
   areaId?: string | null;
 }
 
@@ -60,7 +60,7 @@ export const MapView: React.FC = () => {
             roomCode: room.roomCode,
             roomLabel: room.roomLabel,
             floorNumber: floor.floorNumber,
-            type: room.type,
+            type: (room as any).type || '',
             areaId: room.areaId,
           };
           break;
@@ -81,7 +81,7 @@ export const MapView: React.FC = () => {
               roomCode: room.roomCode,
               roomLabel: room.roomLabel,
               floorNumber: floor.floorNumber,
-              type: room.type,
+              type: (room as any).type || '',
               areaId: room.areaId,
             };
             break;
@@ -110,7 +110,7 @@ export const MapView: React.FC = () => {
   useEffect(() => {
     if (startRoom && targetRoom) {
       setRouteLoading(true);
-      fetchRoute(startRoom.id, 'ROOM', targetRoom.id, 'ROOM')
+      fetchRoute({ startId: startRoom.id, startType: 'ROOM', targetId: targetRoom.id, targetType: 'ROOM' })
         .then((data) => {
           setRouteData(data);
         })

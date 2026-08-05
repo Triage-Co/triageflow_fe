@@ -16,6 +16,7 @@ import { Badge } from '@/shared/components/ui/Badge';
 import { Input } from '@/shared/components/ui/Input';
 import { cn } from '@/lib/utils';
 import { ParaclinicalOrdersTab } from './ParaclinicalOrdersTab';
+import { DoctorPrescriptionTab } from './DoctorPrescriptionTab';
 
 const STAGE_TABS: {
     key: ClinicalStage;
@@ -154,7 +155,7 @@ export function ClinicalProcessPanel({
                     <StagePlaceholder title="Thủ thuật" />
                 )}
                 {activeStage === 'prescription' && (
-                    <StagePlaceholder title="Đơn thuốc" />
+                    <DoctorPrescriptionTab patientName={patient?.name} />
                 )}
             </div>
         </div>

@@ -18,6 +18,8 @@ function getPostLoginPath(role: string) {
         case 'LAB_TECHNICIAN':
             return '/lab';
         case 'PHARMACY_STAFF':
+        case 'PHARMACIST':
+        case 'PHARMACY':
             return '/pharmacy';
         case 'CASHIER':
             return '/cashier';

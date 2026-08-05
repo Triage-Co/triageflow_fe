@@ -1635,10 +1635,16 @@ export function WorkflowDiagram({
         const liveStep = orderedFlowSteps
             .map((item) => asRecord(item))
             .find((s) => s && String(s.step_id || '') === stepId);
-        const linkedOrderId =
-            typeof liveStep?.service_order_id === 'string'
-                ? liveStep.service_order_id.trim()
-                : '';
+        const linkedOrderId = (() => {
+            if (!liveStep) return '';
+            if (typeof liveStep.service_order_id === 'string') {
+                return liveStep.service_order_id.trim();
+            }
+            if (typeof liveStep.serviceOrderId === 'string') {
+                return liveStep.serviceOrderId.trim();
+            }
+            return '';
+        })();
         const nextStatus = (editingStepStatus || '').trim().toUpperCase();
         const hasRoom = Boolean(editingRoomId);
         const hasStatus = Boolean(nextStatus);
