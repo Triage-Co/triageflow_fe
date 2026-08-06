@@ -75,6 +75,10 @@ export interface TicketData {
   startTime?: string;
   roomId?: string;
   stepName?: string;
+  ticketCode?: string;
+  queueType?: string;
+  doctorExperience?: number;
+  doctorLicense?: string;
 }
 
 export interface PaymentItem {

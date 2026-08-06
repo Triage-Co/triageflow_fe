@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useFlowStore } from '../store/flowStore';
-import { stripRoomName } from '../utils/flowHelpers';
+import { stripRoomName, QUEUE_TYPE_MAP } from '../utils/flowHelpers';
 import { cn } from '@/lib/utils';
 
 export const PatientInfoView: React.FC = () => {
@@ -37,13 +37,19 @@ export const PatientInfoView: React.FC = () => {
   const currentCallingNo = activeTicket?.currentCallingNo || ticketNo;
   const waitingCount = activeTicket?.waitingCount ?? 3;
   const estimatedWait = activeTicket?.estimatedWaitMinutes ?? 10;
+  const startTime = activeTicket?.startTime || '';
 
   const isPaymentStep = activeTicket?.stepName?.toLowerCase().trim().startsWith('thanh toán') || false;
 
-  // Dynamic QR Code for Ticket
-  const qrTicketUrl = ticketNo && ticketNo !== '---'
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(ticketNo)}`
-    : '';
+  // Dynamic QR Code for Ticket - Gen từ activeTicket?.ticketCode (nếu có), fallback ticketNo
+  const ticketCode = activeTicket?.ticketCode || '';
+  const queueType = activeTicket?.queueType || '';
+  const queueTypeLabel = QUEUE_TYPE_MAP[queueType] || (activeTicket ? QUEUE_TYPE_MAP.NEW : '');
+  const qrTicketUrl = ticketCode
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(ticketCode)}`
+    : (ticketNo && ticketNo !== '---'
+      ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(ticketNo)}`
+      : '');
 
   const handleOpenPrintModal = () => {
     if (!ticketNo || ticketNo === '---') {
@@ -335,15 +341,12 @@ export const PatientInfoView: React.FC = () => {
 
                 <div className="w-full border-t border-blue-200/80 my-1" />
 
-                <div className="text-sm font-black text-[#1E2939]">
-                  {roomName || '---'}
-                </div>
-
-                {patientName && (
-                  <div className="text-xs font-bold text-neutral-500">
-                    Bệnh nhân: {patientName}
+                <div className="space-y-0.5">
+                  <span className="text-xs font-bold text-neutral-500 uppercase">Mã vé</span>
+                  <div className="text-sm font-black text-[#1E2939] tracking-wider">
+                    {ticketCode || '---'}
                   </div>
-                )}
+                </div>
               </div>
             </div>
           </div>
@@ -364,15 +367,30 @@ export const PatientInfoView: React.FC = () => {
                 </span>
               </div>
 
-              {/* 2 Metric Cards */}
-              <div className="grid grid-cols-2 gap-4">
+              {queueTypeLabel && (
+                <div className="flex items-center justify-between py-2.5 px-4 bg-neutral-50 rounded-2xl border border-neutral-100">
+                  <span className="text-xs lg:text-sm font-bold text-neutral-500">Đối tượng khám</span>
+                  <span className="text-xs lg:text-sm font-black text-[#155DFC] bg-blue-50/50 px-3 py-1 rounded-xl border border-blue-100">
+                    {queueTypeLabel}
+                  </span>
+                </div>
+              )}
+
+              {/* 3 Metric Cards */}
+              <div className="grid grid-cols-3 gap-4">
                 {/* Metric 1 (Highlighted Blue) */}
                 <div className="bg-[#D6E6FE] rounded-2xl p-5 border-2 border-[#A4C8FF] text-center space-y-1 shadow-sm">
                   <span className="text-xs font-bold text-[#155DFC] block">Số của bạn</span>
                   <span className="text-3xl lg:text-4xl font-black text-[#0F2C59] block">{ticketNo || '---'}</span>
                 </div>
 
-                {/* Metric 2 */}
+                {/* Metric 2: Giờ khám dự kiến */}
+                <div className="bg-[#F8FAFC] rounded-2xl p-5 border border-neutral-100 text-center space-y-1">
+                  <span className="text-xs font-bold text-neutral-400 block">Giờ khám dự kiến</span>
+                  <span className="text-3xl lg:text-4xl font-black text-[#1E2939] block">{startTime || '---'}</span>
+                </div>
+
+                {/* Metric 3 */}
                 <div className="bg-[#F8FAFC] rounded-2xl p-5 border border-neutral-100 text-center space-y-1">
                   <span className="text-xs font-bold text-neutral-400 block">Thời gian chờ</span>
                   <div className="flex items-baseline justify-center gap-1">
@@ -403,14 +421,30 @@ export const PatientInfoView: React.FC = () => {
                 <div className="space-y-1">
                   <h4 className="text-xl font-black text-[#1E2939]">{doctorName || 'BS. Chuyên khoa phụ trách'}</h4>
                   {specialtyName && (
-                    <p className="text-sm font-bold text-neutral-500">{specialtyName}</p>
+                    <p className="text-sm font-bold text-neutral-500">Chuyên khoa: <span className="font-black text-[#1E2939]">{specialtyName}</span></p>
                   )}
                 </div>
               </div>
 
-              <div className="border-t border-neutral-100 pt-4">
-                <span className="text-xs font-bold text-neutral-400 block mb-1">Phòng khám</span>
-                <span className="text-base font-black text-[#1E2939]">{roomName || '---'}</span>
+              <div className="border-t border-neutral-100 pt-4 space-y-2.5 text-sm">
+                <div className="flex items-center gap-3">
+                  <span className="font-bold text-neutral-400 w-32 shrink-0">Phòng khám</span>
+                  <span className="font-black text-[#1E2939]">{roomName || '---'}</span>
+                </div>
+                {typeof activeTicket?.doctorExperience === 'number' && (
+                  <div className="flex items-center gap-3">
+                    <span className="font-bold text-neutral-400 w-32 shrink-0">Kinh nghiệm</span>
+                    <span className="font-black text-[#1E2939]">{activeTicket.doctorExperience} năm</span>
+                  </div>
+                )}
+                {activeTicket?.doctorLicense && (
+                  <div className="flex items-center gap-3">
+                    <span className="font-bold text-neutral-400 w-32 shrink-0">GP hành nghề</span>
+                    <span className="font-black text-[#1E2939] font-mono bg-neutral-100 px-2 py-0.5 rounded text-xs">
+                      {activeTicket.doctorLicense}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

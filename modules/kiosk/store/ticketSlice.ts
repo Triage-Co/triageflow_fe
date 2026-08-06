@@ -205,7 +205,8 @@ export const createTicketSlice: StateCreator<
         }
 
         const activeBookingId = activeFlow?.booking_id || stepData.flow?.booking_id || stepData.flow_id || null;
-        const generatedTicket = mapApiToTicketData(stepData, authPatientInfo, activeBookingId);
+        const ticketCode = activeFlow?.ticket_code || stepData.flow?.ticket_code || '';
+        const generatedTicket = mapApiToTicketData(stepData, authPatientInfo, activeBookingId, ticketCode);
 
         set({
           activeStepId: stepData.step_id,
