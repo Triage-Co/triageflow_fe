@@ -5,6 +5,7 @@ import { useRoomDisplaySocket } from '../hooks/useRoomDisplaySocket';
 import { useQueueSound } from '../hooks/useQueueSound';
 import { AnimatedQueueNumber } from './AnimatedQueueNumber';
 import { RebalanceBanner } from './RebalanceBanner';
+import { roomService } from '../services/roomService';
 import { useAuthStore } from '@/modules/auth/store/authStore';
 import {
     Maximize2, Minimize2, RefreshCw, Volume2, VolumeX,
@@ -28,6 +29,21 @@ export function RoomWaitingScreen({
     const [currentTime, setCurrentTime] = useState<Date | null>(null);
     const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
     const [blinkColon, setBlinkColon] = useState<boolean>(true);
+    const [roomDetails, setRoomDetails] = useState<{ roomName: string; department: string } | null>(null);
+
+    // Fetch room details (human readable room_name & specialty) if roomId is provided
+    useEffect(() => {
+        if (!roomId) return;
+        roomService.getRooms().then((rooms) => {
+            const found = rooms.find((r) => r.room_id === roomId || r.room_name === roomId);
+            if (found) {
+                setRoomDetails({
+                    roomName: found.room_name,
+                    department: found.specialty?.specialty_name || 'KHOA KHÁM BỆNH',
+                });
+            }
+        }).catch(() => {});
+    }, [roomId]);
 
     // ── Sound & Audio Chime Hook ──────────────────────────────────────────────
     const { soundEnabled, setSoundEnabled, playDing, isAudioBlocked, enableAudio } = useQueueSound();
@@ -91,11 +107,30 @@ export function RoomWaitingScreen({
         };
     };
 
-    // ── Map socket data to display data ───────────────────────────────────────
+    const isUuidString = (str?: string): boolean => {
+        if (!str) return false;
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str.trim());
+    };
+
+    const formatDisplayRoomName = (rawName?: string): string => {
+        if (!rawName || isUuidString(rawName)) return 'PHÒNG KHÁM';
+        const upper = rawName.trim().toUpperCase();
+        if (upper.startsWith('PHÒNG')) return upper;
+        return `PHÒNG ${upper}`;
+    };
+
+    // Determine room name & department to display (prioritizing non-UUID names)
+    const socketRoomName = socketData?.room_info?.room_name;
+    const resolvedRoomName = (!isUuidString(socketRoomName) && socketRoomName)
+        ? socketRoomName
+        : (roomDetails?.roomName || (!isUuidString(roomId) ? roomId : 'PHÒNG KHÁM'));
+
+    const resolvedDeptName = socketData?.room_info?.specialty_name || roomDetails?.department || 'KHOA KHÁM BỆNH';
+
     const activeData = socketData ?? {
         room_info: {
-            room_name: roomId ? `PHÒNG ${String(roomId).toUpperCase()}` : 'PHÒNG KHÁM',
-            specialty_name: 'KHOA KHÁM BỆNH',
+            room_name: resolvedRoomName,
+            specialty_name: resolvedDeptName,
             doctor_name: authUser?.fullName || (authUser as any)?.full_name || 'BS. Đang trực',
         },
         current_patient: null,
@@ -103,8 +138,8 @@ export function RoomWaitingScreen({
     };
 
     const room = {
-        roomName: activeData.room_info?.room_name?.toUpperCase() ?? 'PHÒNG KHÁM',
-        department: activeData.room_info?.specialty_name?.toUpperCase() ?? 'KHOA KHÁM BỆNH',
+        roomName: formatDisplayRoomName(resolvedRoomName),
+        department: resolvedDeptName.toUpperCase(),
         doctorName: activeData.room_info?.doctor_name || authUser?.fullName || (authUser as any)?.full_name || 'BS. Đang trực',
     };
 
@@ -127,10 +162,10 @@ export function RoomWaitingScreen({
 
     /** CALLING = vừa gọi vào phòng; IN_PROGRESS = đang khám */
     const currentStatusLabel = !currentPatient
-        ? 'SẮN SÀNG ĐÓN BỆNH NHÂN'
+        ? 'SẴN SÀNG ĐÓN BỆNH NHÂN'
         : currentPatient.status === 'CALLING'
-        ? 'ĐANG GỌI BỆNH NHÂN'
-        : 'ĐANG KHÁM BỆNH';
+            ? 'ĐANG GỌI BỆNH NHÂN'
+            : 'ĐANG KHÁM BỆNH';
 
     const leftColumn = displayUpcoming.filter((_, idx) => idx % 2 === 0);
     const rightColumn = displayUpcoming.filter((_, idx) => idx % 2 === 1);
@@ -180,27 +215,19 @@ export function RoomWaitingScreen({
             </div>
 
             {/* ── 1. HEADER BANNER ── */}
-            <div className="shrink-0 bg-gradient-to-r from-[#6997E5] via-[#7AA6F0] to-[#6997E5] text-white px-8 py-5 flex items-center justify-between shadow-md">
-                {/* Tên khoa float trái */}
-                <div className="text-left flex-1">
-                    <span className="text-base sm:text-xl md:text-2xl tracking-[0.15em] font-black text-white/90 uppercase block leading-tight">
-                        {room.department}
-                    </span>
-                </div>
-
-                {/* Bác sĩ ở giữa */}
-                <div className="text-center flex-1 px-4 flex items-center justify-center gap-2">
-                    <Stethoscope className="w-7 h-7 text-white/80 shrink-0" />
-                    <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-wide text-white drop-shadow-sm truncate">
-                        {room.doctorName}
-                    </h2>
-                </div>
-
-                {/* Tên phòng float phải */}
-                <div className="text-right flex-1">
-                    <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black tracking-tight drop-shadow-sm leading-none uppercase">
+            <div className="shrink-0 bg-gradient-to-r from-[#6997E5] via-[#7AA6F0] to-[#6997E5] text-white px-6 sm:px-8 py-3 flex items-center justify-between shadow-md">
+                {/* Bên trái: Tên phòng */}
+                <div className="text-left flex-1 min-w-0">
+                    <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight drop-shadow-sm leading-none uppercase">
                         {room.roomName}
                     </h1>
+                </div>
+
+                {/* Bên phải: BS: [Tên bác sĩ] */}
+                <div className="text-right shrink-0 min-w-0 pl-4">
+                    <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-wide text-white drop-shadow-sm truncate">
+                        BS: {room.doctorName.replace(/^(BS\.|BS:?\s*)/i, '').trim()}
+                    </h2>
                 </div>
             </div>
 
@@ -245,9 +272,8 @@ export function RoomWaitingScreen({
                             {leftColumn.map((p, idx) => (
                                 <div
                                     key={p.id}
-                                    className={`flex items-center justify-between py-2.5 text-xl sm:text-2xl md:text-3xl font-bold ${
-                                        idx < leftColumn.length - 1 ? 'border-b border-black/10' : ''
-                                    }`}
+                                    className={`flex items-center justify-between py-2.5 text-xl sm:text-2xl md:text-3xl font-bold ${idx < leftColumn.length - 1 ? 'border-b border-black/10' : ''
+                                        }`}
                                 >
                                     <div className="flex items-center gap-3 truncate">
                                         <span className="text-xs font-black bg-indigo-950 text-white w-6 h-6 rounded-full flex items-center justify-center shrink-0">
@@ -290,9 +316,8 @@ export function RoomWaitingScreen({
                             {rightColumn.map((p, idx) => (
                                 <div
                                     key={p.id}
-                                    className={`flex items-center justify-between py-2.5 text-xl sm:text-2xl md:text-3xl font-bold ${
-                                        idx < rightColumn.length - 1 ? 'border-b border-black/10' : ''
-                                    }`}
+                                    className={`flex items-center justify-between py-2.5 text-xl sm:text-2xl md:text-3xl font-bold ${idx < rightColumn.length - 1 ? 'border-b border-black/10' : ''
+                                        }`}
                                 >
                                     <div className="flex items-center gap-3 truncate">
                                         <span className="text-xs font-black bg-indigo-950 text-white w-6 h-6 rounded-full flex items-center justify-center shrink-0">
@@ -342,7 +367,7 @@ export function RoomWaitingScreen({
                 {/* Socket live indicator in footer */}
                 <div className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full transition-colors ${isConnected ? 'text-emerald-700 bg-emerald-100/60' : 'text-amber-700 bg-amber-100/60'}`}>
                     <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400 animate-bounce'}`} />
-                    {isConnected ? 'LIVE SOCKET' : 'Reconnecting...'}
+                    {isConnected ? 'LIVE' : 'Đang kết nối lại...'}
                 </div>
 
                 {/* Digital Clock with Blinking Colon */}
