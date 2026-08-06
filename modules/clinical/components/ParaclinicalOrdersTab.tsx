@@ -80,10 +80,10 @@ function pickBookingIdFromFlow(flow: Record<string, unknown> | null): string {
 function resolveSpecialtyIdForOrder(
     room:
         | {
-              specialty_id?: string | null;
-              specialty?: { specialty_id?: string | null } | null;
-              room_type?: string | null;
-          }
+            specialty_id?: string | null;
+            specialty?: { specialty_id?: string | null } | null;
+            room_type?: string | null;
+        }
         | null
         | undefined,
     flow: Record<string, unknown> | null
@@ -194,6 +194,7 @@ function pickEmbeddedShiftStaffName(shift: Shift): string {
             user_name?: string;
             name?: string;
             account?: { user_name?: string; full_name?: string };
+            profile?: { full_name?: string };
         };
         account?: { user_name?: string; full_name?: string };
         staff_name?: string;
@@ -468,7 +469,10 @@ export function ParaclinicalOrdersTab({
     useEffect(() => {
         // Chỉ refetch theo ngữ cảnh bệnh nhân/flow — KHÔNG phụ thuộc shifts/staffNameById
         // (tránh đóng modal khi mở form sửa vì fetch ca trực)
-        void loadPendingOrders();
+        const timeoutId = window.setTimeout(() => {
+            void loadPendingOrders();
+        }, 0);
+        return () => window.clearTimeout(timeoutId);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [accessToken, patientId, patient.bookingId, patient.flowId, refreshKey, flowSnapshot]);
 
@@ -524,17 +528,20 @@ export function ParaclinicalOrdersTab({
         if (!shifts.length) return;
         const fromShifts = collectStaffNamesFromShifts(shifts);
         if (fromShifts.size === 0) return;
-        setStaffNameById((prev) => {
-            let changed = false;
-            const next = new Map(prev);
-            fromShifts.forEach((name, id) => {
-                if (!next.has(id)) {
-                    next.set(id, name);
-                    changed = true;
-                }
+        const timeoutId = window.setTimeout(() => {
+            setStaffNameById((prev) => {
+                let changed = false;
+                const next = new Map(prev);
+                fromShifts.forEach((name, id) => {
+                    if (!next.has(id)) {
+                        next.set(id, name);
+                        changed = true;
+                    }
+                });
+                return changed ? next : prev;
             });
-            return changed ? next : prev;
-        });
+        }, 0);
+        return () => window.clearTimeout(timeoutId);
     }, [shifts]);
 
     const selectedService = useMemo(
@@ -571,33 +578,39 @@ export function ParaclinicalOrdersTab({
     }, [rooms, editServiceRoomType, shifts, staffNameById]);
 
     useEffect(() => {
-        if (!selectedService) {
-            setSelectedRoomId('');
-            return;
-        }
-        if (eligibleRooms.length > 0) {
-            setSelectedRoomId((prev) =>
-                eligibleRooms.some((r) => r.room_id === prev) ? prev : eligibleRooms[0].room_id
-            );
-        }
+        const timeoutId = window.setTimeout(() => {
+            if (!selectedService) {
+                setSelectedRoomId('');
+                return;
+            }
+            if (eligibleRooms.length > 0) {
+                setSelectedRoomId((prev) =>
+                    eligibleRooms.some((r) => r.room_id === prev) ? prev : eligibleRooms[0].room_id
+                );
+            }
+        }, 0);
+        return () => window.clearTimeout(timeoutId);
     }, [selectedService, eligibleRooms]);
 
     // When opening edit: keep current room if valid; otherwise preselect best CLS room
     useEffect(() => {
         if (!editingOrder) return;
-        setEditRoomId((prev) => {
-            if (prev && editEligibleRooms.some((r) => r.room_id === prev)) return prev;
-            if (
-                editingOrder.room_id &&
-                editEligibleRooms.some((r) => r.room_id === editingOrder.room_id)
-            ) {
-                return editingOrder.room_id;
-            }
-            const withDuty = editEligibleRooms.find((r) =>
-                resolveOnDutyDoctorName(r.room_id, rooms, shifts, staffNameById)
-            );
-            return withDuty?.room_id || editEligibleRooms[0]?.room_id || '';
-        });
+        const timeoutId = window.setTimeout(() => {
+            setEditRoomId((prev) => {
+                if (prev && editEligibleRooms.some((r) => r.room_id === prev)) return prev;
+                if (
+                    editingOrder.room_id &&
+                    editEligibleRooms.some((r) => r.room_id === editingOrder.room_id)
+                ) {
+                    return editingOrder.room_id;
+                }
+                const withDuty = editEligibleRooms.find((r) =>
+                    resolveOnDutyDoctorName(r.room_id, rooms, shifts, staffNameById)
+                );
+                return withDuty?.room_id || editEligibleRooms[0]?.room_id || '';
+            });
+        }, 0);
+        return () => window.clearTimeout(timeoutId);
     }, [editingOrder, editEligibleRooms, rooms, shifts, staffNameById]);
 
     const handleCreateIndication = async () => {
@@ -922,14 +935,14 @@ export function ParaclinicalOrdersTab({
                                     <label className="text-[10px] font-bold uppercase text-neutral-400 block mb-1">
                                         Nhân viên trực
                                     </label>
-                                    <div className="w-full border border-neutral-200 rounded-xl px-3 py-2.5 text-sm font-medium bg-neutral-50 text-neutral-800 min-h-[42px] flex items-center">
+                                    <div className="w-full border border-neutral-200 rounded-xl px-3 py-2.5 text-sm font-medium bg-neutral-50 text-neutral-800 min-h-10.5 flex items-center">
                                         {selectedRoomId
                                             ? resolveOnDutyDoctorName(
-                                                  selectedRoomId,
-                                                  rooms,
-                                                  shifts,
-                                                  staffNameById
-                                              ) || 'Chưa có bác sĩ trực'
+                                                selectedRoomId,
+                                                rooms,
+                                                shifts,
+                                                staffNameById
+                                            ) || 'Chưa có bác sĩ trực'
                                             : '—'}
                                     </div>
                                 </div>
@@ -1015,14 +1028,14 @@ export function ParaclinicalOrdersTab({
                                     <label className="text-[10px] font-bold uppercase text-neutral-400 block mb-1">
                                         Bác sĩ trực
                                     </label>
-                                    <div className="w-full border border-neutral-200 rounded-xl px-3 py-2.5 text-sm font-medium bg-neutral-50 text-neutral-800 min-h-[42px] flex items-center">
+                                    <div className="w-full border border-neutral-200 rounded-xl px-3 py-2.5 text-sm font-medium bg-neutral-50 text-neutral-800 min-h-10.5 flex items-center">
                                         {editRoomId
                                             ? resolveOnDutyDoctorName(
-                                                  editRoomId,
-                                                  rooms,
-                                                  shifts,
-                                                  staffNameById
-                                              ) || 'Chưa có bác sĩ trực'
+                                                editRoomId,
+                                                rooms,
+                                                shifts,
+                                                staffNameById
+                                            ) || 'Chưa có bác sĩ trực'
                                             : '—'}
                                     </div>
                                 </div>
@@ -1040,8 +1053,8 @@ export function ParaclinicalOrdersTab({
                                                 {s === 'PENDING'
                                                     ? 'Chờ thực hiện'
                                                     : s === 'IN_PROGRESS'
-                                                      ? 'Đang thực hiện'
-                                                      : 'Hoàn tất'}
+                                                        ? 'Đang thực hiện'
+                                                        : 'Hoàn tất'}
                                             </option>
                                         ))}
                                     </select>

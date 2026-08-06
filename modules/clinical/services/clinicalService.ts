@@ -592,6 +592,28 @@ export const clinicalService = {
             headers: { Authorization: `Bearer ${token}` },
         }),
 
+    /**
+     * Fallback for booking/flow steps that have no service_order_id
+     * (e.g. default "Khám bệnh"). Prefer PATCH /api/service-order when linked.
+     */
+    updateStep: (
+        stepId: string,
+        body: { room_id?: string; staff_id?: string; docNo?: number; payment_status?: string },
+        token: string
+    ) =>
+        apiClient.patch<unknown>(`/api/step/${stepId}`, body, {
+            headers: { Authorization: `Bearer ${token}` },
+        }),
+
+    updateStepStatus: (stepId: string, status: string, token: string) =>
+        apiClient.patch<unknown>(
+            `/api/step/${stepId}/status`,
+            { step_status: status },
+            {
+                headers: { Authorization: `Bearer ${token}` },
+            }
+        ),
+
     /** Create runtime edge: waiting step cannot proceed until required completes. */
     createStepDependency: (
         body: { waiting_step_id: string; required_step_id: string },
