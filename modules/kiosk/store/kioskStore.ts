@@ -14,6 +14,7 @@ import { usePackageBookingStore } from './packageBookingStore';
 
 export interface KioskStoreState {
   currentView: ActiveView;
+  previousView: ActiveView | null;
   activeModal: ActiveModal;
   targetViewAfterScan: ActiveView | null;
   aiRegisterStep: AIRegisterStep;
@@ -49,6 +50,7 @@ export interface KioskStoreState {
 
 export const useKioskStore = create<KioskStoreState>((set, get) => ({
   currentView: 'home',
+  previousView: null,
   activeModal: null,
   targetViewAfterScan: null,
   aiRegisterStep: 'body_select',
@@ -168,6 +170,7 @@ export const useKioskStore = create<KioskStoreState>((set, get) => ({
 
     set({
       currentView: 'home',
+      previousView: null,
       activeModal: null,
       targetViewAfterScan: null,
       aiRegisterStep: 'body_select',
@@ -177,9 +180,9 @@ export const useKioskStore = create<KioskStoreState>((set, get) => ({
     });
   },
 
-  navigateToView: (view) => set({ currentView: view }),
+  navigateToView: (view) => set((state) => ({ previousView: state.currentView, currentView: view })),
 
-  navigateToMap: (roomId) => set({ mapNavigationRoomId: roomId ?? null, currentView: 'map' }),
+  navigateToMap: (roomId) => set((state) => ({ previousView: state.currentView, mapNavigationRoomId: roomId ?? null, currentView: 'map' })),
 
   showToast: (msg, type = 'info') => {
     const id = Date.now().toString();

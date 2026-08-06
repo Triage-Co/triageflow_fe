@@ -126,10 +126,11 @@ export const MapView: React.FC = () => {
   }, [startRoom, targetRoom]);
 
   const handleBack = () => {
-    if (mapNavigationRoomId) {
-      navigateToView('patient_info');
+    const previousView = useKioskStore.getState().previousView;
+    if (previousView && previousView !== 'map') {
+      navigateToView(previousView);
     } else {
-      goHome();
+      navigateToView('patient_info');
     }
   };
 
