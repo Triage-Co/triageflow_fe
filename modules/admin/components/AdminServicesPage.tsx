@@ -19,6 +19,9 @@ import {
     extractServiceList,
     serviceCatalogService,
 } from '../services/serviceCatalogService';
+import { getCompactPages } from '../utils/pagination';
+
+const ITEMS_PER_PAGE = 10;
 
 const EMPTY_FORM: CreateServiceReqDto = {
     service_code: '',
@@ -39,6 +42,7 @@ export function AdminServicesPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editing, setEditing] = useState<CatalogService | null>(null);
@@ -77,6 +81,17 @@ export function AdminServicesPage() {
             return code.includes(q) || name.includes(q);
         });
     }, [services, searchQuery]);
+
+    const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+    const safePage = Math.min(currentPage, totalPages);
+    const paginated = useMemo(
+        () =>
+            filtered.slice(
+                (safePage - 1) * ITEMS_PER_PAGE,
+                safePage * ITEMS_PER_PAGE
+            ),
+        [filtered, safePage]
+    );
 
     const openCreate = () => {
         setEditing(null);
@@ -156,6 +171,11 @@ export function AdminServicesPage() {
         try {
             await serviceCatalogService.deleteService(id, accessToken);
             setDeleting(null);
+            const newTotal = Math.max(0, filtered.length - 1);
+            const newTotalPages = Math.max(1, Math.ceil(newTotal / ITEMS_PER_PAGE));
+            if (currentPage > newTotalPages) {
+                setCurrentPage(newTotalPages);
+            }
             await loadServices();
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Không thể xóa dịch vụ.');
@@ -188,7 +208,10 @@ export function AdminServicesPage() {
                 <Search className="w-4 h-4 text-neutral-400" />
                 <input
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setCurrentPage(1);
+                    }}
                     placeholder="Tìm theo mã hoặc tên..."
                     className="flex-1 text-sm outline-none bg-transparent"
                 />
@@ -223,7 +246,7 @@ export function AdminServicesPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-neutral-100">
-                            {filtered.map((service) => {
+                            {paginated.map((service) => {
                                 const id = getServiceId(service);
                                 const active = service.is_active !== false;
                                 return (
@@ -280,6 +303,64 @@ export function AdminServicesPage() {
                     </div>
                 )}
             </div>
+
+            {filtered.length > 0 && (
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-neutral-100 pt-4">
+                    <p className="text-[12px] text-[#ADADAD] font-bold">
+                        Hiển thị{' '}
+                        {Math.min(filtered.length, (safePage - 1) * ITEMS_PER_PAGE + 1)}
+                        {' - '}
+                        {Math.min(filtered.length, safePage * ITEMS_PER_PAGE)} trong số{' '}
+                        {filtered.length} dịch vụ
+                    </p>
+                    {totalPages > 1 && (
+                        <div className="flex items-center gap-1">
+                            <button
+                                type="button"
+                                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                                disabled={safePage === 1}
+                                className="px-3 py-1.5 text-xs font-bold border border-[#EBEBEB] rounded-lg bg-white text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6] disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+                            >
+                                Trước
+                            </button>
+                            {getCompactPages(safePage, totalPages).map((page, idx) =>
+                                page === 'ellipsis' ? (
+                                    <span
+                                        key={`ellipsis-${idx}`}
+                                        className="px-1 text-sm font-bold text-[#ADADAD] select-none"
+                                    >
+                                        ...
+                                    </span>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        key={page}
+                                        onClick={() => setCurrentPage(page)}
+                                        className={cn(
+                                            'w-8 h-8 flex items-center justify-center text-xs font-bold rounded-lg border transition cursor-pointer',
+                                            safePage === page
+                                                ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white'
+                                                : 'bg-white border-[#EBEBEB] text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6]'
+                                        )}
+                                    >
+                                        {page}
+                                    </button>
+                                )
+                            )}
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                                }
+                                disabled={safePage === totalPages}
+                                className="px-3 py-1.5 text-xs font-bold border border-[#EBEBEB] rounded-lg bg-white text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6] disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+                            >
+                                Sau
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
                         </div>
                     </div>
                 </div>

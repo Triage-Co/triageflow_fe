@@ -70,6 +70,18 @@ export interface ServiceOrder {
         specialty_name?: string;
         specialty_id?: string;
     };
+    /** Bác sĩ tạo chỉ định — một số BE nhúng object, một số chỉ trả assign_by_staff_id */
+    staff_info?: {
+        staff_id?: string;
+        full_name?: string;
+        user_name?: string;
+    } | null;
+    assign_by_staff?: {
+        staff_id?: string;
+        full_name?: string;
+        user_name?: string;
+        account?: { user_name?: string; email?: string };
+    } | null;
 }
 
 export interface CreateServiceOrderReqDto {
@@ -79,7 +91,6 @@ export interface CreateServiceOrderReqDto {
     service_code: string;
     specialty_id?: string | null;
     room_id?: string;
-    is_payment: boolean;
 }
 
 export interface UpdateServiceOrderReqDto {
@@ -89,7 +100,6 @@ export interface UpdateServiceOrderReqDto {
     service_code?: string;
     specialty_id?: string | null;
     room_id?: string;
-    is_payment?: boolean;
     status?: ServiceOrderStatus;
 }
 
