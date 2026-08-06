@@ -1,12 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRoomDisplaySocket } from '../hooks/useRoomDisplaySocket';
-import type { CallNextResponse } from '../types/queue.types';
+import { useQueueSound } from '../hooks/useQueueSound';
+import { AnimatedQueueNumber } from './AnimatedQueueNumber';
+import { RebalanceBanner } from './RebalanceBanner';
+import { roomService } from '../services/roomService';
 import { useAuthStore } from '@/modules/auth/store/authStore';
 import {
     Maximize2, Minimize2, RefreshCw, Volume2, VolumeX,
-    Wifi, WifiOff,
+    Wifi, WifiOff, Stethoscope, Clock, Calendar, Shuffle
 } from 'lucide-react';
 
 interface RoomWaitingScreenProps {
@@ -20,76 +23,60 @@ export function RoomWaitingScreen({
     staffId: initialStaffId,
 }: RoomWaitingScreenProps) {
     const authUser = useAuthStore((s) => s.user);
-    const accessToken = useAuthStore((s) => s.accessToken);
 
     const [roomId] = useState<string | undefined>(initialRoomId);
     const [staffId] = useState<string | undefined>(initialStaffId ?? authUser?.id);
     const [currentTime, setCurrentTime] = useState<Date | null>(null);
     const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
-    const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
-    const [initialData, setInitialData] = useState<CallNextResponse | null>(null);
+    const [blinkColon, setBlinkColon] = useState<boolean>(true);
+    const [roomDetails, setRoomDetails] = useState<{ roomName: string; department: string } | null>(null);
+
+    // Fetch room details (human readable room_name & specialty) if roomId is provided
+    useEffect(() => {
+        if (!roomId) return;
+        roomService.getRooms().then((rooms) => {
+            const found = rooms.find((r) => r.room_id === roomId || r.room_name === roomId);
+            if (found) {
+                setRoomDetails({
+                    roomName: found.room_name,
+                    department: found.specialty?.specialty_name || 'KHOA KHÁM BỆNH',
+                });
+            }
+        }).catch(() => {});
+    }, [roomId]);
+
+    // ── Sound & Audio Chime Hook ──────────────────────────────────────────────
+    const { soundEnabled, setSoundEnabled, playDing, isAudioBlocked, enableAudio } = useQueueSound();
 
     // ── Socket.IO real-time connection ────────────────────────────────────────
-    const { data: socketData, isConnected, error: socketError } = useRoomDisplaySocket({
+    const { data: socketData, rebalanceSuggestions, isConnected, error: socketError } = useRoomDisplaySocket({
         roomId,
         staffId: staffId ?? authUser?.id,
     });
 
-    // ── Initial Fetch if Doctor is logged in ──────────────────────────────────
+    // Track queue number changes to trigger chime bell sound
+    const prevQueueNumberRef = useRef<string | null>(null);
+
     useEffect(() => {
-        if (!accessToken) return;
-        const todayStr = new Date().toISOString().slice(0, 10);
+        const currentNum = socketData?.current_patient?.queue_number
+            ? String(socketData.current_patient.queue_number).trim()
+            : null;
 
-        import('@/shared/services/apiClient').then(({ apiClient }) => {
-            apiClient
-                .get<any[]>(`/api/doctor/patients?date=${todayStr}`, {
-                    headers: { Authorization: `Bearer ${accessToken}` },
-                    suppressLogError: true,
-                })
-                .then((res) => {
-                    const list = Array.isArray(res?.data) ? res.data : [];
-                    if (list.length === 0) return;
-
-                    const first = list[0];
-                    const roomName = first?.step?.room?.room_name || (roomId ? `PHÒNG ${roomId.toUpperCase()}` : 'PHÒNG 101');
-                    const specialtyName = first?.step?.room?.specialty?.specialty_name || 'KHOA KHÁM BỆNH';
-                    const current = list.find(
-                        (p) => p.status === 'CALLING' || p.status === 'IN_PROGRESS' || p.status === 'PROCESSING'
-                    );
-                    const upcoming = list.filter(
-                        (p) => p.status === 'PENDING' || p.status === 'WAITING'
-                    );
-
-                    setInitialData({
-                        room_info: {
-                            room_name: roomName,
-                            specialty_name: specialtyName,
-                            doctor_name: authUser?.fullName || (authUser as any)?.full_name || 'BS. Lê Văn An',
-                        },
-                        current_patient: current
-                            ? {
-                                  queue_id: current.queue_id,
-                                  queue_number: current.queue_number,
-                                  patient_name: current.step?.flow?.booking?.patient?.account?.full_name || 'Bệnh nhân',
-                                  status: current.status,
-                              }
-                            : null,
-                        upcoming_patients: upcoming.map((p) => ({
-                            queue_id: p.queue_id,
-                            queue_number: p.queue_number,
-                            patient_name: p.step?.flow?.booking?.patient?.account?.full_name || 'Bệnh nhân',
-                            status: p.status,
-                        })),
-                    });
-                })
-                .catch(() => null);
-        });
-    }, [accessToken, authUser, roomId]);
+        if (prevQueueNumberRef.current !== null && currentNum !== null && currentNum !== prevQueueNumberRef.current) {
+            playDing();
+        }
+        if (currentNum !== null) {
+            prevQueueNumberRef.current = currentNum;
+        }
+    }, [socketData?.current_patient?.queue_number, playDing]);
 
     // ── Live Clock ────────────────────────────────────────────────────────────
     useEffect(() => {
         setCurrentTime(new Date());
-        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+        const timer = setInterval(() => {
+            setCurrentTime(new Date());
+            setBlinkColon((prev) => !prev);
+        }, 1000);
         return () => clearInterval(timer);
     }, []);
 
@@ -112,19 +99,38 @@ export function RoomWaitingScreen({
     };
 
     const formatTime = (date: Date | null) => {
-        if (!date) return '';
-        return [
-            String(date.getHours()).padStart(2, '0'),
-            String(date.getMinutes()).padStart(2, '0'),
-            String(date.getSeconds()).padStart(2, '0'),
-        ].join(':');
+        if (!date) return { hh: '00', mm: '00', ss: '00' };
+        return {
+            hh: String(date.getHours()).padStart(2, '0'),
+            mm: String(date.getMinutes()).padStart(2, '0'),
+            ss: String(date.getSeconds()).padStart(2, '0'),
+        };
     };
 
-    // ── Map socket data to display data (with fallback when waiting for socket) ─
-    const activeData = socketData ?? initialData ?? {
+    const isUuidString = (str?: string): boolean => {
+        if (!str) return false;
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str.trim());
+    };
+
+    const formatDisplayRoomName = (rawName?: string): string => {
+        if (!rawName || isUuidString(rawName)) return 'PHÒNG KHÁM';
+        const upper = rawName.trim().toUpperCase();
+        if (upper.startsWith('PHÒNG')) return upper;
+        return `PHÒNG ${upper}`;
+    };
+
+    // Determine room name & department to display (prioritizing non-UUID names)
+    const socketRoomName = socketData?.room_info?.room_name;
+    const resolvedRoomName = (!isUuidString(socketRoomName) && socketRoomName)
+        ? socketRoomName
+        : (roomDetails?.roomName || (!isUuidString(roomId) ? roomId : 'PHÒNG KHÁM'));
+
+    const resolvedDeptName = socketData?.room_info?.specialty_name || roomDetails?.department || 'KHOA KHÁM BỆNH';
+
+    const activeData = socketData ?? {
         room_info: {
-            room_name: roomId ? `PHÒNG ${String(roomId).toUpperCase()}` : 'PHÒNG KHÁM',
-            specialty_name: 'KHOA KHÁM BỆNH',
+            room_name: resolvedRoomName,
+            specialty_name: resolvedDeptName,
             doctor_name: authUser?.fullName || (authUser as any)?.full_name || 'BS. Đang trực',
         },
         current_patient: null,
@@ -132,8 +138,8 @@ export function RoomWaitingScreen({
     };
 
     const room = {
-        roomName: activeData.room_info?.room_name?.toUpperCase() ?? 'PHÒNG KHÁM',
-        department: activeData.room_info?.specialty_name?.toUpperCase() ?? 'KHOA KHÁM BỆNH',
+        roomName: formatDisplayRoomName(resolvedRoomName),
+        department: resolvedDeptName.toUpperCase(),
         doctorName: activeData.room_info?.doctor_name || authUser?.fullName || (authUser as any)?.full_name || 'BS. Đang trực',
     };
 
@@ -145,175 +151,232 @@ export function RoomWaitingScreen({
         }
         : null;
 
-    // current_patient and any past patients (queue_number <= current) must never appear in upcoming
-    const currentQueueNumberStr = currentPatient?.queueNumber ? String(currentPatient.queueNumber).replace(/^0+/, '') : '';
-    const currentNumVal = parseInt(currentQueueNumberStr, 10);
+    const displayUpcoming = (activeData.upcoming_patients ?? []).map((p, idx) => ({
+        id: p.queue_id ? String(p.queue_id) : `socket-${idx}`,
+        queueNumber: String(p.queue_number),
+        patientName: p.patient_name,
+        etaMinutes: p.eta_minutes,
+        queueType: p.queue_type,
+        position: idx + 1,
+    }));
 
-    const upcomingPatients = (activeData.upcoming_patients ?? [])
-        .filter((p) => {
-            if (!p) return false;
-            const pNumStr = String(p.queue_number).replace(/^0+/, '') || '0';
-            const pNumVal = parseInt(pNumStr, 10);
-            const pStatus = String(p.status ?? '').toUpperCase();
-
-            if (currentQueueNumberStr && pNumStr === currentQueueNumberStr) return false;
-            if (pStatus === 'COMPLETED' || pStatus === 'DONE' || pStatus === 'IN_PROGRESS' || pStatus === 'CALLING') return false;
-
-            if (!isNaN(currentNumVal) && currentNumVal > 0 && !isNaN(pNumVal) && pNumVal <= currentNumVal) {
-                return false;
-            }
-
-            return true;
-        })
-        .map((p, idx) => ({
-            id: p.queue_id ? String(p.queue_id) : `socket-${idx}`,
-            queueNumber: String(p.queue_number),
-            patientName: p.patient_name,
-        }));
-
-    const displayUpcoming = upcomingPatients;
     /** CALLING = vừa gọi vào phòng; IN_PROGRESS = đang khám */
     const currentStatusLabel = !currentPatient
-        ? 'SẮN SÀNG ĐÓN BỆNH NHÂN'
+        ? 'SẴN SÀNG ĐÓN BỆNH NHÂN'
         : currentPatient.status === 'CALLING'
-        ? 'ĐANG GỌI BỆNH NHÂN'
-        : 'ĐANG KHÁM BỆNH';
+            ? 'ĐANG GỌI BỆNH NHÂN'
+            : 'ĐANG KHÁM BỆNH';
 
     const leftColumn = displayUpcoming.filter((_, idx) => idx % 2 === 0);
     const rightColumn = displayUpcoming.filter((_, idx) => idx % 2 === 1);
+    const clock = formatTime(currentTime);
 
     return (
         /* h-screen + overflow-hidden = khóa chặt trong viewport, không scroll */
         <div className="relative h-screen w-screen flex flex-col font-sans select-none overflow-hidden" style={{ background: 'linear-gradient(160deg, #DFE1FF 0%, #DFE1FF 45%, #F0D2C1 100%)' }}>
 
-            {/* ── Controls overlay (ẩn, chỉ hiện khi hover) ── */}
-            <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-end gap-1 px-3 pt-2 opacity-0 hover:opacity-100 transition-opacity duration-300">
-                {/* Socket status indicator */}
-                <div className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full mr-2 ${isConnected ? 'bg-emerald-100/80 text-emerald-700' : 'bg-red-100/80 text-red-600'}`}>
-                    {isConnected
-                        ? <><Wifi className="w-3 h-3" /> LIVE</>
-                        : <><WifiOff className="w-3 h-3" /> {socketError ? 'Lỗi kết nối' : 'Đang kết nối...'}</>
-                    }
+            {/* ── Controls overlay (hidden by default, revealed on hover) ── */}
+            <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 pt-2 opacity-0 hover:opacity-100 transition-opacity duration-300">
+                {/* Audio Unblock Prompt */}
+                {isAudioBlocked ? (
+                    <button
+                        onClick={enableAudio}
+                        className="flex items-center gap-2 text-xs font-extrabold px-3 py-1.5 rounded-full bg-amber-500 text-amber-950 shadow-md animate-bounce"
+                    >
+                        <Volume2 className="w-4 h-4" /> Bấm để bật chuông gọi số
+                    </button>
+                ) : (
+                    <div />
+                )}
+
+                <div className="flex items-center gap-2">
+                    {/* Socket status indicator */}
+                    <div className={`flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full ${isConnected ? 'bg-emerald-100/90 text-emerald-800 border border-emerald-300' : 'bg-red-100/90 text-red-700 border border-red-300'}`}>
+                        {isConnected
+                            ? <><Wifi className="w-3 h-3" /> LIVE</>
+                            : <><WifiOff className="w-3 h-3" /> {socketError ? 'Lỗi kết nối' : 'Đang kết nối...'}</>
+                        }
+                    </div>
+                    <button
+                        onClick={() => setSoundEnabled(!soundEnabled)}
+                        title="Âm thanh"
+                        className="p-2 rounded-xl bg-white/40 hover:bg-white/70 text-neutral-700 backdrop-blur-md transition shadow-sm"
+                    >
+                        {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-600" /> : <VolumeX className="w-4 h-4 text-red-500" />}
+                    </button>
+                    <button
+                        onClick={toggleFullscreen}
+                        title="Toàn màn hình"
+                        className="p-2 rounded-xl bg-white/40 hover:bg-white/70 text-neutral-700 backdrop-blur-md transition shadow-sm"
+                    >
+                        {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                    </button>
                 </div>
-                <button onClick={() => setSoundEnabled(!soundEnabled)} title="Âm thanh" className="p-1.5 rounded hover:bg-black/10 text-neutral-500 transition">
-                    {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-emerald-500" /> : <VolumeX className="w-3.5 h-3.5" />}
-                </button>
-                <button onClick={toggleFullscreen} title="Toàn màn hình" className="p-1.5 rounded hover:bg-black/10 text-neutral-500 transition">
-                    {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-                </button>
             </div>
 
             {/* ── 1. HEADER BANNER ── */}
-            <div className="shrink-0 bg-gradient-to-r from-[#709CE4] via-[#7DA7EC] to-[#709CE4] text-white px-8 py-6 flex items-center justify-between shadow-md">
-                {/* Tên khoa float trái */}
-                <div className="text-left flex-1">
-                    <span className="text-base sm:text-xl md:text-2xl tracking-[0.15em] font-black text-white/90 uppercase block leading-tight">
-                        {room.department}
-                    </span>
-                </div>
-
-                {/* Bác sĩ ở giữa */}
-                <div className="text-center flex-1 px-4">
-                    <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-wide text-white drop-shadow-sm">
-                        {room.doctorName}
-                    </h2>
-                </div>
-
-                {/* Tên phòng float phải */}
-                <div className="text-right flex-1">
-                    <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black tracking-tight drop-shadow-sm leading-none uppercase">
+            <div className="shrink-0 bg-gradient-to-r from-[#6997E5] via-[#7AA6F0] to-[#6997E5] text-white px-6 sm:px-8 py-3 flex items-center justify-between shadow-md">
+                {/* Bên trái: Tên phòng */}
+                <div className="text-left flex-1 min-w-0">
+                    <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight drop-shadow-sm leading-none uppercase">
                         {room.roomName}
                     </h1>
                 </div>
+
+                {/* Bên phải: BS: [Tên bác sĩ] */}
+                <div className="text-right shrink-0 min-w-0 pl-4">
+                    <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-wide text-white drop-shadow-sm truncate">
+                        BS: {room.doctorName.replace(/^(BS\.|BS:?\s*)/i, '').trim()}
+                    </h2>
+                </div>
             </div>
 
-            {/* ── 2. CURRENT PATIENT — flex-1 = chiếm hết không gian còn lại ── */}
-            <div className="flex-1 flex flex-col items-center justify-center py-2 px-4 text-center overflow-hidden">
-                {/* Status pill */}
-                <div className="flex items-center justify-center gap-2 text-[#6B5FD6] font-black text-lg tracking-[0.35em] uppercase mb-1">
-                    <span className="relative flex h-3.5 w-3.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#6B5FD6] opacity-60" />
-                        <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#6B5FD6]" />
+            {/* ── 1.5 REBALANCE BANNER (Phase 4) ── */}
+            <RebalanceBanner suggestions={rebalanceSuggestions} currentRoomId={roomId} />
+
+            {/* ── 2. CURRENT PATIENT (Phase 3 Animated Component) ── */}
+            <AnimatedQueueNumber
+                queueNumber={currentPatient?.queueNumber ?? '---'}
+                patientName={currentPatient?.patientName ?? 'Chưa có bệnh nhân'}
+                statusLabel={currentStatusLabel}
+                status={currentPatient?.status ?? ''}
+            />
+
+            {/* Socket disconnected warning overlay */}
+            {!isConnected && (
+                <div className="shrink-0 mx-auto mb-2 flex items-center gap-2 text-xs font-bold text-amber-800 bg-amber-100/90 border border-amber-300 px-4 py-1.5 rounded-full shadow-sm">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    {socketError ?? 'Đang kết nối lại máy chủ real-time...'}
+                </div>
+            )}
+
+            {/* ── 3. UPCOMING QUEUE (Phase 4 ETA & Badges) ── */}
+            <div className="shrink-0 bg-white/40 backdrop-blur-sm border-t border-black/10 px-8 md:px-16 py-4">
+                <div className="flex items-center justify-between mb-2 pb-2 border-b-2 border-black/20">
+                    <span className="text-base sm:text-lg md:text-xl font-black tracking-[0.25em] text-black uppercase">
+                        SẮP TỚI LƯỢT
                     </span>
-                    <span>{currentStatusLabel}</span>
-                    <span className="relative flex h-3.5 w-3.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#6B5FD6] opacity-60" />
-                        <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#6B5FD6]" />
+                    <span className="text-xs font-extrabold text-black/50 uppercase tracking-wider">
+                        Tối đa 5 lượt tiếp theo
                     </span>
                 </div>
 
-                {/* Ticket Number — siêu lớn phục vụ kiosk */}
-                <div
-                    className="font-black text-[#6B5FD6]/70 tracking-widest leading-none drop-shadow-sm"
-                    style={{ fontSize: 'clamp(100px, 24vw, 240px)' }}
-                >
-                    {currentPatient?.queueNumber ?? '---'}
-                </div>
+                {displayUpcoming.length === 0 ? (
+                    <div className="text-center py-4 text-black/40 font-bold text-lg">
+                        Không có bệnh nhân đang chờ
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-2 gap-x-12 md:gap-x-24">
+                        {/* Left column */}
+                        <div className="flex flex-col">
+                            {leftColumn.map((p, idx) => (
+                                <div
+                                    key={p.id}
+                                    className={`flex items-center justify-between py-2.5 text-xl sm:text-2xl md:text-3xl font-bold ${idx < leftColumn.length - 1 ? 'border-b border-black/10' : ''
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-3 truncate">
+                                        <span className="text-xs font-black bg-indigo-950 text-white w-6 h-6 rounded-full flex items-center justify-center shrink-0">
+                                            {p.position}
+                                        </span>
+                                        <span className="text-black font-black font-mono min-w-[5rem] shrink-0">
+                                            {p.queueNumber}
+                                        </span>
+                                        <span className="text-black/30 font-normal shrink-0">—</span>
+                                        <span className="text-black font-semibold truncate">
+                                            {p.patientName}
+                                        </span>
+                                    </div>
 
-                {/* Patient Name */}
-                <div
-                    className="font-extrabold text-[#2D1F5E] tracking-tight mt-1"
-                    style={{ fontSize: 'clamp(32px, 5.5vw, 68px)' }}
-                >
-                    {currentPatient?.patientName ?? 'Chưa có bệnh nhân'}
-                </div>
+                                    <div className="flex items-center gap-2 shrink-0 ml-2">
+                                        {/* Queue type badge */}
+                                        {p.queueType === 'APPOINTMENT' && (
+                                            <span className="text-xs font-extrabold bg-blue-600 text-white px-2 py-0.5 rounded-md flex items-center gap-1">
+                                                <Calendar className="w-3 h-3" /> HẸN
+                                            </span>
+                                        )}
+                                        {p.queueType === 'TRANSFER' && (
+                                            <span className="text-xs font-extrabold bg-orange-600 text-white px-2 py-0.5 rounded-md flex items-center gap-1">
+                                                <Shuffle className="w-3 h-3" /> CHUYỂN
+                                            </span>
+                                        )}
+                                        {/* ETA minutes display */}
+                                        {typeof p.etaMinutes === 'number' && p.etaMinutes > 0 && (
+                                            <span className="text-xs font-extrabold bg-black/10 text-black/70 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                                <Clock className="w-3 h-3" /> ~{p.etaMinutes}p
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
 
-                {/* Socket connection badge — shown when not connected */}
-                {!isConnected && (
-                    <div className="mt-4 flex items-center gap-2 text-sm font-semibold text-amber-700 bg-amber-50/80 border border-amber-200 px-4 py-2 rounded-full">
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        {socketError ?? 'Đang kết nối tới máy chủ real-time...'}
+                        {/* Right column */}
+                        <div className="flex flex-col">
+                            {rightColumn.map((p, idx) => (
+                                <div
+                                    key={p.id}
+                                    className={`flex items-center justify-between py-2.5 text-xl sm:text-2xl md:text-3xl font-bold ${idx < rightColumn.length - 1 ? 'border-b border-black/10' : ''
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-3 truncate">
+                                        <span className="text-xs font-black bg-indigo-950 text-white w-6 h-6 rounded-full flex items-center justify-center shrink-0">
+                                            {p.position}
+                                        </span>
+                                        <span className="text-black font-black font-mono min-w-[5rem] shrink-0">
+                                            {p.queueNumber}
+                                        </span>
+                                        <span className="text-black/30 font-normal shrink-0">—</span>
+                                        <span className="text-black font-semibold truncate">
+                                            {p.patientName}
+                                        </span>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 shrink-0 ml-2">
+                                        {/* Queue type badge */}
+                                        {p.queueType === 'APPOINTMENT' && (
+                                            <span className="text-xs font-extrabold bg-blue-600 text-white px-2 py-0.5 rounded-md flex items-center gap-1">
+                                                <Calendar className="w-3 h-3" /> HẸN
+                                            </span>
+                                        )}
+                                        {p.queueType === 'TRANSFER' && (
+                                            <span className="text-xs font-extrabold bg-orange-600 text-white px-2 py-0.5 rounded-md flex items-center gap-1">
+                                                <Shuffle className="w-3 h-3" /> CHUYỂN
+                                            </span>
+                                        )}
+                                        {/* ETA minutes display */}
+                                        {typeof p.etaMinutes === 'number' && p.etaMinutes > 0 && (
+                                            <span className="text-xs font-extrabold bg-black/10 text-black/70 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                                <Clock className="w-3 h-3" /> ~{p.etaMinutes}p
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 )}
             </div>
 
-            {/* ── 3. UPCOMING QUEUE ── */}
-            <div className="shrink-0 bg-white/40 backdrop-blur-sm border-t border-black/10 px-8 md:px-16 py-5">
-                <div className="text-base sm:text-lg md:text-xl font-black tracking-[0.25em] text-black uppercase mb-3 pb-2.5 border-b-2 border-black/20">
-                    SẮP TỚI LƯỢT
-                </div>
-                <div className="grid grid-cols-2 gap-x-12 md:gap-x-24">
-                    {/* Left column */}
-                    <div className="flex flex-col">
-                        {leftColumn.map((p, idx) => (
-                            <div
-                                key={p.id}
-                                className={`flex items-center gap-4 py-3.5 text-xl sm:text-2xl md:text-3xl font-bold ${idx < leftColumn.length - 1 ? 'border-b border-black/10' : ''}`}
-                            >
-                                <span className="text-black font-black min-w-[5rem]">{p.queueNumber}</span>
-                                <span className="text-black/30 font-normal shrink-0">—</span>
-                                <span className="text-black font-semibold truncate">{p.patientName}</span>
-                            </div>
-                        ))}
-                    </div>
-                    {/* Right column */}
-                    <div className="flex flex-col">
-                        {rightColumn.map((p, idx) => (
-                            <div
-                                key={p.id}
-                                className={`flex items-center gap-4 py-3.5 text-xl sm:text-2xl md:text-3xl font-bold ${idx < rightColumn.length - 1 ? 'border-b border-black/10' : ''}`}
-                            >
-                                <span className="text-black font-black min-w-[5rem]">{p.queueNumber}</span>
-                                <span className="text-black/30 font-normal shrink-0">—</span>
-                                <span className="text-black font-semibold truncate">{p.patientName}</span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </div>
-
             {/* ── 4. FOOTER ── */}
-            <div className="shrink-0 bg-white/30 backdrop-blur-sm border-t border-black/10 px-8 md:px-12 py-3 flex items-center justify-between">
+            <div className="shrink-0 bg-white/30 backdrop-blur-sm border-t border-black/10 px-8 md:px-12 py-2.5 flex items-center justify-between">
                 <div className="text-base sm:text-lg font-medium text-black/70">
                     {formatVietnameseDate(currentTime)}
                 </div>
+
                 {/* Socket live indicator in footer */}
-                <div className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full transition-colors ${isConnected ? 'text-emerald-600' : 'text-amber-600'}`}>
+                <div className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full transition-colors ${isConnected ? 'text-emerald-700 bg-emerald-100/60' : 'text-amber-700 bg-amber-100/60'}`}>
                     <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400 animate-bounce'}`} />
-                    {isConnected ? 'LIVE' : 'Reconnecting...'}
+                    {isConnected ? 'LIVE' : 'Đang kết nối lại...'}
                 </div>
+
+                {/* Digital Clock with Blinking Colon */}
                 <div className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-wider font-mono text-black">
-                    {formatTime(currentTime)}
+                    <span>{clock.hh}</span>
+                    <span className={blinkColon ? 'opacity-100' : 'opacity-20'}>:</span>
+                    <span>{clock.mm}</span>
+                    <span className={blinkColon ? 'opacity-100' : 'opacity-20'}>:</span>
+                    <span>{clock.ss}</span>
                 </div>
             </div>
         </div>

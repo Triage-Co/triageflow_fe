@@ -46,7 +46,7 @@ export function AdminStaffDetailPage() {
     useEffect(() => {
         if (accessToken) {
             if (staffs.length === 0) {
-                fetchStaffs(accessToken);
+                fetchStaffs(accessToken, { mergeAccounts: true });
             }
             if (specialties.length === 0) {
                 fetchSpecialties(accessToken);

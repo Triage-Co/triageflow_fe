@@ -18,7 +18,7 @@ export interface StaffState {
 }
 
 export interface StaffActions {
-    fetchStaffs: (token: string) => Promise<void>;
+    fetchStaffs: (token: string, options?: { mergeAccounts?: boolean }) => Promise<void>;
     createStaff: (data: CreateStaffDto, token: string) => Promise<void>;
     updateStaff: (id: string, data: UpdateStaffDto, token: string) => Promise<void>;
     deleteStaff: (id: string, token: string) => Promise<void>;
@@ -38,7 +38,7 @@ export const useStaffStore = create<StaffStore>()(
         (set, get) => ({
             ...initialState,
 
-            fetchStaffs: async (token: string) => {
+            fetchStaffs: async (token: string, options?: { mergeAccounts?: boolean }) => {
                 set({ isLoading: true, error: null }, false, 'fetchStaffs/pending');
                 try {
                     const res = await staffService.getStaffs(token);
@@ -46,47 +46,50 @@ export const useStaffStore = create<StaffStore>()(
 
                     let mergedStaffs = [...officialStaffs];
 
-                    try {
-                        const accRes = await adminService.getAccounts(token);
-                        const accounts = Array.isArray(accRes?.data) ? accRes.data : [];
+                    // /api/account chỉ ADMIN — không gọi khi doctor/role khác (tránh 403 log)
+                    if (options?.mergeAccounts) {
+                        try {
+                            const accRes = await adminService.getAccounts(token);
+                            const accounts = Array.isArray(accRes?.data) ? accRes.data : [];
 
-                        const existingEmails = new Set(
-                            officialStaffs
-                                .map((s) => s.account?.email?.toLowerCase())
-                                .filter(Boolean)
-                        );
+                            const existingEmails = new Set(
+                                officialStaffs
+                                    .map((s) => s.account?.email?.toLowerCase())
+                                    .filter(Boolean)
+                            );
 
-                        const STAFF_ROLES = new Set(['DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_STAFF', 'LAB_TECHNICIAN', 'PHARMACY_STAFF', 'PHARMACIST', 'CASHIER', 'ADMIN']);
+                            const STAFF_ROLES = new Set(['DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_STAFF', 'LAB_TECHNICIAN', 'PHARMACY_STAFF', 'PHARMACIST', 'CASHIER', 'ADMIN']);
 
-                        const extraStaffs: Staff[] = accounts
-                            .filter((acc) => {
-                                const r = normalizeRoleKey(acc.role);
-                                return STAFF_ROLES.has(r) && acc.email && !existingEmails.has(acc.email.toLowerCase());
-                            })
-                            .map((acc) => {
-                                const normRole = (normalizeRoleKey(acc.role) || 'NURSE') as StaffAccount['role'];
-                                const name = acc.profile?.user_name || acc.user_name || acc.email.split('@')[0];
-                                return {
-                                    staff_id: acc.id || acc.account_id || `acc-${acc.email}`,
-                                    full_name: name,
-                                    license_number: null,
-                                    experience_years: null,
-                                    specialty_id: null,
-                                    account: {
-                                        avatar: null,
-                                        user_name: name,
-                                        email: acc.email,
-                                        role: normRole,
-                                        gender: ((acc.gender || acc.profile?.gender || 'MALE').toUpperCase()) as StaffAccount['gender'],
-                                        phone: acc.profile?.phone || '',
-                                        is_banned: acc.isBanned || false,
-                                    },
-                                };
-                            });
+                            const extraStaffs: Staff[] = accounts
+                                .filter((acc) => {
+                                    const r = normalizeRoleKey(acc.role);
+                                    return STAFF_ROLES.has(r) && acc.email && !existingEmails.has(acc.email.toLowerCase());
+                                })
+                                .map((acc) => {
+                                    const normRole = (normalizeRoleKey(acc.role) || 'NURSE') as StaffAccount['role'];
+                                    const name = acc.profile?.user_name || acc.user_name || acc.email.split('@')[0];
+                                    return {
+                                        staff_id: acc.id || acc.account_id || `acc-${acc.email}`,
+                                        full_name: name,
+                                        license_number: null,
+                                        experience_years: null,
+                                        specialty_id: null,
+                                        account: {
+                                            avatar: null,
+                                            user_name: name,
+                                            email: acc.email,
+                                            role: normRole,
+                                            gender: ((acc.gender || acc.profile?.gender || 'MALE').toUpperCase()) as StaffAccount['gender'],
+                                            phone: acc.profile?.phone || '',
+                                            is_banned: acc.isBanned || false,
+                                        },
+                                    };
+                                });
 
-                        mergedStaffs = [...officialStaffs, ...extraStaffs];
-                    } catch {
-                        // Fallback to officialStaffs if getAccounts fails
+                            mergedStaffs = [...officialStaffs, ...extraStaffs];
+                        } catch {
+                            // Fallback to officialStaffs if getAccounts fails
+                        }
                     }
 
                     set({ staffs: mergedStaffs, isLoading: false }, false, 'fetchStaffs/success');
