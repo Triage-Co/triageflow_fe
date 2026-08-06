@@ -112,7 +112,7 @@ export function AdminStaffPage() {
 
     useEffect(() => {
         if (accessToken) {
-            fetchStaffs(accessToken);
+            fetchStaffs(accessToken, { mergeAccounts: true });
             fetchSpecialties(accessToken);
         }
     }, [accessToken, fetchStaffs, fetchSpecialties]);
@@ -199,7 +199,7 @@ export function AdminStaffPage() {
                 specialty_id: specialties[0]?.specialty_id || '',
             });
             if (accessToken) {
-                await fetchStaffs(accessToken);
+                await fetchStaffs(accessToken, { mergeAccounts: true });
             }
         } catch (err) {
             setCreateError(err instanceof Error ? err.message : 'Tạo tài khoản nhân viên thất bại.');
@@ -257,7 +257,7 @@ export function AdminStaffPage() {
             await updateStaff(editingStaff.staff_id, data, accessToken || '');
             setEditingStaff(null);
             if (accessToken) {
-                await fetchStaffs(accessToken);
+                await fetchStaffs(accessToken, { mergeAccounts: true });
             }
         } catch (err) {
             setEditError(err instanceof Error ? err.message : 'Cập nhật thông tin nhân viên thất bại.');

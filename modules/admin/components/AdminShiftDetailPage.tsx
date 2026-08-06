@@ -72,7 +72,7 @@ export function AdminShiftDetailPage() {
 
     useEffect(() => {
         if (accessToken) {
-            if (staffs.length === 0) fetchStaffs(accessToken);
+            if (staffs.length === 0) fetchStaffs(accessToken, { mergeAccounts: true });
             if (rooms.length === 0) fetchRooms(accessToken);
         }
     }, [accessToken, staffs.length, rooms.length, fetchStaffs, fetchRooms]);
