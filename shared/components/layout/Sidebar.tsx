@@ -61,16 +61,12 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
         { label: 'Cài đặt', href: '/settings', icon: Settings },
     ],
     LAB_STAFF: [
-        { label: 'Tiếp Nhận Khám', href: '/lab', icon: UserCheck },
-        { label: 'Danh Sách Bệnh Nhân', href: '/lab/patients', icon: LayoutDashboard },
-        { label: 'Thông báo', href: '/lab/notification', icon: Bell },
-        { label: 'Cài đặt', href: '/settings', icon: Settings },
+        { label: 'Danh Sách Bệnh Nhân', href: '/lab', icon: LayoutDashboard },
+        { label: 'Thông tin cá nhân', href: '/settings', icon: User },
     ],
     LAB_TECHNICIAN: [
-        { label: 'Tiếp Nhận Khám', href: '/lab', icon: UserCheck },
-        { label: 'Danh Sách Bệnh Nhân', href: '/lab/patients', icon: LayoutDashboard },
-        { label: 'Thông báo', href: '/lab/notification', icon: Bell },
-        { label: 'Cài đặt', href: '/settings', icon: Settings },
+        { label: 'Danh Sách Bệnh Nhân', href: '/lab', icon: LayoutDashboard },
+        { label: 'Thông tin cá nhân', href: '/settings', icon: User },
     ],
     PHARMACY_STAFF: [
         { label: 'Tiếp nhận đơn tại quầy', href: '/pharmacy/checkin', icon: QrCode },

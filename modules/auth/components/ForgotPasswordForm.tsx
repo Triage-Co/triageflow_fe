@@ -82,7 +82,7 @@ export function ForgotPasswordForm() {
                 await authService.forgotPasswordVerify({
                     email: email.trim(),
                     otp: otp.trim(),
-                    password: password
+                    new_password: password
                 });
                 setStep('success');
             } catch (err) {
