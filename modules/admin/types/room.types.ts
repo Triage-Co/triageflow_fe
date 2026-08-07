@@ -13,6 +13,8 @@ export interface HospitalRoom {
     physical_room_id: string | null;
     specialty_id: string;
     specialty?: Specialty;
+    /** Present on some BE payloads — used to match CLS services */
+    room_type?: string | null;
 }
 
 export interface CreateRoomDto {

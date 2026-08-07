@@ -37,7 +37,8 @@ export const useRoomStore = create<RoomStore>()(
                 set({ isLoading: true, error: null }, false, 'fetchRooms/pending');
                 try {
                     const res = await roomService.getRooms(token);
-                    set({ rooms: res.data || [], isLoading: false }, false, 'fetchRooms/success');
+                    const list = Array.isArray(res.data) ? res.data : [];
+                    set({ rooms: list, isLoading: false }, false, 'fetchRooms/success');
                 } catch (err) {
                     set({
                         error: err instanceof Error ? err.message : 'Không thể tải danh sách phòng bệnh.',
