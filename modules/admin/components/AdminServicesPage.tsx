@@ -14,8 +14,17 @@ import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/modules/auth/store/authStore';
 import { useRoomStore } from '../store/roomStore';
 import { ROOM_TYPE_OPTIONS } from '../types/process.types';
-import type { CatalogService, CreateServiceReqDto, QueryServiceParams } from '../types/service.types';
-import { SERVICE_TYPE_OPTIONS, getServiceId } from '../types/service.types';
+import type {
+    CatalogService,
+    CreateServiceReqDto,
+    QueryServiceParams,
+} from '../types/service.types';
+import {
+    SERVICE_TYPE_OPTIONS,
+    defaultServiceTypeForRoom,
+    getServiceId,
+    serviceTypeLabel,
+} from '../types/service.types';
 import {
     extractServiceList,
     serviceCatalogService,
@@ -38,11 +47,6 @@ const EMPTY_FORM: CreateServiceReqDto = {
 function roomTypeLabel(value?: string | null): string {
     if (!value) return '—';
     return ROOM_TYPE_OPTIONS.find((o) => o.value === value)?.label || value;
-}
-
-function serviceTypeLabel(value?: string | null): string {
-    if (!value) return '—';
-    return SERVICE_TYPE_OPTIONS.find((o) => o.value === value)?.label || value;
 }
 
 export function AdminServicesPage() {
@@ -141,7 +145,10 @@ export function AdminServicesPage() {
             service_code: service.service_code || '',
             service_name: service.service_name || '',
             price: Number(service.price) || 0,
-            service_type: service.service_type || 'CLINICAL_EXAMINATION',
+            service_type:
+                service.service_type ||
+                defaultServiceTypeForRoom(service.room_type) ||
+                'CLINICAL_EXAMINATION',
             room_type: service.room_type || 'OTHER',
         });
         setFormActive(service.is_active !== false);
@@ -167,6 +174,10 @@ export function AdminServicesPage() {
         }
         if (!Number.isFinite(form.price) || form.price < 0) {
             setFormError('Giá dịch vụ không hợp lệ.');
+            return;
+        }
+        if (!form.service_type) {
+            setFormError('Vui lòng chọn loại dịch vụ.');
             return;
         }
 
@@ -235,245 +246,245 @@ export function AdminServicesPage() {
                 <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-tl-[16px] shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
                     <div className="flex-1 min-h-0 overflow-y-auto p-6">
                         <div className="max-w-6xl mx-auto space-y-5">
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-                <div>
-                    <h1 className="text-xl font-bold text-neutral-900">Quản lý dịch vụ</h1>
-                    <p className="text-sm text-neutral-500 mt-0.5">Danh mục dịch vụ khám, xét nghiệm, thủ thuật và đơn thuốc</p>
-                </div>
-                <button
-                    type="button"
-                    onClick={openCreate}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#8B7CF6] hover:bg-[#7a6ae5] text-white text-sm font-bold cursor-pointer"
-                >
-                    <Plus className="w-4 h-4" />
-                    Thêm dịch vụ
-                </button>
-            </div>
+                            <div className="flex items-start justify-between gap-4 flex-wrap">
+                                <div>
+                                    <h1 className="text-xl font-bold text-neutral-900">Quản lý dịch vụ</h1>
+                                    <p className="text-sm text-neutral-500 mt-0.5">Danh mục dịch vụ khám, xét nghiệm, thủ thuật và đơn thuốc</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={openCreate}
+                                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#8B7CF6] hover:bg-[#7a6ae5] text-white text-sm font-bold cursor-pointer"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    Thêm dịch vụ
+                                </button>
+                            </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-2 bg-white border border-neutral-200 rounded-xl px-3 py-2 max-w-md flex-1 min-w-[220px]">
-                    <Search className="w-4 h-4 text-neutral-400" />
-                    <input
-                        value={searchQuery}
-                        onChange={(e) => {
-                            setSearchQuery(e.target.value);
-                            setCurrentPage(1);
-                        }}
-                        placeholder="Tìm theo mã hoặc tên..."
-                        className="flex-1 text-sm outline-none bg-transparent"
-                    />
-                </div>
+                            <div className="flex flex-wrap items-center gap-3">
+                                <div className="flex items-center gap-2 bg-white border border-neutral-200 rounded-xl px-3 py-2 max-w-md flex-1 min-w-[220px]">
+                                    <Search className="w-4 h-4 text-neutral-400" />
+                                    <input
+                                        value={searchQuery}
+                                        onChange={(e) => {
+                                            setSearchQuery(e.target.value);
+                                            setCurrentPage(1);
+                                        }}
+                                        placeholder="Tìm theo mã hoặc tên..."
+                                        className="flex-1 text-sm outline-none bg-transparent"
+                                    />
+                                </div>
 
-                <select
-                    value={filterServiceType}
-                    onChange={(e) => {
-                        setFilterServiceType(e.target.value);
-                        setCurrentPage(1);
-                    }}
-                    className="text-sm font-medium border border-neutral-200 rounded-xl px-3 py-2 bg-white text-neutral-700"
-                >
-                    <option value="">Tất cả loại dịch vụ</option>
-                    {SERVICE_TYPE_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                        </option>
-                    ))}
-                </select>
+                                <select
+                                    value={filterServiceType}
+                                    onChange={(e) => {
+                                        setFilterServiceType(e.target.value);
+                                        setCurrentPage(1);
+                                    }}
+                                    className="text-sm font-medium border border-neutral-200 rounded-xl px-3 py-2 bg-white text-neutral-700"
+                                >
+                                    <option value="">Tất cả loại dịch vụ</option>
+                                    {SERVICE_TYPE_OPTIONS.map((opt) => (
+                                        <option key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                        </option>
+                                    ))}
+                                </select>
 
-                <select
-                    value={filterRoomType}
-                    onChange={(e) => {
-                        setFilterRoomType(e.target.value);
-                        setCurrentPage(1);
-                    }}
-                    className="text-sm font-medium border border-neutral-200 rounded-xl px-3 py-2 bg-white text-neutral-700"
-                >
-                    <option value="">Tất cả loại phòng</option>
-                    {ROOM_TYPE_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                        </option>
-                    ))}
-                </select>
+                                <select
+                                    value={filterRoomType}
+                                    onChange={(e) => {
+                                        setFilterRoomType(e.target.value);
+                                        setCurrentPage(1);
+                                    }}
+                                    className="text-sm font-medium border border-neutral-200 rounded-xl px-3 py-2 bg-white text-neutral-700"
+                                >
+                                    <option value="">Tất cả loại phòng</option>
+                                    {ROOM_TYPE_OPTIONS.map((opt) => (
+                                        <option key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                        </option>
+                                    ))}
+                                </select>
 
-                <label className="flex items-center gap-2 text-sm font-semibold text-neutral-600 cursor-pointer select-none px-1">
-                    <input
-                        type="checkbox"
-                        checked={showInactive}
-                        onChange={(e) => {
-                            setShowInactive(e.target.checked);
-                            setCurrentPage(1);
-                        }}
-                        className="accent-[#8B7CF6]"
-                    />
-                    Hiện đã tắt
-                </label>
-            </div>
+                                <label className="flex items-center gap-2 text-sm font-semibold text-neutral-600 cursor-pointer select-none px-1">
+                                    <input
+                                        type="checkbox"
+                                        checked={showInactive}
+                                        onChange={(e) => {
+                                            setShowInactive(e.target.checked);
+                                            setCurrentPage(1);
+                                        }}
+                                        className="accent-[#8B7CF6]"
+                                    />
+                                    Hiện đã tắt
+                                </label>
+                            </div>
 
-            {error && (
-                <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-700 whitespace-pre-line">
-                    <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                    <span>{error}</span>
-                </div>
-            )}
-
-            <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
-                {isLoading ? (
-                    <div className="p-12 flex flex-col items-center gap-2 text-neutral-500">
-                        <Loader2 className="w-6 h-6 animate-spin text-[#8B7CF6]" />
-                        <span className="text-sm font-medium">Đang tải...</span>
-                    </div>
-                ) : filtered.length === 0 ? (
-                    <div className="p-12 text-center text-sm text-neutral-500">Chưa có dịch vụ nào.</div>
-                ) : (
-                    <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                        <thead className="bg-neutral-50 border-b border-neutral-200 text-left text-xs font-bold text-neutral-500 uppercase tracking-wide sticky top-0 z-10">
-                            <tr>
-                                <th className="px-4 py-3">Mã</th>
-                                <th className="px-4 py-3">Tên dịch vụ</th>
-                                <th className="px-4 py-3 text-right">Giá</th>
-                                <th className="px-4 py-3">Loại dịch vụ</th>
-                                <th className="px-4 py-3">Loại phòng</th>
-                                <th className="px-4 py-3">Trạng thái</th>
-                                <th className="px-4 py-3 text-right">Thao tác</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-neutral-100">
-                            {paginated.map((service) => {
-                                const id = getServiceId(service);
-                                const active = service.is_active !== false;
-                                return (
-                                    <tr key={id || service.service_code || service.service_name} className="hover:bg-neutral-50/80">
-                                        <td className="px-4 py-3 font-mono text-xs text-neutral-600">
-                                            {service.service_code || '—'}
-                                        </td>
-                                        <td className="px-4 py-3 font-semibold text-neutral-800">
-                                            {service.service_name}
-                                        </td>
-                                        <td className="px-4 py-3 text-right font-medium">
-                                            {Number(service.price || 0).toLocaleString('vi-VN')}₫
-                                        </td>
-                                        <td className="px-4 py-3 text-neutral-600">
-                                            {serviceTypeLabel(service.service_type)}
-                                        </td>
-                                        <td className="px-4 py-3 text-neutral-600">
-                                            {roomTypeLabel(service.room_type)}
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <span
-                                                className={cn(
-                                                    'text-[10px] font-bold px-2 py-0.5 rounded-full border',
-                                                    active
-                                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                                        : 'bg-neutral-50 text-neutral-500 border-neutral-200'
-                                                )}
-                                            >
-                                                {active ? 'Đang hoạt động' : 'Đã tắt'}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <div className="flex justify-end gap-1">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setRoomsDrawerFor(service)}
-                                                    className="p-2 rounded-lg text-neutral-400 hover:text-[#8B7CF6] hover:bg-neutral-50 cursor-pointer"
-                                                    title="Phòng thực hiện"
-                                                >
-                                                    <Home className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => openEdit(service)}
-                                                    className="p-2 rounded-lg text-neutral-400 hover:text-[#8B7CF6] hover:bg-neutral-50 cursor-pointer"
-                                                    title="Sửa"
-                                                >
-                                                    <Pencil className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setToggleError(null);
-                                                        setTogglingTarget(service);
-                                                    }}
-                                                    className={cn(
-                                                        'px-2.5 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer border',
-                                                        active
-                                                            ? 'text-red-500 border-red-100 hover:bg-red-50'
-                                                            : 'text-emerald-600 border-emerald-100 hover:bg-emerald-50'
-                                                    )}
-                                                    title={active ? 'Vô hiệu hóa' : 'Kích hoạt'}
-                                                >
-                                                    {active ? 'Tắt' : 'Bật'}
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                    </div>
-                )}
-            </div>
-
-            {filtered.length > 0 && (
-                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-neutral-100 pt-4">
-                    <p className="text-[12px] text-[#ADADAD] font-bold">
-                        Hiển thị{' '}
-                        {Math.min(filtered.length, (safePage - 1) * ITEMS_PER_PAGE + 1)}
-                        {' - '}
-                        {Math.min(filtered.length, safePage * ITEMS_PER_PAGE)} trong số{' '}
-                        {filtered.length} dịch vụ
-                    </p>
-                    {totalPages > 1 && (
-                        <div className="flex items-center gap-1">
-                            <button
-                                type="button"
-                                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                                disabled={safePage === 1}
-                                className="px-3 py-1.5 text-xs font-bold border border-[#EBEBEB] rounded-lg bg-white text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6] disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
-                            >
-                                Trước
-                            </button>
-                            {getCompactPages(safePage, totalPages).map((page, idx) =>
-                                page === 'ellipsis' ? (
-                                    <span
-                                        key={`ellipsis-${idx}`}
-                                        className="px-1 text-sm font-bold text-[#ADADAD] select-none"
-                                    >
-                                        ...
-                                    </span>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        key={page}
-                                        onClick={() => setCurrentPage(page)}
-                                        className={cn(
-                                            'w-8 h-8 flex items-center justify-center text-xs font-bold rounded-lg border transition cursor-pointer',
-                                            safePage === page
-                                                ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white'
-                                                : 'bg-white border-[#EBEBEB] text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6]'
-                                        )}
-                                    >
-                                        {page}
-                                    </button>
-                                )
+                            {error && (
+                                <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-700 whitespace-pre-line">
+                                    <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                                    <span>{error}</span>
+                                </div>
                             )}
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-                                }
-                                disabled={safePage === totalPages}
-                                className="px-3 py-1.5 text-xs font-bold border border-[#EBEBEB] rounded-lg bg-white text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6] disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
-                            >
-                                Sau
-                            </button>
-                        </div>
-                    )}
-                </div>
-            )}
+
+                            <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
+                                {isLoading ? (
+                                    <div className="p-12 flex flex-col items-center gap-2 text-neutral-500">
+                                        <Loader2 className="w-6 h-6 animate-spin text-[#8B7CF6]" />
+                                        <span className="text-sm font-medium">Đang tải...</span>
+                                    </div>
+                                ) : filtered.length === 0 ? (
+                                    <div className="p-12 text-center text-sm text-neutral-500">Chưa có dịch vụ nào.</div>
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead className="bg-neutral-50 border-b border-neutral-200 text-left text-xs font-bold text-neutral-500 uppercase tracking-wide sticky top-0 z-10">
+                                                <tr>
+                                                    <th className="px-4 py-3">Mã</th>
+                                                    <th className="px-4 py-3">Tên dịch vụ</th>
+                                                    <th className="px-4 py-3 text-right">Giá</th>
+                                                    <th className="px-4 py-3">Loại dịch vụ</th>
+                                                    <th className="px-4 py-3">Loại phòng</th>
+                                                    <th className="px-4 py-3">Trạng thái</th>
+                                                    <th className="px-4 py-3 text-right">Thao tác</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-neutral-100">
+                                                {paginated.map((service) => {
+                                                    const id = getServiceId(service);
+                                                    const active = service.is_active !== false;
+                                                    return (
+                                                        <tr key={id || service.service_code || service.service_name} className="hover:bg-neutral-50/80">
+                                                            <td className="px-4 py-3 font-mono text-xs text-neutral-600">
+                                                                {service.service_code || '—'}
+                                                            </td>
+                                                            <td className="px-4 py-3 font-semibold text-neutral-800">
+                                                                {service.service_name}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-right font-medium">
+                                                                {Number(service.price || 0).toLocaleString('vi-VN')}₫
+                                                            </td>
+                                                            <td className="px-4 py-3 text-neutral-600">
+                                                                {serviceTypeLabel(service.service_type)}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-neutral-600">
+                                                                {roomTypeLabel(service.room_type)}
+                                                            </td>
+                                                            <td className="px-4 py-3">
+                                                                <span
+                                                                    className={cn(
+                                                                        'text-[10px] font-bold px-2 py-0.5 rounded-full border',
+                                                                        active
+                                                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                                                            : 'bg-neutral-50 text-neutral-500 border-neutral-200'
+                                                                    )}
+                                                                >
+                                                                    {active ? 'Đang hoạt động' : 'Đã tắt'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-4 py-3">
+                                                                <div className="flex justify-end gap-1">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setRoomsDrawerFor(service)}
+                                                                        className="p-2 rounded-lg text-neutral-400 hover:text-[#8B7CF6] hover:bg-neutral-50 cursor-pointer"
+                                                                        title="Phòng thực hiện"
+                                                                    >
+                                                                        <Home className="w-4 h-4" />
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => openEdit(service)}
+                                                                        className="p-2 rounded-lg text-neutral-400 hover:text-[#8B7CF6] hover:bg-neutral-50 cursor-pointer"
+                                                                        title="Sửa"
+                                                                    >
+                                                                        <Pencil className="w-4 h-4" />
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setToggleError(null);
+                                                                            setTogglingTarget(service);
+                                                                        }}
+                                                                        className={cn(
+                                                                            'px-2.5 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer border',
+                                                                            active
+                                                                                ? 'text-red-500 border-red-100 hover:bg-red-50'
+                                                                                : 'text-emerald-600 border-emerald-100 hover:bg-emerald-50'
+                                                                        )}
+                                                                        title={active ? 'Vô hiệu hóa' : 'Kích hoạt'}
+                                                                    >
+                                                                        {active ? 'Tắt' : 'Bật'}
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+
+                            {filtered.length > 0 && (
+                                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-neutral-100 pt-4">
+                                    <p className="text-[12px] text-[#ADADAD] font-bold">
+                                        Hiển thị{' '}
+                                        {Math.min(filtered.length, (safePage - 1) * ITEMS_PER_PAGE + 1)}
+                                        {' - '}
+                                        {Math.min(filtered.length, safePage * ITEMS_PER_PAGE)} trong số{' '}
+                                        {filtered.length} dịch vụ
+                                    </p>
+                                    {totalPages > 1 && (
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                                                disabled={safePage === 1}
+                                                className="px-3 py-1.5 text-xs font-bold border border-[#EBEBEB] rounded-lg bg-white text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6] disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+                                            >
+                                                Trước
+                                            </button>
+                                            {getCompactPages(safePage, totalPages).map((page, idx) =>
+                                                page === 'ellipsis' ? (
+                                                    <span
+                                                        key={`ellipsis-${idx}`}
+                                                        className="px-1 text-sm font-bold text-[#ADADAD] select-none"
+                                                    >
+                                                        ...
+                                                    </span>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        key={page}
+                                                        onClick={() => setCurrentPage(page)}
+                                                        className={cn(
+                                                            'w-8 h-8 flex items-center justify-center text-xs font-bold rounded-lg border transition cursor-pointer',
+                                                            safePage === page
+                                                                ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white'
+                                                                : 'bg-white border-[#EBEBEB] text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6]'
+                                                        )}
+                                                    >
+                                                        {page}
+                                                    </button>
+                                                )
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                                                }
+                                                disabled={safePage === totalPages}
+                                                className="px-3 py-1.5 text-xs font-bold border border-[#EBEBEB] rounded-lg bg-white text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6] disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+                                            >
+                                                Sau
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -541,7 +552,12 @@ export function AdminServicesPage() {
                                     </label>
                                     <select
                                         value={form.service_type || ''}
-                                        onChange={(e) => setForm((f) => ({ ...f, service_type: e.target.value }))}
+                                        onChange={(e) =>
+                                            setForm((f) => ({
+                                                ...f,
+                                                service_type: e.target.value,
+                                            }))
+                                        }
                                         className="w-full border border-neutral-200 rounded-xl px-3 py-2.5 text-sm font-medium bg-white"
                                     >
                                         {SERVICE_TYPE_OPTIONS.map((opt) => (
@@ -557,7 +573,9 @@ export function AdminServicesPage() {
                                     </label>
                                     <select
                                         value={form.room_type || 'OTHER'}
-                                        onChange={(e) => setForm((f) => ({ ...f, room_type: e.target.value }))}
+                                        onChange={(e) =>
+                                            setForm((f) => ({ ...f, room_type: e.target.value }))
+                                        }
                                         className="w-full border border-neutral-200 rounded-xl px-3 py-2.5 text-sm font-medium bg-white"
                                     >
                                         {ROOM_TYPE_OPTIONS.map((opt) => (
@@ -567,6 +585,7 @@ export function AdminServicesPage() {
                                         ))}
                                     </select>
                                 </div>
+
                             </div>
                             {editing && (
                                 <label className="flex items-center gap-2 text-sm font-medium text-neutral-700">

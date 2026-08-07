@@ -12,19 +12,38 @@ export type ServiceRoomType =
     | 'EMPTY'
     | 'OTHER';
 
-/** Matches backend Prisma ServiceTypeEnum */
+/** Matches values returned by GET /api/service */
 export type ServiceType =
     | 'CLINICAL_EXAMINATION'
-    | 'PRESCRIPTION'
     | 'DIAGNOSTIC_TEST'
-    | 'PROCEDURE';
+    | 'PROCEDURE'
+    | 'PRESCRIPTION';
 
-export const SERVICE_TYPE_OPTIONS: { value: ServiceType; label: string }[] = [
+export const SERVICE_TYPE_OPTIONS = [
     { value: 'CLINICAL_EXAMINATION', label: 'Khám lâm sàng' },
-    { value: 'PRESCRIPTION', label: 'Kê đơn / Thuốc' },
-    { value: 'DIAGNOSTIC_TEST', label: 'Xét nghiệm / Cận lâm sàng' },
+    { value: 'DIAGNOSTIC_TEST', label: 'Cận lâm sàng / Chẩn đoán' },
     { value: 'PROCEDURE', label: 'Thủ thuật' },
-];
+    { value: 'PRESCRIPTION', label: 'Cấp phát thuốc' },
+] as const;
+
+export function serviceTypeLabel(value?: string | null): string {
+    if (!value) return '—';
+    return SERVICE_TYPE_OPTIONS.find((o) => o.value === value)?.label || value;
+}
+
+/** Suggest service_type from room_type when creating */
+export function defaultServiceTypeForRoom(
+    roomType?: string | null
+): ServiceType | undefined {
+    const t = (roomType || '').toUpperCase();
+    if (t === 'CLINICAL_ROOM') return 'CLINICAL_EXAMINATION';
+    if (t === 'LABORATORY' || t === 'IMAGING_ROOM' || t === 'FUNCTIONAL_EXPLORATION') {
+        return 'DIAGNOSTIC_TEST';
+    }
+    if (t === 'PROCEDURE_ROOM') return 'PROCEDURE';
+    if (t === 'PHARMACY') return 'PRESCRIPTION';
+    return undefined;
+}
 
 export interface CatalogService {
     service_id?: string;
@@ -32,8 +51,8 @@ export interface CatalogService {
     service_code?: string;
     service_name: string;
     price: number;
-    service_type?: ServiceType | string;
-    room_type?: ServiceRoomType | string;
+    service_type?: ServiceType | string | null;
+    room_type?: ServiceRoomType | string | null;
     is_active?: boolean;
     createdAt?: string;
     updatedAt?: string;
@@ -43,7 +62,7 @@ export interface CreateServiceReqDto {
     service_code: string;
     service_name: string;
     price: number;
-    service_type: ServiceType | string;
+    service_type?: ServiceType | string;
     room_type?: ServiceRoomType | string;
 }
 
@@ -51,8 +70,8 @@ export interface UpdateServiceReqDto {
     service_code?: string;
     service_name?: string;
     price?: number;
-    service_type?: ServiceType | string;
-    room_type?: ServiceRoomType | string;
+    service_type?: ServiceType | string | null;
+    room_type?: ServiceRoomType | string | null;
     is_active?: boolean;
 }
 

@@ -339,7 +339,6 @@ export function LeftPatientPanel({
                                         </div>
                                         <div className="min-w-0">
                                             <p className="text-[14px] font-bold text-neutral-800 leading-tight truncate">{patient.name}</p>
-                                            <p className="text-[10px] text-neutral-400 font-semibold mt-1">Mã BN: {patient.patientId || '—'}</p>
                                         </div>
                                     </div>
 

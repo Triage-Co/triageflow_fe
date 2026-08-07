@@ -2692,7 +2692,7 @@ export function WorkflowDiagram({
                     onClick={() => setIsSelectingTemplate(true)}
                     className="w-full bg-[#F5F2FF] hover:bg-[#EDE8FF] text-[#6D5DE5] border border-[#DED7FF] font-bold py-2.5 px-4 rounded-xl text-xs transition-colors cursor-pointer"
                 >
-                    Thêm template vào quy trình
+                    Thêm quy trình khám bệnh
                 </button>
             </div>
 
@@ -3118,7 +3118,7 @@ export function WorkflowDiagram({
                                     </>
                                 ) : (
                                     <>
-                                        Thêm template vào quy trình
+                                        Thêm quy trình khám bệnh
                                     </>
                                 )}
                             </button>
@@ -3191,11 +3191,8 @@ export function WorkflowDiagram({
 
             <Dialog open={!!selectedStepNode} onOpenChange={(open) => !open && closeStepDetail()}>
                 <DialogContent className="max-w-lg" onClick={(e) => e.stopPropagation()}>
-                    <DialogHeader>
+                    <DialogHeader className="mb-5 pb-1">
                         <DialogTitle>Chi tiết bước quy trình</DialogTitle>
-                        <DialogDescription>
-                            Chỉnh sửa hoặc xóa bước đã chọn. Bước đang thực hiện / hoàn tất chỉ được đổi trạng thái.
-                        </DialogDescription>
                     </DialogHeader>
 
                     {selectedStepNode && (() => {
@@ -3295,11 +3292,7 @@ export function WorkflowDiagram({
                                             <p className="text-[10px] text-neutral-400 mt-1">
                                                 Tự động theo ca trực của phòng đã chọn.
                                             </p>
-                                        ) : (
-                                            <p className="text-[10px] text-neutral-400 mt-1">
-                                                Không thể đổi phòng/nhân viên khi bước đang thực hiện hoặc đã hoàn tất.
-                                            </p>
-                                        )}
+                                        ) : null}
                                     </div>
                                 </div>
 
@@ -3314,13 +3307,7 @@ export function WorkflowDiagram({
                                             <Trash2 className="w-3.5 h-3.5" />
                                             Xóa bước
                                         </button>
-                                    ) : (
-                                        <span className="text-[10px] text-neutral-400 font-medium">
-                                            {contentLocked
-                                                ? 'Không thể xóa bước đang thực hiện / hoàn tất'
-                                                : ''}
-                                        </span>
-                                    )}
+                                    ) : null}
 
                                     <div className="flex items-center gap-2 ml-auto">
                                         <button
