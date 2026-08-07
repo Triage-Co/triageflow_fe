@@ -23,18 +23,19 @@ export interface ShiftInfo {
 }
 
 export interface QueuePatientItem {
-    position: number;
+    position?: number;
     queue_id: string;
     queue_number: string;
     patient_name: string;
-    queue_type: 'APPOINTMENT' | 'WALK_IN' | string;
-    effective_score: number;
-    reasons: string[];
-    is_pinned: boolean;
-    enqueued_at: string;
-    waited_minutes: number;
-    eta_minutes: number;
-    eta_time: string;
+    queue_type?: 'APPOINTMENT' | 'WALK_IN' | string;
+    effective_score?: number;
+    reasons?: string[];
+    is_pinned?: boolean;
+    enqueued_at?: string;
+    waited_minutes?: number;
+    eta_minutes?: number;
+    eta_time?: string;
+    missed_at?: string;
     
     // Local UI overrides/states
     localStatus?: 'WAITING' | 'SERVING' | 'MISSING' | 'COMPLETED';
@@ -42,12 +43,41 @@ export interface QueuePatientItem {
     resultNotes?: string;
     tubeType?: string;
     volume?: string;
+
+    // Serving nested objects fallback
+    patient?: ServingPatient;
+    step?: ServingStep;
+    serving_started_at?: string;
+}
+
+export interface ServingPatient {
+    patient_id: string;
+    full_name: string;
+    dob: string;
+    gender: string;
+}
+
+export interface ServingStep {
+    step_id: string;
+    step_name: string;
+    step_type: string;
+    step_status: string;
+    service_code: string | null;
+}
+
+export interface ServingQueueItem {
+    queue_id: string;
+    queue_number: string;
+    serving_started_at: string;
+    patient: ServingPatient;
+    step: ServingStep;
+    service_order: any;
 }
 
 export interface RoomQueueData {
     room_id: string;
     expected_service_minutes: number;
-    serving: QueuePatientItem | null;
+    serving: ServingQueueItem | null;
     waiting: QueuePatientItem[];
     missing: QueuePatientItem[];
 }

@@ -20,11 +20,26 @@ import { useAuthStore } from '@/store/authStore';
 import { Gender } from '@/shared/types/auth.types';
 import { uploadImageToCloudinary } from '@/shared/services/cloudinaryService';
 import { authService } from '@/modules/auth/services/authService';
+import { labService } from '../services/labService';
+import { ShiftInfo } from '../types/lab.types';
 
 export default function LabSettingsView() {
     const { profile, fetchProfile, updateProfile, accessToken, error } = useAuthStore();
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Ca trực state
+    const [activeShift, setActiveShift] = useState<ShiftInfo | null>(null);
+    const [isLoadingShifts, setIsLoadingShifts] = useState(false);
+
+    // Định dạng ngày hiện tại YYYY-MM-DD
+    const todayStr = React.useMemo(() => {
+        const d = new Date();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }, []);
 
     const [userName, setUserName] = useState('');
     const [gender, setGender] = useState<Gender>('MALE');
@@ -58,6 +73,25 @@ export default function LabSettingsView() {
             });
         }
     }, [accessToken, fetchProfile]);
+
+    useEffect(() => {
+        if (accessToken) {
+            setIsLoadingShifts(true);
+            labService.getMyShifts(todayStr)
+                .then((shifts) => {
+                    const labShift = shifts.find(s => s.room?.room_type === 'LABORATORY') || shifts[0];
+                    if (labShift) {
+                        setActiveShift(labShift);
+                    }
+                })
+                .catch((err) => {
+                    console.error('Failed to fetch shifts:', err);
+                })
+                .finally(() => {
+                    setIsLoadingShifts(false);
+                });
+        }
+    }, [accessToken, todayStr]);
 
     useEffect(() => {
         if (profile) {
@@ -215,9 +249,32 @@ export default function LabSettingsView() {
                         </p>
                     </div>
                     {profile?.role && (
-                        <span className="px-3 py-1.5 bg-[#8B7CF6]/10 text-[#8B7CF6] rounded-full text-[11px] font-bold tracking-wide">
-                            {profile.role === 'LAB_TECHNICIAN' ? 'Kỹ thuật viên Xét nghiệm' : 'Nhân viên Xét nghiệm'}
-                        </span>
+                        <div className="flex flex-col items-end gap-1.5 text-right shrink-0">
+                            <span className="px-3 py-1.5 bg-[#8B7CF6]/10 text-[#8B7CF6] rounded-full text-[11px] font-bold tracking-wide">
+                                {profile.role === 'LAB_TECHNICIAN' ? 'Kỹ thuật viên Xét nghiệm' : 'Nhân viên Xét nghiệm'}
+                            </span>
+                            {isLoadingShifts ? (
+                                <div className="space-y-1 mt-1 flex flex-col items-end">
+                                    <div className="h-3 w-32 bg-slate-100 animate-pulse rounded" />
+                                    <div className="h-2.5 w-24 bg-slate-100 animate-pulse rounded" />
+                                </div>
+                            ) : activeShift ? (
+                                <div className="mt-1 text-right">
+                                    <p className="text-[11.5px] font-extrabold text-slate-700">
+                                        Ca trực: {activeShift.room?.room_name || 'Phòng xét nghiệm'}
+                                    </p>
+                                    <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                                        Giờ trực: {activeShift.start_time} - {activeShift.end_time} • Ngày: {activeShift.date}
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="mt-1 text-right">
+                                    <p className="text-[11.5px] font-extrabold text-rose-500">
+                                        Không có ca trực hôm nay
+                                    </p>
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
 

@@ -20,5 +20,41 @@ export const labService = {
     async getRoomQueue(roomId: string): Promise<RoomQueueData> {
         const res = await apiClient.get<RoomQueueData>(`/api/queue/room/${roomId}`);
         return res.data;
+    },
+
+    /**
+     * POST /api/queue/call-next
+     * Bác sĩ gọi bệnh nhân tiếp theo vào phòng khám.
+     */
+    async callNext(data: { room_id: string; staff_id: string }): Promise<any> {
+        const res = await apiClient.post<any>('/api/queue/call-next', data);
+        return res.data;
+    },
+
+    /**
+     * POST /api/queue/{queueId}/complete
+     * Hoàn thành lượt SERVING tại phòng.
+     */
+    async completeQueue(queueId: string): Promise<any> {
+        const res = await apiClient.post<any>(`/api/queue/${queueId}/complete`, {});
+        return res.data;
+    },
+
+    /**
+     * POST /api/queue/{queueId}/recall
+     * Gọi lại bệnh nhân vắng mặt vào lại hàng chờ.
+     */
+    async recallQueue(queueId: string): Promise<any> {
+        const res = await apiClient.post<any>(`/api/queue/${queueId}/recall`, {});
+        return res.data;
+    },
+
+    /**
+     * POST /api/queue/{queueId}/override
+     * Can thiệp thứ tự hàng chờ (PIN_TOP, MOVE_TO_POSITION, UNPIN).
+     */
+    async overrideQueue(queueId: string, data: { action: string; position: number; reason: string }): Promise<any> {
+        const res = await apiClient.post<any>(`/api/queue/${queueId}/override`, data);
+        return res.data;
     }
 };

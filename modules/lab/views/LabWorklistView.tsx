@@ -12,7 +12,8 @@ import {
     RefreshCw,
     Clock,
     User,
-    Compass
+    Compass,
+    Volume2
 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 import { cn } from '@/lib/utils';
@@ -27,10 +28,11 @@ import {
 } from '@/shared/components/ui/Table';
 import { useLab } from '../hooks/useLab';
 import { QUEUE_TYPE_MAP } from '@/modules/kiosk/utils/flowHelpers';
-import SampleCollectionModal from '../modals/SampleCollectionModal';
-import ResultEntryModal from '../modals/ResultEntryModal';
+import PatientDetailsModal from '../modals/PatientDetailsModal';
+import OverrideConfirmModal from '../modals/OverrideConfirmModal';
 
 export default function LabWorklistView() {
+    const [dragOverIndex, setDragOverIndex] = React.useState<number | null>(null);
     const {
         mounted,
         accessToken,
@@ -40,32 +42,24 @@ export default function LabWorklistView() {
         setActiveListTab,
         toasts,
         selectedPatient,
-        setSelectedPatient,
         activeModal,
         setActiveModal,
-        inputResultValue,
-        setInputResultValue,
-        inputResultNotes,
-        setInputResultNotes,
-        isSubmitting,
-        collectingStep,
-        setCollectingStep,
-        tubeType,
-        setTubeType,
-        volume,
-        setVolume,
-        labelConfirmed,
-        setLabelConfirmed,
         activeShift,
-        isLoadingShifts,
         isLoadingQueue,
         mergedQueueLists,
         handleRefresh,
-        handlePrintBarcode,
-        handleUpdateStatus,
-        handleSaveResult,
         handleOpenViewModal,
-        handleConfirmCollection,
+        isCallingNext,
+        handleCallNext,
+        isCompleting,
+        handleCompleteQueue,
+        isRecalling,
+        handleRecallQueue,
+        overrideConfirmData,
+        setOverrideConfirmData,
+        isOverriding,
+        handleOpenOverrideConfirm,
+        handleConfirmOverride,
     } = useLab();
 
     if (!mounted || !accessToken) {
@@ -104,59 +98,24 @@ export default function LabWorklistView() {
                             ))}
                         </div>
 
-                        {/* Shift Information Header */}
-                        <div className="bg-[#F4F3FF]/70 border border-[#8B7CF6]/15 rounded-[22px] p-5 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                            <div className="flex items-center gap-3.5">
-                                <div className="w-10 h-10 rounded-full bg-[#8B7CF6]/10 flex items-center justify-center shrink-0">
-                                    <Compass className="w-5 h-5 text-[#8B7CF6]" />
-                                </div>
-                                {isLoadingShifts ? (
-                                    <div className="space-y-1">
-                                        <div className="h-4 w-40 bg-neutral-200 animate-pulse rounded" />
-                                        <div className="h-3.5 w-24 bg-neutral-200 animate-pulse rounded" />
-                                    </div>
-                                ) : activeShift ? (
-                                    <div>
-                                        <p className="text-[14px] font-extrabold text-[#2D2D2D] tracking-tight">
-                                            Ca trực: {activeShift.room?.room_name || 'Phòng xét nghiệm'}
-                                        </p>
-                                        <p className="text-[11.5px] text-[#7B7B7B] font-semibold mt-0.5">
-                                            Giờ trực: {activeShift.start_time} - {activeShift.end_time} • Ngày: {activeShift.date}
-                                        </p>
-                                    </div>
-                                ) : (
-                                    <div>
-                                        <p className="text-[14px] font-extrabold text-rose-600 tracking-tight">
-                                            Không có ca trực hôm nay
-                                        </p>
-                                        <p className="text-[11.5px] text-[#7B7B7B] font-semibold mt-0.5">
-                                            Bạn chưa được phân ca trực phòng xét nghiệm nào.
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <Button
-                                    variant="outline"
-                                    onClick={handleRefresh}
-                                    disabled={isLoadingQueue || !activeShift}
-                                    className="h-10 rounded-xl px-4 flex items-center gap-1.5 text-neutral-600 font-bold bg-white text-xs"
-                                >
-                                    <RefreshCw className={cn("w-3.5 h-3.5", isLoadingQueue && "animate-spin")} />
-                                    Làm mới hàng chờ
-                                </Button>
-                            </div>
-                        </div>
-
                         {/* Title Row */}
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                             <div>
                                 <h1 className="text-[20px] font-extrabold text-[#2D2D2D] tracking-tight">
                                     Quản lý hàng chờ xét nghiệm
                                 </h1>
-                                <p className="text-[12.5px] text-[#7B7B7B] mt-0.5 font-medium">
-                                    Tải thông tin từ ca trực và xử lý bệnh nhân theo luồng queue
-                                </p>
+
+                            </div>
+                            <div className="flex items-center">
+                                <Button
+                                    variant="outline"
+                                    onClick={handleRefresh}
+                                    disabled={isLoadingQueue || !activeShift}
+                                    startIcon={<RefreshCw className={cn("w-3.5 h-3.5", isLoadingQueue && "animate-spin")} />}
+                                    className="h-10 rounded-xl px-4 text-neutral-600 font-bold bg-white text-xs border-neutral-200 gap-1.5"
+                                >
+                                    Làm mới hàng chờ
+                                </Button>
                             </div>
                         </div>
 
@@ -176,37 +135,49 @@ export default function LabWorklistView() {
                                 </div>
                             </div>
 
-                            {/* Section Switcher Tabs */}
-                            <div className="flex items-center border-b border-neutral-100 gap-1.5 select-none overflow-x-auto pb-1.5">
-                                {[
-                                    { id: 'waiting', label: 'Đang Chờ', count: mergedQueueLists.waiting.length },
-                                    { id: 'serving', label: 'Đang Phục Vụ', count: mergedQueueLists.serving.length },
-                                    { id: 'missing', label: 'Lỡ Lượt', count: mergedQueueLists.missing.length },
-                                    { id: 'completed', label: 'Đã Hoàn Thành', count: mergedQueueLists.completed.length },
-                                ].map((tab) => (
-                                    <button
-                                        key={tab.id}
-                                        onClick={() => setActiveListTab(tab.id as any)}
-                                        className={cn(
-                                            "px-4.5 py-2.5 rounded-xl text-xs font-bold transition-all relative whitespace-nowrap cursor-pointer",
-                                            activeListTab === tab.id
-                                                ? "bg-[#8B7CF6]/10 text-[#8B7CF6]"
-                                                : "text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50"
-                                        )}
-                                    >
-                                        <span className="flex items-center gap-1.5">
-                                            {tab.label}
-                                            <span className={cn(
-                                                "px-2 py-0.5 rounded-full text-[9px] font-black",
+                            {/* Section Switcher Tabs & Call Patient Button */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-neutral-100 pb-1.5 gap-4">
+                                <div className="flex items-center gap-1.5 select-none overflow-x-auto">
+                                    {[
+                                        { id: 'waiting', label: 'Hàng đợi', count: mergedQueueLists.waiting.length },
+                                        { id: 'missing', label: 'Lỡ Lượt', count: mergedQueueLists.missing.length },
+                                        { id: 'completed', label: 'Đã Hoàn Thành', count: mergedQueueLists.completed.length },
+                                    ].map((tab) => (
+                                        <button
+                                            key={tab.id}
+                                            onClick={() => setActiveListTab(tab.id as any)}
+                                            className={cn(
+                                                "px-4.5 py-2.5 rounded-xl text-xs font-bold transition-all relative whitespace-nowrap cursor-pointer",
                                                 activeListTab === tab.id
-                                                    ? "bg-[#8B7CF6] text-white"
-                                                    : "bg-neutral-100 text-neutral-550"
-                                            )}>
-                                                {tab.count}
+                                                    ? "bg-[#8B7CF6]/10 text-[#8B7CF6]"
+                                                    : "text-neutral-500 hover:text-neutral-800 hover:bg-neutral-50"
+                                            )}
+                                        >
+                                            <span className="flex items-center gap-1.5">
+                                                {tab.label}
+                                                <span className={cn(
+                                                    "px-2 py-0.5 rounded-full text-[9px] font-black",
+                                                    activeListTab === tab.id
+                                                        ? "bg-[#8B7CF6] text-white"
+                                                        : "bg-neutral-100 text-neutral-550"
+                                                )}>
+                                                    {tab.count}
+                                                </span>
                                             </span>
-                                        </span>
-                                    </button>
-                                ))}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="shrink-0 flex justify-end pb-1 sm:pb-0">
+                                    <Button
+                                        onClick={handleCallNext}
+                                        disabled={isCallingNext || !activeShift}
+                                        isLoading={isCallingNext}
+                                        startIcon={isCallingNext ? undefined : <Volume2 className="w-4 h-4" />}
+                                        className="h-9 rounded-xl px-4 bg-[#8B7CF6] hover:bg-[#7C6CF5] text-white font-extrabold text-xs shadow-md shadow-purple-500/10 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 border-0"
+                                    >
+                                        Gọi xét nghiệm
+                                    </Button>
+                                </div>
                             </div>
                         </div>
 
@@ -230,19 +201,11 @@ export default function LabWorklistView() {
                                         <TableRow className="hover:bg-transparent cursor-default border-b border-neutral-100">
                                             <TableHead className="w-24 pl-8 text-[11.5px] font-extrabold text-neutral-500 py-3.5">SỐ TT</TableHead>
                                             <TableHead className="text-[11.5px] font-extrabold text-neutral-500 py-3.5">HỌ TÊN BỆNH NHÂN</TableHead>
-                                            <TableHead className="text-[11.5px] font-extrabold text-neutral-500 py-3.5">ĐỐi TƯỢNG KHÁM</TableHead>
 
                                             {activeListTab === 'waiting' && (
                                                 <>
                                                     <TableHead className="text-[11.5px] font-extrabold text-neutral-500 py-3.5">GIỜ VÀO</TableHead>
                                                     <TableHead className="text-[11.5px] font-extrabold text-neutral-500 py-3.5">THỜI GIAN ĐÃ CHỜ</TableHead>
-                                                </>
-                                            )}
-
-                                            {activeListTab === 'serving' && (
-                                                <>
-                                                    <TableHead className="text-[11.5px] font-extrabold text-neutral-500 py-3.5">ỐNG NGHIỆM</TableHead>
-                                                    <TableHead className="text-[11.5px] font-extrabold text-neutral-500 py-3.5">THỂ TÍCH</TableHead>
                                                 </>
                                             )}
 
@@ -253,145 +216,147 @@ export default function LabWorklistView() {
                                                 </>
                                             )}
 
+                                            {activeListTab === 'missing' && (
+                                                <TableHead className="text-[11.5px] font-extrabold text-neutral-500 py-3.5">GIỜ LỠ LƯỢT</TableHead>
+                                            )}
+
                                             <TableHead className="text-[11.5px] font-extrabold text-neutral-500 py-3.5 text-right pr-8">THAO TÁC</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {currentList.map((patient) => (
-                                            <TableRow
-                                                key={patient.queue_id}
-                                                className="group hover:bg-[#8B7CF6]/5 transition-colors duration-150 border-b border-neutral-50 last:border-b-0"
-                                            >
-                                                {/* STT */}
-                                                <TableCell className="font-extrabold text-neutral-800 text-sm pl-8 py-3.5">
-                                                    {patient.queue_number}
-                                                </TableCell>
+                                        {currentList.map((patient, index) => {
+                                            const isDraggable = activeListTab === 'waiting' && patient.localStatus !== 'SERVING';
+                                            return (
+                                                <TableRow
+                                                    key={patient.queue_id}
+                                                    draggable={isDraggable}
+                                                    onDragStart={(e) => {
+                                                        if (isDraggable) {
+                                                            e.dataTransfer.setData('text/plain', index.toString());
+                                                        }
+                                                    }}
+                                                    onDragOver={(e) => {
+                                                        if (activeListTab === 'waiting' && patient.localStatus !== 'SERVING') {
+                                                            e.preventDefault();
+                                                            setDragOverIndex(index);
+                                                        }
+                                                    }}
+                                                    onDragLeave={() => setDragOverIndex(null)}
+                                                    onDrop={(e) => {
+                                                        setDragOverIndex(null);
+                                                        if (activeListTab === 'waiting') {
+                                                            const draggedIdxStr = e.dataTransfer.getData('text/plain');
+                                                            if (draggedIdxStr) {
+                                                                const draggedIdx = parseInt(draggedIdxStr, 10);
+                                                                if (draggedIdx !== index && patient.localStatus !== 'SERVING') {
+                                                                    handleOpenOverrideConfirm(draggedIdx, index);
+                                                                }
+                                                            }
+                                                        }
+                                                    }}
+                                                    className={cn(
+                                                        "group transition-colors duration-150 border-b border-neutral-50 last:border-b-0",
+                                                        patient.localStatus === 'SERVING'
+                                                            ? "bg-blue-50/30 hover:bg-blue-100/50"
+                                                            : "hover:bg-[#8B7CF6]/5",
+                                                        isDraggable ? "cursor-grab active:cursor-grabbing" : "",
+                                                        dragOverIndex === index ? "bg-amber-55 bg-amber-50/50 border-t-2 border-t-amber-400" : ""
+                                                    )}
+                                                >
+                                                    {/* STT */}
+                                                    <TableCell className="font-extrabold text-neutral-800 text-sm pl-8 py-3.5">
+                                                        {patient.queue_number}
+                                                    </TableCell>
 
-                                                {/* Name */}
-                                                <TableCell className="py-3.5 font-bold text-neutral-800 text-sm">
-                                                    {patient.patient_name}
-                                                </TableCell>
+                                                    {/* Name */}
+                                                    <TableCell className="py-3.5 font-bold text-neutral-800 text-sm">
+                                                        {patient.patient_name}
+                                                    </TableCell>
 
-                                                {/* Queue Type */}
-                                                <TableCell className="py-3.5">
-                                                    <span className={cn(
-                                                        "text-[9.5px] font-extrabold px-2.5 py-0.5 rounded-full border uppercase tracking-wider",
-                                                        patient.queue_type === 'APPOINTMENT'
-                                                            ? "bg-indigo-50 border-indigo-150 text-[#8B7CF6]"
-                                                            : "bg-amber-50 border-amber-150 text-amber-600"
-                                                    )}>
-                                                        {QUEUE_TYPE_MAP[patient.queue_type] || patient.queue_type}
-                                                    </span>
-                                                </TableCell>
+                                                    {/* Conditional Columns based on Tab */}
+                                                    {activeListTab === 'waiting' && (
+                                                        <>
+                                                            <TableCell className="py-3.5 text-xs text-neutral-500 font-semibold">
+                                                                {patient.enqueued_at ? (() => {
+                                                                    try {
+                                                                        const d = new Date(patient.enqueued_at);
+                                                                        return isNaN(d.getTime()) ? '—' : d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                                                                    } catch {
+                                                                        return '—';
+                                                                    }
+                                                                })() : '—'}
+                                                            </TableCell>
+                                                            <TableCell className="py-3.5 text-xs font-bold text-[#8B7CF6]">
+                                                                {patient.localStatus === 'SERVING' ? (
+                                                                    <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full border border-blue-200 bg-blue-50 text-blue-600 uppercase tracking-wider">
+                                                                        Đang xét nghiệm
+                                                                    </span>
+                                                                ) : (
+                                                                    `${patient.waited_minutes} phút`
+                                                                )}
+                                                            </TableCell>
+                                                        </>
+                                                    )}
 
-                                                {/* Conditional Columns based on Tab */}
-                                                {activeListTab === 'waiting' && (
-                                                    <>
-                                                        <TableCell className="py-3.5 text-xs text-neutral-500 font-semibold">
-                                                            {patient.enqueued_at ? (() => {
+                                                    {activeListTab === 'missing' && (
+                                                        <TableCell className="py-3.5 text-xs text-rose-500 font-semibold">
+                                                            {patient.missed_at ? (() => {
                                                                 try {
-                                                                    const d = new Date(patient.enqueued_at);
+                                                                    const d = new Date(patient.missed_at);
                                                                     return isNaN(d.getTime()) ? '—' : d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
                                                                 } catch {
                                                                     return '—';
                                                                 }
                                                             })() : '—'}
                                                         </TableCell>
-                                                        <TableCell className="py-3.5 text-xs font-bold text-[#8B7CF6]">
-                                                            {patient.waited_minutes} phút
-                                                        </TableCell>
-                                                    </>
-                                                )}
+                                                    )}
 
-                                                {activeListTab === 'serving' && (
-                                                    <>
-                                                        <TableCell className="py-3.5 text-xs text-purple-650 font-bold">
-                                                            {patient.tubeType || 'Chưa chọn'}
-                                                        </TableCell>
-                                                        <TableCell className="py-3.5 text-xs text-neutral-600 font-semibold">
-                                                            {patient.volume || '—'}
-                                                        </TableCell>
-                                                    </>
-                                                )}
+                                                    {activeListTab === 'completed' && (
+                                                        <>
+                                                            <TableCell className="py-3.5 text-sm font-black text-emerald-700">
+                                                                {patient.resultValue || '—'}
+                                                            </TableCell>
+                                                            <TableCell className="py-3.5 text-xs text-neutral-500 font-semibold max-w-60 truncate" title={patient.resultNotes}>
+                                                                {patient.resultNotes || '—'}
+                                                            </TableCell>
+                                                        </>
+                                                    )}
 
-                                                {activeListTab === 'completed' && (
-                                                    <>
-                                                        <TableCell className="py-3.5 text-sm font-black text-emerald-700">
-                                                            {patient.resultValue || '—'}
-                                                        </TableCell>
-                                                        <TableCell className="py-3.5 text-xs text-neutral-500 font-semibold max-w-60 truncate" title={patient.resultNotes}>
-                                                            {patient.resultNotes || '—'}
-                                                        </TableCell>
-                                                    </>
-                                                )}
-
-                                                {/* Actions */}
-                                                <TableCell className="text-right pr-8 py-3.5">
-                                                    <div className="inline-flex items-center gap-2">
-                                                        {activeListTab === 'waiting' && (
-                                                            <>
-                                                                <button
-                                                                    onClick={() => handlePrintBarcode(patient)}
-                                                                    title="In tem ống nghiệm"
-                                                                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-neutral-100 text-neutral-400 hover:text-neutral-600 transition cursor-pointer"
-                                                                >
-                                                                    <Printer className="w-4 h-4" />
-                                                                </button>
+                                                    {/* Actions */}
+                                                    <TableCell className="text-right pr-8 py-3.5">
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            {patient.localStatus === 'SERVING' && (
                                                                 <Button
-                                                                    onClick={() => handleOpenViewModal(patient)}
-                                                                    className="h-8 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold shadow-xs shrink-0 cursor-pointer"
+                                                                    onClick={() => handleCompleteQueue(patient.queue_id)}
+                                                                    disabled={isCompleting}
+                                                                    isLoading={isCompleting}
+                                                                    className="h-8 px-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11.5px] font-extrabold shadow-xs shrink-0 cursor-pointer gap-1.5 border-0"
                                                                 >
-                                                                    Lấy mẫu
+                                                                    Hoàn thành
                                                                 </Button>
-                                                                <button
-                                                                    onClick={() => handleUpdateStatus(patient.queue_id, 'MISSING')}
-                                                                    title="Báo vắng mặt (Lỡ lượt)"
-                                                                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-rose-50 text-rose-500 transition cursor-pointer"
-                                                                >
-                                                                    <AlertCircle className="w-4 h-4" />
-                                                                </button>
-                                                            </>
-                                                        )}
-
-                                                        {activeListTab === 'serving' && (
-                                                            <>
+                                                            )}
+                                                            {activeListTab === 'missing' && (
                                                                 <Button
-                                                                    onClick={() => {
-                                                                        setSelectedPatient(patient);
-                                                                        setInputResultValue('');
-                                                                        setInputResultNotes('');
-                                                                        setActiveModal('result');
-                                                                    }}
-                                                                    className="h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-xs shrink-0 cursor-pointer flex items-center gap-1"
+                                                                    onClick={() => handleRecallQueue(patient.queue_id)}
+                                                                    disabled={isRecalling}
+                                                                    isLoading={isRecalling}
+                                                                    className="h-8 px-3.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11.5px] font-extrabold shadow-xs shrink-0 cursor-pointer gap-1.5 border-0"
                                                                 >
-                                                                    <Upload className="w-3 h-3" />
-                                                                    Nhập kết quả
+                                                                    Gọi lại
                                                                 </Button>
-                                                            </>
-                                                        )}
-
-                                                        {activeListTab === 'missing' && (
+                                                            )}
                                                             <Button
-                                                                onClick={() => handleUpdateStatus(patient.queue_id, 'WAITING')}
-                                                                className="h-8 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold shadow-xs shrink-0 cursor-pointer"
-                                                            >
-                                                                Gọi lại hàng chờ
-                                                            </Button>
-                                                        )}
-
-                                                        {activeListTab === 'completed' && (
-                                                            <button
                                                                 onClick={() => handleOpenViewModal(patient)}
-                                                                title="Xem lại chi tiết"
-                                                                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-neutral-100 text-neutral-400 hover:text-neutral-600 transition cursor-pointer"
+                                                                startIcon={<Eye className="w-3.5 h-3.5" />}
+                                                                className="h-8 px-3.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11.5px] font-bold shadow-xs shrink-0 cursor-pointer gap-1.5 border-0"
                                                             >
-                                                                <Eye className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
+                                                                Xem chi tiết
+                                                            </Button>
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
                                     </TableBody>
                                 </Table>
                             )}
@@ -401,32 +366,18 @@ export default function LabWorklistView() {
             </div>
 
             {/* Modals */}
-            <SampleCollectionModal
+            <PatientDetailsModal
                 isOpen={activeModal === 'view'}
                 onClose={() => setActiveModal(null)}
                 selectedPatient={selectedPatient}
-                collectingStep={collectingStep}
-                setCollectingStep={setCollectingStep}
-                tubeType={tubeType}
-                setTubeType={setTubeType}
-                volume={volume}
-                setVolume={setVolume}
-                labelConfirmed={labelConfirmed}
-                setLabelConfirmed={setLabelConfirmed}
-                handleConfirmCollection={handleConfirmCollection}
-                isSubmitting={isSubmitting}
             />
 
-            <ResultEntryModal
-                isOpen={activeModal === 'result'}
-                onClose={() => setActiveModal(null)}
-                selectedPatient={selectedPatient}
-                inputResultValue={inputResultValue}
-                setInputResultValue={setInputResultValue}
-                inputResultNotes={inputResultNotes}
-                setInputResultNotes={setInputResultNotes}
-                handleSaveResult={handleSaveResult}
-                isSubmitting={isSubmitting}
+            <OverrideConfirmModal
+                isOpen={overrideConfirmData !== null}
+                onClose={() => setOverrideConfirmData(null)}
+                data={overrideConfirmData}
+                onConfirm={handleConfirmOverride}
+                isLoading={isOverriding}
             />
         </EMRWorkspaceLayout>
     );

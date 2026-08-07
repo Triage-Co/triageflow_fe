@@ -5,13 +5,26 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { labService } from '../services/labService';
 import { ShiftInfo, RoomQueueData, QueuePatientItem, Toast } from '../types/lab.types';
+import { OverrideConfirmData } from '../modals/OverrideConfirmModal';
 
 export function useLab() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const initialSearch = searchParams ? searchParams.get('search') || '' : '';
     const accessToken = useAuthStore((s) => s.accessToken);
+    const user = useAuthStore((s) => s.user);
+    const profile = useAuthStore((s) => s.profile);
+    const fetchProfile = useAuthStore((s) => s.fetchProfile);
     const [mounted, setMounted] = useState(false);
+
+    // Call Next state
+    const [isCallingNext, setIsCallingNext] = useState(false);
+    const [isCompleting, setIsCompleting] = useState(false);
+    const [isRecalling, setIsRecalling] = useState(false);
+
+    // Override Queue state
+    const [overrideConfirmData, setOverrideConfirmData] = useState<OverrideConfirmData | null>(null);
+    const [isOverriding, setIsOverriding] = useState(false);
 
     // Ca trực & Hàng chờ state
     const [myShifts, setMyShifts] = useState<ShiftInfo[]>([]);
@@ -23,7 +36,7 @@ export function useLab() {
 
     // Filters & Search
     const [search, setSearch] = useState(initialSearch);
-    const [activeListTab, setActiveListTab] = useState<'waiting' | 'serving' | 'missing' | 'completed'>('waiting');
+    const [activeListTab, setActiveListTab] = useState<'waiting' | 'missing' | 'completed'>('waiting');
     const [toasts, setToasts] = useState<Toast[]>([]);
 
     // Local overrides for queue list interaction (since we don't write back to database for queue status)
@@ -31,17 +44,7 @@ export function useLab() {
 
     // Modals
     const [selectedPatient, setSelectedPatient] = useState<QueuePatientItem | null>(null);
-    const [activeModal, setActiveModal] = useState<'view' | 'collect' | 'result' | null>(null);
-
-    // Form inputs for results
-    const [inputResultValue, setInputResultValue] = useState('');
-    const [inputResultNotes, setInputResultNotes] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
-
-    const [collectingStep, setCollectingStep] = useState(false);
-    const [tubeType, setTubeType] = useState('EDTA (Nắp Tím)');
-    const [volume, setVolume] = useState('2 ml');
-    const [labelConfirmed, setLabelConfirmed] = useState(false);
+    const [activeModal, setActiveModal] = useState<'view' | null>(null);
 
     const showToast = (message: string, type: 'success' | 'error' | 'info') => {
         const id = Date.now().toString();
@@ -105,6 +108,14 @@ export function useLab() {
         }
     }, [mounted, accessToken, todayStr]);
 
+    useEffect(() => {
+        if (mounted && accessToken && !profile) {
+            fetchProfile(accessToken).catch((err) => {
+                console.error('Failed to fetch profile in useLab:', err);
+            });
+        }
+    }, [mounted, accessToken, profile, fetchProfile]);
+
     // Handle initial search from query
     useEffect(() => {
         if (initialSearch) {
@@ -114,7 +125,16 @@ export function useLab() {
 
     // Merge API Queue Data with Local Interactions
     const mergedQueueLists = useMemo(() => {
-        const initialServing = queueData?.serving ? [queueData.serving] : [];
+        const initialServing: QueuePatientItem[] = queueData?.serving ? [{
+            queue_id: queueData.serving.queue_id,
+            queue_number: queueData.serving.queue_number,
+            patient_name: queueData.serving.patient?.full_name || 'Bệnh nhân',
+            enqueued_at: queueData.serving.serving_started_at,
+            queue_type: queueData.serving.step?.step_name || 'Xét nghiệm phòng Lab',
+            patient: queueData.serving.patient,
+            step: queueData.serving.step,
+            serving_started_at: queueData.serving.serving_started_at,
+        }] : [];
         const initialWaiting = queueData?.waiting ?? [];
         const initialMissing = queueData?.missing ?? [];
 
@@ -151,13 +171,12 @@ export function useLab() {
 
         // Filter helper by search query
         const filterFn = (p: QueuePatientItem) => 
-            p.patient_name.toLowerCase().includes(search.toLowerCase()) ||
-            p.queue_number.includes(search) ||
-            p.queue_id.includes(search);
+            (p.patient_name || '').toLowerCase().includes(search.toLowerCase()) ||
+            (p.queue_number || '').includes(search) ||
+            (p.queue_id || '').includes(search);
 
         return {
-            serving: servingList.filter(filterFn),
-            waiting: waitingList.filter(filterFn),
+            waiting: [...servingList, ...waitingList].filter(filterFn),
             missing: missingList.filter(filterFn),
             completed: completedList.filter(filterFn)
         };
@@ -180,95 +199,113 @@ export function useLab() {
     };
 
     // Actions
-    const handlePrintBarcode = (patient: QueuePatientItem) => {
-        showToast(`Đang in mã vạch ống nghiệm cho bệnh nhân: ${patient.patient_name} (Số: ${patient.queue_number})`, 'success');
-    };
-
-    const handleUpdateStatus = (patientId: string, nextStatus: 'WAITING' | 'SERVING' | 'MISSING' | 'COMPLETED') => {
-        setLocalOverrides(prev => ({
-            ...prev,
-            [patientId]: {
-                ...prev[patientId],
-                localStatus: nextStatus
-            }
-        }));
-        
-        let statusText = '';
-        if (nextStatus === 'SERVING') statusText = 'Đang phục vụ';
-        else if (nextStatus === 'WAITING') statusText = 'Đang chờ';
-        else if (nextStatus === 'MISSING') statusText = 'Lỡ lượt';
-        else if (nextStatus === 'COMPLETED') statusText = 'Hoàn thành';
-
-        showToast(`Cập nhật trạng thái thành công: ${statusText}`, 'success');
-        setActiveModal(null);
-    };
-
-    const handleSaveResult = () => {
-        if (!selectedPatient) return;
-        if (!inputResultValue.trim()) {
-            showToast('Vui lòng nhập trị số kết quả xét nghiệm.', 'error');
-            return;
-        }
-
-        setIsSubmitting(true);
-        setTimeout(() => {
-            setLocalOverrides(prev => ({
-                ...prev,
-                [selectedPatient.queue_id]: {
-                    ...prev[selectedPatient.queue_id],
-                    localStatus: 'COMPLETED',
-                    resultValue: inputResultValue,
-                    resultNotes: inputResultNotes,
-                }
-            }));
-            
-            setIsSubmitting(false);
-            setActiveModal(null);
-            showToast(`Đã lưu kết quả xét nghiệm cho bệnh nhân: ${selectedPatient.patient_name}`, 'success');
-        }, 1200);
-    };
-
     const handleOpenViewModal = (patient: QueuePatientItem) => {
         setSelectedPatient(patient);
-        setCollectingStep(false);
-        setLabelConfirmed(false);
-        
-        setTubeType('EDTA (Nắp Tím)');
-        setVolume('2 ml');
         setActiveModal('view');
     };
 
-    const handleConfirmCollection = async () => {
-        if (!selectedPatient) return;
-        if (!labelConfirmed) {
-            showToast('Vui lòng xác nhận nhãn barcode đã được dán đúng!', 'error');
+    const handleCallNext = async () => {
+        if (!activeShift) {
+            showToast('Không tìm thấy ca trực hoạt động.', 'error');
+            return;
+        }
+        
+        const staffId = profile?.account_id || user?.id || activeShift.staff_id;
+        if (!staffId) {
+            showToast('Không xác định được thông tin nhân viên.', 'error');
             return;
         }
 
-        setIsSubmitting(true);
-        showToast('Đang ghi nhận thông tin thu thập mẫu...', 'info');
-        await new Promise((resolve) => setTimeout(resolve, 1200));
-        setIsSubmitting(false);
+        setIsCallingNext(true);
+        try {
+            await labService.callNext({
+                room_id: activeShift.room_id,
+                staff_id: staffId
+            });
+            showToast('Đã gọi bệnh nhân tiếp theo vào phòng xét nghiệm.', 'success');
+            await handleRefresh();
+        } catch (e: any) {
+            console.error('[useLab] Error calling next patient:', e);
+            const errMsg = e?.response?.data?.message || e?.message || 'Có lỗi xảy ra khi gọi bệnh nhân.';
+            showToast(errMsg, 'error');
+        } finally {
+            setIsCallingNext(false);
+        }
+    };
 
-        setLocalOverrides(prev => ({
-            ...prev,
-            [selectedPatient.queue_id]: {
-                ...prev[selectedPatient.queue_id],
-                localStatus: 'SERVING',
-                tubeType,
-                volume,
-            }
-        }));
+    const handleCompleteQueue = async (queueId: string) => {
+        if (!queueId) return;
+        setIsCompleting(true);
+        try {
+            await labService.completeQueue(queueId);
+            showToast('Đã hoàn thành lượt phục vụ thành công.', 'success');
+            await handleRefresh();
+        } catch (e: any) {
+            console.error('[useLab] Error completing queue:', e);
+            const errMsg = e?.response?.data?.message || e?.message || 'Có lỗi xảy ra khi hoàn thành lượt phục vụ.';
+            showToast(errMsg, 'error');
+        } finally {
+            setIsCompleting(false);
+        }
+    };
 
-        setSelectedPatient(prev => prev ? { 
-            ...prev, 
-            localStatus: 'SERVING',
-            tubeType,
-            volume 
-        } : null);
-        
-        setActiveModal(null);
-        showToast(`Thu thập mẫu thành công cho bệnh nhân: ${selectedPatient.patient_name}`, 'success');
+    const handleRecallQueue = async (queueId: string) => {
+        if (!queueId) return;
+        setIsRecalling(true);
+        try {
+            await labService.recallQueue(queueId);
+            showToast('Đã đưa bệnh nhân quay lại hàng chờ.', 'success');
+            await handleRefresh();
+        } catch (e: any) {
+            console.error('[useLab] Error recalling queue:', e);
+            const errMsg = e?.response?.data?.message || e?.message || 'Có lỗi xảy ra khi gọi lại bệnh nhân.';
+            showToast(errMsg, 'error');
+        } finally {
+            setIsRecalling(false);
+        }
+    };
+
+    const handleOpenOverrideConfirm = (draggedIndex: number, targetIndex: number) => {
+        const list = mergedQueueLists.waiting;
+        const draggedPatient = list[draggedIndex];
+        if (!draggedPatient) return;
+
+        // Calculate backend position
+        const hasServing = list[0]?.localStatus === 'SERVING';
+        let backendPosition = targetIndex;
+        if (hasServing) {
+            backendPosition = Math.max(0, targetIndex - 1);
+        }
+
+        setOverrideConfirmData({
+            queueId: draggedPatient.queue_id,
+            patientName: draggedPatient.patient_name,
+            queueNumber: draggedPatient.queue_number,
+            oldIndex: draggedIndex,
+            newIndex: targetIndex,
+            backendPosition,
+        });
+    };
+
+    const handleConfirmOverride = async (reason: string) => {
+        if (!overrideConfirmData) return;
+        setIsOverriding(true);
+        try {
+            await labService.overrideQueue(overrideConfirmData.queueId, {
+                action: 'MOVE_TO_POSITION',
+                position: overrideConfirmData.backendPosition,
+                reason,
+            });
+            showToast('Đã cập nhật vị trí ưu tiên lượt chờ.', 'success');
+            setOverrideConfirmData(null);
+            await handleRefresh();
+        } catch (e: any) {
+            console.error('[useLab] Error overriding queue:', e);
+            const errMsg = e?.response?.data?.message || e?.message || 'Có lỗi xảy ra khi can thiệp hàng đợi.';
+            showToast(errMsg, 'error');
+        } finally {
+            setIsOverriding(false);
+        }
     };
 
     return {
@@ -280,31 +317,23 @@ export function useLab() {
         setActiveListTab,
         toasts,
         selectedPatient,
-        setSelectedPatient,
         activeModal,
         setActiveModal,
-        inputResultValue,
-        setInputResultValue,
-        inputResultNotes,
-        setInputResultNotes,
-        isSubmitting,
-        collectingStep,
-        setCollectingStep,
-        tubeType,
-        setTubeType,
-        volume,
-        setVolume,
-        labelConfirmed,
-        setLabelConfirmed,
         activeShift,
-        isLoadingShifts,
         isLoadingQueue,
         mergedQueueLists,
         handleRefresh,
-        handlePrintBarcode,
-        handleUpdateStatus,
-        handleSaveResult,
         handleOpenViewModal,
-        handleConfirmCollection,
+        isCallingNext,
+        handleCallNext,
+        isCompleting,
+        handleCompleteQueue,
+        isRecalling,
+        handleRecallQueue,
+        overrideConfirmData,
+        setOverrideConfirmData,
+        isOverriding,
+        handleOpenOverrideConfirm,
+        handleConfirmOverride,
     };
 }
