@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     AlertCircle,
+    Circle,
     Loader2,
-    Microscope,
     Pencil,
     Plus,
+    Printer,
     Trash2,
     X,
 } from 'lucide-react';
@@ -20,25 +21,167 @@ import {
 } from '@/modules/admin/services/serviceCatalogService';
 import type { ServiceOrder } from '@/modules/clinical/types/serviceOrder.types';
 import {
-    filterOrdersByBookingId,
     getOrderDisplayName,
     getOrderRoomType,
     getOrderServiceCode,
+    getOrderServiceType,
     getServiceOrderId,
 } from '@/modules/clinical/types/serviceOrder.types';
 import {
-    extractServiceOrderList,
     serviceOrderService,
 } from '@/modules/clinical/services/serviceOrderService';
-import { resolvePatientFlow } from '@/modules/clinical/services/clinicalService';
+import {
+    clinicalService,
+    extractFlowSteps,
+    resolvePatientFlow,
+} from '@/modules/clinical/services/clinicalService';
 import { useAuthStore } from '@/store/authStore';
 import { useRoomStore } from '@/modules/admin/store/roomStore';
 import { useShiftStore } from '@/modules/admin/store/shiftStore';
 import { staffService } from '@/modules/admin/services/staffService';
 import type { Shift } from '@/modules/admin/types/shift.types';
 
+function pickLinkedServiceOrderId(step: Record<string, unknown> | null): string {
+    if (!step) return '';
+    if (typeof step.service_order_id === 'string' && step.service_order_id.trim()) {
+        return step.service_order_id.trim();
+    }
+    const nested = asRecord(step.service_order) || asRecord(step.serviceOrder);
+    if (nested) {
+        const id = nested.service_order_id || nested.id;
+        if (typeof id === 'string' && id.trim()) return id.trim();
+    }
+    return '';
+}
+
+type FlowOrderRoomStaff = {
+    roomId?: string;
+    roomName?: string;
+    staffName?: string;
+    staffId?: string;
+};
+
+/** Room/staff trên live step — nguồn đúng hơn detail order nếu lệch */
+function buildFlowOrderRoomStaffMap(
+    flow: Record<string, unknown> | null | undefined
+): Map<string, FlowOrderRoomStaff> {
+    const map = new Map<string, FlowOrderRoomStaff>();
+    for (const item of extractFlowSteps(flow)) {
+        const step = asRecord(item);
+        if (!step) continue;
+        const status = String(step.step_status || '').toUpperCase();
+        if (status === 'CANCELLED' || status === 'CANCELED') continue;
+
+        const orderId = pickLinkedServiceOrderId(step);
+        if (!orderId) continue;
+
+        const roomInfo = asRecord(step.room_info);
+        const roomId =
+            (typeof step.room_id === 'string' && step.room_id.trim()) ||
+            (typeof roomInfo?.room_id === 'string' && roomInfo.room_id.trim()) ||
+            '';
+        const roomName =
+            (typeof roomInfo?.room_name === 'string' && roomInfo.room_name.trim()) || '';
+
+        const staffInfo = asRecord(step.staff_info) || asRecord(step.staff);
+        const staffName =
+            (typeof staffInfo?.full_name === 'string' && staffInfo.full_name.trim()) ||
+            (typeof staffInfo?.user_name === 'string' && staffInfo.user_name.trim()) ||
+            (typeof step.staff_name === 'string' && step.staff_name.trim()) ||
+            '';
+        const staffId =
+            (typeof step.staff_id === 'string' && step.staff_id.trim()) ||
+            (typeof staffInfo?.staff_id === 'string' && staffInfo.staff_id.trim()) ||
+            '';
+
+        map.set(orderId, {
+            roomId: roomId || undefined,
+            roomName: roomName || undefined,
+            staffName: staffName || undefined,
+            staffId: staffId || undefined,
+        });
+    }
+    return map;
+}
+
+function findStepIdByServiceOrderId(
+    flow: Record<string, unknown> | null | undefined,
+    serviceOrderId: string
+): string {
+    const want = (serviceOrderId || '').trim();
+    if (!want) return '';
+    for (const item of extractFlowSteps(flow)) {
+        const step = asRecord(item);
+        if (!step) continue;
+        if (pickLinkedServiceOrderId(step) !== want) continue;
+        const stepId =
+            (typeof step.step_id === 'string' && step.step_id.trim()) ||
+            (typeof step.id === 'string' && step.id.trim()) ||
+            '';
+        if (stepId) return stepId;
+    }
+    return '';
+}
+
+/** service_order_id trên live steps (bỏ step đã hủy) */
+function collectServiceOrderIdsFromFlow(
+    flow: Record<string, unknown> | null | undefined
+): string[] {
+    const ids = new Set<string>();
+    for (const item of extractFlowSteps(flow)) {
+        const step = asRecord(item);
+        if (!step) continue;
+        const status = String(step.step_status || '').toUpperCase();
+        if (status === 'CANCELLED' || status === 'CANCELED') continue;
+        const orderId = pickLinkedServiceOrderId(step);
+        if (orderId) ids.add(orderId);
+    }
+    return [...ids];
+}
+
+export type DoctorServiceOrderKind =
+    | 'DIAGNOSTIC_TEST'
+    | 'PROCEDURE'
+    | 'PRESCRIPTION';
+
+const KIND_COPY: Record<
+    DoctorServiceOrderKind,
+    {
+        title: string;
+        countLabel: (n: number) => string;
+        emptyHint: string;
+        nameColumn: string;
+        printLabel: string;
+    }
+> = {
+    DIAGNOSTIC_TEST: {
+        title: 'Yêu cầu cận lâm sàng',
+        countLabel: (n) => `${n} xét nghiệm đã được chỉ định`,
+        emptyHint: 'Chưa có xét nghiệm nào. Bấm "Thêm chỉ định" để tạo yêu cầu.',
+        nameColumn: 'Tên xét nghiệm',
+        printLabel: 'In CĐ',
+    },
+    PROCEDURE: {
+        title: 'Yêu cầu thủ thuật',
+        countLabel: (n) => `${n} thủ thuật đã được chỉ định`,
+        emptyHint: 'Chưa có thủ thuật nào. Bấm "Thêm chỉ định" để tạo yêu cầu.',
+        nameColumn: 'Tên thủ thuật',
+        printLabel: 'In CĐ',
+    },
+    PRESCRIPTION: {
+        title: 'Yêu cầu cấp phát thuốc',
+        countLabel: (n) => `${n} dịch vụ cấp phát đã được chỉ định`,
+        emptyHint: 'Chưa có chỉ định cấp phát. Bấm "Thêm chỉ định" để tạo yêu cầu.',
+        nameColumn: 'Tên dịch vụ',
+        printLabel: 'In CĐ',
+    },
+};
+
 interface ParaclinicalOrdersTabProps {
     patient: Patient;
+    /** Filter catalog + listed orders by service_type */
+    serviceTypes?: DoctorServiceOrderKind[];
+    title?: string;
     refreshKey?: number;
     flowSnapshot?: Record<string, unknown> | null;
     onFlowChanged?: (flow: Record<string, unknown> | null) => void;
@@ -51,6 +194,7 @@ interface ServiceOrderCard {
     status: string;
     payment_status?: string;
     service_code?: string;
+    service_type?: string;
     room_type?: string;
     room_id?: string;
     room_name?: string;
@@ -60,6 +204,56 @@ interface ServiceOrderCard {
     on_duty_doctor_name?: string;
     total_price?: number;
     created_at?: number;
+}
+
+function normalizeServiceTypeKey(value?: string | null): string {
+    return (value || '').trim().toUpperCase();
+}
+
+function inferServiceTypeFromRoom(roomType?: string | null): string {
+    const t = normalizeServiceTypeKey(roomType);
+    if (t === 'PROCEDURE_ROOM') return 'PROCEDURE';
+    if (t === 'PHARMACY') return 'PRESCRIPTION';
+    if (t === 'LABORATORY' || t === 'IMAGING_ROOM' || t === 'FUNCTIONAL_EXPLORATION') {
+        return 'DIAGNOSTIC_TEST';
+    }
+    if (t === 'CLINICAL_ROOM') return 'CLINICAL_EXAMINATION';
+    return '';
+}
+
+function resolveCatalogServiceType(
+    order: ServiceOrder,
+    catalog: CatalogService[]
+): string {
+    const fromOrder = getOrderServiceType(order);
+    if (fromOrder) return fromOrder;
+
+    const code = getOrderServiceCode(order).toUpperCase();
+    const displayName = getOrderDisplayName(order).trim().toLowerCase();
+    const rawName = (order.service_name || order.name || '').trim().toLowerCase();
+
+    const match = catalog.find((s) => {
+        const svcCode = (s.service_code || '').trim().toUpperCase();
+        if (code && svcCode && svcCode === code) return true;
+        const svcName = (s.service_name || '').trim().toLowerCase();
+        if (!svcName) return false;
+        return svcName === displayName || svcName === rawName;
+    });
+
+    const fromCatalog = normalizeServiceTypeKey(match?.service_type);
+    if (fromCatalog) return fromCatalog;
+
+    return inferServiceTypeFromRoom(match?.room_type || getOrderRoomType(order));
+}
+
+function matchesServiceTypes(
+    serviceType: string | undefined,
+    allowed: DoctorServiceOrderKind[] | undefined
+): boolean {
+    if (!allowed || allowed.length === 0) return true;
+    const key = normalizeServiceTypeKey(serviceType);
+    if (!key) return false;
+    return allowed.some((t) => t === key);
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -121,7 +315,7 @@ function roomsForService(
     }>,
     serviceRoomType?: string | null
 ) {
-    if (!rooms.length) return rooms;
+    if (!rooms.length) return [];
     const want = (serviceRoomType || '').trim().toUpperCase();
     if (!want) return rooms;
 
@@ -131,38 +325,68 @@ function roomsForService(
     if (byType.length > 0) return byType;
 
     if (want === 'LABORATORY' || want === 'LAB') {
-        const byName = rooms.filter((r) =>
+        return rooms.filter((r) =>
             /xét nghiệm|xet nghiem|\blab\b|sinh hóa|sinh hoa/i.test(r.room_name || '')
         );
-        if (byName.length > 0) return byName;
     }
     if (want === 'IMAGING_ROOM' || want === 'IMAGING') {
-        const byName = rooms.filter((r) =>
+        return rooms.filter((r) =>
             /chẩn đoán hình ảnh|cdha|x-?quang|siêu âm|sieu am|ct|mri/i.test(r.room_name || '')
         );
-        if (byName.length > 0) return byName;
     }
-    return rooms;
+    if (want === 'PROCEDURE_ROOM') {
+        return rooms.filter((r) =>
+            /thủ thuật|thu thuat|điều trị|dieu tri|nội soi|noi soi/i.test(r.room_name || '')
+        );
+    }
+    if (want === 'PHARMACY') {
+        return rooms.filter((r) =>
+            /nhà thuốc|nha thuoc|pharmacy|quầy thuốc|quay thuoc/i.test(r.room_name || '')
+        );
+    }
+
+    // Không fallback toàn bộ danh mục — tránh chọn nhầm PHARMACY/CASHIER
+    return [];
 }
 
 function stepStatusMeta(status?: string): { label: string; className: string } {
     const s = (status || 'PENDING').toUpperCase();
-    if (['COMPLETED', 'DONE', 'FINISHED', 'SUCCESSED', 'PAID', 'SUCCESS'].includes(s)) {
+    if (['COMPLETED', 'DONE', 'FINISHED', 'SUCCESSED', 'PAID', 'SUCCESS', 'COMPLETE'].includes(s)) {
         return {
-            label: s === 'PAID' || s === 'SUCCESSED' || s === 'SUCCESS' ? 'Đã thanh toán' : 'Hoàn tất',
-            className: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+            label:
+                s === 'PAID' || s === 'SUCCESSED' || s === 'SUCCESS' || s === 'COMPLETE'
+                    ? 'Đã thanh toán'
+                    : 'Hoàn tất',
+            className: 'bg-emerald-50 text-emerald-700',
         };
     }
     if (['IN_PROGRESS', 'PROCESSING', 'ONGOING', 'CURRENT', 'ACTIVE'].includes(s)) {
         return {
             label: 'Đang thực hiện',
-            className: 'bg-blue-50 text-blue-700 border-blue-100',
+            className: 'bg-blue-50 text-blue-700',
+        };
+    }
+    if (['CANCELLED', 'CANCELED', 'DECLINED', 'REJECTED'].includes(s)) {
+        return {
+            label: 'Đã hủy',
+            className: 'bg-red-50 text-red-600',
         };
     }
     return {
-        label: 'Chờ xử lý',
-        className: 'bg-slate-50 text-slate-600 border-slate-200',
+        label: 'Chờ thực hiện',
+        className: 'bg-neutral-100 text-neutral-600',
     };
+}
+
+/** Paid / non-deletable — chỉ theo payment field, không dùng step clinical status */
+function isPaymentCompleted(...values: Array<string | undefined | null>): boolean {
+    const paid = new Set([
+        'SUCCESSED',
+        'SUCCESS',
+        'PAID',
+        'COMPLETE',
+    ]);
+    return values.some((v) => paid.has(String(v || '').trim().toUpperCase()));
 }
 
 function todayDateKeys(): { local: string; utc: string } {
@@ -236,7 +460,7 @@ function collectStaffNamesFromShifts(shifts: Shift[]): Map<string, string> {
     return map;
 }
 
-function resolveOnDutyDoctorName(
+function resolveOnDutyStaff(
     roomId: string | undefined,
     rooms: Array<{
         room_id: string;
@@ -245,8 +469,8 @@ function resolveOnDutyDoctorName(
     }>,
     shifts: Shift[],
     staffNameById: Map<string, string>
-): string {
-    if (!roomId?.trim()) return '';
+): { staffId: string; staffName: string } {
+    if (!roomId?.trim()) return { staffId: '', staffName: '' };
 
     const targetRoom = rooms.find(
         (r) => r.room_id === roomId || r.room_name === roomId
@@ -265,7 +489,7 @@ function resolveOnDutyDoctorName(
                 (s.room_id === roomName || s.room_id.includes(roomName))
         );
     }
-    if (roomShifts.length === 0) return '';
+    if (roomShifts.length === 0) return { staffId: '', staffName: '' };
 
     const { local, utc } = todayDateKeys();
     const todayShifts = roomShifts.filter((s) => {
@@ -273,7 +497,7 @@ function resolveOnDutyDoctorName(
         const dStr = s.date.split('T')[0].slice(0, 10);
         return dStr === local || dStr === utc;
     });
-    if (todayShifts.length === 0) return '';
+    if (todayShifts.length === 0) return { staffId: '', staffName: '' };
 
     // Prefer shift currently in time window if start/end available
     const nowMins = new Date().getHours() * 60 + new Date().getMinutes();
@@ -292,10 +516,26 @@ function resolveOnDutyDoctorName(
         }) || todayShifts[0];
 
     const staffId = (inWindow.staff_id || '').trim();
-    if (!staffId) return '';
+    if (!staffId) return { staffId: '', staffName: '' };
 
     const fromShift = pickEmbeddedShiftStaffName(inWindow);
-    return fromShift || staffNameById.get(staffId) || '';
+    return {
+        staffId,
+        staffName: fromShift || staffNameById.get(staffId) || '',
+    };
+}
+
+function resolveOnDutyDoctorName(
+    roomId: string | undefined,
+    rooms: Array<{
+        room_id: string;
+        room_name: string;
+        physical_room_id?: string | null;
+    }>,
+    shifts: Shift[],
+    staffNameById: Map<string, string>
+): string {
+    return resolveOnDutyStaff(roomId, rooms, shifts, staffNameById).staffName;
 }
 
 function mapOrderToCard(
@@ -306,7 +546,8 @@ function mapOrderToCard(
         physical_room_id?: string | null;
     }>,
     shifts: Shift[],
-    staffNameById: Map<string, string>
+    staffNameById: Map<string, string>,
+    flowMeta?: FlowOrderRoomStaff | null
 ): ServiceOrderCard | null {
     const id = getServiceOrderId(order);
     if (!id) return null;
@@ -315,35 +556,53 @@ function mapOrderToCard(
 
     const createdRaw = order.created_at || order.create_at || order.updated_at;
     const createdAt = createdRaw ? new Date(createdRaw).getTime() : NaN;
-    const roomId = (order.room_id || order.room_info?.room_id || '').trim();
+
+    // Nguồn đúng cho phòng: service-order (PATCH room_id). Flow chỉ fallback.
+    const roomId = (
+        order.room_id ||
+        order.room_info?.room_id ||
+        flowMeta?.roomId ||
+        ''
+    ).trim();
     const roomName =
-        order.room_info?.room_name ||
         rooms.find((r) => r.room_id === roomId)?.room_name ||
+        order.room_name ||
+        order.room_info?.room_name ||
+        flowMeta?.roomName ||
         undefined;
 
-    const assignId = (order.assign_by_staff_id || '').trim();
+    const assignId = (order.assign_by_staff_id || flowMeta?.staffId || '').trim();
     const nestedStaff = order.staff_info || order.assign_by_staff;
     const doctorFromNested =
+        order.staff_name?.trim() ||
         nestedStaff?.full_name?.trim() ||
         nestedStaff?.user_name?.trim() ||
         order.assign_by_staff?.account?.user_name?.trim() ||
+        flowMeta?.staffName?.trim() ||
         '';
     const doctorFromDirectory = assignId ? staffNameById.get(assignId) || '' : '';
     const assignDoctorName = doctorFromNested || doctorFromDirectory || undefined;
-    const onDutyDoctorName = resolveOnDutyDoctorName(
-        roomId || undefined,
-        rooms,
-        shifts,
-        staffNameById
-    );
+
+    // Bác sĩ trực theo phòng trên service-order + fallback staff trên step
+    const onDutyDoctorName =
+        resolveOnDutyDoctorName(roomId || undefined, rooms, shifts, staffNameById) ||
+        flowMeta?.staffName ||
+        assignDoctorName ||
+        '';
+
+    const paymentFromIsPayment =
+        typeof order.is_payment === 'string' ? order.is_payment : undefined;
 
     return {
         service_order_id: id,
         name: getOrderDisplayName(order),
         order_name: order.name || '',
-        status: String(order.payment_status || order.status || 'PENDING'),
-        payment_status: order.payment_status,
+        status: String(
+            order.payment_status || paymentFromIsPayment || order.status || 'PENDING'
+        ),
+        payment_status: order.payment_status || paymentFromIsPayment,
         service_code: getOrderServiceCode(order) || undefined,
+        service_type: getOrderServiceType(order) || undefined,
         room_type: getOrderRoomType(order) || undefined,
         room_id: roomId || undefined,
         room_name: roomName,
@@ -365,6 +624,8 @@ const EDITABLE_STATUSES = ['PENDING', 'IN_PROGRESS', 'COMPLETED'] as const;
 
 export function ParaclinicalOrdersTab({
     patient,
+    serviceTypes,
+    title,
     refreshKey = 0,
     flowSnapshot = null,
     onFlowChanged,
@@ -377,7 +638,20 @@ export function ParaclinicalOrdersTab({
     const shifts = useShiftStore((s) => s.shifts);
     const fetchShifts = useShiftStore((s) => s.fetchShifts);
 
+    const allowedTypes = useMemo(
+        () =>
+            (serviceTypes || []).map((t) =>
+                normalizeServiceTypeKey(t)
+            ) as DoctorServiceOrderKind[],
+        [serviceTypes]
+    );
+    const primaryKind: DoctorServiceOrderKind =
+        allowedTypes[0] || 'DIAGNOSTIC_TEST';
+    const copy = KIND_COPY[primaryKind];
+    const panelTitle = title || copy.title;
+
     const [rawOrders, setRawOrders] = useState<ServiceOrder[]>([]);
+    const [linkedFlow, setLinkedFlow] = useState<Record<string, unknown> | null>(null);
     const [staffNameById, setStaffNameById] = useState<Map<string, string>>(() => new Map());
     const [resolvedBookingId, setResolvedBookingId] = useState(patient.bookingId || '');
     const [catalog, setCatalog] = useState<CatalogService[]>([]);
@@ -399,17 +673,71 @@ export function ParaclinicalOrdersTab({
     const patientId = (patient.patientId || '').trim();
     const staffId = authProfile?.account_id || authUser?.id || '';
 
+    const filteredCatalog = useMemo(
+        () =>
+            catalog.filter((s) =>
+                matchesServiceTypes(
+                    normalizeServiceTypeKey(s.service_type) ||
+                        inferServiceTypeFromRoom(s.room_type),
+                    allowedTypes
+                )
+            ),
+        [catalog, allowedTypes]
+    );
+
+    const flowRoomStaffByOrderId = useMemo(
+        () => buildFlowOrderRoomStaffMap(flowSnapshot || linkedFlow),
+        [flowSnapshot, linkedFlow]
+    );
+
     // Map thẻ hiển thị local — không refetch API khi rooms/shifts/tên bác sĩ đổi
     const orders = useMemo(() => {
-        const scoped = filterOrdersByBookingId(rawOrders, resolvedBookingId);
+        // Đã lấy id từ flow hiện tại — giữ cả order thiếu booking_id trên detail
+        const scoped = !resolvedBookingId
+            ? rawOrders
+            : rawOrders.filter((o) => {
+                const oid = (o.booking_id || '').trim();
+                return !oid || oid === resolvedBookingId;
+            });
         const cards = scoped
-            .map((o) => mapOrderToCard(o, rooms, shifts, staffNameById))
-            .filter((c): c is ServiceOrderCard => Boolean(c));
+            .filter((o) =>
+                matchesServiceTypes(
+                    resolveCatalogServiceType(o, catalog),
+                    allowedTypes
+                )
+            )
+            .map((o) => {
+                const orderId = getServiceOrderId(o);
+                const card = mapOrderToCard(
+                    o,
+                    rooms,
+                    shifts,
+                    staffNameById,
+                    flowRoomStaffByOrderId.get(orderId) || null
+                );
+                if (!card) return null;
+                const resolvedType = resolveCatalogServiceType(o, catalog);
+                const next: ServiceOrderCard = {
+                    ...card,
+                    service_type: resolvedType || card.service_type,
+                };
+                return next;
+            })
+            .filter((c): c is ServiceOrderCard => c !== null);
         return sortCards(cards);
-    }, [rawOrders, resolvedBookingId, rooms, shifts, staffNameById]);
+    }, [
+        rawOrders,
+        resolvedBookingId,
+        rooms,
+        shifts,
+        staffNameById,
+        catalog,
+        allowedTypes,
+        flowRoomStaffByOrderId,
+    ]);
 
     const loadPendingOrders = useCallback(async (opts?: { silent?: boolean }) => {
-        if (!accessToken || !patientId) {
+        if (!accessToken) {
             setRawOrders([]);
             setIsLoading(false);
             return;
@@ -420,11 +748,13 @@ export function ParaclinicalOrdersTab({
         try {
             const flowObj =
                 flowSnapshot ||
-                (await resolvePatientFlow(accessToken, {
-                    flowId: patient.flowId,
-                    patientId,
-                    bookingId: patient.bookingId || resolvedBookingId,
-                }).catch(() => null));
+                (patientId
+                    ? await resolvePatientFlow(accessToken, {
+                        flowId: patient.flowId,
+                        patientId,
+                        bookingId: patient.bookingId || resolvedBookingId,
+                    }).catch(() => null)
+                    : null);
 
             const bookingId =
                 pickBookingIdFromFlow(flowObj) ||
@@ -433,22 +763,30 @@ export function ParaclinicalOrdersTab({
                 '';
             if (bookingId) setResolvedBookingId(bookingId);
 
-            // Pending + full list: order COMPLETED sẽ mất khỏi /pending → gộp thêm getOrders
-            const [pendingRes, allRes] = await Promise.all([
-                serviceOrderService.getPendingByPatientId(patientId, accessToken).catch(() => null),
-                serviceOrderService.getOrders(accessToken, 1, 200).catch(() => null),
-            ]);
-            const merged = [
-                ...extractServiceOrderList(pendingRes?.data),
-                ...extractServiceOrderList(allRes?.data),
-            ];
-            const byId = new Map<string, ServiceOrder>();
-            for (const order of merged) {
-                const id = getServiceOrderId(order);
-                if (!id) continue;
-                byId.set(id, order);
+            // Flow mới nhất → lấy service_order_id từ steps → GET /api/service-order/{id}
+            const latestFlow =
+                (patientId
+                    ? await resolvePatientFlow(accessToken, {
+                        flowId: patient.flowId,
+                        patientId,
+                        bookingId: bookingId || undefined,
+                    }).catch(() => flowObj)
+                    : flowObj) || flowObj;
+
+            if (!latestFlow) {
+                setLinkedFlow(null);
+                setRawOrders([]);
+                setError('Không tìm thấy quy trình khám để tải chỉ định.');
+                return;
             }
-            setRawOrders([...byId.values()]);
+
+            setLinkedFlow(latestFlow);
+            const orderIds = collectServiceOrderIdsFromFlow(latestFlow);
+            const orders = await serviceOrderService.getOrdersByIds(
+                orderIds,
+                accessToken
+            );
+            setRawOrders(orders);
             hasLoadedOnceRef.current = true;
         } catch (err) {
             setError(
@@ -545,8 +883,8 @@ export function ParaclinicalOrdersTab({
     }, [shifts]);
 
     const selectedService = useMemo(
-        () => catalog.find((s) => getServiceId(s) === selectedServiceId) || null,
-        [catalog, selectedServiceId]
+        () => filteredCatalog.find((s) => getServiceId(s) === selectedServiceId) || null,
+        [filteredCatalog, selectedServiceId]
     );
 
     const eligibleRooms = useMemo(
@@ -583,11 +921,11 @@ export function ParaclinicalOrdersTab({
                 setSelectedRoomId('');
                 return;
             }
-            if (eligibleRooms.length > 0) {
-                setSelectedRoomId((prev) =>
-                    eligibleRooms.some((r) => r.room_id === prev) ? prev : eligibleRooms[0].room_id
-                );
-            }
+            setSelectedRoomId((prev) => {
+                if (prev && eligibleRooms.some((r) => r.room_id === prev)) return prev;
+                // Chỉ auto-chọn khi chưa có phòng / phòng cũ không còn hợp lệ
+                return eligibleRooms[0]?.room_id || '';
+            });
         }, 0);
         return () => window.clearTimeout(timeoutId);
     }, [selectedService, eligibleRooms]);
@@ -633,6 +971,19 @@ export function ParaclinicalOrdersTab({
             return;
         }
 
+        const room = rooms.find((r) => r.room_id === selectedRoomId);
+        if (!room) {
+            setFormError('Phòng đã chọn không hợp lệ. Vui lòng chọn lại.');
+            return;
+        }
+        if (
+            eligibleRooms.length > 0 &&
+            !eligibleRooms.some((r) => r.room_id === selectedRoomId)
+        ) {
+            setFormError('Phòng đã chọn không phù hợp với loại dịch vụ.');
+            return;
+        }
+
         setIsSubmitting(true);
         setFormError(null);
         try {
@@ -653,25 +1004,60 @@ export function ParaclinicalOrdersTab({
             }
             setResolvedBookingId(bookingId);
 
-            const room = rooms.find((r) => r.room_id === selectedRoomId);
-            // specialty_id is optional on POST /api/service-order — do not block CLS lab rooms
-            const specialtyId = resolveSpecialtyIdForOrder(room, flowObj) || null;
+            // specialty_id optional — omit khi không có (tránh gửi null làm BE gán phòng sai)
+            const specialtyId = resolveSpecialtyIdForOrder(room, flowObj) || '';
 
-            await serviceOrderService.createOrder(
-                {
-                    booking_id: bookingId,
-                    assign_by_staff_id: staffId,
-                    name: selectedService.service_name,
-                    service_code: serviceCode,
-                    specialty_id: specialtyId,
-                    room_id: selectedRoomId,
-                },
-                accessToken
-            );
+            const createBody: {
+                booking_id: string;
+                assign_by_staff_id: string;
+                name: string;
+                service_code: string;
+                room_id: string;
+                specialty_id?: string;
+            } = {
+                booking_id: bookingId,
+                assign_by_staff_id: staffId,
+                name: selectedService.service_name,
+                service_code: serviceCode,
+                room_id: selectedRoomId,
+            };
+            if (specialtyId) createBody.specialty_id = specialtyId;
+
+            const createdRes = await serviceOrderService.createOrder(createBody, accessToken);
+            const createdData = (createdRes?.data || null) as Record<string, unknown> | null;
+            const createdId = String(
+                createdData?.service_order_id || createdData?.id || ''
+            ).trim();
+
+            // Response create thường không trả room_id — PATCH lại để gắn đúng phòng đã chọn
+            if (createdId) {
+                try {
+                    const patchBody: {
+                        room_id: string;
+                        specialty_id?: string | null;
+                        name?: string;
+                        service_code?: string;
+                    } = {
+                        room_id: selectedRoomId,
+                        name: selectedService.service_name,
+                        service_code: serviceCode,
+                    };
+                    if (specialtyId) patchBody.specialty_id = specialtyId;
+                    await serviceOrderService.updateOrder(createdId, patchBody, accessToken);
+                } catch (patchErr) {
+                    console.warn(
+                        'Created service-order but failed to PATCH room_id',
+                        patchErr
+                    );
+                }
+            }
 
             setIsAddOpen(false);
             setSelectedServiceId('');
+            setSelectedRoomId('');
             onFlowChanged?.(flowObj);
+            // Chờ BE gắn service_order_id vào step rồi mới enrich phòng/BS từ flow
+            await new Promise((resolve) => window.setTimeout(resolve, 400));
             await loadPendingOrders({ silent: true });
         } catch (err) {
             setFormError(err instanceof Error ? err.message : 'Không thể tạo chỉ định dịch vụ.');
@@ -704,19 +1090,78 @@ export function ParaclinicalOrdersTab({
                 setFormError('Phòng đã chọn không hợp lệ. Vui lòng chọn lại.');
                 return;
             }
+            const duty = resolveOnDutyStaff(
+                editRoomId,
+                rooms,
+                shifts,
+                staffNameById
+            );
+            const orderId = editingOrder.service_order_id;
+
+            // PATCH chỉ nhận room_id — tên phòng lấy từ catalog khi render
             await serviceOrderService.updateOrder(
-                editingOrder.service_order_id,
+                orderId,
                 {
                     room_id: editRoomId,
                     specialty_id: resolveSpecialtyIdForOrder(room, flowSnapshot) || null,
                     status: editStatus as (typeof EDITABLE_STATUSES)[number],
                     name: editingOrder.name || undefined,
                     service_code: editingOrder.service_code || undefined,
+                    ...(duty.staffId
+                        ? { assign_by_staff_id: duty.staffId }
+                        : {}),
                 },
                 accessToken
             );
+
+            // Đồng bộ phòng (và BS trực) lên flow step liên kết
+            const stepId = findStepIdByServiceOrderId(
+                linkedFlow || flowSnapshot,
+                orderId
+            );
+            if (stepId) {
+                try {
+                    await clinicalService.updateStep(
+                        stepId,
+                        {
+                            room_id: editRoomId,
+                            ...(duty.staffId ? { staff_id: duty.staffId } : {}),
+                        },
+                        accessToken
+                    );
+                } catch (stepErr) {
+                    console.warn(
+                        'Updated service-order room but failed to sync flow step',
+                        stepErr
+                    );
+                }
+            }
+
+            // Optimistic: bảng hiện phòng mới ngay (không chờ flow cũ ghi đè)
+            setRawOrders((prev) =>
+                prev.map((o) => {
+                    if (getServiceOrderId(o) !== orderId) return o;
+                    return {
+                        ...o,
+                        room_id: editRoomId,
+                        room_name: room.room_name,
+                        room_info: {
+                            room_id: editRoomId,
+                            room_name: room.room_name,
+                        },
+                        ...(duty.staffId
+                            ? {
+                                assign_by_staff_id: duty.staffId,
+                                staff_name: duty.staffName || o.staff_name,
+                            }
+                            : {}),
+                        status: editStatus,
+                    };
+                })
+            );
+
             setEditingOrder(null);
-            onFlowChanged?.(flowSnapshot);
+            onFlowChanged?.(linkedFlow || flowSnapshot);
             await loadPendingOrders({ silent: true });
         } catch (err) {
             setFormError(err instanceof Error ? err.message : 'Không thể cập nhật chỉ định.');
@@ -727,22 +1172,61 @@ export function ParaclinicalOrdersTab({
 
     const handleDeleteIndication = async (order: ServiceOrderCard) => {
         if (!accessToken) return;
+        // Chỉ chặn theo payment_status / is_payment — không dùng status lâm sàng
+        if (isPaymentCompleted(order.payment_status)) {
+            setError('Không thể xóa chỉ định đã thanh toán thành công.');
+            return;
+        }
         const ok = window.confirm(`Hủy chỉ định "${order.name}"?`);
         if (!ok) return;
 
-        setDeletingId(order.service_order_id);
+        const orderId = order.service_order_id;
+        setDeletingId(orderId);
         setError(null);
         try {
-            try {
-                await serviceOrderService.updateOrder(
-                    order.service_order_id,
-                    { status: 'CANCELLED' },
-                    accessToken
-                );
-            } catch {
-                await serviceOrderService.deleteOrder(order.service_order_id, accessToken);
+            let latestFlow = flowSnapshot || linkedFlow;
+            const flowObj =
+                latestFlow ||
+                (await resolvePatientFlow(accessToken, {
+                    flowId: patient.flowId,
+                    patientId,
+                    bookingId: patient.bookingId || resolvedBookingId,
+                }).catch(() => null));
+
+            // 1) Hủy step trước — list giờ lấy id từ flow; step CANCELLED sẽ không còn load lại
+            const stepId = findStepIdByServiceOrderId(flowObj, orderId);
+            if (stepId) {
+                try {
+                    await clinicalService.updateStepStatus(stepId, 'CANCELLED', accessToken);
+                } catch (stepErr) {
+                    console.warn('Failed to cancel linked step before delete', stepErr);
+                }
             }
-            onFlowChanged?.(flowSnapshot);
+
+            // 2) DELETE service-order
+            try {
+                await serviceOrderService.deleteOrder(orderId, accessToken);
+            } catch (delErr) {
+                const status =
+                    delErr && typeof delErr === 'object' && 'statusCode' in delErr
+                        ? Number((delErr as { statusCode?: number }).statusCode)
+                        : 0;
+                if (status !== 404) throw delErr;
+            }
+
+            setRawOrders((prev) =>
+                prev.filter((o) => getServiceOrderId(o) !== orderId)
+            );
+
+            latestFlow =
+                (await resolvePatientFlow(accessToken, {
+                    flowId: patient.flowId,
+                    patientId,
+                    bookingId: patient.bookingId || resolvedBookingId,
+                }).catch(() => flowObj)) || flowObj;
+            if (latestFlow) setLinkedFlow(latestFlow);
+
+            onFlowChanged?.(latestFlow);
             await loadPendingOrders({ silent: true });
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Không thể hủy chỉ định dịch vụ.');
@@ -766,112 +1250,146 @@ export function ParaclinicalOrdersTab({
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-neutral-600">
-                    <Microscope className="w-4 h-4 text-[#8B7CF6]" />
-                    <span className="text-xs font-bold uppercase tracking-wide">
-                        Service order của lượt khám ({orders.length})
-                    </span>
-                </div>
-                <button
-                    type="button"
-                    onClick={() => {
-                        setFormError(null);
-                        setIsAddOpen(true);
-                    }}
-                    className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full bg-[#F5F2FF] text-[#6D5DE5] border border-[#DED7FF] hover:bg-[#EDE8FF]"
-                >
-                    <Plus className="w-3.5 h-3.5" />
-                    Thêm chỉ định
-                </button>
-            </div>
-
-            {error && (
-                <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-100 text-xs text-red-700">
-                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                    <span>{error}</span>
-                </div>
-            )}
-
-            {orders.length === 0 ? (
-                <div className="bg-white rounded-2xl border border-[#EBEBEB] p-8 text-center text-sm text-neutral-500">
-                    Chưa có service order. Bấm &quot;Thêm chỉ định&quot; để tạo qua API service-order.
-                </div>
-            ) : (
-                orders.map((order) => {
-                    const meta = stepStatusMeta(order.status);
-                    const isDeleting = deletingId === order.service_order_id;
-                    return (
-                        <div
-                            key={order.service_order_id}
-                            className="bg-white rounded-2xl border border-[#EBEBEB] p-5"
+            <div className="bg-white rounded-2xl border border-[#EBEBEB] shadow-[0_2px_12px_rgba(0,0,0,0.03)] overflow-hidden">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 px-5 pt-5 pb-4">
+                    <div>
+                        <h3 className="text-[15px] font-bold text-[#2D2D2D] tracking-tight">
+                            {panelTitle}
+                        </h3>
+                        <p className="text-[12px] text-neutral-400 font-medium mt-1">
+                            {copy.countLabel(orders.length)}
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <button
+                            type="button"
+                            title="In chỉ định"
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-neutral-200 bg-white text-[12px] font-bold text-neutral-700 hover:bg-neutral-50 transition-colors cursor-pointer"
                         >
-                            <div className="flex items-start justify-between flex-wrap gap-2">
-                                <div className="min-w-0 flex-1">
-                                    <h4 className="text-[13px] font-bold text-[#2D2D2D]">
-                                        {order.name}
-                                    </h4>
-                                    <p className="text-[11px] text-[#6B7280] mt-1">
-                                        <span className="font-semibold text-neutral-500">Phòng khám:</span>{' '}
-                                        {order.room_name || 'Chưa gán phòng'}
-                                    </p>
-                                    <p className="text-[11px] text-[#6B7280] mt-0.5">
-                                        <span className="font-semibold text-neutral-500">Bác sĩ chỉ định:</span>{' '}
-                                        {order.assign_doctor_name || 'Chưa xác định'}
-                                    </p>
-                                    <p className="text-[11px] text-[#6B7280] mt-0.5">
-                                        <span className="font-semibold text-neutral-500">Bác sĩ đang trực:</span>{' '}
-                                        {order.on_duty_doctor_name || 'Chưa có bác sĩ trực'}
-                                    </p>
-                                    <p className="text-[11px] text-[#9C9C9C] mt-1">
-                                        {[
-                                            order.order_name !== order.name ? order.order_name : null,
-                                            order.service_code,
-                                            typeof order.total_price === 'number'
-                                                ? `${order.total_price.toLocaleString('vi-VN')}đ`
-                                                : null,
-                                        ]
-                                            .filter(Boolean)
-                                            .join(' · ')}
-                                    </p>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                    <span
-                                        className={cn(
-                                            'text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider border',
-                                            meta.className
-                                        )}
-                                    >
-                                        {meta.label}
-                                    </span>
-                                    <button
-                                        type="button"
-                                        title="Sửa chỉ định"
-                                        onClick={() => openEdit(order)}
-                                        disabled={isDeleting}
-                                        className="p-1.5 rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
-                                    >
-                                        <Pencil className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                        type="button"
-                                        title="Hủy chỉ định"
-                                        onClick={() => void handleDeleteIndication(order)}
-                                        disabled={isDeleting}
-                                        className="p-1.5 rounded-lg border border-red-100 text-red-600 hover:bg-red-50 disabled:opacity-50"
-                                    >
-                                        {isDeleting ? (
-                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                        ) : (
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        )}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })
-            )}
+                            <Printer className="w-3.5 h-3.5" />
+                            {copy.printLabel}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setFormError(null);
+                                setIsAddOpen(true);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#8B7CF6] hover:bg-[#7a6ae5] text-white text-[12px] font-bold transition-colors cursor-pointer shadow-sm"
+                        >
+                            <Plus className="w-3.5 h-3.5" />
+                            Thêm chỉ định
+                        </button>
+                    </div>
+                </div>
+
+                {error && (
+                    <div className="mx-5 mb-4 flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-100 text-xs text-red-700">
+                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                        <span>{error}</span>
+                    </div>
+                )}
+
+                {orders.length === 0 ? (
+                    <div className="px-5 pb-8 text-center text-sm text-neutral-500">
+                        {copy.emptyHint}
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-160 text-left border-collapse">
+                            <thead>
+                                <tr className="bg-[#F7F7F8] border-y border-[#ECECEE]">
+                                    <th className="px-5 py-3 text-[11px] font-bold text-neutral-500">
+                                        {copy.nameColumn}
+                                    </th>
+                                    <th className="px-4 py-3 text-[11px] font-bold text-neutral-500">
+                                        Phòng thực hiện
+                                    </th>
+                                    <th className="px-4 py-3 text-[11px] font-bold text-neutral-500">
+                                        Bác sĩ trực
+                                    </th>
+                                    <th className="px-4 py-3 text-[11px] font-bold text-neutral-500">
+                                        Trạng thái
+                                    </th>
+                                    <th className="px-4 py-3 text-[11px] font-bold text-neutral-500 text-right w-22">
+                                        {/* actions */}
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {orders.map((order) => {
+                                    const meta = stepStatusMeta(order.status);
+                                    const isDeleting = deletingId === order.service_order_id;
+                                    const paid = isPaymentCompleted(order.payment_status);
+                                    return (
+                                        <tr
+                                            key={order.service_order_id}
+                                            className="border-b border-[#F0F0F2] last:border-b-0 hover:bg-neutral-50/60 transition-colors"
+                                        >
+                                            <td className="px-5 py-3.5">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openEdit(order)}
+                                                    className="text-left text-[13px] font-bold text-[#2D2D2D] hover:text-[#6D5DE5] transition-colors cursor-pointer"
+                                                >
+                                                    {order.name}
+                                                </button>
+                                            </td>
+                                            <td className="px-4 py-3.5 text-[12px] text-neutral-600 font-medium">
+                                                {order.room_name || 'Chưa gán phòng'}
+                                            </td>
+                                            <td className="px-4 py-3.5 text-[12px] text-neutral-600 font-medium">
+                                                {order.on_duty_doctor_name || 'Chưa có bác sĩ trực'}
+                                            </td>
+                                            <td className="px-4 py-3.5">
+                                                <span
+                                                    className={cn(
+                                                        'inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full',
+                                                        meta.className
+                                                    )}
+                                                >
+                                                    <Circle className="w-1.5 h-1.5 fill-current" />
+                                                    {meta.label}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3.5">
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <button
+                                                        type="button"
+                                                        title="Sửa chỉ định"
+                                                        onClick={() => openEdit(order)}
+                                                        disabled={isDeleting}
+                                                        className="p-1.5 rounded-lg text-neutral-400 hover:text-[#8B7CF6] hover:bg-[#F5F2FF] disabled:opacity-50 cursor-pointer transition-colors"
+                                                    >
+                                                        <Pencil className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        title={
+                                                            paid
+                                                                ? 'Không thể xóa chỉ định đã thanh toán'
+                                                                : 'Hủy chỉ định'
+                                                        }
+                                                        onClick={() => void handleDeleteIndication(order)}
+                                                        disabled={isDeleting || paid}
+                                                        className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-neutral-400 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                                                    >
+                                                        {isDeleting ? (
+                                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                        ) : (
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
 
             {isAddOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -902,16 +1420,20 @@ export function ParaclinicalOrdersTab({
                                     className="w-full border border-neutral-200 rounded-xl px-3 py-2.5 text-sm font-medium bg-white"
                                 >
                                     <option value="">Chọn dịch vụ</option>
-                                    {catalog.map((svc) => {
+                                    {filteredCatalog.map((svc) => {
                                         const id = getServiceId(svc);
                                         return (
                                             <option key={id} value={id}>
                                                 {svc.service_name}
-                                                {svc.service_code ? ` (${svc.service_code})` : ''}
                                             </option>
                                         );
                                     })}
                                 </select>
+                                {filteredCatalog.length === 0 && (
+                                    <p className="text-[11px] text-amber-600 mt-1.5">
+                                        Không có dịch vụ thuộc nhóm này trong danh mục.
+                                    </p>
+                                )}
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
@@ -995,9 +1517,6 @@ export function ParaclinicalOrdersTab({
                                 </label>
                                 <p className="text-sm font-semibold text-neutral-800">
                                     {editingOrder.name}
-                                    {editingOrder.service_code
-                                        ? ` (${editingOrder.service_code})`
-                                        : ''}
                                 </p>
                             </div>
                             <div>

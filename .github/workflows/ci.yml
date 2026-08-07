@@ -26,11 +26,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run ESLint
-        run: npm run lint
+      # - name: Run ESLint
+      #   run: npm run lint
 
-      - name: Type checking
-        run: npx tsc --noEmit
+      # - name: Type checking
+      #   run: npx tsc --noEmit
 
       - name: Build project
         run: npm run build

@@ -9,7 +9,6 @@ import {
     Shield,
     FlaskConical,
     Pill,
-    CreditCard,
     UserCheck,
     ShieldCheck,
     Loader2,
@@ -32,14 +31,32 @@ import { getCompactPages } from '../utils/pagination';
 
 const ROLE_CONFIG: Record<string, { label: string; color: string; bg: string; border: string; icon: React.ElementType }> = {
     DOCTOR: { label: 'Bác sĩ', color: 'text-[#1E78FF]', bg: 'bg-[#E8F1FF]', border: 'border-[#D0E2FF]', icon: Stethoscope },
-    NURSE: { label: 'Y tá', color: 'text-[#8B7CF6]', bg: 'bg-[#F5F2FF]', border: 'border-[#E0DCFB]', icon: Shield },
+    NURSE: { label: 'Y tá / Điều dưỡng', color: 'text-[#8B7CF6]', bg: 'bg-[#F5F2FF]', border: 'border-[#E0DCFB]', icon: Shield },
     RECEPTIONIST: { label: 'Lễ tân', color: 'text-[#00ACC1]', bg: 'bg-[#E0F7FA]', border: 'border-[#B2EBF2]', icon: UserCheck },
-    LAB_STAFF: { label: 'Xét nghiệm', color: 'text-[#D81B60]', bg: 'bg-[#FCE4EC]', border: 'border-[#F8BBD0]', icon: FlaskConical },
-    PHARMACY_STAFF: { label: 'Dược sĩ', color: 'text-[#43A047]', bg: 'bg-[#E8F5E9]', border: 'border-[#C8E6C9]', icon: Pill },
-    CASHIER: { label: 'Thu ngân', color: 'text-[#FFB300]', bg: 'bg-[#FFF8E1]', border: 'border-[#FFE082]', icon: CreditCard },
+    LAB_TECHNICIAN: { label: 'Kỹ thuật viên XN', color: 'text-[#D81B60]', bg: 'bg-[#FCE4EC]', border: 'border-[#F8BBD0]', icon: FlaskConical },
+    PHARMACIST: { label: 'Dược sĩ', color: 'text-[#43A047]', bg: 'bg-[#E8F5E9]', border: 'border-[#C8E6C9]', icon: Pill },
     ADMIN: { label: 'Quản trị', color: 'text-[#E53935]', bg: 'bg-[#FFEBEE]', border: 'border-[#FFCDD2]', icon: ShieldCheck },
     USER: { label: 'Bệnh nhân', color: 'text-[#10B981]', bg: 'bg-[#E8F9EE]', border: 'border-[#C6F6D5]', icon: UserIcon },
 };
+
+/** Thứ tự hiển thị theo role — role lạ đẩy xuống cuối. */
+const ROLE_SORT_ORDER = [
+    'ADMIN',
+    'DOCTOR',
+    'LAB_TECHNICIAN',
+    'PHARMACIST',
+    'NURSE',
+    'RECEPTIONIST',
+    'USER',
+] as const;
+
+const getRoleSortIndex = (role?: string) => {
+    const idx = ROLE_SORT_ORDER.indexOf((role || '').toUpperCase() as (typeof ROLE_SORT_ORDER)[number]);
+    return idx === -1 ? ROLE_SORT_ORDER.length : idx;
+};
+
+const getAccountDisplayName = (account: { profile?: { user_name?: string } | null; user_name?: string; email?: string }) =>
+    (account.profile?.user_name || account.user_name || account.email || '').trim();
 
 const formatDate = (dateStr: string) => {
     if (!dateStr) return '';
@@ -152,24 +169,32 @@ export function AdminUsersPage() {
         }
     };
 
-    const filtered = accounts.filter((s) => {
-        const name = s.profile?.user_name || s.user_name || '';
-        const email = s.email || '';
-        const matchesSearch =
-            name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            email.toLowerCase().includes(searchQuery.toLowerCase());
+    const filtered = accounts
+        .filter((s) => {
+            const name = getAccountDisplayName(s);
+            const email = s.email || '';
+            const matchesSearch =
+                name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                email.toLowerCase().includes(searchQuery.toLowerCase());
 
-        const matchesRole = roleFilter === 'ALL' || s.role === roleFilter;
+            const matchesRole = roleFilter === 'ALL' || s.role === roleFilter;
 
-        let matchesStatus = true;
-        if (statusFilter === 'ACTIVE') {
-            matchesStatus = !s.isBanned;
-        } else if (statusFilter === 'BANNED') {
-            matchesStatus = s.isBanned;
-        }
+            let matchesStatus = true;
+            if (statusFilter === 'ACTIVE') {
+                matchesStatus = !s.isBanned;
+            } else if (statusFilter === 'BANNED') {
+                matchesStatus = s.isBanned;
+            }
 
-        return matchesSearch && matchesRole && matchesStatus;
-    });
+            return matchesSearch && matchesRole && matchesStatus;
+        })
+        .toSorted((a, b) => {
+            const roleDiff = getRoleSortIndex(a.role) - getRoleSortIndex(b.role);
+            if (roleDiff !== 0) return roleDiff;
+            return getAccountDisplayName(a).localeCompare(getAccountDisplayName(b), 'vi', {
+                sensitivity: 'base',
+            });
+        });
 
     const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
     const paginatedAccounts = filtered.slice(
@@ -234,13 +259,12 @@ export function AdminUsersPage() {
                                         className="w-full text-xs text-[#2D2D2D] border border-neutral-200 rounded-xl px-3 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold"
                                     >
                                         <option value="ALL">Tất cả</option>
+                                        <option value="ADMIN">Quản trị</option>
                                         <option value="DOCTOR">Bác sĩ</option>
+                                        <option value="LAB_TECHNICIAN">Kỹ thuật viên XN</option>
+                                        <option value="PHARMACIST">Dược sĩ</option>
                                         <option value="NURSE">Y tá / Điều dưỡng</option>
                                         <option value="RECEPTIONIST">Lễ tân</option>
-                                        <option value="LAB_STAFF">Xét nghiệm</option>
-                                        <option value="PHARMACY_STAFF">Dược sĩ</option>
-                                        <option value="CASHIER">Thu ngân</option>
-                                        <option value="ADMIN">Quản trị</option>
                                         <option value="USER">Bệnh nhân</option>
                                     </select>
                                 </div>

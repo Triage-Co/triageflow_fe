@@ -14,7 +14,12 @@ import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/modules/auth/store/authStore';
 import { ROOM_TYPE_OPTIONS } from '../types/process.types';
 import type { CatalogService, CreateServiceReqDto } from '../types/service.types';
-import { getServiceId } from '../types/service.types';
+import {
+    SERVICE_TYPE_OPTIONS,
+    defaultServiceTypeForRoom,
+    getServiceId,
+    serviceTypeLabel,
+} from '../types/service.types';
 import {
     extractServiceList,
     serviceCatalogService,
@@ -27,10 +32,11 @@ const EMPTY_FORM: CreateServiceReqDto = {
     service_code: '',
     service_name: '',
     price: 0,
+    service_type: 'DIAGNOSTIC_TEST',
     room_type: 'LABORATORY',
 };
 
-function roomTypeLabel(value?: string): string {
+function roomTypeLabel(value?: string | null): string {
     if (!value) return '—';
     return ROOM_TYPE_OPTIONS.find((o) => o.value === value)?.label || value;
 }
@@ -107,6 +113,10 @@ export function AdminServicesPage() {
             service_code: service.service_code || '',
             service_name: service.service_name || '',
             price: Number(service.price) || 0,
+            service_type:
+                service.service_type ||
+                defaultServiceTypeForRoom(service.room_type) ||
+                'CLINICAL_EXAMINATION',
             room_type: service.room_type || 'OTHER',
         });
         setFormActive(service.is_active !== false);
@@ -125,6 +135,10 @@ export function AdminServicesPage() {
             setFormError('Giá dịch vụ không hợp lệ.');
             return;
         }
+        if (!form.service_type) {
+            setFormError('Vui lòng chọn loại dịch vụ.');
+            return;
+        }
 
         setIsSaving(true);
         setFormError(null);
@@ -138,6 +152,7 @@ export function AdminServicesPage() {
                         service_code: form.service_code?.trim() || undefined,
                         service_name: name,
                         price: form.price,
+                        service_type: form.service_type,
                         room_type: form.room_type || undefined,
                         is_active: formActive,
                     },
@@ -149,6 +164,7 @@ export function AdminServicesPage() {
                         service_code: form.service_code?.trim() || undefined,
                         service_name: name,
                         price: form.price,
+                        service_type: form.service_type,
                         room_type: form.room_type || undefined,
                     },
                     accessToken
@@ -240,6 +256,7 @@ export function AdminServicesPage() {
                                 <th className="px-4 py-3">Mã</th>
                                 <th className="px-4 py-3">Tên dịch vụ</th>
                                 <th className="px-4 py-3 text-right">Giá</th>
+                                <th className="px-4 py-3">Loại dịch vụ</th>
                                 <th className="px-4 py-3">Loại phòng</th>
                                 <th className="px-4 py-3">Trạng thái</th>
                                 <th className="px-4 py-3 text-right">Thao tác</th>
@@ -259,6 +276,9 @@ export function AdminServicesPage() {
                                         </td>
                                         <td className="px-4 py-3 text-right font-medium">
                                             {Number(service.price || 0).toLocaleString('vi-VN')}₫
+                                        </td>
+                                        <td className="px-4 py-3 text-neutral-600">
+                                            {serviceTypeLabel(service.service_type)}
                                         </td>
                                         <td className="px-4 py-3 text-neutral-600">
                                             {roomTypeLabel(service.room_type)}
@@ -421,21 +441,46 @@ export function AdminServicesPage() {
                                     />
                                 </div>
                             </div>
-                            <div>
-                                <label className="text-xs font-bold text-neutral-500 uppercase block mb-1">
-                                    Loại phòng
-                                </label>
-                                <select
-                                    value={form.room_type || 'OTHER'}
-                                    onChange={(e) => setForm((f) => ({ ...f, room_type: e.target.value }))}
-                                    className="w-full border border-neutral-200 rounded-xl px-3 py-2.5 text-sm font-medium bg-white"
-                                >
-                                    {ROOM_TYPE_OPTIONS.map((opt) => (
-                                        <option key={opt.value} value={opt.value}>
-                                            {opt.label}
-                                        </option>
-                                    ))}
-                                </select>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs font-bold text-neutral-500 uppercase block mb-1">
+                                        Loại dịch vụ *
+                                    </label>
+                                    <select
+                                        value={form.service_type || ''}
+                                        onChange={(e) =>
+                                            setForm((f) => ({
+                                                ...f,
+                                                service_type: e.target.value,
+                                            }))
+                                        }
+                                        className="w-full border border-neutral-200 rounded-xl px-3 py-2.5 text-sm font-medium bg-white"
+                                    >
+                                        {SERVICE_TYPE_OPTIONS.map((opt) => (
+                                            <option key={opt.value} value={opt.value}>
+                                                {opt.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-neutral-500 uppercase block mb-1">
+                                        Loại phòng
+                                    </label>
+                                    <select
+                                        value={form.room_type || 'OTHER'}
+                                        onChange={(e) =>
+                                            setForm((f) => ({ ...f, room_type: e.target.value }))
+                                        }
+                                        className="w-full border border-neutral-200 rounded-xl px-3 py-2.5 text-sm font-medium bg-white"
+                                    >
+                                        {ROOM_TYPE_OPTIONS.map((opt) => (
+                                            <option key={opt.value} value={opt.value}>
+                                                {opt.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
                             {editing && (
                                 <label className="flex items-center gap-2 text-sm font-medium text-neutral-700">
