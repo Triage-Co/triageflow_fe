@@ -42,7 +42,6 @@ interface NavItem {
 const NAV_BY_ROLE: Record<string, NavItem[]> = {
     DOCTOR: [
         { label: 'Danh sách bệnh nhân', href: '/doctor', icon: LayoutDashboard },
-        { label: 'Tiếp nhận khám', href: '/lab', icon: FlaskConical },
         { label: 'Thanh toán', href: '/cashier', icon: CreditCard },
         { label: 'Thông báo', href: '/doctor/notification', icon: Bell },
         { label: 'Cài đặt', href: '/doctor/setting', icon: Settings },
@@ -61,13 +60,11 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
         { label: 'Cài đặt', href: '/settings', icon: Settings },
     ],
     LAB_STAFF: [
-        { label: 'Tiếp Nhận Khám', href: '/lab', icon: UserCheck },
         { label: 'Danh Sách Bệnh Nhân', href: '/lab/patients', icon: LayoutDashboard },
         { label: 'Thông báo', href: '/lab/notification', icon: Bell },
         { label: 'Cài đặt', href: '/settings', icon: Settings },
     ],
     LAB_TECHNICIAN: [
-        { label: 'Tiếp Nhận Khám', href: '/lab', icon: UserCheck },
         { label: 'Danh Sách Bệnh Nhân', href: '/lab/patients', icon: LayoutDashboard },
         { label: 'Thông báo', href: '/lab/notification', icon: Bell },
         { label: 'Cài đặt', href: '/settings', icon: Settings },
