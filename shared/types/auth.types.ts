@@ -95,5 +95,5 @@ export interface ForgotPasswordRequest {
 export interface ForgotPasswordVerifyRequest {
     email: string;
     otp: string;
-    password: string;
+    new_password: string;
 }
