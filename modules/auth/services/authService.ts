@@ -54,4 +54,8 @@ export const authService = {
     /** Verify OTP and reset password */
     forgotPasswordVerify: (data: ForgotPasswordVerifyRequest) =>
         apiClient.post<null>('/api/auth/forgot/verify', data),
+
+    /** Log out user on server */
+    logout: (token: string) =>
+        apiClient.post<null>('/api/auth/logout', { token }),
 };

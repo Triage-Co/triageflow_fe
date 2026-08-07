@@ -12,6 +12,7 @@ import {
     BellRing,
     MessageSquare,
     Save,
+    AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -112,8 +113,16 @@ export function AdminSettingsPage() {
                                 <p className="text-[13px] text-[#7B7B7B] mt-1 font-medium">
                                     Quản lý cấu hình chung cho hệ thống TriageFlowOPD.
                                 </p>
+                                <p className="flex items-center gap-1.5 text-[11px] text-amber-600 font-bold mt-2">
+                                    <AlertTriangle className="w-3.5 h-3.5" />
+                                    Chưa kết nối API
+                                </p>
                             </div>
-                            <button className="flex items-center gap-2 px-4 py-2.5 bg-brand-500 text-white text-[13px] font-bold rounded-xl hover:bg-brand-600 transition-colors shadow-sm shrink-0 cursor-pointer">
+                            <button
+                                disabled
+                                title="Chưa kết nối API"
+                                className="flex items-center gap-2 px-4 py-2.5 bg-neutral-200 text-neutral-400 text-[13px] font-bold rounded-xl shrink-0 cursor-not-allowed"
+                            >
                                 <Save className="w-4 h-4" />
                                 Lưu thay đổi
                             </button>

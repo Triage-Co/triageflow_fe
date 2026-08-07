@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import {
   Eye,
@@ -20,6 +21,7 @@ import {
   Trash2,
   Save,
   Waypoints,
+  Flame,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -58,6 +60,7 @@ import {
 } from './GeometryEditorPanel';
 import { snapPoint } from '../utils/mapEditorSnap';
 import type { LngLat } from '../utils/mapEditorGeometry';
+import { CONGESTION_STYLES, useQueueHeatmap } from '../hooks/useQueueHeatmap';
 
 type MapMode = 'watch' | 'edit';
 type EditTab = 'geometry' | 'nodes';
@@ -87,8 +90,10 @@ const DEBUG_STEPS = [
 
 export function AdminMapPage() {
   const accessToken = useAuthStore((s) => s.accessToken);
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<MapMode>('watch');
   const [editTab, setEditTab] = useState<EditTab>('geometry');
+  const [heatmapEnabled, setHeatmapEnabled] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [startRoomId, setStartRoomId] = useState<string>('');
   const [targetRoomId, setTargetRoomId] = useState<string>('');
@@ -227,6 +232,22 @@ export function AdminMapPage() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get('heatmap') === '1') setHeatmapEnabled(true);
+  }, [searchParams]);
+
+  // Overlay is read-only info — auto-disable while editing to avoid confusing the geometry/node editor.
+  useEffect(() => {
+    if (mode === 'edit') setHeatmapEnabled(false);
+  }, [mode]);
+
+  const heatmap = useQueueHeatmap(heatmapEnabled && mode === 'watch', accessToken);
+
+  const sortedHeatmapRooms = useMemo(
+    () => [...heatmap.rooms].sort((a, b) => b.waiting_count - a.waiting_count),
+    [heatmap.rooms]
+  );
 
   useEffect(() => {
     if (!isFullscreen) return;
@@ -832,6 +853,22 @@ export function AdminMapPage() {
         </button>
       </div>
 
+      {mode === 'watch' && (
+        <button
+          type="button"
+          onClick={() => setHeatmapEnabled((v) => !v)}
+          className={cn(
+            'flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-colors cursor-pointer whitespace-nowrap',
+            heatmapEnabled
+              ? 'bg-red-500 border-red-500 text-white'
+              : 'bg-white border-[#EBEBEB] text-[#2D2D2D] hover:bg-[#F8F8FB]',
+          )}
+        >
+          <Flame className="w-3.5 h-3.5" />
+          Heatmap
+        </button>
+      )}
+
       <button
         type="button"
         onClick={() => setIsFullscreen((v) => !v)}
@@ -1285,6 +1322,72 @@ export function AdminMapPage() {
     </div>
   );
 
+  const heatmapPanel = heatmapEnabled && mode === 'watch' && (
+    <div className="absolute bottom-4 right-4 z-20 pointer-events-auto w-[260px]">
+      <div className="rounded-xl border border-[#EBEBEB] bg-white/95 backdrop-blur-md shadow-md p-3 flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-red-50 text-red-500 flex items-center justify-center shrink-0">
+              <Flame className="w-3.5 h-3.5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-extrabold text-[#2D2D2D] truncate">Mật độ hàng chờ</p>
+              {heatmap.generatedAt && (
+                <p className="text-[9px] font-semibold text-[#9C9C9C] truncate">
+                  Cập nhật {new Date(heatmap.generatedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              )}
+            </div>
+          </div>
+          {heatmap.isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-[#8B7CF6] shrink-0" />}
+        </div>
+
+        <div className="flex items-center gap-3">
+          {(Object.keys(CONGESTION_STYLES) as (keyof typeof CONGESTION_STYLES)[]).map((lvl) => (
+            <div key={lvl} className="flex items-center gap-1">
+              <span className={cn('w-2 h-2 rounded-full', CONGESTION_STYLES[lvl].dot)} />
+              <span className="text-[9px] font-bold text-[#7B7B7B]">{CONGESTION_STYLES[lvl].label}</span>
+            </div>
+          ))}
+        </div>
+
+        {heatmap.error && (
+          <p className="text-[10px] font-semibold text-rose-600 bg-rose-50 rounded-lg px-2 py-1.5">{heatmap.error}</p>
+        )}
+
+        <div className="max-h-[32vh] overflow-y-auto space-y-1.5 pr-0.5">
+          {!heatmap.isLoading && !heatmap.error && sortedHeatmapRooms.length === 0 && (
+            <p className="text-[10px] text-[#9C9C9C] font-semibold">Chưa có dữ liệu hàng chờ hôm nay.</p>
+          )}
+          {sortedHeatmapRooms.map((room) => {
+            const style = CONGESTION_STYLES[room.congestion_level];
+            return (
+              <div
+                key={room.room_id}
+                className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg bg-[#F8F8FB]"
+              >
+                <span className="text-[10px] font-bold text-[#2D2D2D] truncate flex-1" title={room.room_name}>
+                  {room.room_name}
+                </span>
+                <span className="text-[9px] font-bold text-[#7B7B7B] shrink-0 whitespace-nowrap">
+                  {room.waiting_count} chờ · {room.eta_full_queue_minutes}p
+                </span>
+                <span
+                  className={cn(
+                    'text-[9px] font-extrabold px-1.5 py-0.5 rounded-full border shrink-0',
+                    style?.badge || 'bg-neutral-50 text-neutral-500 border-neutral-200',
+                  )}
+                >
+                  {style?.label || room.congestion_level}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+
   const saveFab = nodeEditMode ? (
     <div className="absolute bottom-4 right-4 z-30 pointer-events-auto">
       <button
@@ -1381,6 +1484,7 @@ export function AdminMapPage() {
       </div>
 
       {roomInfoPopup}
+      {heatmapPanel}
       {saveFab}
     </div>
   );

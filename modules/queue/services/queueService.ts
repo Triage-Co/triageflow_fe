@@ -15,8 +15,8 @@ export const queueService = {
      * POST /api/queue/call-next
      *
      * Doctor calls the next PENDING queue for this step/room/staff.
-     * Backend marks queue CALLING, finds next waiting (≤5), broadcasts
-     * `doctor_queue_updated` to TV, and returns:
+     * Backend marks queue SERVING, returns up to 7 upcoming, broadcasts
+     * `onQueueUpdate` to TV room display, and returns:
      * { room_info, current_patient, upcoming_patients }
      *
      * current_patient must not appear in upcoming_patients.

@@ -12,7 +12,7 @@ interface EMRWorkspaceLayoutProps {
 
 export function EMRWorkspaceLayout({ activeTabId, activeTabName, children }: EMRWorkspaceLayoutProps) {
     const user = useAuthStore((s) => s.user);
-    const isLabRole = user?.role === 'LAB_TECHNICIAN' || user?.role === 'LAB_STAFF';
+    const isLabRole = user?.role === 'LAB_TECHNICIAN';
     const isPharmacyRole = user?.role === 'PHARMACIST' || user?.role === 'PHARMACY_STAFF';
 
     const hideHeaderIds = [

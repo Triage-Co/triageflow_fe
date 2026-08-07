@@ -32,11 +32,8 @@ export type StaffRole =
     | 'DOCTOR'
     | 'NURSE'
     | 'RECEPTIONIST'
-    | 'LAB_STAFF'
     | 'LAB_TECHNICIAN'
-    | 'PHARMACY_STAFF'
     | 'PHARMACIST'
-    | 'CASHIER'
     | 'ADMIN';
 
 export interface RegisterRequest {
@@ -95,5 +92,5 @@ export interface ForgotPasswordRequest {
 export interface ForgotPasswordVerifyRequest {
     email: string;
     otp: string;
-    password: string;
+    new_password: string;
 }

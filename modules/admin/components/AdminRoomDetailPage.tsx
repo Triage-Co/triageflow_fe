@@ -25,6 +25,9 @@ import type { HospitalRoom, Specialty } from '../types/room.types';
 import type { Shift } from '../types/shift.types';
 import { roomService } from '../services/roomService';
 import { validateShiftAssignment, filterEligibleStaffForRoom } from '../utils/shiftValidation';
+import { RoomServicesPanel } from './RoomServicesPanel';
+import { serviceCatalogService, extractServiceList } from '../services/serviceCatalogService';
+import type { CatalogService } from '../types/service.types';
 
 /* ─── Role Badges Config ─────────────────────────────────────────────────── */
 
@@ -72,6 +75,7 @@ export function AdminRoomDetailPage() {
 
     const [room, setRoom] = useState<HospitalRoom | null>(null);
     const [isFetchingDetail, setIsFetchingDetail] = useState(false);
+    const [allServices, setAllServices] = useState<CatalogService[]>([]);
 
     // Shift Modal state
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -127,6 +131,14 @@ export function AdminRoomDetailPage() {
 
         fetchDetail();
     }, [accessToken, roomId, rooms]);
+
+    useEffect(() => {
+        if (!accessToken) return;
+        serviceCatalogService
+            .getServices(accessToken, { limit: 500 })
+            .then((res) => setAllServices(extractServiceList(res?.data)))
+            .catch(() => setAllServices([]));
+    }, [accessToken]);
 
     /* ── Lookup Helper ── */
     const isStaffsLoading = useStaffStore((s) => s.isLoading);
@@ -527,6 +539,13 @@ export function AdminRoomDetailPage() {
                                 </div>
                             </div>
                         </div>
+
+                        <RoomServicesPanel
+                            roomId={room.room_id}
+                            roomName={room.room_name}
+                            allServices={allServices}
+                            accessToken={accessToken}
+                        />
 
                     </div>
                 </div>

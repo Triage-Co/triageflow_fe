@@ -183,22 +183,30 @@ triageflow_fe/
 │   │   └── store/
 │   │       └── clinicalStore.ts
 │   │
-│   ├── ancillary/                    # ── Lab & Pharmacy Workflow ──
+│   ├── ancillary/                    # ── Pharmacy Workflow ──
 │   │   ├── components/
-│   │   │   ├── LabWorklist.tsx       # Lab technician worklist
-│   │   │   ├── ResultUpload.tsx      # Upload lab results
 │   │   │   ├── PharmacyQueue.tsx     # Pharmacy dispensing queue
 │   │   │   └── MedicationDispense.tsx # QR-verified dispensing
 │   │   ├── hooks/
-│   │   │   ├── useLab.ts
 │   │   │   └── usePharmacy.ts
 │   │   ├── services/
-│   │   │   ├── labService.ts
 │   │   │   └── pharmacyService.ts
 │   │   ├── types/
 │   │   │   └── ancillary.types.ts
 │   │   └── store/
 │   │       └── ancillaryStore.ts
+│   │
+│   ├── lab/                          # ── Lab Workflow ──
+│   │   ├── components/
+│   │   │   ├── LabWorklist.tsx       # Lab technician worklist
+│   │   │   └── ResultUpload.tsx      # Upload lab results
+│   │   ├── hooks/
+│   │   │   └── useLab.ts
+│   │   ├── services/
+│   │   │   └── labService.ts
+│   │   └── store/
+│   │       └── labStore.ts
+│   │
 │   │
 │   ├── reception/                    # ── Receptionist Workflow ──
 │   │   ├── components/
@@ -419,7 +427,8 @@ import { Button, Input, Card } from '@/shared/components/ui';
 | `payment` | `(patient)/payment`, `(staff)/cashier` | UC-04, UC-08: Payments |
 | `navigation` | `(patient)/navigation` | UC-05: Wayfinding |
 | `clinical` | `(staff)/doctor/[visitId]` | UC-11/12/13: Clinical workflow |
-| `ancillary` | `(staff)/lab`, `(staff)/pharmacy` | UC-14/16: Lab & Pharmacy |
+| `ancillary` | `(staff)/pharmacy` | UC-16: Pharmacy |
+| `lab` | `(staff)/lab` | UC-14: Lab service completion |
 | `reception` | `(staff)/reception` | UC-06/07/10: Reception workflow |
 | `cashier` | `(staff)/cashier` | UC-08/09: Cash & Refund |
 | `admin` | `(admin)/*` | UC-17/18: Monitoring & Config |

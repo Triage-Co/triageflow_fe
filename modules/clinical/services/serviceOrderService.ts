@@ -22,6 +22,158 @@ export function extractServiceOrderList(raw: unknown): ServiceOrder[] {
     return [];
 }
 
+function unwrapOrderRecord(raw: unknown): Record<string, unknown> | null {
+    const root = asRecord(raw);
+    if (!root) return null;
+    const nested = asRecord(root.data);
+    if (
+        nested &&
+        (typeof nested.service_order_id === 'string' ||
+            typeof nested.id === 'string' ||
+            typeof nested.name === 'string')
+    ) {
+        return nested;
+    }
+    if (
+        typeof root.service_order_id === 'string' ||
+        typeof root.id === 'string' ||
+        typeof root.name === 'string'
+    ) {
+        return root;
+    }
+    return nested || root;
+}
+
+/** Normalize GET /api/service-order/{id} payload → ServiceOrder */
+export function normalizeDetailServiceOrder(raw: unknown): ServiceOrder | null {
+    const rec = unwrapOrderRecord(raw);
+    if (!rec) return null;
+    const id = String(rec.service_order_id || rec.id || '').trim();
+    if (!id) return null;
+
+    const roomInfo = asRecord(rec.room_info);
+    const roomId =
+        (typeof rec.room_id === 'string' && rec.room_id.trim()) ||
+        (typeof roomInfo?.room_id === 'string' && roomInfo.room_id.trim()) ||
+        '';
+    const roomName =
+        (typeof rec.room_name === 'string' && rec.room_name.trim()) ||
+        (typeof roomInfo?.room_name === 'string' && roomInfo.room_name.trim()) ||
+        '';
+
+    const paymentRaw = String(rec.payment_status || rec.is_payment || rec.status || '')
+        .trim()
+        .toUpperCase();
+    const specialtyInfo = asRecord(rec.specialty_info);
+    const staffInfo = asRecord(rec.staff_info) || asRecord(rec.assign_by_staff);
+    const staffName =
+        (typeof rec.staff_name === 'string' && rec.staff_name.trim()) ||
+        (typeof staffInfo?.full_name === 'string' && staffInfo.full_name.trim()) ||
+        (typeof staffInfo?.user_name === 'string' && staffInfo.user_name.trim()) ||
+        '';
+
+    const details = Array.isArray(rec.serviceOrderDetails)
+        ? rec.serviceOrderDetails
+        : Array.isArray(rec.service_order_details)
+            ? rec.service_order_details
+            : undefined;
+
+    const primaryDetail = Array.isArray(details)
+        ? details.find((d) => d && typeof d === 'object')
+        : undefined;
+    const primaryDetailRec = asRecord(primaryDetail);
+    const nestedService =
+        asRecord(primaryDetailRec?.service) ||
+        asRecord(rec.service) ||
+        asRecord(rec.catalog_service);
+
+    const serviceCode =
+        (typeof rec.service_code === 'string' && rec.service_code.trim()) ||
+        (typeof nestedService?.service_code === 'string' &&
+            nestedService.service_code.trim()) ||
+        '';
+    const serviceName =
+        (typeof rec.service_name === 'string' && rec.service_name.trim()) ||
+        (typeof nestedService?.service_name === 'string' &&
+            nestedService.service_name.trim()) ||
+        '';
+    const serviceType =
+        (typeof rec.service_type === 'string' && rec.service_type.trim()) ||
+        (typeof nestedService?.service_type === 'string' &&
+            nestedService.service_type.trim()) ||
+        '';
+    const roomType =
+        (typeof rec.room_type === 'string' && rec.room_type.trim()) ||
+        (typeof roomInfo?.room_type === 'string' && roomInfo.room_type.trim()) ||
+        (typeof nestedService?.room_type === 'string' &&
+            nestedService.room_type.trim()) ||
+        '';
+
+    return {
+        service_order_id: id,
+        booking_id:
+            typeof rec.booking_id === 'string' ? rec.booking_id : undefined,
+        assign_by_staff_id:
+            typeof rec.assign_by_staff_id === 'string'
+                ? rec.assign_by_staff_id
+                : null,
+        name: String(rec.name || serviceName || 'Dịch vụ'),
+        service_name: serviceName || undefined,
+        service_code: serviceCode || undefined,
+        service_type: serviceType || null,
+        specialty_id:
+            (typeof rec.specialty_id === 'string' && rec.specialty_id) ||
+            (typeof specialtyInfo?.specialty_id === 'string' &&
+                specialtyInfo.specialty_id) ||
+            null,
+        room_id: roomId || null,
+        room_name: roomName || null,
+        room_type: roomType || null,
+        room_info:
+            roomId || roomName
+                ? {
+                    room_id: roomId || undefined,
+                    room_name: roomName || undefined,
+                    ...(roomType ? { room_type: roomType } : {}),
+                  }
+                : undefined,
+        specialty_info: specialtyInfo
+            ? {
+                specialty_id:
+                    typeof specialtyInfo.specialty_id === 'string'
+                        ? specialtyInfo.specialty_id
+                        : undefined,
+                specialty_name:
+                    typeof specialtyInfo.specialty_name === 'string'
+                        ? specialtyInfo.specialty_name
+                        : undefined,
+            }
+            : undefined,
+        is_payment: (rec.is_payment as string | boolean | null | undefined) ?? null,
+        payment_status: paymentRaw || 'PENDING',
+        status: String(rec.status || paymentRaw || 'PENDING'),
+        staff_name: staffName || null,
+        staff_info: staffName
+            ? {
+                staff_id:
+                    typeof staffInfo?.staff_id === 'string'
+                        ? staffInfo.staff_id
+                        : undefined,
+                full_name: staffName,
+            }
+            : null,
+        qr_code: (rec.qr_code as string | null | undefined) ?? null,
+        package_id: (rec.package_id as string | null | undefined) ?? null,
+        flow_id: (rec.flow_id as string | null | undefined) ?? null,
+        total_price:
+            typeof rec.total_price === 'number' ? rec.total_price : undefined,
+        created_at: typeof rec.created_at === 'string' ? rec.created_at : undefined,
+        updated_at: typeof rec.updated_at === 'string' ? rec.updated_at : undefined,
+        serviceOrderDetails: details as ServiceOrder['serviceOrderDetails'],
+        service_order_details: details as ServiceOrder['service_order_details'],
+    };
+}
+
 export const serviceOrderService = {
     createOrder: (body: CreateServiceOrderReqDto, token: string) =>
         apiClient.post<unknown>('/api/service-order', body, {
@@ -42,6 +194,28 @@ export const serviceOrderService = {
         apiClient.get<unknown>(`/api/service-order/${id}`, {
             headers: { Authorization: `Bearer ${token}` },
         }),
+
+    /** Parallel GET /api/service-order/{id} for ids collected from flow steps */
+    getOrdersByIds: async (ids: string[], token: string): Promise<ServiceOrder[]> => {
+        const unique = [
+            ...new Set(ids.map((id) => id.trim()).filter(Boolean)),
+        ];
+        if (unique.length === 0) return [];
+
+        const settled = await Promise.all(
+            unique.map(async (id) => {
+                try {
+                    const res = await serviceOrderService.getOrderById(id, token);
+                    return normalizeDetailServiceOrder(res?.data ?? res);
+                } catch {
+                    // 404 after delete — skip
+                    return null;
+                }
+            })
+        );
+
+        return settled.filter((o): o is ServiceOrder => Boolean(o));
+    },
 
     updateOrder: (id: string, body: UpdateServiceOrderReqDto, token: string) =>
         apiClient.patch<unknown>(`/api/service-order/${id}`, body, {
