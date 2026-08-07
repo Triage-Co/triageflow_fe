@@ -26,10 +26,10 @@ interface UseRoomDisplaySocketReturn {
     error: string | null;
 }
 
-/** Prefer explicit socket URL; fall back to API host (strip path). */
+/** Prefer explicit socket URL; fall back to API host (strip trailing /api). */
 const SOCKET_URL =
     process.env.NEXT_PUBLIC_SOCKET_URL ||
-    API_BASE_URL.replace(/\/$/, '');
+    API_BASE_URL.replace(/\/$/, '').replace(/\/api$/i, '');
 
 /** Event emitted by BE for queue display updates */
 const EVENT_ON_QUEUE_UPDATE = 'onQueueUpdate';

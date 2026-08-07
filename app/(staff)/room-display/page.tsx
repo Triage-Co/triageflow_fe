@@ -1,6 +1,9 @@
-import React from 'react';
-import { RoomWaitingScreen } from '@/modules/queue/components/RoomWaitingScreen';
+import { redirect } from 'next/navigation';
 
+/**
+ * Staff sidebar entry used to open the TV waiting screen.
+ * Always go through the room selector so socket join has a real roomId.
+ */
 export default function StaffRoomDisplayPage() {
-    return <RoomWaitingScreen />;
+    redirect('/display/room');
 }

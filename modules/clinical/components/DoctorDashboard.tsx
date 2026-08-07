@@ -128,30 +128,49 @@ export function DoctorDashboard() {
     };
 
     /**
-     * call-next finds the first PENDING queue on the backend.
-     * FE only needs step_id / room_id / staff_id from any PENDING (or WAITING legacy) row.
+     * call-next / TV need a waiting queue in PENDING or QUEUED (BE enums).
+     * Prefer queue.room_id (denormalized) then step.room_id.
      */
     const nextWaitingRaw = useMemo(() => {
         return rawPatients.find((p) => {
             const queueStatus = (p.status || '').toUpperCase();
             const stepStatus = (p.step?.step_status || '').toUpperCase();
 
-            // Skip items that are already in progress, calling, or completed
             if (
                 stepStatus === 'IN_PROGRESS' ||
                 stepStatus === 'PROCESSING' ||
-                stepStatus === 'CALLING' ||
                 stepStatus === 'COMPLETED' ||
+                stepStatus === 'DECLINED' ||
+                queueStatus === 'CALLED' ||
                 queueStatus === 'CALLING' ||
+                queueStatus === 'SERVING' ||
                 queueStatus === 'IN_PROGRESS' ||
-                queueStatus === 'COMPLETED'
+                queueStatus === 'FINISHED' ||
+                queueStatus === 'COMPLETED' ||
+                queueStatus === 'CANCELLED'
             ) {
                 return false;
             }
 
-            return queueStatus === 'PENDING' || queueStatus === 'WAITING' || stepStatus === 'PENDING';
+            return (
+                queueStatus === 'PENDING' ||
+                queueStatus === 'QUEUED' ||
+                queueStatus === 'WAITING' ||
+                queueStatus === 'MISSING' ||
+                stepStatus === 'PENDING'
+            );
         });
     }, [rawPatients]);
+
+    const resolvePatientRoomId = (patient: typeof nextWaitingRaw): string | undefined => {
+        if (!patient) return undefined;
+        return (
+            patient.room_id ||
+            patient.step?.room_id ||
+            patient.step?.room?.room_id ||
+            undefined
+        );
+    };
 
     const handleCallNextPatient = async () => {
         if (!accessToken || !user?.id) {
@@ -168,15 +187,18 @@ export function DoctorDashboard() {
         }
 
         const stepId = nextWaitingRaw.step?.step_id;
-        const roomId =
-            nextWaitingRaw.step?.room_id ??
-            nextWaitingRaw.step?.room?.room_id ??
-            (user as unknown as { room_id?: string })?.room_id ??
-            '201';
+        const roomId = resolvePatientRoomId(nextWaitingRaw);
 
         if (!stepId) {
             setCallStatus('error');
             setCallMessage('Không tìm thấy thông tin bước khám của bệnh nhân.');
+            setTimeout(() => setCallStatus('idle'), 3000);
+            return;
+        }
+
+        if (!roomId) {
+            setCallStatus('error');
+            setCallMessage('Bệnh nhân chưa được gán phòng khám — không thể gọi số.');
             setTimeout(() => setCallStatus('idle'), 3000);
             return;
         }
@@ -243,16 +265,29 @@ export function DoctorDashboard() {
                             {/* ── Mở màn hình TV & Gọi bệnh nhân ── */}
                             <div className="flex flex-col items-end gap-1.5">
                                 <div className="flex items-center gap-2">
-                                    <a
-                                        href={`/display/room/${nextWaitingRaw?.step?.room_id || nextWaitingRaw?.step?.room?.room_id || '101'}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        title="Mở màn hình TV phòng khám trên tab mới"
-                                        className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-50 shadow-sm transition active:scale-95 whitespace-nowrap"
-                                    >
-                                        <Tv className="w-4 h-4 text-[#8B7CF6]" />
-                                        <span>Màn hình TV</span>
-                                    </a>
+                                    {resolvePatientRoomId(nextWaitingRaw) ? (
+                                        <a
+                                            href={`/display/room/${resolvePatientRoomId(nextWaitingRaw)}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            title="Mở màn hình TV phòng khám trên tab mới"
+                                            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-50 shadow-sm transition active:scale-95 whitespace-nowrap"
+                                        >
+                                            <Tv className="w-4 h-4 text-[#8B7CF6]" />
+                                            <span>Màn hình TV</span>
+                                        </a>
+                                    ) : (
+                                        <a
+                                            href="/display/room"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            title="Chọn phòng để mở màn hình TV"
+                                            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-50 shadow-sm transition active:scale-95 whitespace-nowrap"
+                                        >
+                                            <Tv className="w-4 h-4 text-[#8B7CF6]" />
+                                            <span>Màn hình TV</span>
+                                        </a>
+                                    )}
 
                                     <button
                                         id="call-next-patient-btn"
