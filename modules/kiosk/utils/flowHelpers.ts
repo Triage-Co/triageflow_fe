@@ -7,12 +7,21 @@ export const doctorRouteRequests = new Map<string, Promise<boolean>>();
 export const stepDetailRequests = new Map<string, Promise<any>>();
 export const activeFlowKioskRequests = new Map<string, Promise<any>>();
 
-export const getActivePatientFlowKioskWithCache = (patientId: string): Promise<any> => {
-  const cacheKey = patientId;
+export const QUEUE_TYPE_MAP: Record<string, string> = {
+  NEW: "Bệnh nhân mới",
+  APPOINTMENT: "Đặt lịch hẹn",
+  RETURNING: "Quay lại",
+  TRANSFER: "Chuyển phòng",
+  QUICK_TASK: "Tác vụ nhanh",
+  FOLLOW_UP: "Tái khám",
+};
+
+export const getActivePatientFlowKioskWithCache = (patientId: string, date?: string): Promise<any> => {
+  const cacheKey = date ? `${patientId}_${date}` : patientId;
   if (activeFlowKioskRequests.has(cacheKey)) {
     return activeFlowKioskRequests.get(cacheKey)!;
   }
-  const promise = flowService.getActivePatientFlowKiosk(patientId)
+  const promise = flowService.getActivePatientFlowKiosk(patientId, date)
     .then(res => (res as any)?.data || res)
     .catch((err) => {
       activeFlowKioskRequests.delete(cacheKey);
@@ -52,6 +61,17 @@ export const sortStepsTopologically = (steps: any[]): any[] => {
   const visited = new Set<string>();
   const temp = new Set<string>();
 
+  const getStatusWeight = (status: string): number => {
+    const s = (status || '').toUpperCase().trim();
+    if (s === 'COMPLETED') return 0;
+    if (s === 'IN_PROGRESS' || s === 'WAITING') return 1;
+    return 2; // PENDING or others
+  };
+
+  const preSortedSteps = [...steps].sort((a, b) => {
+    return getStatusWeight(a.step_status) - getStatusWeight(b.step_status);
+  });
+
   const visit = (step: any) => {
     const stepId = step.step_id || step.id;
     if (!stepId) {
@@ -65,7 +85,7 @@ export const sortStepsTopologically = (steps: any[]): any[] => {
 
     const deps = step.depends_on || [];
     for (const depId of deps) {
-      const depStep = steps.find(s => (s.step_id || s.id) === depId);
+      const depStep = preSortedSteps.find(s => (s.step_id || s.id) === depId);
       if (depStep) {
         visit(depStep);
       }
@@ -76,14 +96,14 @@ export const sortStepsTopologically = (steps: any[]): any[] => {
     sorted.push(step);
   };
 
-  for (const step of steps) {
+  for (const step of preSortedSteps) {
     visit(step);
   }
   return sorted;
 };
 
 export const computeWaitMinutes = (startTimeStr: string | undefined): number => {
-  if (!startTimeStr) return 0;
+  if (!startTimeStr) return 5;
   const now = new Date();
   const [h, m] = startTimeStr.split(':').map(Number);
   const slotStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0);
@@ -91,7 +111,7 @@ export const computeWaitMinutes = (startTimeStr: string | undefined): number => 
   return Math.max(0, Math.floor(diffMs / 60000));
 };
 
-export const mapApiToTicketData = (stepData: any, patientInfo: any, bookingId: string | null): TicketData => {
+export const mapApiToTicketData = (stepData: any, patientInfo: any, bookingId: string | null, ticketCode?: string): TicketData => {
   const queueObj = Array.isArray(stepData.queues) ? stepData.queues[0] : null;
   const roomObj = stepData.room_info || stepData.room || stepData.flow?.booking?.slot?.shift?.room;
   const specialtyObj = stepData.specialty_info || stepData.specialty || roomObj?.specialty;
@@ -118,12 +138,16 @@ export const mapApiToTicketData = (stepData: any, patientInfo: any, bookingId: s
     status: stepData.step_status === 'COMPLETED' ? 'completed' : 'waiting',
     waitingCount: 0,
     currentCallingNo: queueNumber,
-    estimatedWaitMinutes: computeWaitMinutes(slotObj?.start_time) || 5,
+    estimatedWaitMinutes: computeWaitMinutes(slotObj?.start_time),
     stepId: stepData.step_id,
     bookingId: bookingId || stepData.flow_id || undefined,
     startTime: slotObj?.start_time ?? '',
     roomId: isPaymentStep ? undefined : (roomObj?.physical_room_id || roomObj?.room_id || stepData.room_id || undefined),
     stepName: stepName,
+    ticketCode: ticketCode || stepData.flow?.ticket_code || '',
+    queueType: queueObj?.queue_type ?? '',
+    doctorExperience: staffObj?.experience_years,
+    doctorLicense: staffObj?.license_number,
   };
 };
 
@@ -159,7 +183,9 @@ export const mapApiToRouteSteps = (detailedSteps: any[]): RouteStepItem[] => {
       room: roomName || undefined,
       location: undefined,
       queueNo: queueNoStr,
-      status: status
+      status: status,
+      stepId: step.step_id || step.id || '',
+      rawStep: step,
     };
   });
 };

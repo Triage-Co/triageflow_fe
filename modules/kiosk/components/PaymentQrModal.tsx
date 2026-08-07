@@ -37,8 +37,6 @@ export const PaymentQrModal: React.FC<PaymentQrModalProps> = ({
   useEffect(() => {
     if (!isOpen || !qrResult || !patientId || !serviceOrderId) return;
 
-    let intervalId: NodeJS.Timeout;
-
     const checkPaymentStatus = async () => {
       try {
         const res = await flowService.getPendingServiceOrders(patientId);
@@ -64,7 +62,7 @@ export const PaymentQrModal: React.FC<PaymentQrModalProps> = ({
     };
 
     // Bắt đầu check mỗi 3 giây
-    intervalId = setInterval(checkPaymentStatus, 3000);
+    const intervalId = setInterval(checkPaymentStatus, 3000);
 
     return () => {
       if (intervalId) clearInterval(intervalId);

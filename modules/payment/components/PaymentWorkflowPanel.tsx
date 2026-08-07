@@ -285,6 +285,43 @@ export function PaymentWorkflowPanel({
         }
     }, [activePatient, quantities, paymentMethod, paymentSuccess, totalAmount, insuranceDiscount]);
 
+    const handleConfirmPayment = async () => {
+        if (!activePatient) return;
+        setIsProcessing(true);
+        try {
+            // Call Backend API to update status to paid
+            const updated = await paymentService.payPrescriptionOffline(activePatient.id);
+            setIsProcessing(false);
+            setPaymentSuccess(true);
+            broadcastPaymentDisplaySync({
+                status: 'success',
+                prescriptionId: activePatient.id,
+                patientName: activePatient.patientName,
+                patientCode: activePatient.code,
+                rxCode: activePatient.rxCode,
+                totalAmount,
+            });
+            if (onPaymentSuccess) {
+                onPaymentSuccess(updated);
+            }
+        } catch (err: any) {
+            console.error('[PaymentWorkflowPanel] Payment failed:', err);
+            setIsProcessing(false);
+            setPaymentSuccess(true); // Fallback success
+            broadcastPaymentDisplaySync({
+                status: 'success',
+                prescriptionId: activePatient.id,
+                patientName: activePatient.patientName,
+                patientCode: activePatient.code,
+                rxCode: activePatient.rxCode,
+                totalAmount,
+            });
+            if (onPaymentSuccess) {
+                onPaymentSuccess(activePatient.rawPrescription);
+            }
+        }
+    };
+
     // Auto-polling PayOS status from Backend using GET /api/transaction or GET /api/transaction/:id
     useEffect(() => {
         if (paymentMethod !== 'qr' || paymentSuccess || !activePatient) return;
@@ -327,43 +364,6 @@ export function PaymentWorkflowPanel({
     const handleProceedToStep2 = async () => {
         if (!activePatient) return;
         setStep(2);
-    };
-
-    const handleConfirmPayment = async () => {
-        if (!activePatient) return;
-        setIsProcessing(true);
-        try {
-            // Call Backend API to update status to paid
-            const updated = await paymentService.payPrescriptionOffline(activePatient.id);
-            setIsProcessing(false);
-            setPaymentSuccess(true);
-            broadcastPaymentDisplaySync({
-                status: 'success',
-                prescriptionId: activePatient.id,
-                patientName: activePatient.patientName,
-                patientCode: activePatient.code,
-                rxCode: activePatient.rxCode,
-                totalAmount,
-            });
-            if (onPaymentSuccess) {
-                onPaymentSuccess(updated);
-            }
-        } catch (err: any) {
-            console.error('[PaymentWorkflowPanel] Payment failed:', err);
-            setIsProcessing(false);
-            setPaymentSuccess(true); // Fallback success
-            broadcastPaymentDisplaySync({
-                status: 'success',
-                prescriptionId: activePatient.id,
-                patientName: activePatient.patientName,
-                patientCode: activePatient.code,
-                rxCode: activePatient.rxCode,
-                totalAmount,
-            });
-            if (onPaymentSuccess) {
-                onPaymentSuccess(activePatient.rawPrescription);
-            }
-        }
     };
 
     const handleReset = () => {

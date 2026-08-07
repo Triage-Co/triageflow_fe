@@ -31,7 +31,7 @@ import {
     extractServiceOrderList,
     serviceOrderService,
 } from '@/modules/clinical/services/serviceOrderService';
-import type { ServiceOrder } from '@/modules/clinical/types/serviceOrder.types';
+import type { ServiceOrder, ServiceOrderStatus } from '@/modules/clinical/types/serviceOrder.types';
 import {
     filterOrdersByBookingId,
     getOrderDisplayName,
@@ -43,6 +43,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useRoomStore } from '@/modules/admin/store/roomStore';
 import { useStaffStore } from '@/modules/admin/store/staffStore';
 import { useShiftStore } from '@/modules/admin/store/shiftStore';
+import type { Staff } from '@/modules/admin/types/staff.types';
 
 import {
     Dialog,
@@ -51,7 +52,7 @@ import {
     DialogTitle,
     DialogDescription,
 } from '@/shared/components/ui/Dialog';
-import { Plus, Trash2, Edit3 } from 'lucide-react';
+import { Plus, Trash2, ChevronRight } from 'lucide-react';
 
 type NodeIcon = typeof FileText;
 
@@ -86,6 +87,8 @@ interface FlowNode {
     label: string;
     roomName?: string;
     staffName?: string;
+    /** Secondary payment companion — rendered smaller than service steps */
+    isPayment?: boolean;
     detail?: {
         source: 'live' | 'draft' | 'default' | 'service-order';
         stepStatus?: string;
@@ -141,6 +144,68 @@ function isPaymentStepName(name: string): boolean {
     return n.startsWith('thanh toán') || n.startsWith('thanh toan');
 }
 
+/** service_order_id gắn trên live step (BE có thể camelCase). */
+function pickLinkedServiceOrderId(step: Record<string, unknown> | null | undefined): string {
+    if (!step) return '';
+    if (typeof step.service_order_id === 'string' && step.service_order_id.trim()) {
+        return step.service_order_id.trim();
+    }
+    if (typeof step.serviceOrderId === 'string' && step.serviceOrderId.trim()) {
+        return step.serviceOrderId.trim();
+    }
+    const nested = asRecord(step.service_order) || asRecord(step.serviceOrder);
+    if (nested) {
+        const id = nested.service_order_id || nested.id;
+        if (typeof id === 'string' && id.trim()) return id.trim();
+    }
+    return '';
+}
+
+function toServiceOrderStatus(status: string): ServiceOrderStatus {
+    const s = (status || '').toUpperCase().trim();
+    if (['COMPLETED', 'DONE', 'FINISHED', 'SUCCESSED', 'SUCCESS'].includes(s)) return 'COMPLETED';
+    if (['CANCELLED', 'CANCELED'].includes(s)) return 'CANCELLED';
+    if (
+        ['IN_PROGRESS', 'PROCESSING', 'CURRENT', 'DOING', 'EXAMINING', 'ACTIVE', 'ONGOING'].includes(s)
+    ) {
+        return 'IN_PROGRESS';
+    }
+    if (s === 'PAID') return 'PAID';
+    return 'PENDING';
+}
+
+function formatStepStatusVi(status?: string | null): string {
+    const s = (status || '').toUpperCase().trim();
+    if (!s || s === 'N/A') return 'Chưa xác định';
+    if (['COMPLETED', 'DONE', 'FINISHED', 'SUCCESSED', 'SUCCESS'].includes(s)) return 'Hoàn tất';
+    if (['IN_PROGRESS', 'PROCESSING', 'CURRENT', 'DOING', 'EXAMINING', 'ACTIVE', 'ONGOING'].includes(s)) {
+        return 'Đang thực hiện';
+    }
+    if (['CANCELLED', 'CANCELED'].includes(s)) return 'Đã hủy';
+    if (['DECLINED', 'REJECTED', 'DENIED'].includes(s)) return 'Từ chối';
+    if (s === 'PAID') return 'Đã thanh toán';
+    if (['PENDING', 'WAITING', 'NOT_STARTED'].includes(s)) return 'Chờ thực hiện';
+    return status?.trim() || 'Chưa xác định';
+}
+
+const STEP_STATUS_EDIT_OPTIONS = [
+    { value: 'PENDING', label: 'Chờ thực hiện' },
+    { value: 'IN_PROGRESS', label: 'Đang thực hiện' },
+    { value: 'COMPLETED', label: 'Hoàn tất' },
+    { value: 'DECLINED', label: 'Từ chối' },
+    { value: 'CANCELLED', label: 'Đã hủy' },
+] as const;
+
+/** IN_PROGRESS / COMPLETED: chỉ được sửa trạng thái, không sửa phòng/nhân viên/tên. */
+function isStepContentLocked(status?: string | null): boolean {
+    const s = (status || '').toUpperCase().trim();
+    if (['COMPLETED', 'DONE', 'FINISHED', 'SUCCESSED', 'SUCCESS'].includes(s)) return true;
+    if (['IN_PROGRESS', 'PROCESSING', 'CURRENT', 'DOING', 'EXAMINING', 'ACTIVE', 'ONGOING'].includes(s)) {
+        return true;
+    }
+    return false;
+}
+
 /** Strip leading "Thanh toán:" / "Thanh toán " for matching service ↔ payment. */
 function stripPaymentPrefix(name: string): string {
     return normalizeStepLabel(name)
@@ -179,6 +244,21 @@ export function isExamPaymentStepName(name: string): boolean {
 function isPaidPaymentStatus(paymentStatus?: string): boolean {
     const pay = (paymentStatus || '').toUpperCase().trim();
     return ['SUCCESSED', 'SUCCESS', 'PAID', 'COMPLETED', 'DONE', 'FINISHED'].includes(pay);
+}
+
+/** Draft/template payment companions — ẩn khỏi modal cấu hình (không sửa/xóa). */
+function isDraftPaymentStep(step: {
+    tempId?: string;
+    step_name?: string;
+    step_type?: string;
+    room_type?: string;
+}): boolean {
+    if (step.tempId?.startsWith('draft-pay-')) return true;
+    const stepType = normalizeStepType(step.step_type, step.room_type);
+    const roomType = normalizeRoomType(step.room_type);
+    if (stepType === 'PAYMENT' || roomType === 'CASHIER') return true;
+    const name = step.step_name || '';
+    return isPaymentStepName(name) || isExamPaymentStepName(name);
 }
 
 /** Hide cancelled steps — except settled / exam-queue payments that must stay on the timeline. */
@@ -945,21 +1025,44 @@ function nodeStyles(status: WorkflowStepStatus) {
     }
 }
 
+function isPaymentFlowNode(opts: {
+    label?: string;
+    stepType?: string;
+    roomType?: string;
+}): boolean {
+    const label = opts.label || '';
+    if (isPaymentStepName(label) || isExamPaymentStepName(label)) return true;
+    const stepType = String(opts.stepType || '').toUpperCase();
+    const roomType = String(opts.roomType || '').toUpperCase();
+    return stepType === 'PAYMENT' || roomType === 'CASHIER' || roomType === 'PAYMENT';
+}
+
 function FlowIcon({ node, isFirst, onClick }: { node: FlowNode; isFirst?: boolean; onClick?: () => void }) {
     const styles = nodeStyles(node.status);
+    const compact = Boolean(node.isPayment);
 
     return (
-        <div className="group relative flex flex-col items-center">
+        <div className={cn('group relative flex flex-col items-center', compact && 'opacity-90')}>
             <button
                 type="button"
                 onClick={onClick}
                 className={cn(
-                    'w-11 h-11 rounded-full flex items-center justify-center shrink-0 transition-all duration-200 cursor-pointer',
-                    styles.ring
+                    'rounded-full flex items-center justify-center shrink-0 transition-all duration-200 cursor-pointer',
+                    compact ? 'w-7 h-7' : 'w-11 h-11',
+                    styles.ring,
+                    compact &&
+                        (node.status === 'completed'
+                            ? 'shadow-[0_0_0_3px_rgba(16,185,129,0.18)]'
+                            : node.status === 'current'
+                              ? 'shadow-[0_0_0_3px_rgba(37,99,235,0.2)]'
+                              : '')
                 )}
                 title="Xem chi tiết bước"
             >
-                <node.Icon className="w-5 h-5" strokeWidth={2.2} />
+                <node.Icon
+                    className={compact ? 'w-3.5 h-3.5' : 'w-5 h-5'}
+                    strokeWidth={compact ? 2 : 2.2}
+                />
             </button>
 
             {/* Tooltip */}
@@ -977,16 +1080,31 @@ function FlowIcon({ node, isFirst, onClick }: { node: FlowNode; isFirst?: boolea
                 </div>
                 {!isFirst && <div className="w-2 h-2 bg-[#1E293B] rotate-45 -mt-1" />}
             </div>
-            <span className="text-[11px] font-bold text-neutral-600 mt-1.5 max-w-[140px] text-center truncate">
+            <span
+                className={cn(
+                    'font-bold text-center truncate',
+                    compact
+                        ? 'text-[9px] text-neutral-500 mt-1 max-w-[96px]'
+                        : 'text-[11px] text-neutral-600 mt-1.5 max-w-[140px]'
+                )}
+            >
                 {node.label}
             </span>
         </div>
     );
 }
 
-function Connector({ status }: { status: WorkflowStepStatus }) {
+function Connector({ status, compact }: { status: WorkflowStepStatus; compact?: boolean }) {
     const styles = nodeStyles(status);
-    return <div className={cn('w-0.5 h-6 mx-auto rounded-full', styles.line)} />;
+    return (
+        <div
+            className={cn(
+                'mx-auto rounded-full',
+                compact ? 'w-px h-3.5' : 'w-0.5 h-6',
+                styles.line
+            )}
+        />
+    );
 }
 
 function normalizeRoomKey(value?: string): string {
@@ -1032,7 +1150,6 @@ export function WorkflowDiagram({
     const [editingStaffId, setEditingStaffId] = useState<string>('');
     const [selectedSpecialtyId, setSelectedSpecialtyId] = useState<string>('');
     const [selectedRoomId, setSelectedRoomId] = useState<string>('');
-    const [addStepRequirePayment, setAddStepRequirePayment] = useState(true);
     const [selectedStaffId, setSelectedStaffId] = useState<string>('');
     const [selectedServiceCode, setSelectedServiceCode] = useState<string>('');
     const [selectedDraftServiceCode, setSelectedDraftServiceCode] = useState<string>('');
@@ -1062,36 +1179,65 @@ export function WorkflowDiagram({
         return 'PENDING';
     };
 
-    const getStatusCandidates = (normalizedStatus: string): string[] => {
-        switch (normalizedStatus) {
-            case 'IN_PROGRESS':
-                return ['IN_PROGRESS', 'PROCESSING', 'ONGOING', 'CURRENT', 'ACTIVE'];
-            case 'COMPLETED':
-                return ['COMPLETED', 'DONE', 'FINISHED', 'SUCCESSED'];
-            case 'DECLINED':
-                return ['DECLINED', 'REJECTED', 'DENIED'];
-            case 'CANCELLED':
-                return ['CANCELLED', 'CANCELED'];
-            default:
-                return ['PENDING', 'WAITING'];
+    /**
+     * Cập nhật room/staff/status:
+     * - Có service_order_id → PATCH /api/service-order/{id}
+     * - Không có (bước khám từ booking/flow) → fallback PATCH /api/step/{id} (+ /status)
+     */
+    const updateServiceOrderFromStep = async (
+        step: Record<string, unknown> | null | undefined,
+        body: {
+            room_id?: string;
+            assign_by_staff_id?: string;
+            status?: string;
+        },
+        token: string
+    ) => {
+        const orderId = pickLinkedServiceOrderId(step);
+        if (orderId) {
+            const payload: {
+                room_id?: string;
+                assign_by_staff_id?: string;
+                status?: ServiceOrderStatus;
+            } = {};
+            if (body.room_id) payload.room_id = body.room_id;
+            if (body.assign_by_staff_id) payload.assign_by_staff_id = body.assign_by_staff_id;
+            if (body.status) payload.status = toServiceOrderStatus(body.status);
+            await serviceOrderService.updateOrder(orderId, payload, token);
+            return;
         }
-    };
 
-    const updateStepStatusWithFallback = async (stepId: string, status: string, token: string) => {
-        const normalizedStatus = normalizeStepStatusForApi(status);
-        const candidates = getStatusCandidates(normalizedStatus);
-        let lastError: unknown = null;
-
-        for (const candidate of candidates) {
-            try {
-                await clinicalService.updateStepStatus(stepId, candidate, token);
-                return;
-            } catch (err) {
-                lastError = err;
-            }
+        const stepId =
+            (typeof step?.step_id === 'string' && step.step_id.trim()) ||
+            (typeof step?.id === 'string' && step.id.trim()) ||
+            '';
+        if (!stepId) {
+            throw new Error(
+                'Bước này không có service_order_id lẫn step_id — không thể cập nhật.'
+            );
         }
 
-        throw lastError;
+        const hasRoomOrStaff = Boolean(body.room_id || body.assign_by_staff_id);
+        if (hasRoomOrStaff) {
+            await clinicalService.updateStep(
+                stepId,
+                {
+                    room_id: body.room_id || undefined,
+                    staff_id: body.assign_by_staff_id || undefined,
+                },
+                token
+            );
+        }
+        if (body.status) {
+            await clinicalService.updateStepStatus(
+                stepId,
+                normalizeStepStatusForApi(body.status),
+                token
+            );
+        }
+        if (!hasRoomOrStaff && !body.status) {
+            throw new Error('Không có dữ liệu để cập nhật bước.');
+        }
     };
 
     const rawFlowSteps = useMemo(() => extractFlowSteps(flowData), [flowData]);
@@ -1114,8 +1260,11 @@ export function WorkflowDiagram({
     const { staffs, fetchStaffs } = useStaffStore();
     const { shifts, fetchShifts } = useShiftStore();
 
-    const currentRole = (authUser?.role || authProfile?.role || '').toUpperCase();
+    const currentRole = (authUser?.role || authProfile?.role || '')
+        .toUpperCase()
+        .replace(/^ROLE_/, '');
     const isDoctorRole = currentRole === 'DOCTOR';
+    const staffDirectory = staffs;
 
     const currentDoctorStaffId = useMemo(() => {
         if (!isDoctorRole) return '';
@@ -1126,7 +1275,7 @@ export function WorkflowDiagram({
         const profileAccountId = (authProfile?.account_id || '').toLowerCase();
         const profileEmail = (authProfile?.email || '').toLowerCase();
 
-        const matched = staffs.find((staff) => {
+        const matched = staffDirectory.find((staff) => {
             const rec = staff as unknown as Record<string, unknown>;
             const accountRec = rec.account && typeof rec.account === 'object'
                 ? (rec.account as Record<string, unknown>)
@@ -1134,22 +1283,36 @@ export function WorkflowDiagram({
 
             const staffId = (staff.staff_id || '').toLowerCase();
             const accountId = (typeof rec.account_id === 'string' ? rec.account_id : '').toLowerCase();
-            const accountRecId = (typeof accountRec?.id === 'string' ? accountRec.id : '').toLowerCase();
+            const accountRecId = (
+                (typeof accountRec?.id === 'string' && accountRec.id) ||
+                (typeof accountRec?.account_id === 'string' && accountRec.account_id) ||
+                ''
+            ).toLowerCase();
             const accountEmail = (typeof accountRec?.email === 'string' ? accountRec.email : '').toLowerCase();
 
             return Boolean(
                 (userId && (staffId === userId || accountId === userId || accountRecId === userId)) ||
                 (profileId && (staffId === profileId || accountId === profileId || accountRecId === profileId)) ||
-                (profileAccountId && (accountId === profileAccountId || accountRecId === profileAccountId)) ||
+                (profileAccountId && (
+                    staffId === profileAccountId ||
+                    accountId === profileAccountId ||
+                    accountRecId === profileAccountId
+                )) ||
                 (userEmail && accountEmail === userEmail) ||
                 (profileEmail && accountEmail === profileEmail)
             );
         });
 
-        return matched?.staff_id || '';
+        return (
+            matched?.staff_id ||
+            authUser?.id ||
+            authProfile?.account_id ||
+            authProfile?.id ||
+            ''
+        );
     }, [
         isDoctorRole,
-        staffs,
+        staffDirectory,
         authUser?.id,
         authUser?.email,
         authProfile?.id,
@@ -1198,11 +1361,10 @@ export function WorkflowDiagram({
 
 
     useEffect(() => {
-        if (accessToken) {
-            fetchRooms(accessToken).catch(() => { });
-            fetchStaffs(accessToken).catch(() => { });
-            fetchShifts(accessToken).catch(() => { });
-        }
+        if (!accessToken) return;
+        fetchRooms(accessToken).catch(() => { });
+        fetchStaffs(accessToken).catch(() => { });
+        fetchShifts(accessToken).catch(() => { });
     }, [accessToken, fetchRooms, fetchStaffs, fetchShifts]);
 
     useEffect(() => {
@@ -1284,9 +1446,9 @@ export function WorkflowDiagram({
 
         if (roomShifts.length === 0) {
             const roomSpecialtyId = targetRoom?.specialty_id;
-            const doctorInSpecialty = staffs.find(
+            const doctorInSpecialty = staffDirectory.find(
                 (st) => (roomSpecialtyId && st.specialty_id === roomSpecialtyId) && (st.account?.role as string) === 'DOCTOR'
-            ) || staffs.find(
+            ) || staffDirectory.find(
                 (st) => (st.account?.role as string) === 'DOCTOR'
             );
             if (doctorInSpecialty?.full_name) {
@@ -1338,7 +1500,7 @@ export function WorkflowDiagram({
 
         const sId = matchedShift.staff_id;
         if (sId) {
-            const staff = staffs.find((st) => {
+            const staff = staffDirectory.find((st) => {
                 const stAny = st as unknown as Record<string, unknown>;
                 const accAny = (st.account || {}) as unknown as Record<string, unknown>;
                 const profAny = (accAny.profile || {}) as Record<string, unknown>;
@@ -1368,7 +1530,7 @@ export function WorkflowDiagram({
             }
 
             const roomSpecialtyId = targetRoom?.specialty_id;
-            const doctorInSpecialty = staffs.find(
+            const doctorInSpecialty = staffDirectory.find(
                 (st) => (roomSpecialtyId && st.specialty_id === roomSpecialtyId) || (st.account?.role as string) === 'DOCTOR'
             );
             const specialtyName =
@@ -1416,9 +1578,9 @@ export function WorkflowDiagram({
 
         if (roomShifts.length === 0) {
             const roomSpecialtyId = targetRoom?.specialty_id;
-            const doctorInSpecialty = staffs.find(
+            const doctorInSpecialty = staffDirectory.find(
                 (st) => roomSpecialtyId && st.specialty_id === roomSpecialtyId && (st.account?.role as string) === 'DOCTOR'
-            ) || staffs.find(
+            ) || staffDirectory.find(
                 (st) => (st.account?.role as string) === 'DOCTOR'
             );
 
@@ -1449,7 +1611,7 @@ export function WorkflowDiagram({
         if (!matchedShift) return '';
 
         const sId = matchedShift.staff_id;
-        const staff = staffs.find(
+        const staff = staffDirectory.find(
             (st) =>
                 st.staff_id === sId ||
                 (st as unknown as Record<string, unknown>).id === sId ||
@@ -1460,9 +1622,9 @@ export function WorkflowDiagram({
         if (resolvedStaffId) return resolvedStaffId;
 
         const roomSpecialtyId = targetRoom?.specialty_id;
-        const doctorInSpecialty = staffs.find(
+        const doctorInSpecialty = staffDirectory.find(
             (st) => roomSpecialtyId && st.specialty_id === roomSpecialtyId && (st.account?.role as string) === 'DOCTOR'
-        ) || staffs.find(
+        ) || staffDirectory.find(
             (st) => (st.account?.role as string) === 'DOCTOR'
         );
 
@@ -1471,7 +1633,7 @@ export function WorkflowDiagram({
 
     const findStaffByAnyId = (sId: string) => {
         if (!sId) return undefined;
-        return staffs.find((st) => {
+        return staffDirectory.find((st) => {
             const stAny = st as unknown as Record<string, unknown>;
             const accAny = (st.account || {}) as unknown as Record<string, unknown>;
             const profAny = (accAny.profile || {}) as Record<string, unknown>;
@@ -1614,16 +1776,95 @@ export function WorkflowDiagram({
         }
     };
 
+    const closeStepDetail = () => {
+        setSelectedStepNode(null);
+        setEditingStepId(null);
+        setEditingSpecialtyId('');
+        setEditingRoomId('');
+        setEditingStaffId('');
+        setEditingStepStatus('');
+        setEditingRequiredStepId('');
+        setEditingOldRequiredStepId('');
+    };
+
+    const openStepDetail = (stepId: string, fallbackNode?: FlowNode) => {
+        const liveStep = orderedFlowSteps
+            .map((item) => asRecord(item))
+            .find((s) => s && String(s.step_id || '') === stepId);
+        const node = dynamicSteps.find((n) => n.id === stepId) || fallbackNode || null;
+        if (!liveStep && !node) return;
+
+        const roomInfo = (liveStep?.room_info as Record<string, unknown> | undefined) || undefined;
+        const specialtyInfo = (liveStep?.specialty_info as Record<string, unknown> | undefined) || undefined;
+        const currentRoomId =
+            (typeof roomInfo?.room_id === 'string' && roomInfo.room_id) ||
+            (typeof liveStep?.room_id === 'string' && liveStep.room_id) ||
+            node?.detail?.roomId ||
+            '';
+        const currentRoom = rooms.find((r) => r.room_id === currentRoomId);
+        const currentSpecialtyId =
+            currentRoom?.specialty_id ||
+            (typeof roomInfo?.specialty_id === 'string' && roomInfo.specialty_id) ||
+            (typeof specialtyInfo?.specialty_id === 'string' && specialtyInfo.specialty_id) ||
+            '';
+        const stepStatus = normalizeStepStatusForApi(
+            (typeof liveStep?.step_status === 'string' && liveStep.step_status) ||
+                node?.detail?.stepStatus ||
+                ''
+        );
+        const currentRequired = liveStep ? pickLiveRequiredStepId(liveStep) : '';
+
+        setEditingStepId(stepId);
+        setEditingSpecialtyId(currentSpecialtyId);
+        setEditingRoomId(currentRoomId);
+        setEditingStaffId(pickDoctorOnDutyForRoom(currentRoomId));
+        setEditingStepStatus(stepStatus);
+        setEditingRequiredStepId(currentRequired);
+        setEditingOldRequiredStepId(currentRequired);
+        setSelectedStepNode(
+            node || {
+                id: stepId,
+                Icon: Stethoscope,
+                label:
+                    (typeof liveStep?.step_name === 'string' && liveStep.step_name) ||
+                    'Bước quy trình',
+                status: 'pending',
+                roomName:
+                    (typeof roomInfo?.room_name === 'string' && roomInfo.room_name) || undefined,
+                staffName: undefined,
+                detail: {
+                    source: 'live',
+                    stepStatus,
+                    roomId: currentRoomId || undefined,
+                },
+            }
+        );
+    };
+
     const handleCancelStep = async (stepId: string) => {
         if (!accessToken) return;
+        const liveStep = orderedFlowSteps
+            .map((item) => asRecord(item))
+            .find((s) => s && String(s.step_id || '') === stepId);
+        if (liveStep && isStepContentLocked(String(liveStep.step_status || ''))) {
+            setError('Không thể xóa bước đang thực hiện hoặc đã hoàn tất.');
+            return;
+        }
+        if (liveStep && isProtectedBaseStep(liveStep)) {
+            setError('Không thể xóa bước cơ bản của quy trình.');
+            return;
+        }
         setIsActionLoading(true);
         try {
-            await clinicalService.updateStepStatus(stepId, 'CANCELLED', accessToken);
+            await updateServiceOrderFromStep(liveStep, { status: 'CANCELLED' }, accessToken);
+            closeStepDetail();
             const latestFlow = await reloadFlow();
             onFlowChanged?.(latestFlow);
         } catch (err) {
             console.error('Failed to cancel step:', err);
-            setError('Không thể hủy bước khám.');
+            setError(
+                err instanceof Error ? err.message : 'Không thể hủy bước khám.'
+            );
         } finally {
             setIsActionLoading(false);
         }
@@ -1635,81 +1876,59 @@ export function WorkflowDiagram({
         const liveStep = orderedFlowSteps
             .map((item) => asRecord(item))
             .find((s) => s && String(s.step_id || '') === stepId);
-        const linkedOrderId =
-            typeof liveStep?.service_order_id === 'string'
-                ? liveStep.service_order_id.trim()
-                : '';
         const nextStatus = (editingStepStatus || '').trim().toUpperCase();
-        const hasRoom = Boolean(editingRoomId);
+        const contentLocked = isStepContentLocked(
+            (typeof liveStep?.step_status === 'string' && liveStep.step_status) || nextStatus
+        );
+        const hasRoom = Boolean(editingRoomId) && !contentLocked;
         const hasStatus = Boolean(nextStatus);
+        const canEditStatus = liveStep ? canCurrentDoctorEditStepStatus(liveStep) : true;
 
-        if (!hasRoom && !hasStatus) {
+        if (!hasStatus && !hasRoom) {
             setError('Vui lòng chọn phòng hoặc đổi trạng thái trước khi lưu.');
+            return;
+        }
+        if (hasStatus && !canEditStatus) {
+            setError('Bác sĩ chỉ có thể sửa trạng thái ở bước mình phụ trách.');
             return;
         }
 
         setIsActionLoading(true);
         setError(null);
         try {
-            // Bước thanh toán thường không có phòng — chỉ cập nhật room khi bác sĩ chọn
-            if (hasRoom) {
-                const payload: { room_id: string; staff_id?: string } = {
-                    room_id: editingRoomId,
-                };
-                if (editingStaffId) {
-                    payload.staff_id = editingStaffId;
-                }
-                await clinicalService.updateStep(stepId, payload, accessToken);
-            }
+            await updateServiceOrderFromStep(
+                liveStep,
+                {
+                    room_id: hasRoom ? editingRoomId : undefined,
+                    assign_by_staff_id: hasRoom && editingStaffId ? editingStaffId : undefined,
+                    status: hasStatus ? nextStatus : undefined,
+                },
+                accessToken
+            );
 
-            if (hasStatus) {
-                await updateStepStatusWithFallback(stepId, nextStatus, accessToken);
-
-                // Đồng bộ service order gắn với step (thanh toán / chỉ định)
-                if (linkedOrderId) {
-                    const orderStatus =
-                        nextStatus === 'COMPLETED' || nextStatus === 'DONE'
-                            ? 'COMPLETED'
-                            : nextStatus === 'CANCELLED' || nextStatus === 'CANCELED'
-                              ? 'CANCELLED'
-                              : nextStatus === 'IN_PROGRESS'
-                                ? 'IN_PROGRESS'
-                                : 'PENDING';
-                    try {
-                        await serviceOrderService.updateOrder(
-                            linkedOrderId,
-                            { status: orderStatus },
+            if (!contentLocked) {
+                const nextRequired = editingRequiredStepId.trim();
+                const oldRequired = editingOldRequiredStepId.trim();
+                if (nextRequired && nextRequired !== stepId) {
+                    if (!oldRequired) {
+                        await clinicalService.createStepDependency(
+                            { waiting_step_id: stepId, required_step_id: nextRequired },
                             accessToken
                         );
-                    } catch (orderErr) {
-                        console.warn('Failed to sync service order status', orderErr);
+                    } else if (oldRequired !== nextRequired) {
+                        await clinicalService.updateStepDependency(
+                            {
+                                waiting_step_id: stepId,
+                                old_required_step_id: oldRequired,
+                                new_required_step_id: nextRequired,
+                            },
+                            accessToken
+                        );
                     }
                 }
             }
 
-            const nextRequired = editingRequiredStepId.trim();
-            const oldRequired = editingOldRequiredStepId.trim();
-            if (nextRequired && nextRequired !== stepId) {
-                if (!oldRequired) {
-                    await clinicalService.createStepDependency(
-                        { waiting_step_id: stepId, required_step_id: nextRequired },
-                        accessToken
-                    );
-                } else if (oldRequired !== nextRequired) {
-                    await clinicalService.updateStepDependency(
-                        {
-                            waiting_step_id: stepId,
-                            old_required_step_id: oldRequired,
-                            new_required_step_id: nextRequired,
-                        },
-                        accessToken
-                    );
-                }
-            }
-
-            setEditingStepId(null);
-            setEditingRequiredStepId('');
-            setEditingOldRequiredStepId('');
+            closeStepDetail();
             const latestFlow = await reloadFlow();
             onFlowChanged?.(latestFlow);
         } catch (err) {
@@ -1795,14 +2014,12 @@ export function WorkflowDiagram({
                     service_code: resolvedServiceCode,
                     specialty_id: specialtyId,
                     room_id: selectedRoomId,
-                    is_payment: addStepRequirePayment,
                 },
                 accessToken
             );
             setSelectedRoomId('');
             setSelectedStaffId('');
             setSelectedServiceCode('');
-            setAddStepRequirePayment(true);
             let flowObj = await reloadFlow();
 
             try {
@@ -1993,33 +2210,48 @@ export function WorkflowDiagram({
 
     const handleUpdateDraftStep = (tempId: string, updates: Partial<DraftStep>) => {
         setDraftSteps(prev => prev.map(step => {
-            if (step.tempId === tempId) {
-                const updated = { ...step, ...updates };
-                if (updates.room_id !== undefined && updates.staff_id === undefined) {
-                    updated.staff_id = ''; // Reset staff when room changes
-                }
-                if (updates.room_id !== undefined) {
-                    updated.doctor_name = getStaffOnDutyForRoom(updates.room_id) || 'Chưa có bác sĩ';
-                    if (!updated.service_code) {
-                        const room = rooms.find((r) => r.room_id === updates.room_id);
-                        updated.service_code = pickServiceCodeByContext(
-                            {
-                                roomType: getRoomTypeValue(room),
-                                roomName: room?.room_name,
-                                specialtyName: room?.specialty?.specialty_name,
-                            },
-                            serviceOptions
-                        );
-                    }
-                }
-                return updated;
-            }
-            return step;
-        }));
-    };
+            if (step.tempId !== tempId) return step;
+            if (isDraftPaymentStep(step)) return step; // không cho sửa bước thanh toán
 
-    const handleRemoveDraftStep = (tempId: string) => {
-        setDraftSteps(prev => prev.filter(step => step.tempId !== tempId));
+            const updated = { ...step, ...updates };
+            if (updates.specialty_id !== undefined && updates.room_id === undefined) {
+                // Đổi chuyên khoa → clear phòng nếu phòng không thuộc specialty mới
+                if (
+                    updated.room_id &&
+                    !rooms.some(
+                        (r) =>
+                            r.room_id === updated.room_id &&
+                            r.specialty_id === updates.specialty_id
+                    )
+                ) {
+                    updated.room_id = '';
+                    updated.staff_id = '';
+                    updated.doctor_name = 'Chưa có bác sĩ';
+                }
+            }
+            if (updates.room_id !== undefined && updates.staff_id === undefined) {
+                updated.staff_id = pickDoctorOnDutyForRoom(updates.room_id) || '';
+            }
+            if (updates.room_id !== undefined) {
+                const room = rooms.find((r) => r.room_id === updates.room_id);
+                // Specialty theo phòng đã chọn
+                if (room?.specialty_id) {
+                    updated.specialty_id = room.specialty_id;
+                }
+                updated.doctor_name = getStaffOnDutyForRoom(updates.room_id) || 'Chưa có bác sĩ';
+                if (!updated.service_code) {
+                    updated.service_code = pickServiceCodeByContext(
+                        {
+                            roomType: getRoomTypeValue(room),
+                            roomName: room?.room_name,
+                            specialtyName: room?.specialty?.specialty_name,
+                        },
+                        serviceOptions
+                    );
+                }
+            }
+            return updated;
+        }));
     };
 
     const handleAddDraftStep = (specialty_id: string, room_id: string, staff_id: string, service_code: string) => {
@@ -2028,12 +2260,21 @@ export function WorkflowDiagram({
             setError('Vui lòng chọn mã dịch vụ cho bước nháp.');
             return;
         }
+        const room = rooms.find(r => r.room_id === room_id);
+        if (specialty_id && room?.specialty_id && specialty_id !== room.specialty_id) {
+            setError('Phòng đã chọn không thuộc chuyên khoa. Vui lòng chọn lại.');
+            return;
+        }
+        const resolvedSpecialtyId = specialty_id || room?.specialty_id || '';
+        if (!resolvedSpecialtyId) {
+            setError('Vui lòng chọn chuyên khoa trước.');
+            return;
+        }
         const resolvedStaffId = staff_id || pickDoctorOnDutyForRoom(room_id);
         if (!resolvedStaffId) {
             setError('Không tìm thấy bác sĩ/nhân viên trực cho phòng đã chọn. Vui lòng chọn phòng khác hoặc phân ca trước.');
             return;
         }
-        const room = rooms.find(r => r.room_id === room_id);
         const doctorName = getStaffOnDutyForRoom(room_id) || 'Chưa có bác sĩ';
         const nextIdx = draftSteps.length;
         const templateStepId = `step_${nextIdx + 1}`;
@@ -2041,7 +2282,7 @@ export function WorkflowDiagram({
         const newStep: DraftStep = {
             tempId: `draft-custom-${Date.now()}`,
             step_name: room?.room_name || 'Chỉ định thêm',
-            specialty_id,
+            specialty_id: resolvedSpecialtyId,
             room_type: roomType,
             room_id,
             staff_id: resolvedStaffId,
@@ -2082,24 +2323,33 @@ export function WorkflowDiagram({
             getRoomTypeValue
         );
 
-        // Validate service steps (payment companions may not need staff)
-        const missingRoom = expandedForValidation.find(
-            (s) => !s.room_id && normalizeStepType(s.step_type, s.room_type) !== 'PAYMENT'
-        );
+        // Validate service steps only (payment companions ẩn khỏi UI, tự gán sau)
+        const serviceDrafts = expandedForValidation.filter((s) => !isDraftPaymentStep(s));
+        const missingRoom = serviceDrafts.find((s) => !s.room_id);
         if (missingRoom) {
             setError(`Vui lòng chọn phòng cho bước "${missingRoom.step_name}".`);
             return;
         }
 
-        const missingStaff = expandedForValidation.find(
-            (s) => !s.staff_id && normalizeStepType(s.step_type, s.room_type) !== 'PAYMENT'
-        );
+        const invalidSpecialty = serviceDrafts.find((s) => {
+            if (!s.room_id || !s.specialty_id) return false;
+            const room = rooms.find((r) => r.room_id === s.room_id);
+            return Boolean(room?.specialty_id && room.specialty_id !== s.specialty_id);
+        });
+        if (invalidSpecialty) {
+            setError(
+                `Phòng của bước "${invalidSpecialty.step_name}" không khớp chuyên khoa đã chọn.`
+            );
+            return;
+        }
+
+        const missingStaff = serviceDrafts.find((s) => !s.staff_id);
         if (missingStaff) {
             setError(`Bước "${missingStaff.step_name}" chưa có bác sĩ/nhân viên phụ trách.`);
             return;
         }
 
-        const missingServiceCode = expandedForValidation.find((s) => !s.service_code);
+        const missingServiceCode = serviceDrafts.find((s) => !s.service_code);
         if (missingServiceCode) {
             setError(`Bước "${missingServiceCode.step_name}" chưa có mã dịch vụ.`);
             return;
@@ -2154,15 +2404,17 @@ export function WorkflowDiagram({
                 if (stepId) appendedLiveIds.push(stepId);
                 if (!stepId || !draft.room_id) continue;
 
-                const patch: { room_id: string; staff_id?: string } = {
-                    room_id: draft.room_id,
-                };
-                if (draft.staff_id) patch.staff_id = draft.staff_id;
-
                 try {
-                    await clinicalService.updateStep(stepId, patch, accessToken);
+                    await updateServiceOrderFromStep(
+                        live,
+                        {
+                            room_id: draft.room_id,
+                            assign_by_staff_id: draft.staff_id || undefined,
+                        },
+                        accessToken
+                    );
                 } catch (patchErr) {
-                    console.warn('Failed to patch room/staff for step', stepId, patchErr);
+                    console.warn('Failed to patch room/staff via service-order for step', stepId, patchErr);
                 }
             }
 
@@ -2267,6 +2519,14 @@ export function WorkflowDiagram({
             );
 
             const { staffName, staffId: resolvedStaffId } = resolveLiveStepStaff(step);
+            const roomType = String(
+                (roomInfo?.room_type as string) || (step.room_type as string) || ''
+            );
+            const isPayment = isPaymentFlowNode({
+                label: rawLabel,
+                stepType: String(step.step_type || ''),
+                roomType,
+            });
 
             dynamicSteps.push({
                 id: stepId,
@@ -2275,6 +2535,7 @@ export function WorkflowDiagram({
                 label,
                 roomName,
                 staffName,
+                isPayment,
                 detail: {
                     source: 'live',
                     stepStatus,
@@ -2344,6 +2605,7 @@ export function WorkflowDiagram({
                 label: rawName,
                 roomName: order.room_info?.room_name || roomType || undefined,
                 staffName: undefined,
+                isPayment: isPaymentFlowNode({ label: rawName, roomType }),
                 detail: {
                     source: 'service-order',
                     stepStatus: String(order.status || 'PENDING'),
@@ -2376,6 +2638,11 @@ export function WorkflowDiagram({
                 label,
                 roomName: roomObj?.room_name || 'Chưa phân phòng',
                 staffName: getStaffOnDutyForRoom(dStep.room_id) || 'Chưa phân công',
+                isPayment: isPaymentFlowNode({
+                    label,
+                    stepType: dStep.step_type,
+                    roomType: dStep.room_type,
+                }),
                 detail: {
                     source: 'draft',
                     stepStatus: 'NOT_STARTED',
@@ -2432,9 +2699,12 @@ export function WorkflowDiagram({
             <div className="flex flex-col items-center w-full space-y-1">
                 {dynamicSteps.map((node, idx) => (
                     <div key={node.id} className="flex flex-col items-center w-full">
-                        <FlowIcon node={node} isFirst={idx === 0} onClick={() => setSelectedStepNode(node)} />
+                        <FlowIcon node={node} isFirst={idx === 0} onClick={() => openStepDetail(node.id, node)} />
                         {idx < dynamicSteps.length - 1 && (
-                            <Connector status={node.status} />
+                            <Connector
+                                status={node.status}
+                                compact={Boolean(node.isPayment || dynamicSteps[idx + 1]?.isPayment)}
+                            />
                         )}
                     </div>
                 ))}
@@ -2508,12 +2778,12 @@ export function WorkflowDiagram({
                     <DialogHeader>
                         <DialogTitle>Tùy chỉnh Quy trình của Bệnh nhân</DialogTitle>
                         <DialogDescription>
-                            Chỉnh sửa phòng, nhân viên phụ trách hoặc thêm/hủy các bước của quy trình hiện tại.
+                            Xem danh sách bước hiện tại (nhấn vào bước để sửa/xóa) hoặc thêm bước khám mới bên dưới.
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="my-6 space-y-4">
-                        {/* List of current steps */}
+                        {/* List of current steps — click opens detail (edit/delete) */}
                         <div className="border border-neutral-100 rounded-2xl overflow-hidden divide-y divide-neutral-100 bg-neutral-50/50">
                             {orderedFlowSteps.map((stepItem, idx) => {
                                 const step = stepItem as Record<string, unknown>;
@@ -2521,9 +2791,6 @@ export function WorkflowDiagram({
                                 const stepStatus = ((step.step_status as string) || '').toUpperCase();
                                 if (shouldHideLiveFlowStep(step)) return null;
 
-                                const canEditStatus = canCurrentDoctorEditStepStatus(step);
-
-                                const isStepEditing = editingStepId === stepId;
                                 const roomInfo = step.room_info as Record<string, unknown> | undefined;
                                 const specialtyInfo = step.specialty_info as Record<string, unknown> | undefined;
                                 const roomName = (roomInfo?.room_name as string) || '';
@@ -2538,202 +2805,44 @@ export function WorkflowDiagram({
                                     });
 
                                 return (
-                                    <div key={stepId} className="p-4 flex items-center justify-between gap-4 bg-white">
+                                    <button
+                                        key={stepId}
+                                        type="button"
+                                        onClick={() => openStepDetail(stepId)}
+                                        className="w-full p-4 flex items-center justify-between gap-4 bg-white text-left hover:bg-neutral-50/80 transition-colors cursor-pointer"
+                                    >
                                         <div className="flex-1 min-w-0">
                                             <p className="font-bold text-neutral-800 text-sm">{stepName}</p>
-
-                                            {!isStepEditing && (
-                                                <div className="flex gap-4 text-xs text-neutral-400 mt-1 font-medium flex-wrap">
-                                                    <span>Phòng: <strong className="text-neutral-600 font-semibold">{roomName || 'Chưa phân công'}</strong></span>
-                                                    <span>Chuyên khoa: <strong className="text-neutral-600 font-semibold">{specialtyName || 'Chưa phân khoa'}</strong></span>
-                                                    <span>Bác sĩ trực: <strong className="text-[#5B4ED6] font-semibold">{dynamicSteps.find((n) => n.id === stepId)?.staffName || 'Chưa có bác sĩ'}</strong></span>
-                                                    <span className="flex items-center gap-1">
-                                                        Trạng thái:
-                                                        <select
-                                                            value={stepStatus}
-                                                            onChange={async (e) => {
-                                                                if (!accessToken) return;
-                                                                if (!canEditStatus) {
-                                                                    setError('Bác sĩ chỉ có thể sửa trạng thái ở bước mình phụ trách.');
-                                                                    return;
-                                                                }
-
-                                                                const newStatus = e.target.value;
-                                                                try {
-                                                                    setIsActionLoading(true);
-                                                                    await clinicalService.updateStepStatus(stepId, newStatus, accessToken);
-                                                                    await reloadFlow();
-                                                                } catch (err) {
-                                                                    console.error('Failed to update step status:', err);
-                                                                    setError('Không thể cập nhật trạng thái.');
-                                                                } finally {
-                                                                    setIsActionLoading(false);
-                                                                }
-                                                            }}
-                                                            disabled={isActionLoading || !canEditStatus}
-                                                            className="bg-neutral-50 hover:bg-neutral-100 text-brand-600 border border-neutral-200 rounded-md px-1.5 py-0.5 text-[11px] font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-500/20"
-                                                        >
-                                                            <option value="PENDING">PENDING</option>
-                                                            <option value="IN_PROGRESS">IN_PROGRESS</option>
-                                                            <option value="COMPLETED">COMPLETED</option>
-                                                            <option value="DECLINED">DECLINED</option>
-                                                            <option value="CANCELLED">CANCELLED</option>
-                                                        </select>
-                                                    </span>
-                                                </div>
-                                            )}
-
-                                            {isStepEditing && (
-                                                <div className="grid grid-cols-2 gap-3 mt-3">
-                                                    <div>
-                                                        <label className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 block mb-1">Chuyên khoa</label>
-                                                        <select
-                                                            value={editingSpecialtyId}
-                                                            onChange={(e) => handleEditingSpecialtyChange(e.target.value)}
-                                                            className="w-full text-xs font-bold p-2.5 rounded-xl border border-neutral-200"
-                                                        >
-                                                            <option value="">Chọn chuyên khoa</option>
-                                                            {specialties.map((specialty) => (
-                                                                <option key={specialty.id} value={specialty.id}>{specialty.name}</option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 block mb-1">Phòng khám</label>
-                                                        <select
-                                                            value={editingRoomId}
-                                                            onChange={(e) => handleEditingRoomChange(e.target.value)}
-                                                            disabled={!editingSpecialtyId}
-                                                            className="w-full text-xs font-bold p-2.5 rounded-xl border border-neutral-200 disabled:bg-neutral-50 disabled:text-neutral-400"
-                                                        >
-                                                            <option value="">Chọn phòng</option>
-                                                            {getRoomsBySpecialty(editingSpecialtyId).map((r) => (
-                                                                <option key={r.room_id} value={r.room_id}>{r.room_name}</option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-
-                                                    <div className="col-span-2">
-                                                        <label className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 block mb-1">Trạng thái</label>
-                                                        <select
-                                                            value={editingStepStatus}
-                                                            onChange={(e) => setEditingStepStatus(e.target.value)}
-                                                            className="w-full text-xs font-bold p-2.5 rounded-xl border border-neutral-200 bg-white"
-                                                        >
-                                                            <option value="PENDING">PENDING</option>
-                                                            <option value="IN_PROGRESS">IN_PROGRESS</option>
-                                                            <option value="COMPLETED">COMPLETED</option>
-                                                            <option value="DECLINED">DECLINED</option>
-                                                            <option value="CANCELLED">CANCELLED</option>
-                                                        </select>
-                                                    </div>
-
-                                                    <div className="col-span-2">
-                                                        <label className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 block mb-1">
-                                                            Phụ thuộc vào
-                                                        </label>
-                                                        <select
-                                                            value={editingRequiredStepId}
-                                                            onChange={(e) => setEditingRequiredStepId(e.target.value)}
-                                                            className="w-full text-xs font-bold p-2.5 rounded-xl border border-neutral-200 bg-white"
-                                                        >
-                                                            <option value="">
-                                                                {editingOldRequiredStepId
-                                                                    ? 'Giữ nguyên (không hỗ trợ xóa)'
-                                                                    : 'Không phụ thuộc'}
-                                                            </option>
-                                                            {orderedFlowSteps.map((depItem, depIdx) => {
-                                                                const dep = asRecord(depItem);
-                                                                const depId =
-                                                                    typeof dep?.step_id === 'string' ? dep.step_id : '';
-                                                                const depStatus = String(dep?.step_status || '').toUpperCase();
-                                                                if (!depId || depId === stepId || depStatus === 'CANCELLED') {
-                                                                    return null;
-                                                                }
-                                                                const depRoom = dep?.room_info as
-                                                                    | Record<string, unknown>
-                                                                    | undefined;
-                                                                const depName =
-                                                                    (typeof dep?.step_name === 'string' && dep.step_name) ||
-                                                                    (typeof depRoom?.room_name === 'string' &&
-                                                                        depRoom.room_name) ||
-                                                                    `Bước ${depIdx + 1}`;
-                                                                return (
-                                                                    <option key={depId} value={depId}>
-                                                                        {depName}
-                                                                    </option>
-                                                                );
-                                                            })}
-                                                        </select>
-                                                    </div>
-                                                </div>
-                                            )}
+                                            <div className="flex gap-4 text-xs text-neutral-400 mt-1 font-medium flex-wrap">
+                                                <span>
+                                                    Phòng:{' '}
+                                                    <strong className="text-neutral-600 font-semibold">
+                                                        {roomName || 'Chưa phân công'}
+                                                    </strong>
+                                                </span>
+                                                <span>
+                                                    Chuyên khoa:{' '}
+                                                    <strong className="text-neutral-600 font-semibold">
+                                                        {specialtyName || 'Chưa phân khoa'}
+                                                    </strong>
+                                                </span>
+                                                <span>
+                                                    Bác sĩ trực:{' '}
+                                                    <strong className="text-[#5B4ED6] font-semibold">
+                                                        {dynamicSteps.find((n) => n.id === stepId)?.staffName ||
+                                                            'Chưa có bác sĩ'}
+                                                    </strong>
+                                                </span>
+                                                <span>
+                                                    Trạng thái:{' '}
+                                                    <strong className="text-neutral-600 font-semibold">
+                                                        {formatStepStatusVi(stepStatus)}
+                                                    </strong>
+                                                </span>
+                                            </div>
                                         </div>
-
-                                        <div className="flex items-center gap-1.5 shrink-0">
-                                            {isStepEditing ? (
-                                                <>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => void handleUpdateStep(stepId)}
-                                                        disabled={isActionLoading}
-                                                        className="px-3 py-1.5 bg-brand-500 text-white rounded-xl text-xs font-bold hover:bg-brand-600 transition-colors disabled:opacity-50"
-                                                    >
-                                                        {isActionLoading ? 'Đang lưu...' : 'Lưu'}
-                                                    </button>
-                                                    <button
-                                                        onClick={() => {
-                                                            setEditingStepId(null);
-                                                            setEditingRequiredStepId('');
-                                                            setEditingOldRequiredStepId('');
-                                                        }}
-                                                        className="px-3 py-1.5 bg-neutral-100 text-neutral-600 rounded-xl text-xs font-bold hover:bg-neutral-200 transition-colors"
-                                                    >
-                                                        Hủy
-                                                    </button>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <button
-                                                        onClick={() => {
-                                                            const currentRoomId = (roomInfo?.room_id as string) || '';
-                                                            const currentRoom = rooms.find((r) => r.room_id === currentRoomId);
-                                                            const currentSpecialtyId =
-                                                                currentRoom?.specialty_id ||
-                                                                (roomInfo?.specialty_id as string) ||
-                                                                (specialtyInfo?.specialty_id as string) ||
-                                                                '';
-                                                            const currentRequired = pickLiveRequiredStepId(step);
-
-                                                            setEditingStepId(stepId);
-                                                            setEditingSpecialtyId(currentSpecialtyId);
-                                                            setEditingRoomId(currentRoomId);
-                                                            setEditingStaffId(pickDoctorOnDutyForRoom(currentRoomId));
-                                                            setEditingStepStatus(normalizeStepStatusForApi(stepStatus));
-                                                            setEditingRequiredStepId(currentRequired);
-                                                            setEditingOldRequiredStepId(currentRequired);
-                                                        }}
-                                                        className="p-2 text-neutral-400 hover:text-brand-500 hover:bg-neutral-50 rounded-xl transition-all cursor-pointer"
-                                                        title="Sửa bước"
-                                                    >
-                                                        <Edit3 className="w-4 h-4" />
-                                                    </button>
-
-                                                    {stepStatus !== 'COMPLETED' && !isProtectedBaseStep(step) && (
-                                                        <button
-                                                            onClick={() => handleCancelStep(stepId)}
-                                                            disabled={isActionLoading}
-                                                            className="p-2 text-neutral-400 hover:text-red-500 hover:bg-neutral-50 rounded-xl transition-all cursor-pointer disabled:opacity-50"
-                                                            title="Hủy bước"
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
+                                        <ChevronRight className="w-4 h-4 text-neutral-300 shrink-0" />
+                                    </button>
                                 );
                             })}
                         </div>
@@ -2789,15 +2898,6 @@ export function WorkflowDiagram({
                                 </div>
 
                             </div>
-                            <label className="flex items-center gap-2 text-xs text-neutral-700 cursor-pointer mb-3">
-                                <input
-                                    type="checkbox"
-                                    checked={addStepRequirePayment}
-                                    onChange={(e) => setAddStepRequirePayment(e.target.checked)}
-                                    className="rounded border-neutral-300"
-                                />
-                                Yêu cầu thanh toán
-                            </label>
                             <button
                                 onClick={handleAddStep}
                                 disabled={!selectedRoomId || !selectedServiceCode}
@@ -2823,120 +2923,110 @@ export function WorkflowDiagram({
                     <DialogHeader>
                         <DialogTitle>Cấu hình & Thêm template</DialogTitle>
                         <DialogDescription>
-                            Gán phòng/nhân viên cho các bước template. Khi lưu, hệ thống gọi assign theo template_id và thêm sau Đặt khám / Khám bệnh.
+                            Chọn chuyên khoa rồi chọn phòng thuộc chuyên khoa đó. Bước thanh toán được hệ thống xử lý tự động — không hiện / không sửa tại đây.
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="my-6 space-y-4">
-                        {/* List of draft steps */}
+                        {/* List of draft steps (ẩn thanh toán) */}
                         <div className="border border-neutral-100 rounded-2xl overflow-hidden divide-y divide-neutral-100 bg-neutral-50/50">
-                            {draftSteps.map((step, idx) => {
+                            {draftSteps.filter((s) => !isDraftPaymentStep(s)).map((step, idx) => {
                                 return (
-                                    <div key={step.tempId} className="p-4 flex items-start justify-between gap-4 bg-white">
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <span className="w-5 h-5 rounded-full bg-[#F5F2FF] text-[#8B7CF6] font-bold text-[10px] flex items-center justify-center shrink-0">
-                                                    {idx + 1}
-                                                </span>
-                                                <p className="font-bold text-neutral-800 text-sm">{step.step_name}</p>
-                                            </div>
-
-                                            <div className="grid grid-cols-2 gap-3 mt-3">
-                                                <div>
-                                                    <label className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 block mb-1">
-                                                        Chuyên khoa
-                                                    </label>
-                                                    <select
-                                                        value={step.specialty_id}
-                                                        onChange={(e) => {
-                                                            handleUpdateDraftStep(step.tempId, {
-                                                                specialty_id: e.target.value,
-                                                                room_id: '',
-                                                                staff_id: '',
-                                                            });
-                                                        }}
-                                                        className="w-full text-xs font-bold p-2.5 rounded-xl border border-neutral-200 bg-white focus:border-[#8B7CF6] focus:outline-none"
-                                                    >
-                                                        <option value="">Chọn chuyên khoa</option>
-                                                        {specialties.map((specialty) => (
-                                                            <option key={specialty.id} value={specialty.id}>
-                                                                {specialty.name}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 block mb-1">
-                                                        Phòng khám
-                                                    </label>
-                                                    <select
-                                                        value={step.room_id}
-                                                        onChange={(e) => {
-                                                            const roomId = e.target.value;
-                                                            handleUpdateDraftStep(step.tempId, {
-                                                                room_id: roomId,
-                                                                staff_id: pickDoctorOnDutyForRoom(roomId),
-                                                            });
-                                                        }}
-                                                        disabled={!step.specialty_id}
-                                                        className="w-full text-xs font-bold p-2.5 rounded-xl border border-neutral-200 bg-white focus:border-[#8B7CF6] focus:outline-none disabled:bg-neutral-50 disabled:text-neutral-400"
-                                                    >
-                                                        <option value="">Chọn phòng</option>
-                                                        {getRoomsBySpecialty(step.specialty_id).map((r) => (
-                                                            <option key={r.room_id} value={r.room_id}>
-                                                                {r.room_name}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 block mb-1">
-                                                        Dịch vụ
-                                                    </label>
-                                                    <select
-                                                        value={step.service_code}
-                                                        onChange={(e) => {
-                                                            handleUpdateDraftStep(step.tempId, {
-                                                                service_code: e.target.value,
-                                                            });
-                                                        }}
-                                                        className="w-full text-xs font-bold p-2.5 rounded-xl border border-neutral-200 bg-white focus:border-[#8B7CF6] focus:outline-none"
-                                                    >
-                                                        {serviceOptions.map((service) => (
-                                                            <option key={service.service_id || service.service_code} value={service.service_code}>
-                                                                {service.service_name}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                                {step.room_id && (
-                                                    <div className="col-span-2">
-                                                        <label className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 block mb-1">
-                                                            Bác sĩ đang trực của phòng
-                                                        </label>
-                                                        <div className="w-full text-xs font-bold p-2.5 rounded-xl border border-neutral-200 bg-[#F5F2FF] text-[#5B4ED6] flex items-center gap-2">
-                                                            <UserCheck className="w-4 h-4 text-[#8B7CF6] shrink-0" />
-                                                            <span>{step.doctor_name || getStaffOnDutyForRoom(step.room_id) || 'Chưa có bác sĩ'}</span>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
+                                    <div key={step.tempId} className="p-4 bg-white">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-5 h-5 rounded-full bg-[#F5F2FF] text-[#8B7CF6] font-bold text-[10px] flex items-center justify-center shrink-0">
+                                                {idx + 1}
+                                            </span>
+                                            <p className="font-bold text-neutral-800 text-sm">{step.step_name}</p>
                                         </div>
 
-                                        <button
-                                            onClick={() => handleRemoveDraftStep(step.tempId)}
-                                            className="p-2 text-neutral-400 hover:text-red-500 hover:bg-neutral-50 rounded-xl transition-all cursor-pointer mt-1"
-                                            title="Xóa bước nháp"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        <div className="grid grid-cols-2 gap-3 mt-3">
+                                            <div>
+                                                <label className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 block mb-1">
+                                                    Chuyên khoa
+                                                </label>
+                                                <select
+                                                    value={step.specialty_id}
+                                                    onChange={(e) => {
+                                                        handleUpdateDraftStep(step.tempId, {
+                                                            specialty_id: e.target.value,
+                                                            room_id: '',
+                                                            staff_id: '',
+                                                        });
+                                                    }}
+                                                    className="w-full text-xs font-bold p-2.5 rounded-xl border border-neutral-200 bg-white focus:border-[#8B7CF6] focus:outline-none"
+                                                >
+                                                    <option value="">Chọn chuyên khoa</option>
+                                                    {specialties.map((specialty) => (
+                                                        <option key={specialty.id} value={specialty.id}>
+                                                            {specialty.name}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 block mb-1">
+                                                    Phòng khám
+                                                </label>
+                                                <select
+                                                    value={step.room_id}
+                                                    onChange={(e) => {
+                                                        const roomId = e.target.value;
+                                                        handleUpdateDraftStep(step.tempId, {
+                                                            room_id: roomId,
+                                                            staff_id: pickDoctorOnDutyForRoom(roomId),
+                                                        });
+                                                    }}
+                                                    disabled={!step.specialty_id}
+                                                    className="w-full text-xs font-bold p-2.5 rounded-xl border border-neutral-200 bg-white focus:border-[#8B7CF6] focus:outline-none disabled:bg-neutral-50 disabled:text-neutral-400"
+                                                >
+                                                    <option value="">Chọn phòng</option>
+                                                    {getRoomsBySpecialty(step.specialty_id).map((r) => (
+                                                        <option key={r.room_id} value={r.room_id}>
+                                                            {r.room_name}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 block mb-1">
+                                                    Dịch vụ
+                                                </label>
+                                                <select
+                                                    value={step.service_code}
+                                                    onChange={(e) => {
+                                                        handleUpdateDraftStep(step.tempId, {
+                                                            service_code: e.target.value,
+                                                        });
+                                                    }}
+                                                    className="w-full text-xs font-bold p-2.5 rounded-xl border border-neutral-200 bg-white focus:border-[#8B7CF6] focus:outline-none"
+                                                >
+                                                    {serviceOptions.map((service) => (
+                                                        <option key={service.service_id || service.service_code} value={service.service_code}>
+                                                            {service.service_name}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            {step.room_id && (
+                                                <div>
+                                                    <label className="text-[10px] font-bold uppercase tracking-wide text-neutral-400 block mb-1">
+                                                        Bác sĩ đang trực
+                                                    </label>
+                                                    <div className="w-full text-xs font-bold p-2.5 rounded-xl border border-neutral-200 bg-[#F5F2FF] text-[#5B4ED6] flex items-center gap-2 min-h-[42px]">
+                                                        <UserCheck className="w-4 h-4 text-[#8B7CF6] shrink-0" />
+                                                        <span>{step.doctor_name || getStaffOnDutyForRoom(step.room_id) || 'Chưa có bác sĩ'}</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 );
                             })}
 
-                            {draftSteps.length === 0 && (
+                            {draftSteps.filter((s) => !isDraftPaymentStep(s)).length === 0 && (
                                 <div className="p-8 text-center text-xs text-neutral-400 font-semibold">
-                                    Không có bước khám nào. Hãy thêm bước mới ở dưới.
+                                    Không có bước dịch vụ nào để cấu hình.
                                 </div>
                             )}
                         </div>
@@ -3000,7 +3090,7 @@ export function WorkflowDiagram({
                                     setSelectedStaffId('');
                                     setSelectedDraftServiceCode('');
                                 }}
-                                disabled={!selectedRoomId || !selectedDraftServiceCode}
+                                disabled={!selectedSpecialtyId || !selectedRoomId || !selectedDraftServiceCode}
                                 className="w-full bg-neutral-100 hover:bg-neutral-200 disabled:opacity-50 text-neutral-700 font-bold py-2 px-4 rounded-xl text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer border border-neutral-200"
                             >
                                 <Plus className="w-4 h-4" />
@@ -3012,7 +3102,13 @@ export function WorkflowDiagram({
                         <div className="pt-4 border-t border-neutral-100 flex gap-3">
                             <button
                                 onClick={handleCommitDraft}
-                                disabled={isAssigning || draftSteps.length === 0 || draftSteps.some(s => !s.room_id)}
+                                disabled={
+                                    isAssigning ||
+                                    draftSteps.filter((s) => !isDraftPaymentStep(s)).length === 0 ||
+                                    draftSteps
+                                        .filter((s) => !isDraftPaymentStep(s))
+                                        .some((s) => !s.room_id || !s.specialty_id)
+                                }
                                 className="flex-1 bg-brand-500 hover:bg-brand-600 disabled:bg-neutral-200 disabled:text-neutral-400 text-white font-bold py-3 px-4 rounded-xl text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
                             >
                                 {isAssigning ? (
@@ -3093,46 +3189,160 @@ export function WorkflowDiagram({
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={!!selectedStepNode} onOpenChange={(open) => !open && setSelectedStepNode(null)}>
+            <Dialog open={!!selectedStepNode} onOpenChange={(open) => !open && closeStepDetail()}>
                 <DialogContent className="max-w-lg" onClick={(e) => e.stopPropagation()}>
                     <DialogHeader>
                         <DialogTitle>Chi tiết bước quy trình</DialogTitle>
                         <DialogDescription>
-                            Thông tin chi tiết của bước bạn vừa chọn.
+                            Chỉnh sửa hoặc xóa bước đã chọn. Bước đang thực hiện / hoàn tất chỉ được đổi trạng thái.
                         </DialogDescription>
                     </DialogHeader>
 
-                    {selectedStepNode && (
-                        <div className="space-y-3 text-sm">
-                            <div className="rounded-xl border border-neutral-200 bg-neutral-50/70 p-3">
-                                <p className="text-xs text-neutral-500 font-semibold">Tên bước</p>
-                                <p className="font-bold text-neutral-800 mt-0.5">{selectedStepNode.label}</p>
-                            </div>
+                    {selectedStepNode && (() => {
+                        const detailStepId = editingStepId || selectedStepNode.id;
+                        const liveStep = orderedFlowSteps
+                            .map((item) => asRecord(item))
+                            .find((s) => s && String(s.step_id || '') === detailStepId);
+                        const liveStatus =
+                            (typeof liveStep?.step_status === 'string' && liveStep.step_status) ||
+                            selectedStepNode.detail?.stepStatus ||
+                            '';
+                        const contentLocked = isStepContentLocked(liveStatus);
+                        const canEditStatus = liveStep ? canCurrentDoctorEditStepStatus(liveStep) : true;
+                        const canDelete =
+                            Boolean(liveStep) &&
+                            !contentLocked &&
+                            !isProtectedBaseStep(liveStep!);
+                        const dutyStaffName =
+                            (editingStaffId && resolveStaffNameById(editingStaffId)) ||
+                            (editingRoomId && getStaffOnDutyForRoom(editingRoomId)) ||
+                            selectedStepNode.staffName ||
+                            'Chưa phân công';
+                        const roomOptions = editingSpecialtyId
+                            ? getRoomsBySpecialty(editingSpecialtyId)
+                            : rooms;
 
-                            <div className="grid grid-cols-2 gap-2">
-                                <div className="rounded-lg border border-neutral-200 p-2.5">
-                                    <p className="text-[11px] text-neutral-500 font-semibold">Trạng thái</p>
-                                    <p className="font-semibold text-neutral-800">{selectedStepNode.detail?.stepStatus || 'N/A'}</p>
+                        return (
+                            <div className="space-y-3 text-sm">
+                                <div className="rounded-xl border border-neutral-200 bg-neutral-50/70 p-3">
+                                    <p className="text-xs text-neutral-500 font-semibold">Tên bước</p>
+                                    <p className="font-bold text-neutral-800 mt-0.5">{selectedStepNode.label}</p>
                                 </div>
-                                <div className="rounded-lg border border-neutral-200 p-2.5">
-                                    <p className="text-[11px] text-neutral-500 font-semibold">Phòng</p>
-                                    <p className="font-semibold text-neutral-800">{selectedStepNode.roomName || selectedStepNode.detail?.roomId || 'N/A'}</p>
+
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="rounded-lg border border-neutral-200 p-2.5">
+                                        <p className="text-[11px] text-neutral-500 font-semibold mb-1">Trạng thái</p>
+                                        <select
+                                            value={editingStepStatus || normalizeStepStatusForApi(liveStatus)}
+                                            onChange={(e) => setEditingStepStatus(e.target.value)}
+                                            disabled={isActionLoading || !canEditStatus}
+                                            className="w-full text-xs font-bold p-2 rounded-lg border border-neutral-200 bg-white disabled:bg-neutral-50 disabled:text-neutral-400"
+                                        >
+                                            {STEP_STATUS_EDIT_OPTIONS.map((opt) => (
+                                                <option key={opt.value} value={opt.value}>
+                                                    {opt.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {!canEditStatus ? (
+                                            <p className="text-[10px] text-amber-600 mt-1 font-medium">
+                                                Chỉ sửa trạng thái ở bước bạn phụ trách.
+                                            </p>
+                                        ) : null}
+                                    </div>
+
+                                    <div className="rounded-lg border border-neutral-200 p-2.5">
+                                        <p className="text-[11px] text-neutral-500 font-semibold mb-1">Phòng</p>
+                                        {contentLocked ? (
+                                            <p className="font-semibold text-neutral-800">
+                                                {selectedStepNode.roomName ||
+                                                    selectedStepNode.detail?.roomId ||
+                                                    'Chưa gán phòng'}
+                                            </p>
+                                        ) : (
+                                            <select
+                                                value={editingRoomId}
+                                                onChange={(e) => {
+                                                    const roomId = e.target.value;
+                                                    handleEditingRoomChange(roomId);
+                                                    const room = rooms.find((r) => r.room_id === roomId);
+                                                    if (room?.specialty_id) {
+                                                        setEditingSpecialtyId(room.specialty_id);
+                                                    }
+                                                }}
+                                                disabled={isActionLoading}
+                                                className="w-full text-xs font-bold p-2 rounded-lg border border-neutral-200 bg-white"
+                                            >
+                                                <option value="">Chọn phòng</option>
+                                                {roomOptions.map((r) => (
+                                                    <option key={r.room_id} value={r.room_id}>
+                                                        {r.room_name}
+                                                        {r.specialty?.specialty_name
+                                                            ? ` · ${r.specialty.specialty_name}`
+                                                            : ''}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        )}
+                                    </div>
+
+                                    <div className="rounded-lg border border-neutral-200 p-2.5 col-span-2">
+                                        <p className="text-[11px] text-neutral-500 font-semibold mb-1">
+                                            Bác sĩ / Nhân viên
+                                        </p>
+                                        <p className="font-semibold text-neutral-800">{dutyStaffName}</p>
+                                        {!contentLocked ? (
+                                            <p className="text-[10px] text-neutral-400 mt-1">
+                                                Tự động theo ca trực của phòng đã chọn.
+                                            </p>
+                                        ) : (
+                                            <p className="text-[10px] text-neutral-400 mt-1">
+                                                Không thể đổi phòng/nhân viên khi bước đang thực hiện hoặc đã hoàn tất.
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
-                                <div className="rounded-lg border border-neutral-200 p-2.5">
-                                    <p className="text-[11px] text-neutral-500 font-semibold">Bác sĩ / Nhân viên</p>
-                                    <p className="font-semibold text-neutral-800">{selectedStepNode.staffName || selectedStepNode.detail?.staffId || 'N/A'}</p>
-                                </div>
-                                <div className="rounded-lg border border-neutral-200 p-2.5">
-                                    <p className="text-[11px] text-neutral-500 font-semibold">Payment status</p>
-                                    <p className="font-semibold text-neutral-800">{selectedStepNode.detail?.paymentStatus || 'N/A'}</p>
-                                </div>
-                                <div className="rounded-lg border border-neutral-200 p-2.5">
-                                    <p className="text-[11px] text-neutral-500 font-semibold">Specialty</p>
-                                    <p className="font-semibold text-neutral-800">{selectedStepNode.detail?.specialtyName || selectedStepNode.detail?.specialtyId || 'N/A'}</p>
+
+                                <div className="flex items-center justify-between gap-2 pt-2">
+                                    {canDelete ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => void handleCancelStep(detailStepId)}
+                                            disabled={isActionLoading}
+                                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 transition-colors disabled:opacity-50"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                            Xóa bước
+                                        </button>
+                                    ) : (
+                                        <span className="text-[10px] text-neutral-400 font-medium">
+                                            {contentLocked
+                                                ? 'Không thể xóa bước đang thực hiện / hoàn tất'
+                                                : ''}
+                                        </span>
+                                    )}
+
+                                    <div className="flex items-center gap-2 ml-auto">
+                                        <button
+                                            type="button"
+                                            onClick={closeStepDetail}
+                                            className="px-3 py-2 rounded-xl text-xs font-bold text-neutral-600 bg-neutral-100 hover:bg-neutral-200 transition-colors"
+                                        >
+                                            Đóng
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => void handleUpdateStep(detailStepId)}
+                                            disabled={isActionLoading || (!canEditStatus && contentLocked)}
+                                            className="px-3 py-2 rounded-xl text-xs font-bold text-white bg-brand-500 hover:bg-brand-600 transition-colors disabled:opacity-50"
+                                        >
+                                            {isActionLoading ? 'Đang lưu...' : 'Lưu thay đổi'}
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    )}
+                        );
+                    })()}
                 </DialogContent>
             </Dialog>
         </div>

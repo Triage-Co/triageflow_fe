@@ -104,16 +104,32 @@ function createArrowTexture(): THREE.Texture {
   canvas.height = 32;
   const ctx = canvas.getContext('2d')!;
 
-  // Transparent background
-  ctx.fillStyle = 'rgba(0, 0, 0, 0)';
-  ctx.fillRect(0, 0, 128, 32);
+  // Background: Transparent
+  ctx.clearRect(0, 0, 128, 32);
 
-  // Draw ">>>" white text on it
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 24px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('>>>', 64, 16);
+  // Draw three black triangles representing arrows pointing right
+  ctx.fillStyle = '#000000'; // Black color
+
+  // Triangle 1
+  ctx.beginPath();
+  ctx.moveTo(30, 8);
+  ctx.lineTo(46, 16);
+  ctx.lineTo(30, 24);
+  ctx.fill();
+
+  // Triangle 2
+  ctx.beginPath();
+  ctx.moveTo(60, 8);
+  ctx.lineTo(76, 16);
+  ctx.lineTo(60, 24);
+  ctx.fill();
+
+  // Triangle 3
+  ctx.beginPath();
+  ctx.moveTo(90, 8);
+  ctx.lineTo(106, 16);
+  ctx.lineTo(90, 24);
+  ctx.fill();
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
@@ -301,98 +317,7 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
     });
   };
 
-  const drawRouteLine = (scene: THREE.Scene) => {
-    // Clean up previous route line
-    if (routeLineRef.current) {
-      scene.remove(routeLineRef.current);
-      routeLineRef.current.geometry.dispose();
-      if (Array.isArray(routeLineRef.current.material)) {
-        routeLineRef.current.material.forEach((m) => m.dispose());
-      } else {
-        routeLineRef.current.material.dispose();
-      }
-      routeLineRef.current = null;
-    }
-
-    if (routeTextureRef.current) {
-      routeTextureRef.current.dispose();
-      routeTextureRef.current = null;
-    }
-
-    const currentPath = routePathRef.current;
-
-    // If we have a path, draw it
-    if (currentPath && currentPath.length >= 2 && floorData) {
-      const centerShiftX = floorData.centerShiftX ?? 0;
-      const centerShiftZ = floorData.centerShiftZ ?? 0;
-
-      // Filter only points on the CURRENT ACTIVE FLOOR
-      let currentFloorNodes = currentPath.filter((node: any) => {
-        if (node.floorId && floorData.floorId) {
-          return node.floorId === floorData.floorId;
-        }
-        if (node.floorNumber !== undefined && floorData.floorNumber !== undefined) {
-          return Number(node.floorNumber) === Number(floorData.floorNumber);
-        }
-        return true;
-      });
-
-      // Fallback: if filtered nodes are fewer than 2, draw the whole path
-      if (currentFloorNodes.length < 2) {
-        currentFloorNodes = currentPath;
-      }
-
-      if (currentFloorNodes.length >= 2) {
-        const points = currentFloorNodes.map((node: any) => {
-          const [lng, lat] = node.coords;
-          const x = lng * 111320 - centerShiftX;
-          const z = -(lat * 110540) - centerShiftZ;
-          return new THREE.Vector3(x, 0.4, z); // Elevated above the floor to float clearly
-        });
-
-        // Filter out duplicate consecutive points to prevent geometry issues
-        const uniquePoints: THREE.Vector3[] = [];
-        points.forEach((p) => {
-          if (uniquePoints.length === 0) {
-            uniquePoints.push(p);
-          } else {
-            const prev = uniquePoints[uniquePoints.length - 1];
-            if (p.distanceTo(prev) > 0.01) {
-              uniquePoints.push(p);
-            }
-          }
-        });
-
-        if (uniquePoints.length >= 2) {
-          try {
-            const curve = new THREE.CatmullRomCurve3(uniquePoints);
-            // Create a nice glowing thicker 3D Tube for the path
-            const geometry = new THREE.TubeGeometry(curve, 100, 0.3, 8, false);
-
-            const arrowTexture = createArrowTexture();
-            routeTextureRef.current = arrowTexture;
-
-            const material = new THREE.MeshStandardMaterial({
-              color: 0x111111, // Sleek glossy black tube
-              map: arrowTexture,
-              emissive: 0x000000, // Black color has no emission
-              roughness: 0.1, // Shiny surface
-              metalness: 0.9, // Glossy look
-              transparent: true,
-              depthWrite: false, // Prevents Z-sorting issues with slab/rooms
-              side: THREE.DoubleSide, // Always visible from all camera angles
-            });
-            const tube = new THREE.Mesh(geometry, material);
-            tube.renderOrder = 100; // Guaranteed to render after transparent floor slab
-            scene.add(tube);
-            routeLineRef.current = tube;
-          } catch (error) {
-            console.error('Failed to build curve or tube geometry:', error);
-          }
-        }
-      }
-    }
-  };
+  // Removed unused drawRouteLine helper to use drawRoutePath directly
 
   useEffect(() => {
     applyFloorColors(activeHighlightId);
@@ -411,35 +336,78 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
 
     clearPathMesh();
 
+    if (routeTextureRef.current) {
+      routeTextureRef.current.dispose();
+      routeTextureRef.current = null;
+    }
+
     if (!path || path.length < 2) return;
 
-    const points = path.map((node) => {
-      const { x, z } = lngLatToLocal(
-        node.coords[0],
-        node.coords[1],
-        floorData.centerShiftX ?? 0,
-        floorData.centerShiftZ ?? 0
-      );
-      return new THREE.Vector3(x, 0.4, z);
+    const centerShiftX = floorData.centerShiftX ?? 0;
+    const centerShiftZ = floorData.centerShiftZ ?? 0;
+
+    // Filter only points on the CURRENT ACTIVE FLOOR
+    let currentFloorNodes = path.filter((node: any) => {
+      if (node.floorId && floorData.floorId) {
+        return node.floorId === floorData.floorId;
+      }
+      if (node.floorNumber !== undefined && floorData.floorNumber !== undefined) {
+        return Number(node.floorNumber) === Number(floorData.floorNumber);
+      }
+      return true;
     });
 
+    // Fallback: if filtered nodes are fewer than 2, draw the whole path
+    if (currentFloorNodes.length < 2) {
+      currentFloorNodes = path;
+    }
+
+    if (currentFloorNodes.length < 2) return;
+
+    const points = currentFloorNodes.map((node) => {
+      const [lng, lat] = node.coords;
+      const x = lng * 111320 - centerShiftX;
+      const z = -(lat * 110540) - centerShiftZ;
+      return new THREE.Vector3(x, 0.4, z); // Elevated above the floor to float clearly
+    });
+
+    // Filter out duplicate consecutive points to prevent geometry issues
+    const uniquePoints: THREE.Vector3[] = [];
+    points.forEach((p) => {
+      if (uniquePoints.length === 0) {
+        uniquePoints.push(p);
+      } else {
+        const prev = uniquePoints[uniquePoints.length - 1];
+        if (p.distanceTo(prev) > 0.01) {
+          uniquePoints.push(p);
+        }
+      }
+    });
+
+    if (uniquePoints.length < 2) return;
+
     try {
-      const curve = new THREE.CatmullRomCurve3(points);
-      const tubeGeo = new THREE.TubeGeometry(curve, points.length * 4, 0.18, 8, false);
-      const tubeMat = new THREE.MeshStandardMaterial({
-        color: 0x06b6d4,
-        emissive: 0x0891b2,
-        emissiveIntensity: 0.6,
-        roughness: 0.1,
-        metalness: 0.8,
+      const curve = new THREE.CatmullRomCurve3(uniquePoints);
+      // Create a nice glowing thicker 3D Tube for the path with animated arrow texture
+      const geometry = new THREE.TubeGeometry(curve, 100, 0.3, 8, false);
+
+      const arrowTexture = createArrowTexture();
+      routeTextureRef.current = arrowTexture;
+
+      const material = new THREE.MeshBasicMaterial({
+        map: arrowTexture,
         transparent: true,
-        opacity: 0.85,
+        opacity: 0.95,
+        depthWrite: false, // Prevents Z-sorting issues with slab/rooms
+        side: THREE.DoubleSide, // Always visible from all camera angles
       });
-      const mesh = new THREE.Mesh(tubeGeo, tubeMat);
-      scene.add(mesh);
-      pathMeshRef.current = mesh;
-    } catch {
-      // Invalid path geometry — leave map without path overlay
+
+      const tube = new THREE.Mesh(geometry, material);
+      tube.renderOrder = 100; // Guaranteed to render after transparent floor slab
+      scene.add(tube);
+      pathMeshRef.current = tube;
+    } catch (error) {
+      console.error('Failed to build curve or tube geometry:', error);
     }
   };
 
@@ -504,8 +472,8 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       const spanZ =
         (floorData.bounds.maxZ - floorData.bounds.minZ) / 2 + 8;
       const aspect = canvas.clientWidth / Math.max(canvas.clientHeight, 1);
-      let halfW = Math.max(spanX, spanZ * aspect);
-      let halfH = halfW / aspect;
+      const halfW = Math.max(spanX, spanZ * aspect);
+      const halfH = halfW / aspect;
       ortho.left = -halfW;
       ortho.right = halfW;
       ortho.top = halfH;
@@ -722,8 +690,8 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
 
     const spanX = (floorData.bounds.maxX - floorData.bounds.minX) / 2 + 8;
     const spanZ = (floorData.bounds.maxZ - floorData.bounds.minZ) / 2 + 8;
-    let halfW = Math.max(spanX, spanZ * (width / Math.max(height, 1)));
-    let halfH = halfW / (width / Math.max(height, 1));
+    const halfW = Math.max(spanX, spanZ * (width / Math.max(height, 1)));
+    const halfH = halfW / (width / Math.max(height, 1));
     const ortho = new THREE.OrthographicCamera(
       -halfW,
       halfW,
@@ -1119,7 +1087,6 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       renderer.render(scene, activeCameraRef.current || camera);
     };
 
-    drawRouteLine(scene);
     animate();
 
     const handleResize = () => {

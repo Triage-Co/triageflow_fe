@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useKioskStore } from '../store/kioskStore';
-import { ArrowLeft, MapPin, Navigation, RotateCw, CheckCircle2, Clock, User } from 'lucide-react';
+import { ArrowLeft, MapPin, Navigation, RotateCw, CheckCircle2, Clock, User, X, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFlowStore } from '../store/flowStore';
 import { useAuthStore } from '../store/authStore';
@@ -37,6 +37,52 @@ export const DoctorRouteView: React.FC = () => {
   const clearTransactionQr = useFlowStore((state) => state.clearTransactionQr);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedDetailStep, setSelectedDetailStep] = useState<any>(null);
+
+  const pendingPaymentSteps = useFlowStore((state) => state.pendingPaymentSteps);
+  const selectPendingStep = useFlowStore((state) => state.selectPendingStep);
+
+  const handleStepClick = async (step: any) => {
+    const isPayment = step.title.toLowerCase().trim().startsWith('thanh toán');
+
+    if (isPayment) {
+      // VẤN ĐỀ 1: Nếu chưa tải danh sách đơn dịch vụ, gọi API tải ngay tại đây
+      if (patientId && pendingServiceOrders.length === 0) {
+        await fetchPendingServiceOrders(patientId);
+      }
+
+      // Lấy danh sách mới nhất từ store sau khi gọi API
+      const latestServiceOrders = useFlowStore.getState().pendingServiceOrders;
+      const stepSoId = step.rawStep?.service_order_id;
+
+      if (stepSoId) {
+        // Tìm đơn dịch vụ khớp với service_order_id của Step
+        const matchedServiceOrder = latestServiceOrders.find(
+          (order) => order.service_order_id === stepSoId
+        );
+
+        if (matchedServiceOrder) {
+          handleSelectPay(
+            matchedServiceOrder.service_order_id,
+            matchedServiceOrder.qr_code,
+            matchedServiceOrder.total_price
+          );
+          return;
+        }
+      }
+
+      // Nếu không khớp đơn dịch vụ nào, check tiếp trong bước thanh toán (ví dụ: phí khám ban đầu)
+      const matchedPending = pendingPaymentSteps.find(p => p.step_id === step.stepId);
+      if (matchedPending) {
+        selectPendingStep(matchedPending);
+      } else {
+        showToast('Bước thanh toán này hiện chưa sẵn sàng hoặc đã được xử lý!', 'info');
+      }
+    } else {
+      // VẤN ĐỀ 2: Nếu là Step khám/xét nghiệm thông thường, luôn chỉ hiện popup thông tin chi tiết
+      setSelectedDetailStep(step);
+    }
+  };
 
   const handleRefresh = async () => {
     if (!patientId) return;
@@ -225,6 +271,10 @@ export const DoctorRouteView: React.FC = () => {
                   const isWaiting = step.status === 'waiting';
                   const isLast = index === routeSteps.length - 1;
 
+                  const isPaymentStep = step.title.toLowerCase().trim().startsWith('thanh toán');
+                  const isPaidPayment = isPaymentStep && isCompleted;
+                  const isClickable = !isPaidPayment;
+
                   return (
                     <div key={step.id} className="flex items-center gap-4">
                       {/* LEFT SEPARATE TIMELINE COLUMN (OUTSIDE STEP BOX) */}
@@ -250,12 +300,14 @@ export const DoctorRouteView: React.FC = () => {
 
                       {/* RIGHT STEP ITEM CARD (SEPARATE FROM TIMELINE LINE) */}
                       <div
+                        onClick={() => isClickable && handleStepClick(step)}
                         className={cn(
                           "flex-1 p-4 lg:p-5 rounded-2xl border grid grid-cols-12 gap-4 items-center transition-all bg-white",
                           isInProgress && "bg-blue-50/90 border-[#155DFC] shadow-sm ring-1 ring-blue-200",
                           isCompleted && "bg-neutral-50/80 border-neutral-200/60 opacity-90",
                           isPending && "bg-amber-50/40 border-amber-200/80",
-                          isWaiting && "bg-white border-neutral-100 text-neutral-400"
+                          isWaiting && "bg-white border-neutral-100 text-neutral-400",
+                          isClickable ? "cursor-pointer hover:shadow-md hover:scale-[1.01] active:scale-95" : "pointer-events-none opacity-80"
                         )}
                       >
                         {/* Col 1: Title & Subtitle (5 cols) */}
@@ -354,6 +406,133 @@ export const DoctorRouteView: React.FC = () => {
         serviceOrderId={selectedServiceOrderId}
         onPaymentSuccess={handlePaymentSuccess}
       />
+
+      {/* Step Detail Modal */}
+      {selectedDetailStep && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-[32px] shadow-2xl border border-neutral-100 max-w-lg w-full p-8 relative flex flex-col space-y-6 animate-scale-up">
+            {/* Close Button */}
+            <button
+              onClick={() => setSelectedDetailStep(null)}
+              className="absolute top-6 right-6 w-10 h-10 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-600 flex items-center justify-center transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div className="space-y-1.5 border-b border-neutral-100 pb-4 pr-8 text-left">
+              <span className={cn(
+                "inline-flex items-center px-3 py-1 rounded-full text-xs font-extrabold border",
+                selectedDetailStep.status === 'completed' && "bg-blue-50 text-[#155DFC] border-blue-200",
+                selectedDetailStep.status === 'in_progress' && "bg-teal-50 text-teal-700 border-teal-200",
+                selectedDetailStep.status === 'waiting' && "bg-amber-50 text-amber-700 border-amber-200",
+                selectedDetailStep.status === 'pending' && "bg-neutral-50 text-neutral-500 border-neutral-200"
+              )}>
+                {selectedDetailStep.status === 'completed' ? 'Hoàn thành' : 
+                 selectedDetailStep.status === 'in_progress' ? 'Đang thực hiện' :
+                 selectedDetailStep.status === 'waiting' ? 'Đang chờ khám' : 'Chưa đến lượt'}
+              </span>
+              <h3 className="text-2xl font-black text-[#1E2939] tracking-tight">
+                {selectedDetailStep.title}
+              </h3>
+            </div>
+
+            {/* Details List */}
+            <div className="space-y-4 text-sm text-left">
+              {/* Room info */}
+              {selectedDetailStep.room && selectedDetailStep.room !== '---' && (
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-blue-50 text-[#155DFC] flex items-center justify-center shrink-0">
+                    <MapPin className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-neutral-400 block uppercase tracking-wider">Phòng khám</span>
+                    <span className="font-extrabold text-[#1E2939] text-base">{selectedDetailStep.room}</span>
+                    {selectedDetailStep.location && (
+                      <span className="text-neutral-500 text-xs font-semibold block">{selectedDetailStep.location}</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Doctor info */}
+              {(selectedDetailStep.subtitle || selectedDetailStep.rawStep?.staff?.full_name || selectedDetailStep.rawStep?.staff_info?.full_name) && (
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-blue-50 text-[#155DFC] flex items-center justify-center shrink-0">
+                    <User className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-xs font-bold text-neutral-400 block uppercase tracking-wider">Bác sĩ phụ trách</span>
+                    <span className="font-extrabold text-[#1E2939] text-base">
+                      {selectedDetailStep.rawStep?.staff?.full_name || selectedDetailStep.rawStep?.staff_info?.full_name || selectedDetailStep.subtitle}
+                    </span>
+                    
+                    {/* Additional staff details like license, experience */}
+                    <div className="space-y-1 text-xs text-neutral-500 font-semibold pt-1.5 border-t border-neutral-100">
+                      {selectedDetailStep.subtitle && (
+                        <p>Chuyên khoa: <span className="text-[#1E2939]">{selectedDetailStep.subtitle}</span></p>
+                      )}
+                      {typeof selectedDetailStep.rawStep?.staff?.experience_years === 'number' && (
+                        <p>Kinh nghiệm: <span className="text-[#1E2939]">{selectedDetailStep.rawStep.staff.experience_years} năm</span></p>
+                      )}
+                      {selectedDetailStep.rawStep?.staff?.license_number && (
+                        <p>GP hành nghề: <span className="text-[#1E2939] font-mono">{selectedDetailStep.rawStep.staff.license_number}</span></p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Queue number */}
+              {selectedDetailStep.queueNo && (
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-blue-50 text-[#155DFC] flex items-center justify-center shrink-0">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-neutral-400 block uppercase tracking-wider">Số thứ tự khám</span>
+                    <span className="font-black text-[#155DFC] text-lg">{selectedDetailStep.queueNo}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Waiting time */}
+              {selectedDetailStep.estimatedWait && (
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-blue-50 text-[#155DFC] flex items-center justify-center shrink-0">
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-neutral-400 block uppercase tracking-wider">Thời gian chờ dự kiến</span>
+                    <span className="font-extrabold text-[#1E2939]">~{selectedDetailStep.estimatedWait}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex gap-4 pt-2 border-t border-neutral-100">
+              <button
+                onClick={() => setSelectedDetailStep(null)}
+                className="flex-1 py-3.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-2xl font-black text-sm transition-all cursor-pointer active:scale-95"
+              >
+                Đóng
+              </button>
+              {selectedDetailStep.room && selectedDetailStep.room !== '---' && (
+                <button
+                  onClick={() => {
+                    navigateToMap(stripRoomName(selectedDetailStep.room || ''));
+                    setSelectedDetailStep(null);
+                  }}
+                  className="flex-1 py-3.5 bg-[#155DFC] hover:bg-blue-700 active:scale-95 text-white rounded-2xl font-black text-sm shadow-lg shadow-blue-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Navigation className="w-4 h-4 rotate-45" /> Chỉ đường đi
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

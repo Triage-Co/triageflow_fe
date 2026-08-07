@@ -194,7 +194,7 @@ export const PackageSlotSelectView: React.FC = () => {
 
       {/* Footer Info */}
       <div className="text-center text-xs font-semibold text-neutral-400 pb-2">
-        Hệ thống Kiosk tự động • Vui lòng chọn khung giờ khám và bấm "Tiến hành thanh toán"
+        Hệ thống Kiosk tự động • Vui lòng chọn khung giờ khám và bấm &quot;Tiến hành thanh toán&quot;
       </div>
     </div>
   );

@@ -98,7 +98,7 @@ export function AdminShiftPage() {
     useEffect(() => {
         if (accessToken) {
             fetchShifts(accessToken);
-            fetchStaffs(accessToken);
+            fetchStaffs(accessToken, { mergeAccounts: true });
             fetchRooms(accessToken);
         }
     }, [accessToken, fetchShifts, fetchStaffs, fetchRooms]);

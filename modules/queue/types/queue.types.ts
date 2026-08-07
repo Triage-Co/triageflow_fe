@@ -21,6 +21,9 @@ export interface QueuePatientItem {
     queueNumber: string;
     patientName: string;
     status: QueueStatus;
+    etaMinutes?: number;
+    queueType?: string;
+    priorityReasons?: string[];
 }
 
 export interface RoomWaitingDisplayData {
@@ -43,7 +46,11 @@ export interface CallNextPatient {
     /** Present when backend includes lifecycle status */
     status?: QueueStatus;
     queue_id?: string;
+    eta_minutes?: number;
+    queue_type?: string;
+    priority_reasons?: string[];
 }
+
 
 export interface CallNextResponse {
     room_info: CallNextRoomInfo;

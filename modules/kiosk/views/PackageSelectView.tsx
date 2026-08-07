@@ -19,9 +19,9 @@ export const PackageSelectView: React.FC = () => {
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigateToView('booking_mode')}
-            className="flex items-center gap-2 px-6 py-3 bg-white hover:bg-neutral-50 active:scale-95 rounded-2xl text-sm font-bold text-neutral-800 shadow-md border border-neutral-100 transition-all cursor-pointer"
+            className="flex items-center gap-2 px-6 py-1 bg-white hover:bg-neutral-50 active:scale-95 rounded-2xl text-md font-bold text-neutral-800 shadow-md border border-neutral-100 transition-all cursor-pointer"
           >
-            <ArrowLeft className="w-5 h-5 text-neutral-600" /> Quay lại
+            <ArrowLeft className="w-12 h-12 text-neutral-600" /> Quay lại
           </button>
           <div className="ml-2">
             <h2 className="text-2xl sm:text-3xl font-black text-[#1E2939] tracking-tight">

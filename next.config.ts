@@ -4,8 +4,10 @@ const nextConfig: NextConfig = {
   // Allow mobile devices on LAN to load Next.js dev assets (HMR, chunks, etc.)
   allowedDevOrigins: ["10.170.3.155", "localhost"],
   async rewrites() {
-    const backendUrl =
-      process.env.NEXT_PUBLIC_API_URL || 'https://triageflow.me';
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (!backendUrl) {
+      return [];
+    }
     return [
       {
         source: "/api/:path*",

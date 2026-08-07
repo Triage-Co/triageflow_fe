@@ -7,6 +7,8 @@ export interface RouteStepItem {
   queueNo?: string;
   estimatedWait?: string;
   status: 'completed' | 'in_progress' | 'waiting' | 'pending';
+  stepId?: string;
+  rawStep?: any;
 }
 
 
@@ -63,6 +65,7 @@ export interface PatientFlowStepItem {
 export interface PatientFlowItem {
   flow_id: string;
   booking_id?: string;
+  ticket_code?: string;
   status: string;
   current_processing_steps?: string[];
   steps?: PatientFlowStepItem[];
@@ -86,6 +89,7 @@ export interface StepDetailPatientResponseData {
     step_id: string;
     queue_number: string;
     status: string;
+    queue_type?: string;
   }>;
   staff?: {
     staff_id: string;
@@ -95,6 +99,7 @@ export interface StepDetailPatientResponseData {
     specialty_id?: string;
   };
   flow?: {
+    ticket_code?: string;
     booking?: {
       slot?: {
         start_time?: string;
