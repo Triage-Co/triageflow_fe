@@ -3,23 +3,27 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle,
+    Home,
     Loader2,
     Pencil,
     Plus,
     Search,
-    Trash2,
     X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/modules/auth/store/authStore';
+import { useRoomStore } from '../store/roomStore';
 import { ROOM_TYPE_OPTIONS } from '../types/process.types';
-import type { CatalogService, CreateServiceReqDto } from '../types/service.types';
-import { getServiceId } from '../types/service.types';
+import type { CatalogService, CreateServiceReqDto, QueryServiceParams } from '../types/service.types';
+import { SERVICE_TYPE_OPTIONS, getServiceId } from '../types/service.types';
 import {
     extractServiceList,
     serviceCatalogService,
 } from '../services/serviceCatalogService';
 import { getCompactPages } from '../utils/pagination';
+import { getErrorMessage } from '../utils/errorMessage';
+import { SoftDisableConfirmDialog } from './SoftDisableConfirmDialog';
+import { ServiceRoomsDrawer } from './ServiceRoomsDrawer';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -27,22 +31,33 @@ const EMPTY_FORM: CreateServiceReqDto = {
     service_code: '',
     service_name: '',
     price: 0,
-    room_type: 'LABORATORY',
+    service_type: 'CLINICAL_EXAMINATION',
+    room_type: 'CLINICAL_ROOM',
 };
 
-function roomTypeLabel(value?: string): string {
+function roomTypeLabel(value?: string | null): string {
     if (!value) return '—';
     return ROOM_TYPE_OPTIONS.find((o) => o.value === value)?.label || value;
 }
 
+function serviceTypeLabel(value?: string | null): string {
+    if (!value) return '—';
+    return SERVICE_TYPE_OPTIONS.find((o) => o.value === value)?.label || value;
+}
+
 export function AdminServicesPage() {
     const accessToken = useAuthStore((s) => s.accessToken);
+    const { rooms, fetchRooms } = useRoomStore();
 
     const [services, setServices] = useState<CatalogService[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
+
+    const [filterServiceType, setFilterServiceType] = useState<string>('');
+    const [filterRoomType, setFilterRoomType] = useState<string>('');
+    const [showInactive, setShowInactive] = useState(false);
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editing, setEditing] = useState<CatalogService | null>(null);
@@ -51,36 +66,55 @@ export function AdminServicesPage() {
     const [isSaving, setIsSaving] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
 
-    const [deleting, setDeleting] = useState<CatalogService | null>(null);
-    const [isDeleting, setIsDeleting] = useState(false);
+    const [togglingTarget, setTogglingTarget] = useState<CatalogService | null>(null);
+    const [isToggling, setIsToggling] = useState(false);
+    const [toggleError, setToggleError] = useState<string | null>(null);
+
+    const [roomsDrawerFor, setRoomsDrawerFor] = useState<CatalogService | null>(null);
+
+    useEffect(() => {
+        if (accessToken && rooms.length === 0) fetchRooms(accessToken);
+    }, [accessToken, rooms.length, fetchRooms]);
 
     const loadServices = useCallback(async () => {
         if (!accessToken) return;
         setIsLoading(true);
         setError(null);
         try {
-            const res = await serviceCatalogService.getServices(accessToken, 1, 200);
+            const params: QueryServiceParams = { limit: 500 };
+            if (filterServiceType) params.service_type = filterServiceType;
+            if (filterRoomType) params.room_type = filterRoomType;
+            if (!showInactive) params.is_active = true;
+            if (searchQuery.trim()) params.search = searchQuery.trim();
+            const res = await serviceCatalogService.getServices(accessToken, params);
             setServices(extractServiceList(res?.data));
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Không thể tải danh mục dịch vụ.');
+            setError(getErrorMessage(err, 'Không thể tải danh mục dịch vụ.'));
         } finally {
             setIsLoading(false);
         }
-    }, [accessToken]);
+    }, [accessToken, filterServiceType, filterRoomType, showInactive, searchQuery]);
 
     useEffect(() => {
         void loadServices();
     }, [loadServices]);
 
+    // Fallback client-side filtering in case BE ignores unsupported query params.
     const filtered = useMemo(() => {
+        let list = services;
         const q = searchQuery.trim().toLowerCase();
-        if (!q) return services;
-        return services.filter((s) => {
-            const code = (s.service_code || '').toLowerCase();
-            const name = (s.service_name || '').toLowerCase();
-            return code.includes(q) || name.includes(q);
-        });
-    }, [services, searchQuery]);
+        if (q) {
+            list = list.filter((s) => {
+                const code = (s.service_code || '').toLowerCase();
+                const name = (s.service_name || '').toLowerCase();
+                return code.includes(q) || name.includes(q);
+            });
+        }
+        if (filterServiceType) list = list.filter((s) => s.service_type === filterServiceType);
+        if (filterRoomType) list = list.filter((s) => s.room_type === filterRoomType);
+        if (!showInactive) list = list.filter((s) => s.is_active !== false);
+        return list;
+    }, [services, searchQuery, filterServiceType, filterRoomType, showInactive]);
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
     const safePage = Math.min(currentPage, totalPages);
@@ -107,6 +141,7 @@ export function AdminServicesPage() {
             service_code: service.service_code || '',
             service_name: service.service_name || '',
             price: Number(service.price) || 0,
+            service_type: service.service_type || 'CLINICAL_EXAMINATION',
             room_type: service.room_type || 'OTHER',
         });
         setFormActive(service.is_active !== false);
@@ -117,8 +152,17 @@ export function AdminServicesPage() {
     const handleSave = async () => {
         if (!accessToken) return;
         const name = form.service_name.trim();
+        const code = form.service_code?.trim();
+        if (!code) {
+            setFormError('Vui lòng nhập mã dịch vụ.');
+            return;
+        }
         if (!name) {
             setFormError('Vui lòng nhập tên dịch vụ.');
+            return;
+        }
+        if (!form.service_type) {
+            setFormError('Vui lòng chọn loại dịch vụ.');
             return;
         }
         if (!Number.isFinite(form.price) || form.price < 0) {
@@ -135,9 +179,10 @@ export function AdminServicesPage() {
                 await serviceCatalogService.updateService(
                     id,
                     {
-                        service_code: form.service_code?.trim() || undefined,
+                        service_code: code,
                         service_name: name,
                         price: form.price,
+                        service_type: form.service_type,
                         room_type: form.room_type || undefined,
                         is_active: formActive,
                     },
@@ -146,9 +191,10 @@ export function AdminServicesPage() {
             } else {
                 await serviceCatalogService.createService(
                     {
-                        service_code: form.service_code?.trim() || undefined,
+                        service_code: code,
                         service_name: name,
                         price: form.price,
+                        service_type: form.service_type,
                         room_type: form.room_type || undefined,
                     },
                     accessToken
@@ -157,30 +203,29 @@ export function AdminServicesPage() {
             setIsModalOpen(false);
             await loadServices();
         } catch (err) {
-            setFormError(err instanceof Error ? err.message : 'Không thể lưu dịch vụ.');
+            setFormError(getErrorMessage(err, 'Không thể lưu dịch vụ.'));
         } finally {
             setIsSaving(false);
         }
     };
 
-    const handleDelete = async () => {
-        if (!accessToken || !deleting) return;
-        const id = getServiceId(deleting);
-        if (!id) return;
-        setIsDeleting(true);
+    const handleToggleActive = async () => {
+        if (!accessToken || !togglingTarget) return;
+        setIsToggling(true);
+        setToggleError(null);
         try {
-            await serviceCatalogService.deleteService(id, accessToken);
-            setDeleting(null);
-            const newTotal = Math.max(0, filtered.length - 1);
-            const newTotalPages = Math.max(1, Math.ceil(newTotal / ITEMS_PER_PAGE));
-            if (currentPage > newTotalPages) {
-                setCurrentPage(newTotalPages);
+            const id = getServiceId(togglingTarget);
+            if (togglingTarget.is_active !== false) {
+                await serviceCatalogService.deleteService(id, accessToken);
+            } else {
+                await serviceCatalogService.updateService(id, { is_active: true }, accessToken);
             }
+            setTogglingTarget(null);
             await loadServices();
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Không thể xóa dịch vụ.');
+            setToggleError(getErrorMessage(err, 'Không thể cập nhật trạng thái dịch vụ.'));
         } finally {
-            setIsDeleting(false);
+            setIsToggling(false);
         }
     };
 
@@ -193,32 +238,80 @@ export function AdminServicesPage() {
             <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
                     <h1 className="text-xl font-bold text-neutral-900">Quản lý dịch vụ</h1>
+                    <p className="text-sm text-neutral-500 mt-0.5">Danh mục dịch vụ khám, xét nghiệm, thủ thuật và đơn thuốc</p>
                 </div>
                 <button
                     type="button"
                     onClick={openCreate}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-sm font-bold"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#8B7CF6] hover:bg-[#7a6ae5] text-white text-sm font-bold cursor-pointer"
                 >
                     <Plus className="w-4 h-4" />
                     Thêm dịch vụ
                 </button>
             </div>
 
-            <div className="flex items-center gap-2 bg-white border border-neutral-200 rounded-xl px-3 py-2 max-w-md">
-                <Search className="w-4 h-4 text-neutral-400" />
-                <input
-                    value={searchQuery}
+            <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2 bg-white border border-neutral-200 rounded-xl px-3 py-2 max-w-md flex-1 min-w-[220px]">
+                    <Search className="w-4 h-4 text-neutral-400" />
+                    <input
+                        value={searchQuery}
+                        onChange={(e) => {
+                            setSearchQuery(e.target.value);
+                            setCurrentPage(1);
+                        }}
+                        placeholder="Tìm theo mã hoặc tên..."
+                        className="flex-1 text-sm outline-none bg-transparent"
+                    />
+                </div>
+
+                <select
+                    value={filterServiceType}
                     onChange={(e) => {
-                        setSearchQuery(e.target.value);
+                        setFilterServiceType(e.target.value);
                         setCurrentPage(1);
                     }}
-                    placeholder="Tìm theo mã hoặc tên..."
-                    className="flex-1 text-sm outline-none bg-transparent"
-                />
+                    className="text-sm font-medium border border-neutral-200 rounded-xl px-3 py-2 bg-white text-neutral-700"
+                >
+                    <option value="">Tất cả loại dịch vụ</option>
+                    {SERVICE_TYPE_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                        </option>
+                    ))}
+                </select>
+
+                <select
+                    value={filterRoomType}
+                    onChange={(e) => {
+                        setFilterRoomType(e.target.value);
+                        setCurrentPage(1);
+                    }}
+                    className="text-sm font-medium border border-neutral-200 rounded-xl px-3 py-2 bg-white text-neutral-700"
+                >
+                    <option value="">Tất cả loại phòng</option>
+                    {ROOM_TYPE_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                        </option>
+                    ))}
+                </select>
+
+                <label className="flex items-center gap-2 text-sm font-semibold text-neutral-600 cursor-pointer select-none px-1">
+                    <input
+                        type="checkbox"
+                        checked={showInactive}
+                        onChange={(e) => {
+                            setShowInactive(e.target.checked);
+                            setCurrentPage(1);
+                        }}
+                        className="accent-[#8B7CF6]"
+                    />
+                    Hiện đã tắt
+                </label>
             </div>
 
             {error && (
-                <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-700">
+                <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-700 whitespace-pre-line">
                     <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                     <span>{error}</span>
                 </div>
@@ -227,7 +320,7 @@ export function AdminServicesPage() {
             <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
                 {isLoading ? (
                     <div className="p-12 flex flex-col items-center gap-2 text-neutral-500">
-                        <Loader2 className="w-6 h-6 animate-spin text-brand-500" />
+                        <Loader2 className="w-6 h-6 animate-spin text-[#8B7CF6]" />
                         <span className="text-sm font-medium">Đang tải...</span>
                     </div>
                 ) : filtered.length === 0 ? (
@@ -240,6 +333,7 @@ export function AdminServicesPage() {
                                 <th className="px-4 py-3">Mã</th>
                                 <th className="px-4 py-3">Tên dịch vụ</th>
                                 <th className="px-4 py-3 text-right">Giá</th>
+                                <th className="px-4 py-3">Loại dịch vụ</th>
                                 <th className="px-4 py-3">Loại phòng</th>
                                 <th className="px-4 py-3">Trạng thái</th>
                                 <th className="px-4 py-3 text-right">Thao tác</th>
@@ -261,6 +355,9 @@ export function AdminServicesPage() {
                                             {Number(service.price || 0).toLocaleString('vi-VN')}₫
                                         </td>
                                         <td className="px-4 py-3 text-neutral-600">
+                                            {serviceTypeLabel(service.service_type)}
+                                        </td>
+                                        <td className="px-4 py-3 text-neutral-600">
                                             {roomTypeLabel(service.room_type)}
                                         </td>
                                         <td className="px-4 py-3">
@@ -272,26 +369,42 @@ export function AdminServicesPage() {
                                                         : 'bg-neutral-50 text-neutral-500 border-neutral-200'
                                                 )}
                                             >
-                                                {active ? 'Active' : 'Inactive'}
+                                                {active ? 'Đang hoạt động' : 'Đã tắt'}
                                             </span>
                                         </td>
                                         <td className="px-4 py-3">
                                             <div className="flex justify-end gap-1">
                                                 <button
                                                     type="button"
+                                                    onClick={() => setRoomsDrawerFor(service)}
+                                                    className="p-2 rounded-lg text-neutral-400 hover:text-[#8B7CF6] hover:bg-neutral-50 cursor-pointer"
+                                                    title="Phòng thực hiện"
+                                                >
+                                                    <Home className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    type="button"
                                                     onClick={() => openEdit(service)}
-                                                    className="p-2 rounded-lg text-neutral-400 hover:text-brand-500 hover:bg-neutral-50"
+                                                    className="p-2 rounded-lg text-neutral-400 hover:text-[#8B7CF6] hover:bg-neutral-50 cursor-pointer"
                                                     title="Sửa"
                                                 >
                                                     <Pencil className="w-4 h-4" />
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    onClick={() => setDeleting(service)}
-                                                    className="p-2 rounded-lg text-neutral-400 hover:text-red-500 hover:bg-neutral-50"
-                                                    title="Xóa"
+                                                    onClick={() => {
+                                                        setToggleError(null);
+                                                        setTogglingTarget(service);
+                                                    }}
+                                                    className={cn(
+                                                        'px-2.5 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer border',
+                                                        active
+                                                            ? 'text-red-500 border-red-100 hover:bg-red-50'
+                                                            : 'text-emerald-600 border-emerald-100 hover:bg-emerald-50'
+                                                    )}
+                                                    title={active ? 'Vô hiệu hóa' : 'Kích hoạt'}
                                                 >
-                                                    <Trash2 className="w-4 h-4" />
+                                                    {active ? 'Tắt' : 'Bật'}
                                                 </button>
                                             </div>
                                         </td>
@@ -373,13 +486,13 @@ export function AdminServicesPage() {
                             <h2 className="font-bold text-neutral-900">
                                 {editing ? 'Cập nhật dịch vụ' : 'Thêm dịch vụ'}
                             </h2>
-                            <button type="button" onClick={() => setIsModalOpen(false)} className="p-1.5 rounded-lg hover:bg-neutral-100">
+                            <button type="button" onClick={() => setIsModalOpen(false)} className="p-1.5 rounded-lg hover:bg-neutral-100 cursor-pointer">
                                 <X className="w-4 h-4" />
                             </button>
                         </div>
                         <div className="p-5 space-y-4">
                             {formError && (
-                                <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
+                                <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2 whitespace-pre-line">
                                     {formError}
                                 </div>
                             )}
@@ -397,7 +510,7 @@ export function AdminServicesPage() {
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <label className="text-xs font-bold text-neutral-500 uppercase block mb-1">
-                                        Mã dịch vụ
+                                        Mã dịch vụ *
                                     </label>
                                     <input
                                         value={form.service_code || ''}
@@ -421,21 +534,39 @@ export function AdminServicesPage() {
                                     />
                                 </div>
                             </div>
-                            <div>
-                                <label className="text-xs font-bold text-neutral-500 uppercase block mb-1">
-                                    Loại phòng
-                                </label>
-                                <select
-                                    value={form.room_type || 'OTHER'}
-                                    onChange={(e) => setForm((f) => ({ ...f, room_type: e.target.value }))}
-                                    className="w-full border border-neutral-200 rounded-xl px-3 py-2.5 text-sm font-medium bg-white"
-                                >
-                                    {ROOM_TYPE_OPTIONS.map((opt) => (
-                                        <option key={opt.value} value={opt.value}>
-                                            {opt.label}
-                                        </option>
-                                    ))}
-                                </select>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs font-bold text-neutral-500 uppercase block mb-1">
+                                        Loại dịch vụ *
+                                    </label>
+                                    <select
+                                        value={form.service_type || ''}
+                                        onChange={(e) => setForm((f) => ({ ...f, service_type: e.target.value }))}
+                                        className="w-full border border-neutral-200 rounded-xl px-3 py-2.5 text-sm font-medium bg-white"
+                                    >
+                                        {SERVICE_TYPE_OPTIONS.map((opt) => (
+                                            <option key={opt.value} value={opt.value}>
+                                                {opt.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-neutral-500 uppercase block mb-1">
+                                        Loại phòng
+                                    </label>
+                                    <select
+                                        value={form.room_type || 'OTHER'}
+                                        onChange={(e) => setForm((f) => ({ ...f, room_type: e.target.value }))}
+                                        className="w-full border border-neutral-200 rounded-xl px-3 py-2.5 text-sm font-medium bg-white"
+                                    >
+                                        {ROOM_TYPE_OPTIONS.map((opt) => (
+                                            <option key={opt.value} value={opt.value}>
+                                                {opt.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
                             {editing && (
                                 <label className="flex items-center gap-2 text-sm font-medium text-neutral-700">
@@ -443,8 +574,9 @@ export function AdminServicesPage() {
                                         type="checkbox"
                                         checked={formActive}
                                         onChange={(e) => setFormActive(e.target.checked)}
+                                        className="accent-[#8B7CF6]"
                                     />
-                                    Đang hoạt động (`is_active`)
+                                    Đang hoạt động
                                 </label>
                             )}
                         </div>
@@ -452,7 +584,7 @@ export function AdminServicesPage() {
                             <button
                                 type="button"
                                 onClick={() => setIsModalOpen(false)}
-                                className="px-4 py-2 rounded-xl bg-neutral-100 text-neutral-700 text-sm font-bold"
+                                className="px-4 py-2 rounded-xl bg-neutral-100 text-neutral-700 text-sm font-bold cursor-pointer"
                             >
                                 Hủy
                             </button>
@@ -460,7 +592,7 @@ export function AdminServicesPage() {
                                 type="button"
                                 onClick={() => void handleSave()}
                                 disabled={isSaving}
-                                className="px-4 py-2 rounded-xl bg-brand-500 text-white text-sm font-bold disabled:opacity-50 inline-flex items-center gap-2"
+                                className="px-4 py-2 rounded-xl bg-[#8B7CF6] hover:bg-[#7a6ae5] text-white text-sm font-bold disabled:opacity-50 inline-flex items-center gap-2 cursor-pointer"
                             >
                                 {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                                 Lưu
@@ -470,32 +602,25 @@ export function AdminServicesPage() {
                 </div>
             )}
 
-            {deleting && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-                    <div className="bg-white rounded-2xl w-full max-w-md p-5 border border-neutral-100 shadow-xl space-y-4">
-                        <h3 className="font-bold text-neutral-900">Xóa dịch vụ?</h3>
-                        <p className="text-sm text-neutral-600">
-                            Xóa <strong>{deleting.service_name}</strong> khỏi danh mục. Thao tác có thể bị từ chối nếu đang được dùng.
-                        </p>
-                        <div className="flex justify-end gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setDeleting(null)}
-                                className="px-4 py-2 rounded-xl bg-neutral-100 text-sm font-bold"
-                            >
-                                Hủy
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => void handleDelete()}
-                                disabled={isDeleting}
-                                className="px-4 py-2 rounded-xl bg-red-500 text-white text-sm font-bold disabled:opacity-50"
-                            >
-                                {isDeleting ? 'Đang xóa...' : 'Xóa'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
+            {togglingTarget && (
+                <SoftDisableConfirmDialog
+                    entityName={togglingTarget.service_name}
+                    isActive={togglingTarget.is_active !== false}
+                    isSubmitting={isToggling}
+                    error={toggleError}
+                    onConfirm={() => void handleToggleActive()}
+                    onCancel={() => setTogglingTarget(null)}
+                />
+            )}
+
+            {roomsDrawerFor && (
+                <ServiceRoomsDrawer
+                    service={roomsDrawerFor}
+                    serviceId={getServiceId(roomsDrawerFor)}
+                    allRooms={rooms}
+                    accessToken={accessToken}
+                    onClose={() => setRoomsDrawerFor(null)}
+                />
             )}
         </div>
     );
