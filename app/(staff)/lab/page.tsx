@@ -1,16 +1,16 @@
 'use client';
 
-import { EMRWorkspaceLayout } from '@/shared/components/layout/EMRWorkspaceLayout';
-import { PatientCheckinPanel } from '@/modules/shared/components/PatientCheckinPanel';
+import React, { Suspense } from 'react';
+import LabWorklistView from '@/modules/lab/views/LabWorklistView';
 
 export default function LabPage() {
     return (
-        <EMRWorkspaceLayout activeTabId="lab" activeTabName="Tiếp Nhận Mẫu Xét Nghiệm">
-            <PatientCheckinPanel
-                moduleType="LAB"
-                title="Tiếp Nhận Mẫu Xét Nghiệm"
-                subtitle="Quét mã QR bệnh nhân hoặc nhập mã lượt khám để tiếp nhận"
-            />
-        </EMRWorkspaceLayout>
+        <Suspense fallback={
+            <div className="flex-1 flex items-center justify-center bg-neutral-50/50 min-h-[60vh]">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#8B7CF6]"></div>
+            </div>
+        }>
+            <LabWorklistView />
+        </Suspense>
     );
 }

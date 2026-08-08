@@ -41,7 +41,7 @@ export interface AuthActions {
     }) => void;
 
     /** Clear all auth state and tokens from storage */
-    logout: () => void;
+    logout: () => void | Promise<void>;
 
     /** Reset to initial state */
     reset: () => void;
@@ -108,7 +108,16 @@ export const useAuthStore = create<AuthStore>()(
                         'loginSuccess',
                     ),
 
-                logout: () => {
+                logout: async () => {
+                    const token = get().accessToken;
+                    if (token) {
+                        try {
+                            await authService.logout(token);
+                        } catch (e) {
+                            console.warn('[authStore] Server logout failed:', e);
+                        }
+                    }
+
                     // Clear legacy token keys (used before this store managed tokens)
                     localStorage.removeItem('accessToken');
                     localStorage.removeItem('refreshToken');

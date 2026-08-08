@@ -1,5 +1,5 @@
 import { apiClient } from '@/shared/services/apiClient';
-import type { Shift, CreateShiftDto } from '../types/shift.types';
+import type { BulkWeeklyResult, BulkWeeklyShiftDto, Shift, CreateShiftDto } from '../types/shift.types';
 
 export const shiftService = {
     getShifts: async (token: string) => {
@@ -28,6 +28,12 @@ export const shiftService = {
 
     deleteShift: async (id: string, token: string) => {
         return apiClient.delete<void>(`/api/shift/${id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+    },
+
+    bulkWeekly: async (data: BulkWeeklyShiftDto, token: string) => {
+        return apiClient.post<BulkWeeklyResult>('/api/shift/bulk-weekly', data, {
             headers: { Authorization: `Bearer ${token}` },
         });
     },

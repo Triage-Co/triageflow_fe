@@ -41,7 +41,7 @@ const MED_TABS: { id: MedTab; label: string; icon: React.ElementType }[] = [
     { id: 'kham-benh', label: 'Khám bệnh', icon: Stethoscope },
     { id: 'can-lam-sang', label: 'Cận lâm sàng', icon: Microscope },
     { id: 'chan-doan', label: 'Chẩn đoán & điều trị', icon: ClipboardList },
-    { id: 'thu-thuat', label: 'Thu thuật', icon: Syringe },
+    { id: 'thu-thuat', label: 'Thủ thuật', icon: Syringe },
     { id: 'don-thuoc', label: 'Đơn thuốc', icon: Pill },
 ];
 
@@ -123,14 +123,13 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
                             resolvedPatientId = patientObj.patient_id as string;
                         }
                     } catch {
-                        // ignore queue lookup error
+                        // queue lookup failed — handled below
                     }
                 }
 
-                const searchId = resolvedPatientId || patientQueueId;
-                if (!searchId) return;
+                if (!resolvedPatientId) return;
 
-                const res = await clinicalService.getVisitSessionByPatientId(searchId, accessToken);
+                const res = await clinicalService.getVisitSessionByPatientId(resolvedPatientId, accessToken);
                 const raw = res as unknown;
 
                 let list: VisitSessionData[] = [];
@@ -487,187 +486,305 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
 function LabTestsTab({
     patient,
     onFlowChanged,
+    refreshKey = 0,
 }: {
     patient: Patient;
     onFlowChanged?: () => void;
+    refreshKey?: number;
 }) {
-    return <ParaclinicalOrdersTab patient={patient} onFlowChanged={onFlowChanged} />;
+    return (
+        <ParaclinicalOrdersTab
+            patient={patient}
+            serviceTypes={['DIAGNOSTIC_TEST']}
+            refreshKey={refreshKey}
+            onFlowChanged={onFlowChanged}
+        />
+    );
 }
 
-function DiagnosisTreatmentTab() {
+function DiagnosisTreatmentTab({ patient }: { patient: Patient }) {
+    const accessToken = useAuthStore((s) => s.accessToken);
+    const user = useAuthStore((s) => s.user);
+    const isReadOnly = user?.role === 'NURSE';
+
+    const initialPatientId =
+        patient.patientId ||
+        ((patient as unknown as Record<string, unknown>).patient_id as string | undefined);
+    const patientQueueId = patient.id;
+
+    const [sessionData, setSessionData] = useState<VisitSessionData | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isEditing, setIsEditing] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [editFinalDiagnosis, setEditFinalDiagnosis] = useState('');
+
+    useEffect(() => {
+        if (!accessToken) {
+            setIsLoading(false);
+            return;
+        }
+
+        let isMounted = true;
+        const fetchVisitSession = async () => {
+            setIsLoading(true);
+            setError(null);
+            try {
+                let resolvedPatientId = initialPatientId;
+
+                if (!resolvedPatientId && patientQueueId) {
+                    try {
+                        const queueRes = (await clinicalService.getPatientByQueueId(
+                            patientQueueId,
+                            accessToken
+                        )) as unknown as Record<string, unknown>;
+                        const queueData = (queueRes?.data || queueRes) as Record<string, unknown>;
+                        const booking = queueData?.booking as Record<string, unknown> | undefined;
+                        const patientObj = booking?.patient as Record<string, unknown> | undefined;
+                        if (patientObj?.patient_id) {
+                            resolvedPatientId = patientObj.patient_id as string;
+                        }
+                    } catch {
+                        // queue lookup failed — handled below
+                    }
+                }
+
+                if (!resolvedPatientId) {
+                    if (isMounted) {
+                        setSessionData(null);
+                        setError(
+                            'Không xác định được mã bệnh nhân để tải chẩn đoán. Vui lòng mở lại hồ sơ từ hàng đợi.'
+                        );
+                        setIsLoading(false);
+                    }
+                    return;
+                }
+
+                const res = await clinicalService.getVisitSessionByPatientId(
+                    resolvedPatientId,
+                    accessToken
+                );
+                const raw = res as unknown;
+
+                let list: VisitSessionData[] = [];
+                if (Array.isArray(raw)) {
+                    list = raw as VisitSessionData[];
+                } else if (raw && typeof raw === 'object') {
+                    const rawObj = raw as Record<string, unknown>;
+                    if (Array.isArray(rawObj.data)) {
+                        list = rawObj.data as VisitSessionData[];
+                    } else if (
+                        rawObj.data &&
+                        typeof rawObj.data === 'object' &&
+                        Array.isArray((rawObj.data as Record<string, unknown>).data)
+                    ) {
+                        list = (rawObj.data as Record<string, unknown>).data as VisitSessionData[];
+                    }
+                }
+
+                if (isMounted && list.length > 0) {
+                    const session = list[0];
+                    setSessionData(session);
+                    setEditFinalDiagnosis(session.final_diagnosis || '');
+                }
+            } catch (err) {
+                console.error('Failed to fetch visit session for diagnosis tab:', err);
+                if (isMounted) {
+                    setError(err instanceof Error ? err.message : 'Không thể tải phiên khám.');
+                }
+            } finally {
+                if (isMounted) setIsLoading(false);
+            }
+        };
+
+        void fetchVisitSession();
+        return () => {
+            isMounted = false;
+        };
+    }, [accessToken, initialPatientId, patientQueueId]);
+
+    const finalDiagnosis = (sessionData?.final_diagnosis || '').trim();
+    const canEdit = Boolean(sessionData?.visit_session_id) && !isReadOnly;
+
+    const openEdit = () => {
+        setEditFinalDiagnosis(finalDiagnosis);
+        setError(null);
+        setIsEditing(true);
+    };
+
+    const handleCancel = () => {
+        setEditFinalDiagnosis(finalDiagnosis);
+        setError(null);
+        setIsEditing(false);
+    };
+
+    const handleSave = async () => {
+        if (!sessionData?.visit_session_id || !accessToken) {
+            setError('Chưa có visit session để lưu chẩn đoán.');
+            return;
+        }
+        const nextValue = editFinalDiagnosis.trim();
+        setIsSaving(true);
+        setError(null);
+        try {
+            await clinicalService.updateVisitSession(
+                sessionData.visit_session_id,
+                { final_diagnosis: nextValue || null },
+                accessToken
+            );
+            setSessionData((prev) =>
+                prev ? { ...prev, final_diagnosis: nextValue || undefined } : prev
+            );
+            setEditFinalDiagnosis(nextValue);
+            setIsEditing(false);
+        } catch (err) {
+            console.error('Failed to update final_diagnosis:', err);
+            setError(err instanceof Error ? err.message : 'Không thể lưu chẩn đoán.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleClear = async () => {
+        if (!sessionData?.visit_session_id || !accessToken) return;
+        setIsSaving(true);
+        setError(null);
+        try {
+            await clinicalService.updateVisitSession(
+                sessionData.visit_session_id,
+                { final_diagnosis: null },
+                accessToken
+            );
+            setSessionData((prev) =>
+                prev ? { ...prev, final_diagnosis: undefined } : prev
+            );
+            setEditFinalDiagnosis('');
+            setIsEditing(false);
+        } catch (err) {
+            console.error('Failed to clear final_diagnosis:', err);
+            setError(err instanceof Error ? err.message : 'Không thể xóa chẩn đoán.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     return (
         <div className="space-y-4">
-            {/* Chẩn đoán xác định */}
-            <SectionCard title="Chẩn đoán xác định">
-                <div className="space-y-3.5">
-                    <div className="flex items-start gap-3 p-4 bg-[#F5F2FF] border border-[#8B7CF6]/10 rounded-2xl">
-                        <div className="text-[11px] font-bold bg-[#8B7CF6] text-white px-2 py-0.5 rounded-md uppercase shrink-0 mt-0.5">
-                            ICD-10
-                        </div>
-                        <div>
-                            <p className="text-[13px] font-bold text-[#2D2D2D]">K29.7 - Viêm dạ dày, không đặc hiệu</p>
-                            <p className="text-[11.5px] text-[#7B7B7B] mt-1 leading-relaxed">
-                                Mô tả lâm sàng: Đau tức vùng thượng vị, trào ngược nhẹ sau khi ăn no, hơi có cảm giác chướng bụng.
-                            </p>
+            <SectionCard
+                title="Chẩn đoán xác định"
+                onEdit={canEdit && !isEditing && !isLoading ? openEdit : undefined}
+            >
+                {isLoading ? (
+                    <p className="text-[12px] text-neutral-400 font-medium">Đang tải chẩn đoán…</p>
+                ) : isEditing ? (
+                    <div className="space-y-3">
+                        <textarea
+                            value={editFinalDiagnosis}
+                            onChange={(e) => setEditFinalDiagnosis(e.target.value)}
+                            rows={5}
+                            placeholder="Nhập chẩn đoán xác định…"
+                            className="w-full text-[13px] font-semibold text-[#2D2D2D] border border-neutral-200 rounded-xl px-3.5 py-3 focus:border-[#8B7CF6] outline-none resize-y min-h-[120px] bg-white"
+                            disabled={isSaving}
+                        />
+                        {error ? (
+                            <p className="text-[11px] text-red-600 font-semibold">{error}</p>
+                        ) : null}
+                        <div className="flex flex-wrap items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => void handleSave()}
+                                disabled={isSaving}
+                                className="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-[#8B7CF6] hover:bg-[#7a6ae5] disabled:opacity-50 transition-colors cursor-pointer"
+                            >
+                                {isSaving ? 'Đang lưu…' : 'Lưu'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleCancel}
+                                disabled={isSaving}
+                                className="px-3.5 py-2 rounded-xl text-xs font-bold text-neutral-600 bg-neutral-100 hover:bg-neutral-200 disabled:opacity-50 transition-colors cursor-pointer"
+                            >
+                                Hủy
+                            </button>
+                            {finalDiagnosis ? (
+                                <button
+                                    type="button"
+                                    onClick={() => void handleClear()}
+                                    disabled={isSaving}
+                                    className="px-3.5 py-2 rounded-xl text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 disabled:opacity-50 transition-colors cursor-pointer ml-auto"
+                                >
+                                    Xóa chẩn đoán
+                                </button>
+                            ) : null}
                         </div>
                     </div>
-
-                    <div className="flex gap-4.5 text-[12px] pl-2 border-l-2 border-neutral-200">
-                        <span className="text-[#9C9C9C] font-semibold w-28 shrink-0">Chẩn đoán phân biệt:</span>
-                        <span className="text-[#555] font-semibold">Trào ngược dạ dày thực quản (GERD)</span>
-                    </div>
-                </div>
-            </SectionCard>
-
-            {/* Hướng điều trị & Lời dặn */}
-            <SectionCard title="Kế hoạch điều trị & Lời dặn của bác sĩ">
-                <div className="space-y-4">
-                    <div className="space-y-1.5">
-                        <span className="text-[10px] font-bold text-[#8B7CF6] uppercase tracking-wider block">Hướng điều trị</span>
-                        <p className="text-[13px] text-[#2D2D2D] font-semibold leading-relaxed">
-                            Điều trị nội khoa ngoại trú bằng thuốc 14 ngày. Kết hợp chế độ ăn uống khoa học và tái khám đúng hẹn.
+                ) : finalDiagnosis ? (
+                    <div className="p-4 bg-[#F5F2FF] border border-[#8B7CF6]/10 rounded-2xl">
+                        <p className="text-[13px] font-bold text-[#2D2D2D] whitespace-pre-wrap leading-relaxed">
+                            {finalDiagnosis}
                         </p>
                     </div>
-
-                    <div className="h-px bg-neutral-100" />
-
-                    <div className="space-y-2">
-                        <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">Lời dặn chi tiết</span>
-                        <ul className="space-y-2">
-                            {[
-                                'Uống thuốc Nexium trước ăn sáng 30 phút, Gaviscon sau ăn 1 giờ.',
-                                'Tránh ăn đồ chua cay, thức ăn chiên rán nhiều dầu mỡ, nước có ga.',
-                                'Không ăn quá no hoặc nằm ngay sau khi ăn (chờ ít nhất 2 tiếng).',
-                                'Hạn chế lo âu, stress và làm việc quá khuya.',
-                                'Tái khám sau 2 tuần hoặc đi khám ngay nếu có dấu hiệu đau bụng dữ dội, nôn ra máu.'
-                            ].map((advice, i) => (
-                                <li key={i} className="flex items-start gap-2 text-[12.5px] text-[#555] leading-relaxed">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-2" />
-                                    <span>{advice}</span>
-                                </li>
-                            ))}
-                        </ul>
+                ) : (
+                    <div className="space-y-3">
+                        <p className="text-[12px] text-neutral-400 font-medium">
+                            {sessionData?.visit_session_id
+                                ? 'Chưa có chẩn đoán xác định.'
+                                : 'Chưa tìm thấy phiên khám để ghi chẩn đoán.'}
+                        </p>
+                        {error ? (
+                            <p className="text-[11px] text-red-600 font-semibold">{error}</p>
+                        ) : null}
+                        {canEdit ? (
+                            <button
+                                type="button"
+                                onClick={openEdit}
+                                className="px-3.5 py-2 rounded-xl text-xs font-bold text-[#8B7CF6] bg-[#F5F2FF] hover:bg-[#EDE8FF] border border-[#DED7FF] transition-colors cursor-pointer"
+                            >
+                                Thêm chẩn đoán
+                            </button>
+                        ) : null}
                     </div>
-                </div>
+                )}
             </SectionCard>
         </div>
     );
 }
 
-function ProceduresTab() {
-    const procedures = [
-        {
-            name: 'Nội soi dạ dày tá tràng không gây mê (có làm test HP)',
-            time: '09:30 08/07/2026',
-            doctor: 'BS. Nguyễn Văn Trung',
-            dept: 'Khoa Nội soi - Phòng 204',
-            result: 'Âm tính với HP (HP-)',
-            notes: 'Hành tá tràng trơn láng, niêm mạc phình vị xung huyết nhẹ, không có vết loét lớn sâu.'
-        }
-    ];
-
+function ProceduresTab({
+    patient,
+    onFlowChanged,
+    refreshKey = 0,
+}: {
+    patient: Patient;
+    onFlowChanged?: () => void;
+    refreshKey?: number;
+}) {
     return (
-        <div className="space-y-4">
-            {procedures.map((proc, idx) => (
-                <div key={idx} className="bg-white rounded-2xl border border-[#EBEBEB] p-5">
-                    <div className="flex items-start justify-between flex-wrap gap-2 mb-3">
-                        <div>
-                            <h4 className="text-[13px] font-bold text-[#2D2D2D]">{proc.name}</h4>
-                            <p className="text-[11px] text-[#9C9C9C] mt-0.5">{proc.dept} · {proc.time}</p>
-                        </div>
-                        <span className="text-[10px] font-bold bg-[#F5F2FF] text-[#8B7CF6] border border-[#8B7CF6]/20 px-2.5 py-1 rounded-full uppercase tracking-wider">
-                            Đã thực hiện
-                        </span>
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 bg-neutral-50/50 p-4 rounded-xl border border-neutral-100">
-                        <div className="space-y-1">
-                            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">Người thực hiện</span>
-                            <span className="text-[12px] text-[#2D2D2D] font-bold">{proc.doctor}</span>
-                        </div>
-                        <div className="space-y-1">
-                            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">Kết quả test nhanh</span>
-                            <span className="text-[12px] text-emerald-600 font-bold">{proc.result}</span>
-                        </div>
-                        <div className="sm:col-span-2 space-y-1 mt-1">
-                            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">Mô tả chi tiết</span>
-                            <p className="text-[12px] text-neutral-700 font-semibold leading-relaxed">{proc.notes}</p>
-                        </div>
-                    </div>
-                </div>
-            ))}
-        </div>
+        <ParaclinicalOrdersTab
+            patient={patient}
+            serviceTypes={['PROCEDURE']}
+            refreshKey={refreshKey}
+            onFlowChanged={onFlowChanged}
+        />
     );
 }
 
-function PrescriptionTab() {
-    const meds = [
-        {
-            name: 'Nexium Mups 40mg (Esomeprazol)',
-            qty: 14,
-            unit: 'Viên',
-            usage: 'Sáng uống 1 viên trước ăn 30 phút. Uống nguyên viên, không nhai.'
-        },
-        {
-            name: 'Gaviscon Dual Action (10ml)',
-            qty: 20,
-            unit: 'Gói',
-            usage: 'Trưa uống 1 gói sau ăn 1 tiếng, tối uống 1 gói trước khi đi ngủ.'
-        },
-        {
-            name: 'Phosphalugel (Huyền dịch uống)',
-            qty: 10,
-            unit: 'Gói',
-            usage: 'Uống 1 gói khi xuất hiện cơn đau rát thượng vị. Tối đa 3 gói/ngày.'
-        }
-    ];
-
+function PrescriptionTab({
+    patient,
+    onFlowChanged,
+    refreshKey = 0,
+}: {
+    patient: Patient;
+    onFlowChanged?: () => void;
+    refreshKey?: number;
+}) {
     return (
-        <div className="space-y-4">
-            <div className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden">
-                {/* Header */}
-                <div className="px-5 py-4 bg-neutral-50/50 border-b border-[#EBEBEB] flex justify-between items-center">
-                    <div>
-                        <h4 className="text-[13px] font-bold text-[#2D2D2D]">Đơn thuốc điều trị ngoại trú</h4>
-                        <p className="text-[11px] text-[#9C9C9C] mt-0.5">Ngày kê: 08/07/2026 · Hạn uống: 14 ngày</p>
-                    </div>
-                    <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded-md uppercase">
-                        BHYT
-                    </span>
-                </div>
-
-                {/* Med list */}
-                <div className="divide-y divide-[#F5F5F8]">
-                    {meds.map((med, idx) => (
-                        <div key={idx} className="p-5 flex items-start gap-4">
-                            <div className="w-6 h-6 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0 font-bold text-xs mt-0.5">
-                                {idx + 1}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-baseline justify-between gap-2">
-                                    <h5 className="text-[13px] font-bold text-[#2D2D2D]">{med.name}</h5>
-                                    <span className="text-[12px] font-bold text-[#2D2D2D] shrink-0">
-                                        SL: {med.qty} {med.unit}
-                                    </span>
-                                </div>
-                                <p className="text-[11.5px] text-[#555] mt-1.5 leading-relaxed font-semibold bg-[#F8F8FA] p-2.5 rounded-xl border border-neutral-100">
-                                    {med.usage}
-                                </p>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* Tái khám */}
-            <div className="p-4 bg-amber-50/40 border border-amber-200/50 rounded-2xl flex items-start gap-3">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 mt-2" />
-                <div className="text-[12px] text-amber-800">
-                    <p className="font-bold">Lịch hẹn tái khám:</p>
-                    <p className="font-semibold mt-0.5">Ngày 22/07/2026 (Sáng 8:00 - 11:30) tại Phòng khám Nội tổng quát 1.</p>
-                </div>
-            </div>
-        </div>
+        <ParaclinicalOrdersTab
+            patient={patient}
+            serviceTypes={['PRESCRIPTION']}
+            refreshKey={refreshKey}
+            onFlowChanged={onFlowChanged}
+        />
     );
 }
 
@@ -675,9 +792,15 @@ interface RightMedicalAreaProps {
     patient: Patient;
     onUpdatePatient: (updated: Patient) => void;
     onFlowChanged?: () => void;
+    flowRefreshKey?: number;
 }
 
-export function RightMedicalArea({ patient, onUpdatePatient, onFlowChanged }: RightMedicalAreaProps) {
+export function RightMedicalArea({
+    patient,
+    onUpdatePatient,
+    onFlowChanged,
+    flowRefreshKey = 0,
+}: RightMedicalAreaProps) {
     const [activeTab, setActiveTab] = useState<MedTab>('kham-benh');
 
     return (
@@ -751,16 +874,28 @@ export function RightMedicalArea({ patient, onUpdatePatient, onFlowChanged }: Ri
                     <MedicalRecordContent key={patient.id} patient={patient} onUpdatePatient={onUpdatePatient} />
                 )}
                 {activeTab === 'can-lam-sang' && (
-                    <LabTestsTab patient={patient} onFlowChanged={onFlowChanged} />
+                    <LabTestsTab
+                        patient={patient}
+                        refreshKey={flowRefreshKey}
+                        onFlowChanged={onFlowChanged}
+                    />
                 )}
                 {activeTab === 'chan-doan' && (
-                    <DiagnosisTreatmentTab />
+                    <DiagnosisTreatmentTab key={patient.id} patient={patient} />
                 )}
                 {activeTab === 'thu-thuat' && (
-                    <ProceduresTab />
+                    <ProceduresTab
+                        patient={patient}
+                        refreshKey={flowRefreshKey}
+                        onFlowChanged={onFlowChanged}
+                    />
                 )}
                 {activeTab === 'don-thuoc' && (
-                    <PrescriptionTab />
+                    <PrescriptionTab
+                        patient={patient}
+                        refreshKey={flowRefreshKey}
+                        onFlowChanged={onFlowChanged}
+                    />
                 )}
             </div>
         </div>

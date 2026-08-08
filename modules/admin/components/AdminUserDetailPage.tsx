@@ -8,7 +8,6 @@ import {
     Shield,
     FlaskConical,
     Pill,
-    CreditCard,
     UserCheck,
     ShieldCheck,
     Loader2,
@@ -23,11 +22,10 @@ import { adminService } from '../services/adminService';
 
 const ROLE_CONFIG: Record<string, { label: string; icon: React.ElementType }> = {
     DOCTOR: { label: 'Bác sĩ', icon: Stethoscope },
-    NURSE: { label: 'Y tá', icon: Shield },
+    NURSE: { label: 'Y tá / Điều dưỡng', icon: Shield },
     RECEPTIONIST: { label: 'Lễ tân', icon: UserCheck },
-    LAB_STAFF: { label: 'Xét nghiệm', icon: FlaskConical },
-    PHARMACY_STAFF: { label: 'Dược sĩ', icon: Pill },
-    CASHIER: { label: 'Thu ngân', icon: CreditCard },
+    LAB_TECHNICIAN: { label: 'Kỹ thuật viên XN', icon: FlaskConical },
+    PHARMACIST: { label: 'Dược sĩ', icon: Pill },
     ADMIN: { label: 'Quản trị', icon: ShieldCheck },
     USER: { label: 'Bệnh nhân', icon: UserIcon },
 };

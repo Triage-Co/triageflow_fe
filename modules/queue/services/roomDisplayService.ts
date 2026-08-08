@@ -125,7 +125,7 @@ export const roomDisplayService = {
             return {
                 room: roomInfo,
                 currentPatient: current ? mapPatient(current) : null,
-                upcomingPatients: waiting.slice(0, 5).map(mapPatient),
+                upcomingPatients: waiting.slice(0, 7).map(mapPatient),
                 lastUpdated: new Date().toISOString(),
             };
         } catch (error) {

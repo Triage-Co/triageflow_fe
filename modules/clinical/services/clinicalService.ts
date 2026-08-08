@@ -187,6 +187,8 @@ export interface BackendQueuePatient {
     queue_id: string;
     queue_number: string;
     status: string;
+    /** Denormalized room for TV/queue engine — may be null on legacy rows */
+    room_id?: string | null;
     step: {
         step_id: string;
         next_step_id: string | null;
@@ -264,8 +266,8 @@ export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient 
     };
 
     /**
-     * Queue lifecycle: PENDING → CALLING → IN_PROGRESS → COMPLETED
-     * Prefer queue.status; fall back to step.step_status for older payloads.
+     * Prefer queue.status (BE: PENDING/QUEUED/CALLED/SERVING/FINISHED/MISSING).
+     * Fall back to step.step_status for older payloads.
      */
     const mapStatus = (
         status: string,
@@ -274,13 +276,20 @@ export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient 
         const queueStatus = (status || '').toUpperCase();
         const step = (stepStatus || '').toUpperCase();
 
-        if (queueStatus === 'COMPLETED' || step === 'COMPLETED') {
+        if (
+            queueStatus === 'FINISHED' ||
+            queueStatus === 'COMPLETED' ||
+            queueStatus === 'CANCELLED' ||
+            step === 'COMPLETED' ||
+            step === 'DECLINED'
+        ) {
             return 'Đã khám';
         }
-        if (queueStatus === 'CALLING') {
+        if (queueStatus === 'CALLED' || queueStatus === 'CALLING') {
             return 'Đang gọi';
         }
         if (
+            queueStatus === 'SERVING' ||
             queueStatus === 'IN_PROGRESS' ||
             step === 'PROCESSING' ||
             step === 'IN_PROGRESS' ||
@@ -288,7 +297,7 @@ export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient 
         ) {
             return 'Đang khám';
         }
-        // PENDING / WAITING / SKIPPED / CANCELLED → waiting bucket for list UI
+        // PENDING / QUEUED / MISSING / WAITING → waiting bucket for list UI
         return 'Đang chờ';
     };
 
