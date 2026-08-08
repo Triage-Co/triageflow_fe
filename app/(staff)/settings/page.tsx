@@ -7,7 +7,11 @@ import { useAuthStore } from '@/store/authStore';
 
 export default function SettingsPage() {
     const user = useAuthStore((s) => s.user);
-    const isLabRole = user?.role === 'LAB_TECHNICIAN';
+    const isLabRole =
+        user?.role === 'LAB_TECHNICIAN' ||
+        (user?.role === 'DOCTOR' &&
+            typeof window !== 'undefined' &&
+            localStorage.getItem('tfopd_active_room_type') === 'PROCEDURE_ROOM');
 
     return (
         <EMRWorkspaceLayout activeTabId="settings" activeTabName="Cài đặt">

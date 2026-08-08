@@ -33,10 +33,10 @@ export const MapView: React.FC = () => {
   const [routeData, setRouteData] = useState<any>(null);
   const [modalType, setModalType] = useState<'start' | 'target' | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
+  const [activeField, setActiveField] = useState<'start' | 'target'>('target');
 
   const targetRoomCode = targetRoom?.roomCode || mapNavigationRoomId || null;
   const targetAreaId = targetRoom?.areaId || null;
-
 
   const KIOSK_RECEPTION_A_ID = 'ce336956-b026-4979-8094-2c7bf7a5a53a';
 
@@ -138,6 +138,49 @@ export const MapView: React.FC = () => {
     setStartRoom(null);
     setTargetRoom(null);
     setRouteData(null);
+    setActiveField('start'); // Sau khi reset, ưu tiên click tiếp theo chọn điểm đi
+  };
+
+  const handleSelectRoomFromMap = (roomId: string) => {
+    if (!rawMap || !rawMap.floors) return;
+
+    let selectedRoom: RoomOption | null = null;
+    for (const floor of rawMap.floors) {
+      const room = floor.rooms.find((r) => r.id === roomId);
+      if (room) {
+        selectedRoom = {
+          id: room.id,
+          roomCode: room.roomCode,
+          roomLabel: room.roomLabel,
+          floorNumber: floor.floorNumber,
+          type: (room as any).type || '',
+          areaId: room.areaId,
+        };
+        break;
+      }
+    }
+
+    if (!selectedRoom) return;
+
+    if (!startRoom) {
+      // 1. Chưa có điểm xuất phát
+      setStartRoom(selectedRoom);
+      setActiveField('target');
+      useNavigationStore.getState().setActiveFloor(selectedRoom.floorNumber);
+    } else if (!targetRoom) {
+      // 2. Có điểm xuất phát nhưng chưa có điểm đến
+      setTargetRoom(selectedRoom);
+      useNavigationStore.getState().setActiveFloor(selectedRoom.floorNumber);
+    } else {
+      // 3. Đã có cả hai, ghi đè theo activeField hiện tại
+      if (activeField === 'start') {
+        setStartRoom(selectedRoom);
+        setActiveField('target');
+      } else {
+        setTargetRoom(selectedRoom);
+      }
+      useNavigationStore.getState().setActiveFloor(selectedRoom.floorNumber);
+    }
   };
 
   const routePath = routeData?.path || undefined;
@@ -151,6 +194,7 @@ export const MapView: React.FC = () => {
         startRoomId={startRoom?.id}
         targetRoomId={targetRoom?.id}
         routePath={routePath}
+        onSelectRoom={handleSelectRoomFromMap}
       />
 
       {/* Floating Header Bar */}
@@ -206,12 +250,17 @@ export const MapView: React.FC = () => {
             Điểm xuất phát
           </label>
           <button
-            onClick={() => setModalType('start')}
-            className={`w-full text-left px-4 py-3 rounded-2xl border text-xs font-semibold flex items-center justify-between transition-all cursor-pointer ${
-              startRoom
+            onClick={() => {
+              setActiveField('start');
+              setModalType('start');
+            }}
+            className={`w-full text-left px-4 py-3 rounded-2xl border text-xs font-semibold flex items-center justify-between transition-all cursor-pointer ${activeField === 'start'
+                ? 'ring-2 ring-blue-500 border-transparent bg-blue-50/20'
+                : 'border-slate-200'
+              } ${startRoom
                 ? 'bg-emerald-50/50 border-emerald-200 text-emerald-800 font-bold'
-                : 'bg-slate-50/60 border-slate-200 hover:bg-slate-100/50 text-slate-400'
-            }`}
+                : 'bg-slate-50/60 hover:bg-slate-100/50 text-slate-400'
+              }`}
           >
             <span className="truncate">
               {startRoom ? `Tầng ${startRoom.floorNumber} - ${startRoom.roomLabel}` : 'Chọn điểm đi...'}
@@ -226,12 +275,17 @@ export const MapView: React.FC = () => {
             Điểm cần đến
           </label>
           <button
-            onClick={() => setModalType('target')}
-            className={`w-full text-left px-4 py-3 rounded-2xl border text-xs font-semibold flex items-center justify-between transition-all cursor-pointer ${
-              targetRoom
+            onClick={() => {
+              setActiveField('target');
+              setModalType('target');
+            }}
+            className={`w-full text-left px-4 py-3 rounded-2xl border text-xs font-semibold flex items-center justify-between transition-all cursor-pointer ${activeField === 'target'
+                ? 'ring-2 ring-blue-500 border-transparent bg-blue-50/20'
+                : 'border-slate-200'
+              } ${targetRoom
                 ? 'bg-rose-50/50 border-rose-200 text-rose-800 font-bold'
-                : 'bg-slate-50/60 border-slate-200 hover:bg-slate-100/50 text-slate-400'
-            }`}
+                : 'bg-slate-50/60 hover:bg-slate-100/50 text-slate-400'
+              }`}
           >
             <span className="truncate">
               {targetRoom ? `Tầng ${targetRoom.floorNumber} - ${targetRoom.roomLabel}` : 'Chọn điểm đến...'}
@@ -263,7 +317,6 @@ export const MapView: React.FC = () => {
         )}
       </div>
 
-
       {/* Room Selection Popup Modal */}
       {rawMap && (
         <RoomPickerModal
@@ -275,6 +328,7 @@ export const MapView: React.FC = () => {
             if (modalType === 'start') {
               setStartRoom(room);
               useNavigationStore.getState().setActiveFloor(room.floorNumber);
+              setActiveField('target');
             } else {
               setTargetRoom(room);
               useNavigationStore.getState().setActiveFloor(room.floorNumber);
