@@ -8,8 +8,14 @@ import {
 
 export const bookingService = {
 
-  getAllSpecialties: async () => {
-    return kioskApiClient.get<SpecialtyItem[]>('/api/specialty');
+  getAllSpecialties: async (params?: { page?: number; limit?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.page !== undefined) searchParams.append('page', String(params.page));
+    if (params?.limit !== undefined) searchParams.append('limit', String(params.limit));
+    const queryString = searchParams.toString();
+    return kioskApiClient.get<SpecialtyItem[]>(
+      queryString ? `/api/specialty?${queryString}` : '/api/specialty'
+    );
   },
 
   createAutoBooking: async (patientId: string, interviewToken: string, token?: string) => {
