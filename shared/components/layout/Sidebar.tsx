@@ -60,10 +60,12 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
     ],
     LAB_STAFF: [
         { label: 'Danh Sách Bệnh Nhân', href: '/lab', icon: LayoutDashboard },
+        { label: 'Thông báo', href: '/lab/notification', icon: Bell },
         { label: 'Thông tin cá nhân', href: '/settings', icon: User },
     ],
     LAB_TECHNICIAN: [
         { label: 'Danh Sách Bệnh Nhân', href: '/lab', icon: LayoutDashboard },
+        { label: 'Thông báo', href: '/lab/notification', icon: Bell },
         { label: 'Thông tin cá nhân', href: '/settings', icon: User },
     ],
     PHARMACY_STAFF: [
