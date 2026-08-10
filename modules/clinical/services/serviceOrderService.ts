@@ -118,6 +118,10 @@ export function normalizeDetailServiceOrder(raw: unknown): ServiceOrder | null {
                 ? rec.assign_by_staff_id
                 : null,
         name: String(rec.name || serviceName || 'Dịch vụ'),
+        type:
+            typeof rec.type === 'string' && rec.type.trim()
+                ? rec.type.trim().toUpperCase()
+                : null,
         service_name: serviceName || undefined,
         service_code: serviceCode || undefined,
         service_type: serviceType || null,

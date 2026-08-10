@@ -25,7 +25,10 @@ import {
     getOrderRoomType,
     getOrderServiceCode,
     getOrderServiceType,
+    getOrderType,
+    getServiceOrderDetails,
     getServiceOrderId,
+    orderTypeLabel,
 } from '@/modules/clinical/types/serviceOrder.types';
 import {
     serviceOrderService,
@@ -38,6 +41,14 @@ import {
 import { useAuthStore } from '@/store/authStore';
 import { useRoomStore } from '@/modules/admin/store/roomStore';
 import { useShiftStore } from '@/modules/admin/store/shiftStore';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/shared/components/ui/Dialog';
 import { staffService } from '@/modules/admin/services/staffService';
 import type { Shift } from '@/modules/admin/types/shift.types';
 
@@ -188,13 +199,20 @@ interface ParaclinicalOrdersTabProps {
 }
 
 interface ServiceOrderCard {
+    /** Stable React key — detail id when split, else order id */
+    row_key: string;
     service_order_id: string;
+    service_order_detail_id?: string;
     name: string;
     order_name: string;
     status: string;
     payment_status?: string;
     service_code?: string;
     service_type?: string;
+    /** Order `type` (LAB_TEST, …) for Nhóm column */
+    order_type?: string;
+    /** Vietnamese label for Nhóm */
+    group_label?: string;
     room_type?: string;
     room_id?: string;
     room_name?: string;
@@ -540,7 +558,7 @@ function resolveOnDutyDoctorName(
     return resolveOnDutyStaff(roomId, rooms, shifts, staffNameById).staffName;
 }
 
-function mapOrderToCard(
+function mapOrderToCards(
     order: ServiceOrder,
     rooms: Array<{
         room_id: string;
@@ -553,11 +571,11 @@ function mapOrderToCard(
     staffNameById: Map<string, string>,
     specialties: Array<{ specialty_id: string; specialty_name: string }>,
     flowMeta?: FlowOrderRoomStaff | null
-): ServiceOrderCard | null {
+): ServiceOrderCard[] {
     const id = getServiceOrderId(order);
-    if (!id) return null;
+    if (!id) return [];
     const status = String(order.status || 'PENDING').toUpperCase();
-    if (status === 'CANCELLED' || status === 'CANCELED') return null;
+    if (status === 'CANCELLED' || status === 'CANCELED') return [];
 
     const createdRaw = order.created_at || order.create_at || order.updated_at;
     const createdAt = createdRaw ? new Date(createdRaw).getTime() : NaN;
@@ -578,22 +596,25 @@ function mapOrderToCard(
         order.room_info?.room_name ||
         undefined;
 
-    // Nhóm = specialty của phòng thực hiện (flow/CLS), không dùng specialty step khám nếu đã có phòng
+    // Nhóm = order.type (LAB_TEST, …), không dùng specialty phòng khám
+    const orderType = getOrderType(order);
+    const groupLabel = orderTypeLabel(orderType) || undefined;
+
     const roomSpecialtyId = (
         room?.specialty_id ||
         room?.specialty?.specialty_id ||
         ''
     ).trim();
     const specialtyId = (
-        roomSpecialtyId ||
         order.specialty_id ||
         order.specialty_info?.specialty_id ||
+        roomSpecialtyId ||
         ''
     ).trim();
     const specialtyName =
         specialties.find((s) => s.specialty_id === specialtyId)?.specialty_name ||
-        room?.specialty?.specialty_name?.trim() ||
         order.specialty_info?.specialty_name?.trim() ||
+        room?.specialty?.specialty_name?.trim() ||
         undefined;
 
     const assignId = (order.assign_by_staff_id || flowMeta?.staffId || '').trim();
@@ -617,17 +638,19 @@ function mapOrderToCard(
 
     const paymentFromIsPayment =
         typeof order.is_payment === 'string' ? order.is_payment : undefined;
+    const orderPaymentStatus = order.payment_status || paymentFromIsPayment;
+    const fallbackStatus = String(
+        orderPaymentStatus || order.status || 'PENDING'
+    );
 
-    return {
+    const shared: Omit<ServiceOrderCard, 'row_key' | 'name' | 'status' | 'total_price' | 'service_order_detail_id'> = {
         service_order_id: id,
-        name: getOrderDisplayName(order),
         order_name: order.name || '',
-        status: String(
-            order.payment_status || paymentFromIsPayment || order.status || 'PENDING'
-        ),
-        payment_status: order.payment_status || paymentFromIsPayment,
+        payment_status: orderPaymentStatus,
         service_code: getOrderServiceCode(order) || undefined,
         service_type: getOrderServiceType(order) || undefined,
+        order_type: orderType || undefined,
+        group_label: groupLabel,
         room_type: getOrderRoomType(order) || undefined,
         room_id: roomId || undefined,
         room_name: roomName,
@@ -636,14 +659,56 @@ function mapOrderToCard(
         assign_by_staff_id: assignId || undefined,
         assign_doctor_name: assignDoctorName,
         on_duty_doctor_name: onDutyDoctorName || undefined,
-        total_price: typeof order.total_price === 'number' ? order.total_price : undefined,
         created_at: Number.isFinite(createdAt) ? createdAt : undefined,
     };
+
+    const details = getServiceOrderDetails(order).filter((d) => {
+        const detailStatus = String(d.status || '').toUpperCase();
+        return detailStatus !== 'CANCELLED' && detailStatus !== 'CANCELED';
+    });
+
+    // Một dòng / serviceOrderDetail — tránh gộp tên bằng dấu phẩy từ order.name
+    if (details.length > 0) {
+        return details.map((detail, index) => {
+            const detailId = (detail.service_order_detail_id || '').trim();
+            const detailName = (
+                detail.name ||
+                detail.service?.service_name ||
+                ''
+            ).trim();
+            const price =
+                typeof detail.price_at_order === 'number'
+                    ? detail.price_at_order
+                    : undefined;
+            return {
+                ...shared,
+                row_key: detailId || `${id}-${index}`,
+                service_order_detail_id: detailId || undefined,
+                name: detailName || getOrderDisplayName(order),
+                status: String(detail.status || fallbackStatus),
+                total_price: price,
+            };
+        });
+    }
+
+    return [
+        {
+            ...shared,
+            row_key: id,
+            name: getOrderDisplayName(order),
+            status: fallbackStatus,
+            total_price:
+                typeof order.total_price === 'number' ? order.total_price : undefined,
+        },
+    ];
 }
 
 function sortCards(cards: ServiceOrderCard[]): ServiceOrderCard[] {
     return [...cards].sort(
-        (a, b) => (b.created_at || 0) - (a.created_at || 0) || a.service_order_id.localeCompare(b.service_order_id)
+        (a, b) =>
+            (b.created_at || 0) - (a.created_at || 0) ||
+            a.service_order_id.localeCompare(b.service_order_id) ||
+            a.row_key.localeCompare(b.row_key)
     );
 }
 
@@ -678,7 +743,7 @@ function printServiceOrderIndications(options: {
             return `<tr>
               <td>${idx + 1}</td>
               <td>${escapeHtml(order.name || '—')}</td>
-              <td>${escapeHtml(order.specialty_name || '—')}</td>
+              <td>${escapeHtml(order.group_label || '—')}</td>
               <td>${escapeHtml(status)}</td>
             </tr>`;
         })
@@ -783,7 +848,7 @@ export function ParaclinicalOrdersTab({
     const [error, setError] = useState<string | null>(null);
 
     const [isAddOpen, setIsAddOpen] = useState(false);
-    const [selectedServiceId, setSelectedServiceId] = useState('');
+    const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
     const [selectedRoomId, setSelectedRoomId] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
@@ -792,6 +857,7 @@ export function ParaclinicalOrdersTab({
     const [editRoomId, setEditRoomId] = useState('');
     const [editStatus, setEditStatus] = useState('PENDING');
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [deleteTarget, setDeleteTarget] = useState<ServiceOrderCard | null>(null);
     const hasLoadedOnceRef = useRef(false);
 
     const patientId = (patient.patientId || '').trim();
@@ -830,25 +896,21 @@ export function ParaclinicalOrdersTab({
                     allowedTypes
                 )
             )
-            .map((o) => {
+            .flatMap((o) => {
                 const orderId = getServiceOrderId(o);
-                const card = mapOrderToCard(
+                const resolvedType = resolveCatalogServiceType(o, catalog, rooms);
+                return mapOrderToCards(
                     o,
                     rooms,
                     shifts,
                     staffNameById,
                     specialties,
                     flowRoomStaffByOrderId.get(orderId) || null
-                );
-                if (!card) return null;
-                const resolvedType = resolveCatalogServiceType(o, catalog, rooms);
-                const next: ServiceOrderCard = {
+                ).map((card) => ({
                     ...card,
                     service_type: resolvedType || card.service_type,
-                };
-                return next;
-            })
-            .filter((c): c is ServiceOrderCard => c !== null);
+                }));
+            });
         return sortCards(cards);
     }, [
         rawOrders,
@@ -1017,15 +1079,35 @@ export function ParaclinicalOrdersTab({
         return () => window.clearTimeout(timeoutId);
     }, [shifts]);
 
-    const selectedService = useMemo(
-        () => filteredCatalog.find((s) => getServiceId(s) === selectedServiceId) || null,
-        [filteredCatalog, selectedServiceId]
+    const selectedServices = useMemo(
+        () =>
+            filteredCatalog.filter((s) =>
+                selectedServiceIds.includes(getServiceId(s))
+            ),
+        [filteredCatalog, selectedServiceIds]
     );
 
-    const eligibleRooms = useMemo(
-        () => roomsForService(rooms, selectedService?.room_type),
-        [rooms, selectedService?.room_type]
-    );
+    const eligibleRooms = useMemo(() => {
+        if (selectedServices.length === 0) return [] as ReturnType<typeof roomsForService>;
+        const seen = new Set<string>();
+        const merged: ReturnType<typeof roomsForService> = [];
+        for (const svc of selectedServices) {
+            for (const room of roomsForService(rooms, svc.room_type)) {
+                if (seen.has(room.room_id)) continue;
+                seen.add(room.room_id);
+                merged.push(room);
+            }
+        }
+        return merged;
+    }, [rooms, selectedServices]);
+
+    const toggleSelectedService = (serviceId: string) => {
+        setSelectedServiceIds((prev) =>
+            prev.includes(serviceId)
+                ? prev.filter((id) => id !== serviceId)
+                : [...prev, serviceId]
+        );
+    };
 
     const editServiceRoomType = useMemo(() => {
         if (!editingOrder?.service_code) return null;
@@ -1052,7 +1134,7 @@ export function ParaclinicalOrdersTab({
 
     useEffect(() => {
         const timeoutId = window.setTimeout(() => {
-            if (!selectedService) {
+            if (selectedServices.length === 0) {
                 setSelectedRoomId('');
                 return;
             }
@@ -1063,7 +1145,7 @@ export function ParaclinicalOrdersTab({
             });
         }, 0);
         return () => window.clearTimeout(timeoutId);
-    }, [selectedService, eligibleRooms]);
+    }, [selectedServices, eligibleRooms]);
 
     // When opening edit: keep current room if valid; otherwise preselect best CLS room
     useEffect(() => {
@@ -1088,17 +1170,19 @@ export function ParaclinicalOrdersTab({
 
     const handleCreateIndication = async () => {
         if (!accessToken) return;
-        if (!staffId) {
-            setFormError('Không xác định được bác sĩ chỉ định.');
+        if (selectedServices.length === 0) {
+            setFormError('Vui lòng chọn ít nhất một dịch vụ.');
             return;
         }
-        if (!selectedService) {
-            setFormError('Vui lòng chọn dịch vụ.');
-            return;
-        }
-        const serviceCode = (selectedService.service_code || '').trim();
-        if (!serviceCode) {
+        const serviceCodes = selectedServices
+            .map((s) => (s.service_code || '').trim())
+            .filter(Boolean);
+        if (serviceCodes.length === 0) {
             setFormError('Dịch vụ thiếu service_code.');
+            return;
+        }
+        if (serviceCodes.length !== selectedServices.length) {
+            setFormError('Một số dịch vụ thiếu service_code.');
             return;
         }
         if (!selectedRoomId) {
@@ -1139,18 +1223,9 @@ export function ParaclinicalOrdersTab({
             }
             setResolvedBookingId(bookingId);
 
-            // specialty_id bắt buộc theo CreateServiceOrderReqDto mới
-            const specialtyId = resolveSpecialtyIdForOrder(room, flowObj) || '';
-            if (!specialtyId) {
-                setFormError('Không xác định được chuyên khoa của phòng. Vui lòng chọn phòng khác.');
-                return;
-            }
-
             const createBody: CreateServiceOrderReqDto = {
                 booking_id: bookingId,
-                assign_by_staff_id: staffId,
-                service_code: serviceCode,
-                specialty_id: specialtyId,
+                service_code: serviceCodes,
                 room_id: selectedRoomId,
             };
 
@@ -1165,11 +1240,7 @@ export function ParaclinicalOrdersTab({
                 try {
                     await serviceOrderService.updateOrder(
                         createdId,
-                        {
-                            room_id: selectedRoomId,
-                            specialty_id: specialtyId,
-                            service_code: serviceCode,
-                        },
+                        { room_id: selectedRoomId },
                         accessToken
                     );
                 } catch (patchErr) {
@@ -1181,7 +1252,7 @@ export function ParaclinicalOrdersTab({
             }
 
             setIsAddOpen(false);
-            setSelectedServiceId('');
+            setSelectedServiceIds([]);
             setSelectedRoomId('');
             onFlowChanged?.(flowObj);
             // Chờ BE gắn service_order_id vào step rồi mới enrich phòng/BS từ flow
@@ -1298,16 +1369,30 @@ export function ParaclinicalOrdersTab({
         }
     };
 
-    const handleDeleteIndication = async (order: ServiceOrderCard) => {
-        if (!accessToken) return;
-        // Chỉ chặn theo payment_status / is_payment — không dùng status lâm sàng
+    const openDeleteDialog = (order: ServiceOrderCard) => {
         if (isPaymentCompleted(order.payment_status)) {
             setError('Không thể xóa chỉ định đã thanh toán thành công.');
             return;
         }
-        const ok = window.confirm(`Hủy chỉ định "${order.name}"?`);
-        if (!ok) return;
+        setError(null);
+        setDeleteTarget(order);
+    };
 
+    const closeDeleteDialog = () => {
+        if (deletingId) return;
+        setDeleteTarget(null);
+    };
+
+    const handleConfirmDeleteIndication = async () => {
+        if (!accessToken || !deleteTarget) return;
+        // Chỉ chặn theo payment_status / is_payment — không dùng status lâm sàng
+        if (isPaymentCompleted(deleteTarget.payment_status)) {
+            setError('Không thể xóa chỉ định đã thanh toán thành công.');
+            setDeleteTarget(null);
+            return;
+        }
+
+        const order = deleteTarget;
         const orderId = order.service_order_id;
         setDeletingId(orderId);
         setError(null);
@@ -1355,6 +1440,7 @@ export function ParaclinicalOrdersTab({
             if (latestFlow) setLinkedFlow(latestFlow);
 
             onFlowChanged?.(latestFlow);
+            setDeleteTarget(null);
             await loadPendingOrders({ silent: true });
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Không thể hủy chỉ định dịch vụ.');
@@ -1365,7 +1451,11 @@ export function ParaclinicalOrdersTab({
 
     // Chỉ che toàn trang khi load lần đầu — giữ modal/list khi refetch nền
     const showInitialLoader =
-        isLoading && rawOrders.length === 0 && !editingOrder && !isAddOpen;
+        isLoading &&
+        rawOrders.length === 0 &&
+        !editingOrder &&
+        !isAddOpen &&
+        !deleteTarget;
 
     if (showInitialLoader) {
         return (
@@ -1410,6 +1500,8 @@ export function ParaclinicalOrdersTab({
                             type="button"
                             onClick={() => {
                                 setFormError(null);
+                                setSelectedServiceIds([]);
+                                setSelectedRoomId('');
                                 setIsAddOpen(true);
                             }}
                             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#8B7CF6] hover:bg-[#7a6ae5] text-white text-[12px] font-bold transition-colors cursor-pointer shadow-sm"
@@ -1457,7 +1549,7 @@ export function ParaclinicalOrdersTab({
                                     const paid = isPaymentCompleted(order.payment_status);
                                     return (
                                         <tr
-                                            key={order.service_order_id}
+                                            key={order.row_key}
                                             className="border-b border-[#F0F0F2] last:border-b-0 hover:bg-neutral-50/60 transition-colors"
                                         >
                                             <td className="px-5 py-3.5">
@@ -1470,7 +1562,7 @@ export function ParaclinicalOrdersTab({
                                                 </button>
                                             </td>
                                             <td className="px-4 py-3.5 text-[12px] text-neutral-600 font-medium">
-                                                {order.specialty_name || '—'}
+                                                {order.group_label || '—'}
                                             </td>
                                             <td className="px-4 py-3.5">
                                                 <span
@@ -1501,7 +1593,7 @@ export function ParaclinicalOrdersTab({
                                                                 ? 'Không thể xóa chỉ định đã thanh toán'
                                                                 : 'Hủy chỉ định'
                                                         }
-                                                        onClick={() => void handleDeleteIndication(order)}
+                                                        onClick={() => openDeleteDialog(order)}
                                                         disabled={isDeleting || paid}
                                                         className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-neutral-400 disabled:cursor-not-allowed cursor-pointer transition-colors"
                                                     >
@@ -1543,28 +1635,49 @@ export function ParaclinicalOrdersTab({
                             )}
                             <div>
                                 <label className="text-[10px] font-bold uppercase text-neutral-400 block mb-1">
-                                    Dịch vụ
+                                    Dịch vụ{' '}
+                                    {selectedServiceIds.length > 0
+                                        ? `(đã chọn ${selectedServiceIds.length})`
+                                        : ''}
                                 </label>
-                                <select
-                                    value={selectedServiceId}
-                                    onChange={(e) => setSelectedServiceId(e.target.value)}
-                                    className="w-full border border-neutral-200 rounded-xl px-3 py-2.5 text-sm font-medium bg-white"
-                                >
-                                    <option value="">Chọn dịch vụ</option>
-                                    {filteredCatalog.map((svc) => {
-                                        const id = getServiceId(svc);
-                                        return (
-                                            <option key={id} value={id}>
-                                                {svc.service_name}
-                                            </option>
-                                        );
-                                    })}
-                                </select>
-                                {filteredCatalog.length === 0 && (
-                                    <p className="text-[11px] text-amber-600 mt-1.5">
-                                        Không có dịch vụ thuộc nhóm này trong danh mục.
-                                    </p>
-                                )}
+                                <div className="max-h-48 overflow-y-auto rounded-xl border border-neutral-200 divide-y divide-neutral-100">
+                                    {filteredCatalog.length === 0 ? (
+                                        <p className="px-3 py-3 text-[11px] text-amber-600">
+                                            Không có dịch vụ thuộc nhóm này trong danh mục.
+                                        </p>
+                                    ) : (
+                                        filteredCatalog.map((svc) => {
+                                            const id = getServiceId(svc);
+                                            const checked = selectedServiceIds.includes(id);
+                                            return (
+                                                <label
+                                                    key={id}
+                                                    className={cn(
+                                                        'flex items-start gap-2.5 px-3 py-2.5 cursor-pointer hover:bg-neutral-50 transition-colors',
+                                                        checked && 'bg-[#F5F2FF]'
+                                                    )}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={checked}
+                                                        onChange={() => toggleSelectedService(id)}
+                                                        className="mt-0.5 rounded border-neutral-300 text-[#8B7CF6] focus:ring-[#8B7CF6]"
+                                                    />
+                                                    <span className="min-w-0">
+                                                        <span className="block text-sm font-medium text-neutral-800">
+                                                            {svc.service_name}
+                                                        </span>
+                                                        {svc.service_code ? (
+                                                            <span className="block text-[11px] text-neutral-400 font-mono mt-0.5">
+                                                                {svc.service_code}
+                                                            </span>
+                                                        ) : null}
+                                                    </span>
+                                                </label>
+                                            );
+                                        })
+                                    )}
+                                </div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
@@ -1612,7 +1725,11 @@ export function ParaclinicalOrdersTab({
                             <button
                                 type="button"
                                 onClick={() => void handleCreateIndication()}
-                                disabled={isSubmitting || !selectedServiceId || !selectedRoomId}
+                                disabled={
+                                    isSubmitting ||
+                                    selectedServiceIds.length === 0 ||
+                                    !selectedRoomId
+                                }
                                 className="px-4 py-2 rounded-xl bg-brand-500 text-white text-sm font-bold disabled:opacity-50 inline-flex items-center gap-2"
                             >
                                 {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -1732,6 +1849,50 @@ export function ParaclinicalOrdersTab({
                     </div>
                 </div>
             )}
+
+            <Dialog
+                open={Boolean(deleteTarget)}
+                onOpenChange={(open) => {
+                    if (!open) closeDeleteDialog();
+                }}
+            >
+                <DialogContent className="sm:max-w-md" showCloseButton={!deletingId}>
+                    <DialogHeader>
+                        <DialogTitle>Xác nhận hủy chỉ định</DialogTitle>
+                        <DialogDescription>
+                            Hủy chỉ định{' '}
+                            <span className="font-semibold text-neutral-800">
+                                {deleteTarget?.name || 'dịch vụ'}
+                            </span>
+                            ?
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <DialogFooter className="mt-6 gap-2 sm:gap-2">
+                        <button
+                            type="button"
+                            onClick={closeDeleteDialog}
+                            disabled={Boolean(deletingId)}
+                            className="px-4 py-2 rounded-xl bg-neutral-100 text-neutral-700 text-sm font-bold hover:bg-neutral-200 transition-colors disabled:opacity-50 cursor-pointer"
+                        >
+                            Không
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => void handleConfirmDeleteIndication()}
+                            disabled={Boolean(deletingId) || !accessToken}
+                            className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-colors disabled:opacity-50 inline-flex items-center gap-2 cursor-pointer"
+                        >
+                            {deletingId ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                                <Trash2 className="w-4 h-4" />
+                            )}
+                            Hủy chỉ định
+                        </button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
