@@ -124,6 +124,7 @@ export const useAuthStore = create<AuthStore>()(
                     sessionStorage.removeItem('accessToken');
                     sessionStorage.removeItem('refreshToken');
                     localStorage.removeItem('emr_patient_tabs_persist');
+                    localStorage.removeItem('tfopd_active_room_type');
 
                     try {
                         usePatientTabsStore.getState().clearAll();

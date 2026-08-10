@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Cross, AlertCircle, Loader2 } from 'lucide-react';
 import { authService } from '@/modules/auth/services/authService';
 import { useAuthStore } from '@/store/authStore';
+import { labService } from '@/modules/lab/services/labService';
 
 function getPostLoginPath(role: string) {
     const normalizedRole = role.trim().toUpperCase().replace(/^ROLE_/, '');
@@ -108,7 +109,33 @@ export function LoginForm() {
                 const { token, refreshToken, username, role } = loginRes.data;
 
                 const resolvedRole = await completeLogin(token, refreshToken, username, role);
-                router.push(getPostLoginPath(resolvedRole));
+                
+                let redirectPath = getPostLoginPath(resolvedRole);
+                if (resolvedRole.trim().toUpperCase().replace(/^ROLE_/, '') === 'DOCTOR') {
+                    try {
+                        const d = new Date();
+                        const year = d.getFullYear();
+                        const month = String(d.getMonth() + 1).padStart(2, '0');
+                        const day = String(d.getDate()).padStart(2, '0');
+                        const todayStr = `${year}-${month}-${day}`;
+
+                        const shifts = await labService.getMyShifts(todayStr);
+                        const hasProcedureShift = shifts.some(s => s.room?.room_type === 'PROCEDURE_ROOM');
+                        if (hasProcedureShift) {
+                            localStorage.setItem('tfopd_active_room_type', 'PROCEDURE_ROOM');
+                            redirectPath = '/lab';
+                        } else {
+                            localStorage.removeItem('tfopd_active_room_type');
+                        }
+                    } catch (err) {
+                        console.error('Lỗi khi kiểm tra ca trực phòng thủ thuật của bác sĩ:', err);
+                        localStorage.removeItem('tfopd_active_room_type');
+                    }
+                } else {
+                    localStorage.removeItem('tfopd_active_room_type');
+                }
+                
+                router.push(redirectPath);
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'Đăng nhập thất bại. Vui lòng thử lại.');
             }

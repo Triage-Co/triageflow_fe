@@ -3,7 +3,7 @@ export function toLocalYmd(raw?: string | null): string | undefined {
     if (!raw) return undefined;
     const s = String(raw).trim();
     if (!s) return undefined;
-    // Pure date-only (no time) — keep as calendar day, do not apply UTC shift
+    // Date-only only — keep as-is. Datetimes go through Date (local calendar day).
     if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
 
     // ISO datetime (e.g. 2026-08-09T17:00:00.000Z = 00:00 10/08 VN) → local YMD

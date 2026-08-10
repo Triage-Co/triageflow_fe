@@ -354,7 +354,7 @@ export const PatientInfoView: React.FC = () => {
           {/* RIGHT COLUMN (8 Cols) */}
           <div className="lg:col-span-8 flex flex-col min-h-0 gap-6">
             {/* Card 3: Thông tin hàng đợi */}
-            <div className="bg-white rounded-[28px] p-6 shadow-md border border-neutral-100 flex flex-col justify-between flex-1 space-y-5">
+            <div className="bg-white rounded-[28px] p-7 shadow-md border border-neutral-100 flex flex-col justify-center flex-1 space-y-15">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-2xl bg-[#D6E6FE] text-[#155DFC] flex items-center justify-center shrink-0">
@@ -366,16 +366,6 @@ export const PatientInfoView: React.FC = () => {
                   Đang chờ khám
                 </span>
               </div>
-
-              {queueTypeLabel && (
-                <div className="flex items-center justify-between py-2.5 px-4 bg-neutral-50 rounded-2xl border border-neutral-100">
-                  <span className="text-xs lg:text-sm font-bold text-neutral-500">Đối tượng khám</span>
-                  <span className="text-xs lg:text-sm font-black text-[#155DFC] bg-blue-50/50 px-3 py-1 rounded-xl border border-blue-100">
-                    {queueTypeLabel}
-                  </span>
-                </div>
-              )}
-
               {/* 3 Metric Cards */}
               <div className="grid grid-cols-3 gap-4">
                 {/* Metric 1 (Highlighted Blue) */}

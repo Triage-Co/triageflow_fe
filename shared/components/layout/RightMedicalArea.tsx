@@ -21,6 +21,7 @@ import {
 } from '@/modules/clinical/services/clinicalService';
 import { useAuthStore } from '@/store/authStore';
 import { ParaclinicalOrdersTab } from '@/modules/clinical/components/ParaclinicalOrdersTab';
+import { EmrPrescriptionTab } from '@/modules/clinical/components/EmrPrescriptionTab';
 import { isClinicalEmrReadOnly } from '@/modules/clinical/utils/appointmentDate';
 import {
     Dialog,
@@ -793,9 +794,8 @@ function PrescriptionTab({
     refreshKey?: number;
 }) {
     return (
-        <ParaclinicalOrdersTab
+        <EmrPrescriptionTab
             patient={patient}
-            serviceTypes={['PRESCRIPTION']}
             refreshKey={refreshKey}
             onFlowChanged={onFlowChanged}
         />

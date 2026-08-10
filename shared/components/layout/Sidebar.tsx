@@ -58,10 +58,12 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
     ],
     LAB_STAFF: [
         { label: 'Danh Sách Bệnh Nhân', href: '/lab', icon: LayoutDashboard },
+        { label: 'Thông báo', href: '/lab/notification', icon: Bell },
         { label: 'Thông tin cá nhân', href: '/settings', icon: User },
     ],
     LAB_TECHNICIAN: [
         { label: 'Danh Sách Bệnh Nhân', href: '/lab', icon: LayoutDashboard },
+        { label: 'Thông báo', href: '/lab/notification', icon: Bell },
         { label: 'Thông tin cá nhân', href: '/settings', icon: User },
     ],
     PHARMACY_STAFF: [
@@ -164,7 +166,20 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
     const handleToggle = onToggle ?? (() => setInternalCollapsed(v => !v));
 
     const roleKey = normalizeRoleKey(user?.role);
-    const navItems = NAV_BY_ROLE[roleKey] ?? NAV_BY_ROLE.default;
+    const [activeRoleKey, setActiveRoleKey] = useState(roleKey);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const hasProcShift = localStorage.getItem('tfopd_active_room_type') === 'PROCEDURE_ROOM';
+            if (roleKey === 'DOCTOR' && hasProcShift) {
+                setActiveRoleKey('LAB_TECHNICIAN');
+            } else {
+                setActiveRoleKey(roleKey);
+            }
+        }
+    }, [roleKey]);
+
+    const navItems = NAV_BY_ROLE[activeRoleKey] ?? NAV_BY_ROLE.default;
 
     const activeNavHref = navItems
         .filter(({ href }) => pathname === href || pathname.startsWith(`${href}/`))
@@ -195,6 +210,9 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
         authService.logout();
         logout();
         setIsDropdownOpen(false);
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem('tfopd_active_room_type');
+        }
         router.push('/login');
     };
 

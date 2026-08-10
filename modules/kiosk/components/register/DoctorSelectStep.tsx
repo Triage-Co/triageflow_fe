@@ -32,8 +32,8 @@ export const DoctorSelectStep: React.FC = () => {
 
   // Kiểm tra xem khung giờ có nằm trong quá khứ so với thời gian hiện tại hay không
   const isSlotInPast = (startTimeStr: string): boolean => {
-    //if (!startTimeStr) return false;
-    return false;
+    if (!startTimeStr) return false;
+    //return false;
     const now = new Date();
     const currentHours = now.getHours();
     const currentMinutes = now.getMinutes();
