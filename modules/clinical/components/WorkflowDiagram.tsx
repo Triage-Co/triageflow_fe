@@ -1961,12 +1961,6 @@ export function WorkflowDiagram({
             return;
         }
 
-        const selectedService = serviceOptions.find((s) => s.service_code === resolvedServiceCode);
-        const resolvedStepName =
-            selectedService?.service_name?.trim() ||
-            room?.room_name ||
-            'Bước khám mới';
-
         const resolvedStaffId =
             selectedStaffId ||
             pickDoctorOnDutyForRoom(selectedRoomId) ||
@@ -2010,7 +2004,6 @@ export function WorkflowDiagram({
                 {
                     booking_id: bookingId,
                     assign_by_staff_id: resolvedStaffId,
-                    name: resolvedStepName,
                     service_code: resolvedServiceCode,
                     specialty_id: specialtyId,
                     room_id: selectedRoomId,

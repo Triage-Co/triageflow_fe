@@ -155,9 +155,8 @@ export function normalizeBookingServiceOrder(
 export interface CreateServiceOrderReqDto {
     booking_id: string;
     assign_by_staff_id: string;
-    name: string;
     service_code: string;
-    specialty_id?: string | null;
+    specialty_id: string;
     room_id: string;
 }
 

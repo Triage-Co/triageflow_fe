@@ -19,7 +19,7 @@ export function AppShell({ children, user }: AppShellProps) {
         : undefined;
 
     return (
-        <div className="flex h-screen w-screen overflow-hidden bg-[#F8F8FB] font-sans text-[#2D2D2D]">
+        <div className="flex h-screen w-screen overflow-hidden bg-gradient-to-br from-[#EEEDFC] via-[#F9ECF2] to-[#E6E9FC] font-sans text-[#2D2D2D]">
             {/* Desktop Sidebar */}
             <div className="hidden lg:flex h-full shrink-0">
                 <Sidebar

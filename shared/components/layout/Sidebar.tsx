@@ -40,8 +40,6 @@ interface NavItem {
 const NAV_BY_ROLE: Record<string, NavItem[]> = {
     DOCTOR: [
         { label: 'Danh sách bệnh nhân', href: '/doctor', icon: LayoutDashboard },
-        { label: 'Tiếp nhận khám', href: '/lab', icon: FlaskConical },
-        { label: 'Thanh toán', href: '/cashier', icon: CreditCard },
         { label: 'Thông báo', href: '/doctor/notification', icon: Bell },
         { label: 'Cài đặt', href: '/doctor/setting', icon: Settings },
     ],
@@ -221,7 +219,7 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
     return (
         <aside
             className={cn(
-                'relative flex flex-col h-full bg-[#F5F2FF] shrink-0 select-none transition-all duration-300 ease-in-out overflow-hidden',
+                'relative flex flex-col h-full bg-transparent shrink-0 select-none transition-all duration-300 ease-in-out overflow-hidden',
                 isCollapsed ? 'w-14' : 'w-62',
             )}
         >

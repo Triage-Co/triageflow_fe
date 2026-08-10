@@ -10,12 +10,26 @@ import {
     Microscope,
     ClipboardList,
     Syringe,
-    Pill
+    Pill,
+    CheckCircle2,
+    Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { clinicalService } from '@/modules/clinical/services/clinicalService';
+import {
+    clinicalService,
+    completeExamStepIfInProgress,
+} from '@/modules/clinical/services/clinicalService';
 import { useAuthStore } from '@/store/authStore';
 import { ParaclinicalOrdersTab } from '@/modules/clinical/components/ParaclinicalOrdersTab';
+import { isClinicalEmrReadOnly } from '@/modules/clinical/utils/appointmentDate';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/shared/components/ui/Dialog';
 
 type MedTab = 'kham-benh' | 'can-lam-sang' | 'chan-doan' | 'thu-thuat' | 'don-thuoc';
 type EditingSection = 'visitReason' | 'clinicalProgression' | 'medicalHistory' | 'physicalExam' | null;
@@ -90,7 +104,7 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
     const record = patient.medicalRecord;
     const user = useAuthStore((s) => s.user);
     const accessToken = useAuthStore((s) => s.accessToken);
-    const isReadOnly = user?.role === 'NURSE';
+    const isReadOnly = isClinicalEmrReadOnly(user?.role, patient.appointmentDate);
     const [sessionData, setSessionData] = useState<VisitSessionData | null>(null);
 
     const initialPatientId = patient.patientId || (patient as unknown as Record<string, unknown>).patient_id as string | undefined;
@@ -505,7 +519,7 @@ function LabTestsTab({
 function DiagnosisTreatmentTab({ patient }: { patient: Patient }) {
     const accessToken = useAuthStore((s) => s.accessToken);
     const user = useAuthStore((s) => s.user);
-    const isReadOnly = user?.role === 'NURSE';
+    const isReadOnly = isClinicalEmrReadOnly(user?.role, patient.appointmentDate);
 
     const initialPatientId =
         patient.patientId ||
@@ -801,10 +815,63 @@ export function RightMedicalArea({
     onFlowChanged,
     flowRefreshKey = 0,
 }: RightMedicalAreaProps) {
+    const accessToken = useAuthStore((s) => s.accessToken);
+    const user = useAuthStore((s) => s.user);
+    const isReadOnly = isClinicalEmrReadOnly(user?.role, patient.appointmentDate);
     const [activeTab, setActiveTab] = useState<MedTab>('kham-benh');
+    const [isCompleteDialogOpen, setIsCompleteDialogOpen] = useState(false);
+    const [isCompletingExam, setIsCompletingExam] = useState(false);
+    const [completeExamError, setCompleteExamError] = useState<string | null>(null);
+
+    const openCompleteExamDialog = () => {
+        if (isReadOnly || !accessToken || isCompletingExam) return;
+        setCompleteExamError(null);
+        setIsCompleteDialogOpen(true);
+    };
+
+    const handleConfirmCompleteExam = async () => {
+        if (isReadOnly || !accessToken || isCompletingExam) return;
+
+        setIsCompletingExam(true);
+        setCompleteExamError(null);
+        try {
+            const result = await completeExamStepIfInProgress(accessToken, {
+                patientId: patient.patientId,
+                flowId: patient.flowId,
+                bookingId: patient.bookingId,
+            });
+            if (result === 'not_found') {
+                setCompleteExamError('Không tìm thấy bước Khám bệnh trên quy trình.');
+                return;
+            }
+            if (result === 'not_ready') {
+                setCompleteExamError('Bước Khám bệnh không thể hoàn tất ở trạng thái hiện tại.');
+                return;
+            }
+            onFlowChanged?.();
+            setIsCompleteDialogOpen(false);
+        } catch (err) {
+            setCompleteExamError(
+                err instanceof Error ? err.message : 'Không thể hoàn tất khám.'
+            );
+        } finally {
+            setIsCompletingExam(false);
+        }
+    };
+
+    const closeCompleteDialog = () => {
+        if (isCompletingExam) return;
+        setIsCompleteDialogOpen(false);
+        setCompleteExamError(null);
+    };
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden">
+            {isReadOnly && user?.role === 'DOCTOR' ? (
+                <div className="px-5 py-2 bg-[#F5F2FF] border-b border-[#E8E4FF] text-[11px] font-semibold text-[#6B5FD6] shrink-0">
+                    Ca khám ngày tương lai — chỉ xem, không chỉnh sửa hồ sơ
+                </div>
+            ) : null}
             {/* ── Patient mini-header ── */}
             <div className="flex items-center gap-3 px-5 py-3 bg-white border-b border-[#EBEBEB] shrink-0">
                 {/* Avatar */}
@@ -844,29 +911,99 @@ export function RightMedicalArea({
                 </button>
             </div>
 
-            {/* ── Toolbar tabs ── */}
+            {/* ── Toolbar tabs + Hoàn tất khám ── */}
             <div className="px-5 pt-3 pb-1 shrink-0 overflow-x-auto">
-                <div className="inline-flex p-0.5 bg-[#E8E7F5]/60 rounded-full border border-neutral-200/30 gap-0.5">
-                    {MED_TABS.map(({ id, label, icon: Icon }) => {
-                        const isActive = activeTab === id;
-                        return (
-                            <button
-                                key={id}
-                                onClick={() => setActiveTab(id)}
-                                className={cn(
-                                    'flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[11px] font-bold transition-all duration-150 cursor-pointer whitespace-nowrap',
-                                    isActive
-                                        ? 'bg-white text-[#2D2D2D] shadow-sm'
-                                        : 'text-[#7C7C8A] hover:text-[#8B7CF6]'
-                                )}
-                            >
-                                <Icon className={cn("w-3.5 h-3.5 shrink-0", isActive ? "text-[#8B7CF6]" : "text-[#7C7C8A]")} />
-                                <span>{label}</span>
-                            </button>
-                        );
-                    })}
+                <div className="flex items-center gap-2 min-w-min">
+                    <div className="inline-flex p-0.5 bg-[#E8E7F5]/60 rounded-full border border-neutral-200/30 gap-0.5">
+                        {MED_TABS.map(({ id, label, icon: Icon }) => {
+                            const isActive = activeTab === id;
+                            return (
+                                <button
+                                    key={id}
+                                    onClick={() => setActiveTab(id)}
+                                    className={cn(
+                                        'flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[11px] font-bold transition-all duration-150 cursor-pointer whitespace-nowrap',
+                                        isActive
+                                            ? 'bg-white text-[#2D2D2D] shadow-sm'
+                                            : 'text-[#7C7C8A] hover:text-[#8B7CF6]'
+                                    )}
+                                >
+                                    <Icon className={cn("w-3.5 h-3.5 shrink-0", isActive ? "text-[#8B7CF6]" : "text-[#7C7C8A]")} />
+                                    <span>{label}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {!isReadOnly ? (
+                        <button
+                            type="button"
+                            onClick={openCompleteExamDialog}
+                            disabled={isCompletingExam || !accessToken}
+                            className={cn(
+                                'inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[11px] font-bold whitespace-nowrap transition-all duration-150 shrink-0',
+                                'bg-[#22C55E] text-white hover:bg-[#16A34A] shadow-sm',
+                                'disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer'
+                            )}
+                        >
+                            {isCompletingExam ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                            ) : (
+                                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                            )}
+                            Hoàn tất khám
+                        </button>
+                    ) : null}
                 </div>
             </div>
+
+            <Dialog
+                open={isCompleteDialogOpen}
+                onOpenChange={(open) => {
+                    if (!open) closeCompleteDialog();
+                }}
+            >
+                <DialogContent className="sm:max-w-md" showCloseButton={!isCompletingExam}>
+                    <DialogHeader>
+                        <DialogTitle>Xác nhận hoàn tất khám</DialogTitle>
+                        <DialogDescription>
+                            Xác nhận hoàn tất khám cho bệnh nhân{' '}
+                            <span className="font-semibold text-neutral-800">
+                                {patient.name}
+                            </span>
+                            ?
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {completeExamError && (
+                        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                            {completeExamError}
+                        </div>
+                    )}
+
+                    <DialogFooter className="mt-6 gap-2 sm:gap-2">
+                        <button
+                            type="button"
+                            onClick={closeCompleteDialog}
+                            disabled={isCompletingExam}
+                            className="px-4 py-2 rounded-xl bg-neutral-100 text-neutral-700 text-sm font-bold hover:bg-neutral-200 transition-colors disabled:opacity-50 cursor-pointer"
+                        >
+                            Hủy
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => void handleConfirmCompleteExam()}
+                            disabled={isCompletingExam || !accessToken}
+                            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#22C55E] text-white text-sm font-bold hover:bg-[#16A34A] transition-colors disabled:opacity-50 cursor-pointer"
+                        >
+                            {isCompletingExam && (
+                                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                            )}
+                            Xác nhận
+                        </button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* ── Tab content ── */}
             <div className="flex-1 overflow-y-auto px-5 pt-4 pb-6">
