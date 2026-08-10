@@ -16,6 +16,7 @@ import { Badge } from '@/shared/components/ui/Badge';
 import { Input } from '@/shared/components/ui/Input';
 import { cn } from '@/lib/utils';
 import { ParaclinicalOrdersTab } from './ParaclinicalOrdersTab';
+import { EmrPrescriptionTab } from './EmrPrescriptionTab';
 
 const STAGE_TABS: {
     key: ClinicalStage;
@@ -161,12 +162,10 @@ export function ClinicalProcessPanel({
                     />
                 )}
                 {activeStage === 'prescription' && (
-                    <ParaclinicalOrdersTab
+                    <EmrPrescriptionTab
                         patient={patient}
-                        serviceTypes={['PRESCRIPTION']}
                         refreshKey={flowRefreshKey}
-                        flowSnapshot={flowSnapshot}
-                        onFlowChanged={onFlowChanged}
+                        onFlowChanged={() => onFlowChanged?.(flowSnapshot)}
                     />
                 )}
             </div>
