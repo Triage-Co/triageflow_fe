@@ -57,7 +57,7 @@ export const useBookingStore = create<BookingStoreState>((set, get) => ({
   fetchSpecialties: async () => {
     set({ isFetchingSpecialties: true });
     try {
-      const response = await bookingService.getAllSpecialties();
+      const response = await bookingService.getAllSpecialties({ page: 1, limit: 500 });
       const apiResponse = response?.data as any;
       const list = apiResponse?.data?.data || apiResponse?.data || apiResponse || [];
       set({ specialties: Array.isArray(list) ? list : [] });
