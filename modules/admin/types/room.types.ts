@@ -1,11 +1,6 @@
-export interface Specialty {
-    specialty_id: string;
-    specialty_code: string;
-    specialty_name: string;
-    description: string | null;
-    createdAt: string;
-    updatedAt: string;
-}
+import type { Specialty } from './specialty.types';
+
+export type { Specialty };
 
 export interface HospitalRoom {
     room_id: string;

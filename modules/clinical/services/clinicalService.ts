@@ -8,7 +8,7 @@ import {
     normalizeRoomType,
     normalizeStepType,
 } from '@/modules/admin/types/process.types';
-
+import { toLocalYmd } from '@/modules/clinical/utils/appointmentDate';
 
 // ── API Services & DTOs ──────────────────────────────────────────────────────
 import { apiClient } from '@/shared/services/apiClient';
@@ -193,6 +193,7 @@ export interface BackendQueuePatient {
         step_id: string;
         next_step_id: string | null;
         step_status: string;
+        step_name?: string;
         docNo: number;
         payment_status: string;
         room_id?: string;   // room assigned to this step (if present)
@@ -396,6 +397,7 @@ export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient 
         templateId,
         workflowSteps,
         patientId: patientObj.patient_id,
+        appointmentDate: toLocalYmd(booking?.slot?.shift?.date),
         medicalRecord: {
             visitReason: visitReasonFromApi || 'Chưa có lý do khám từ hệ thống',
             clinicalProgression: clinicalProgressionFromApi || '',
@@ -533,6 +535,140 @@ export function extractFlowSteps(flow: Record<string, unknown> | null | undefine
     const nested = flow.data && typeof flow.data === 'object' ? (flow.data as Record<string, unknown>) : null;
     if (nested && Array.isArray(nested.steps)) return nested.steps as unknown[];
     return [];
+}
+
+function normalizeStepLabel(name: string): string {
+    return name.trim().toLowerCase().normalize('NFC');
+}
+
+/** Default consultation step created with the visit flow. */
+export function isDefaultExamStepName(name: string): boolean {
+    const n = normalizeStepLabel(name);
+    return n === 'khám bệnh' || n === 'kham benh';
+}
+
+export function findExamStepInFlow(
+    flow: Record<string, unknown> | null | undefined
+): { stepId: string; stepStatus: string } | null {
+    for (const item of extractFlowSteps(flow)) {
+        const rec = asRecord(item);
+        if (!rec) continue;
+        const status = String(rec.step_status || '').toUpperCase();
+        if (status === 'CANCELLED' || status === 'CANCELED') continue;
+        const name = String(rec.step_name || '');
+        if (!isDefaultExamStepName(name)) continue;
+        const stepId = typeof rec.step_id === 'string' ? rec.step_id.trim() : '';
+        if (stepId) return { stepId, stepStatus: status };
+    }
+    return null;
+}
+
+const PENDING_EXAM_STATUSES = new Set(['', 'PENDING', 'WAITING', 'QUEUED']);
+const IN_PROGRESS_EXAM_STATUSES = new Set([
+    'IN_PROGRESS',
+    'PROCESSING',
+    'ONGOING',
+    'CURRENT',
+    'DOING',
+    'EXAMINING',
+    'ACTIVE',
+]);
+
+async function resolveExamStepTarget(
+    token: string,
+    options: {
+        patientId?: string;
+        flowId?: string;
+        bookingId?: string;
+        queueStepId?: string;
+        queueStepStatus?: string;
+        queueStepName?: string;
+    }
+): Promise<{ stepId: string; stepStatus: string } | null> {
+    let stepId = '';
+    let stepStatus = '';
+
+    const queueName = (options.queueStepName || '').trim();
+    const queueId = (options.queueStepId || '').trim();
+    if (queueId && queueName && isDefaultExamStepName(queueName)) {
+        stepId = queueId;
+        stepStatus = (options.queueStepStatus || '').toUpperCase();
+    }
+
+    if (!stepId) {
+        const flow = await resolvePatientFlow(token, {
+            patientId: options.patientId,
+            flowId: options.flowId,
+            bookingId: options.bookingId,
+        });
+        const exam = findExamStepInFlow(flow);
+        if (exam) {
+            stepId = exam.stepId;
+            stepStatus = exam.stepStatus;
+        } else if (queueId) {
+            stepId = queueId;
+            stepStatus = (options.queueStepStatus || '').toUpperCase();
+        }
+    }
+
+    if (!stepId) return null;
+    return { stepId, stepStatus };
+}
+
+/**
+ * When a doctor opens a patient for examination, move "Khám bệnh" PENDING → IN_PROGRESS.
+ * Idempotent for already in-progress / completed steps.
+ */
+export async function startExamStepIfPending(
+    token: string,
+    options: {
+        patientId?: string;
+        flowId?: string;
+        bookingId?: string;
+        /** Queue-bound step from GET /api/doctor/patients/... (often the exam step). */
+        queueStepId?: string;
+        queueStepStatus?: string;
+        queueStepName?: string;
+    }
+): Promise<boolean> {
+    const target = await resolveExamStepTarget(token, options);
+    if (!target) return false;
+    if (!PENDING_EXAM_STATUSES.has(target.stepStatus)) return false;
+
+    await clinicalService.updateStepStatus(target.stepId, 'IN_PROGRESS', token);
+    return true;
+}
+
+/**
+ * Doctor finishes examination: "Khám bệnh" IN_PROGRESS → COMPLETED.
+ * Idempotent if already COMPLETED.
+ */
+export async function completeExamStepIfInProgress(
+    token: string,
+    options: {
+        patientId?: string;
+        flowId?: string;
+        bookingId?: string;
+        queueStepId?: string;
+        queueStepStatus?: string;
+        queueStepName?: string;
+    }
+): Promise<'completed' | 'already_done' | 'not_ready' | 'not_found'> {
+    const target = await resolveExamStepTarget(token, options);
+    if (!target) return 'not_found';
+
+    const status = target.stepStatus;
+    if (status === 'COMPLETED' || status === 'DONE' || status === 'FINISHED') {
+        return 'already_done';
+    }
+    if (!IN_PROGRESS_EXAM_STATUSES.has(status) && !PENDING_EXAM_STATUSES.has(status)) {
+        // DECLINED / CANCELLED etc.
+        return 'not_ready';
+    }
+
+    // Allow complete from IN_PROGRESS (normal) or PENDING (doctor skipped start)
+    await clinicalService.updateStepStatus(target.stepId, 'COMPLETED', token);
+    return 'completed';
 }
 
 export const clinicalService = {

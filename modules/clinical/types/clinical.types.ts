@@ -49,6 +49,8 @@ export interface Patient {
     bookingId?: string;
     templateId?: string;
     workflowSteps?: WorkflowStep[];
+    /** Shift / booking calendar day `YYYY-MM-DD` (local). */
+    appointmentDate?: string;
     // EMR-specific fields
     medicalRecord?: MedicalRecord;
     department?: string;
