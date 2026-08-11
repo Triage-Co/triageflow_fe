@@ -123,7 +123,7 @@ export const useBookingStore = create<BookingStoreState>((set, get) => ({
 
       if (response && (response.status === 'success' || response.code === 200 || response.data)) {
         handleBookingSuccess(response, patientId);
-        kioskState.showToast('Khởi tạo lịch khám & mã VietQR thành công!', 'success');
+        kioskState.showToast('Khởi tạo lịch khám & mã QR thanh toán thành công!', 'success');
         return true;
       } else {
         kioskState.showToast('Phân phòng tự động chưa thành công. Vui lòng chọn Bác sĩ cụ thể!', 'error');
@@ -159,7 +159,7 @@ export const useBookingStore = create<BookingStoreState>((set, get) => ({
     }
 
     set({ isBookingProcessing: true });
-    kioskState.setLoading(true, 'Đang tạo đặt lịch khám & mã VietQR...');
+    kioskState.setLoading(true, 'Đang tạo đặt lịch khám & mã QR...');
 
     try {
       const response = await bookingService.createBooking(patientId, slotId);
