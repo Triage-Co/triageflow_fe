@@ -140,7 +140,7 @@ export const usePackageBookingStore = create<PackageBookingStoreState>((set, get
     }
 
     set({ isBookingProcessing: true });
-    kioskState.setLoading(true, 'Đang khởi tạo đăng ký gói khám & mã VietQR...');
+    kioskState.setLoading(true, 'Đang khởi tạo đăng ký gói khám & mã QR thanh toán...');
 
     try {
       const response = await packageBookingService.createBookingWithPackage(
