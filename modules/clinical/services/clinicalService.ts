@@ -640,8 +640,9 @@ export async function startExamStepIfPending(
 }
 
 /**
- * Doctor finishes examination: "Khám bệnh" IN_PROGRESS → COMPLETED.
- * Idempotent if already COMPLETED.
+ * Doctor finishes examination via queue Step complete.
+ * Prefers POST /queue/:queueId/complete when queueId is known (SERVING turn).
+ * Does NOT silently fall back to PATCH /step — returns need_call_next if no queueId.
  */
 export async function completeExamStepIfInProgress(
     token: string,
@@ -652,23 +653,46 @@ export async function completeExamStepIfInProgress(
         queueStepId?: string;
         queueStepStatus?: string;
         queueStepName?: string;
+        /** Active SERVING queue id (Patient.id from doctor queue routes). */
+        queueId?: string;
     }
-): Promise<'completed' | 'already_done' | 'not_ready' | 'not_found'> {
+): Promise<
+    'completed' | 'already_done' | 'not_ready' | 'not_found' | 'need_call_next'
+> {
+    const queueId = (options.queueId || '').trim();
+    if (queueId) {
+        const { queueService } = await import('@/modules/queue/services/queueService');
+        try {
+            await queueService.completeStep(queueId, token);
+            return 'completed';
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            // Already finished / not serving
+            if (
+                /already|finished|completed|không.*serving|not serving|400/i.test(msg)
+            ) {
+                const target = await resolveExamStepTarget(token, options);
+                if (
+                    target &&
+                    (target.stepStatus === 'COMPLETED' ||
+                        target.stepStatus === 'DONE' ||
+                        target.stepStatus === 'FINISHED')
+                ) {
+                    return 'already_done';
+                }
+            }
+            throw err;
+        }
+    }
+
+    // No queue id — do not PATCH /step; staff must call-next first
     const target = await resolveExamStepTarget(token, options);
     if (!target) return 'not_found';
-
     const status = target.stepStatus;
     if (status === 'COMPLETED' || status === 'DONE' || status === 'FINISHED') {
         return 'already_done';
     }
-    if (!IN_PROGRESS_EXAM_STATUSES.has(status) && !PENDING_EXAM_STATUSES.has(status)) {
-        // DECLINED / CANCELLED etc.
-        return 'not_ready';
-    }
-
-    // Allow complete from IN_PROGRESS (normal) or PENDING (doctor skipped start)
-    await clinicalService.updateStepStatus(target.stepId, 'COMPLETED', token);
-    return 'completed';
+    return 'need_call_next';
 }
 
 export const clinicalService = {

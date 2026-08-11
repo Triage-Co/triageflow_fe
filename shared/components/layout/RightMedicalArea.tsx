@@ -839,9 +839,16 @@ export function RightMedicalArea({
                 patientId: patient.patientId,
                 flowId: patient.flowId,
                 bookingId: patient.bookingId,
+                queueId: patient.id,
             });
             if (result === 'not_found') {
                 setCompleteExamError('Không tìm thấy bước Khám bệnh trên quy trình.');
+                return;
+            }
+            if (result === 'need_call_next') {
+                setCompleteExamError(
+                    'Cần gọi bệnh nhân vào phòng (call-next) trước khi hoàn tất khám.',
+                );
                 return;
             }
             if (result === 'not_ready') {
