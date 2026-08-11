@@ -1,3 +1,20 @@
+import type {
+    MissingEntry,
+    RoomQueueData as SharedRoomQueueData,
+    Serving,
+    ServingPatient,
+    ServingStep,
+    WaitingEntry,
+} from '@/modules/queue/types/queue.types';
+
+export type {
+    MissingEntry,
+    Serving,
+    ServingPatient,
+    ServingStep,
+    WaitingEntry,
+};
+
 export interface ShiftRoom {
     room_id: string;
     room_name: string;
@@ -6,7 +23,7 @@ export interface ShiftRoom {
     specialty_id: string | null;
     created_at: string;
     updated_at: string;
-    specialty: any | null;
+    specialty: unknown | null;
 }
 
 export interface ShiftInfo {
@@ -22,6 +39,7 @@ export interface ShiftInfo {
     room: ShiftRoom;
 }
 
+/** @deprecated Prefer WaitingEntry / Serving from queue.types — kept for legacy lab modals */
 export interface QueuePatientItem {
     position?: number;
     queue_id: string;
@@ -31,56 +49,23 @@ export interface QueuePatientItem {
     effective_score?: number;
     reasons?: string[];
     is_pinned?: boolean;
-    enqueued_at?: string;
+    enqueued_at?: string | null;
     waited_minutes?: number;
     eta_minutes?: number;
-    eta_time?: string;
-    missed_at?: string;
-    
-    // Local UI overrides/states
+    eta_time?: string | null;
+    missed_at?: string | null;
     localStatus?: 'WAITING' | 'SERVING' | 'MISSING' | 'COMPLETED';
     resultValue?: string;
     resultNotes?: string;
     tubeType?: string;
     volume?: string;
-
-    // Serving nested objects fallback
-    patient?: ServingPatient;
-    step?: ServingStep;
-    serving_started_at?: string;
+    patient?: ServingPatient | null;
+    step?: ServingStep | null;
+    serving_started_at?: string | null;
+    service_order?: Serving['service_order'];
 }
 
-export interface ServingPatient {
-    patient_id: string;
-    full_name: string;
-    dob: string;
-    gender: string;
-}
-
-export interface ServingStep {
-    step_id: string;
-    step_name: string;
-    step_type: string;
-    step_status: string;
-    service_code: string | null;
-}
-
-export interface ServingQueueItem {
-    queue_id: string;
-    queue_number: string;
-    serving_started_at: string;
-    patient: ServingPatient;
-    step: ServingStep;
-    service_order: any;
-}
-
-export interface RoomQueueData {
-    room_id: string;
-    expected_service_minutes: number;
-    serving: ServingQueueItem | null;
-    waiting: QueuePatientItem[];
-    missing: QueuePatientItem[];
-}
+export type RoomQueueData = SharedRoomQueueData;
 
 export interface Toast {
     id: string;
