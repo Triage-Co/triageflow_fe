@@ -8,21 +8,53 @@ export const QuizDetailStep: React.FC = () => {
   const currentQuestion = useTriageStore((state) => state.currentQuestion);
   const submitAnswersBatch = useTriageStore((state) => state.submitAnswersBatch);
 
-  const [localAnswers, setLocalAnswers] = useState<Record<string, 'present' | 'absent' | 'unknown'>>({});
+  const [localAnswers, setLocalAnswers] = useState<Record<string, 'present' | 'absent' | 'unknown' | undefined>>({});
+
+  const isGroupSingle = currentQuestion?.type === 'group_single';
+  const isGroupMultiple = currentQuestion?.type === 'group_multiple';
 
   useEffect(() => {
     setLocalAnswers({});
   }, [currentQuestion]);
 
   const isAllAnswered = currentQuestion?.items
-    ? currentQuestion.items.every((item: any) => localAnswers[item.id])
+    ? (isGroupSingle
+      ? currentQuestion.items.some((item: any) => localAnswers[item.id] === 'present') ||
+      currentQuestion.items.every((item: any) => localAnswers[item.id] === 'absent')
+      : isGroupMultiple
+        ? true
+        : currentQuestion.items.every((item: any) => localAnswers[item.id])
+    )
     : false;
 
   const handleNextQuestion = () => {
-    const formattedAnswers = Object.entries(localAnswers).map(([id, choiceId]) => ({
-      id,
-      choice_id: choiceId
-    }));
+    let formattedAnswers: any[] = [];
+    if (isGroupSingle && currentQuestion?.items) {
+      const selectedItem = currentQuestion.items.find((item: any) => localAnswers[item.id] === 'present');
+      if (selectedItem) {
+        formattedAnswers = [{
+          id: selectedItem.id,
+          choice_id: 'present' as const
+        }];
+      } else {
+        formattedAnswers = currentQuestion.items.map((item: any) => ({
+          id: item.id,
+          choice_id: 'absent' as const
+        }));
+      }
+    } else if (isGroupMultiple && currentQuestion?.items) {
+      formattedAnswers = currentQuestion.items.map((item: any) => ({
+        id: item.id,
+        choice_id: localAnswers[item.id] === 'present' ? ('present' as const) : ('absent' as const)
+      }));
+    } else {
+      formattedAnswers = Object.entries(localAnswers)
+        .filter((entry): entry is [string, 'present' | 'absent' | 'unknown'] => entry[1] !== undefined)
+        .map(([id, choiceId]) => ({
+          id,
+          choice_id: choiceId
+        }));
+    }
     submitAnswersBatch(formattedAnswers);
   };
 
@@ -41,9 +73,6 @@ export const QuizDetailStep: React.FC = () => {
 
         {currentQuestion ? (
           <div className="w-full max-w-4xl space-y-6 text-center animate-in fade-in duration-300 flex-1 flex flex-col justify-center">
-            <div className="w-16 h-16 rounded-full bg-blue-50 text-[#74A4F6] flex items-center justify-center mx-auto shadow-sm mb-2">
-              <HelpCircle className="w-8 h-8" />
-            </div>
 
             <h3 className="text-2xl sm:text-3xl font-black text-[#1E2939] leading-snug tracking-tight px-4 mb-4">
               {currentQuestion.text}
@@ -69,6 +98,139 @@ export const QuizDetailStep: React.FC = () => {
                     </button>
                   );
                 })}
+              </div>
+            ) : isGroupSingle ? (
+              <div className="space-y-3 max-h-[400px] overflow-y-auto pt-1 px-4 custom-scrollbar max-w-2xl mx-auto w-full">
+                {currentQuestion.items && currentQuestion.items.map((item: any) => {
+                  const isSelected = localAnswers[item.id] === 'present';
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        const newAnswers: Record<string, 'present' | 'absent'> = {};
+                        currentQuestion.items.forEach((it: any) => {
+                          newAnswers[it.id] = it.id === item.id ? 'present' : 'absent';
+                        });
+                        setLocalAnswers(newAnswers);
+                      }}
+                      className={cn(
+                        "w-full py-4 px-6 rounded-2xl text-base font-extrabold border shadow-sm transition-all cursor-pointer active:scale-98 text-left flex items-center justify-between gap-4",
+                        isSelected
+                          ? "bg-[#2563EB] border-[#2563EB] text-white hover:bg-blue-700 shadow-md shadow-blue-200"
+                          : "bg-white border-neutral-200 text-neutral-700 hover:bg-blue-50 hover:border-[#74A4F6] hover:text-[#2563EB]"
+                      )}
+                    >
+                      <span className="leading-snug">{item.name}</span>
+                      <div className={cn(
+                        "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
+                        isSelected ? "border-white bg-white" : "border-neutral-300 bg-white"
+                      )}>
+                        {isSelected && <div className="w-3 h-3 rounded-full bg-[#2563EB]" />}
+                      </div>
+                    </button>
+                  );
+                })}
+
+                {(() => {
+                  const isNoneSelected = currentQuestion.items && currentQuestion.items.every((it: any) => localAnswers[it.id] === 'absent');
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newAnswers: Record<string, 'absent'> = {};
+                        currentQuestion.items.forEach((it: any) => {
+                          newAnswers[it.id] = 'absent';
+                        });
+                        setLocalAnswers(newAnswers);
+                      }}
+                      className={cn(
+                        "w-full py-4 px-6 rounded-2xl text-base font-extrabold border shadow-sm transition-all cursor-pointer active:scale-98 text-left flex items-center justify-between gap-4",
+                        isNoneSelected
+                          ? "bg-neutral-800 border-neutral-800 text-white hover:bg-neutral-900 shadow-md shadow-neutral-200"
+                          : "bg-white border-neutral-200 text-neutral-700 hover:bg-neutral-50 hover:border-neutral-400 hover:text-neutral-900"
+                      )}
+                    >
+                      <span className="leading-snug">Không có triệu chứng nào nêu trên</span>
+                      <div className={cn(
+                        "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
+                        isNoneSelected ? "border-white bg-white" : "border-neutral-300 bg-white"
+                      )}>
+                        {isNoneSelected && <div className="w-3 h-3 rounded-full bg-neutral-800" />}
+                      </div>
+                    </button>
+                  );
+                })()}
+              </div>
+            ) : isGroupMultiple ? (
+              <div className="space-y-3 max-h-[400px] overflow-y-auto pt-1 px-4 custom-scrollbar max-w-2xl mx-auto w-full">
+                {currentQuestion.items && currentQuestion.items.map((item: any) => {
+                  const isSelected = localAnswers[item.id] === 'present';
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        setLocalAnswers(prev => ({
+                          ...prev,
+                          [item.id]: prev[item.id] === 'present' ? 'absent' : 'present'
+                        }));
+                      }}
+                      className={cn(
+                        "w-full py-4 px-6 rounded-2xl text-base font-extrabold border shadow-sm transition-all cursor-pointer active:scale-98 text-left flex items-center justify-between gap-4",
+                        isSelected
+                          ? "bg-[#2563EB] border-[#2563EB] text-white hover:bg-blue-700 shadow-md shadow-blue-200"
+                          : "bg-white border-neutral-200 text-neutral-700 hover:bg-blue-50 hover:border-[#74A4F6] hover:text-[#2563EB]"
+                      )}
+                    >
+                      <span className="leading-snug">{item.name}</span>
+                      <div className={cn(
+                        "w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all",
+                        isSelected ? "border-white bg-white text-[#2563EB]" : "border-neutral-300 bg-white"
+                      )}>
+                        {isSelected && (
+                          <svg className="w-4 h-4 fill-current text-[#2563EB]" viewBox="0 0 20 20">
+                            <path d="M0 11l2-2 5 5L18 3l2 2L7 18z" />
+                          </svg>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+
+                {(() => {
+                  const isNoneSelected = currentQuestion.items && currentQuestion.items.every((it: any) => localAnswers[it.id] === 'absent');
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newAnswers: Record<string, 'absent'> = {};
+                        currentQuestion.items.forEach((it: any) => {
+                          newAnswers[it.id] = 'absent';
+                        });
+                        setLocalAnswers(newAnswers);
+                      }}
+                      className={cn(
+                        "w-full py-4 px-6 rounded-2xl text-base font-extrabold border shadow-sm transition-all cursor-pointer active:scale-98 text-left flex items-center justify-between gap-4",
+                        isNoneSelected
+                          ? "bg-neutral-800 border-neutral-800 text-white hover:bg-neutral-900 shadow-md shadow-neutral-200"
+                          : "bg-white border-neutral-200 text-neutral-700 hover:bg-neutral-50 hover:border-neutral-400 hover:text-neutral-900"
+                      )}
+                    >
+                      <span className="leading-snug">Không có triệu chứng nào nêu trên</span>
+                      <div className={cn(
+                        "w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all",
+                        isNoneSelected ? "border-white bg-white text-neutral-800" : "border-neutral-300 bg-white"
+                      )}>
+                        {isNoneSelected && (
+                          <svg className="w-4 h-4 fill-current text-neutral-800" viewBox="0 0 20 20">
+                            <path d="M0 11l2-2 5 5L18 3l2 2L7 18z" />
+                          </svg>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })()}
               </div>
             ) : (
               <div className="space-y-3.5 max-h-[420px] overflow-y-auto pt-2 px-4 custom-scrollbar">
@@ -132,10 +294,6 @@ export const QuizDetailStep: React.FC = () => {
             </button>
           </div>
         )}
-      </div>
-
-      <div className="text-center text-[11px] text-neutral-400 font-medium shrink-0">
-        * Vui lòng trả lời trung thực để hệ thống hỗ trợ chỉ định chuyên khoa chính xác nhất.
       </div>
     </div>
   );

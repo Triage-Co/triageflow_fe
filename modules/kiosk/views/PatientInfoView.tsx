@@ -8,9 +8,8 @@ import {
   Clock,
   User,
   X,
-  CheckCircle2,
-  QrCode,
-  FileText
+  FileText,
+  Map
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useFlowStore } from '../store/flowStore';
@@ -26,6 +25,7 @@ export const PatientInfoView: React.FC = () => {
   const selectedDoctor = useKioskStore((state) => state.selectedDoctor);
   const activeTicket = useFlowStore((state) => state.activeTicket);
   const patientInfo = useAuthStore((state) => state.patientInfo);
+  const patientId = useAuthStore((state) => state.patientId);
   const showToast = useKioskStore((state) => state.showToast);
 
   // Dynamic values từ API Store (Không hardcode fallback giả định)
@@ -137,9 +137,14 @@ export const PatientInfoView: React.FC = () => {
           <span className="text-5xl font-black tracking-widest block my-2">{ticketNo}</span>
         </div>
 
+        <div className="text-left text-xs space-y-1 my-3 font-bold">
+          <p>Thời gian chờ ước tính: {estimatedWait} phút</p>
+          {startTime && <p>Giờ khám dự kiến: {startTime}</p>}
+        </div>
+
         {/* Notice */}
-        <p className="text-sm font-bold my-4">
-          Người Bệnh lấy số và chờ đến lượt!
+        <p className="text-xs font-bold my-3 text-center">
+          Vui lòng giữ phiếu khám và chờ đến lượt!
         </p>
 
         {/* Dashed Line */}
@@ -150,12 +155,6 @@ export const PatientInfoView: React.FC = () => {
           <span>Ngày: {currentDateStr}</span>
           <span>Giờ: {currentTimeStr}</span>
         </div>
-
-        {patientName && (
-          <div className="text-left text-xs font-semibold mt-3 border-t border-dotted border-black/50 pt-2">
-            Bệnh nhân: {patientName}
-          </div>
-        )}
       </div>
 
       {/* Interactive Print Preview Modal on Kiosk Screen */}
@@ -187,6 +186,13 @@ export const PatientInfoView: React.FC = () => {
                 </h4>
               </div>
 
+              {patientName && (
+                <div className="text-left text-xs font-bold text-neutral-700 border-b border-neutral-200 pb-1.5 space-y-0.5">
+                  <p>Bệnh nhân: {patientName}</p>
+                  <p className="text-[11px] text-neutral-500">Mã bệnh nhân: {patientInfo?.idNumber || patientId || '---'}</p>
+                </div>
+              )}
+
               <div className="space-y-1 text-sm font-bold text-neutral-700">
                 {roomName && roomName !== '---' && <p className="text-lg font-black text-[#1E2939]">Phòng: {roomName}</p>}
                 {specialtyName && <p>{specialtyName}</p>}
@@ -198,20 +204,19 @@ export const PatientInfoView: React.FC = () => {
                 <span className="text-4xl font-black text-[#155DFC] tracking-wider block my-1">{ticketNo}</span>
               </div>
 
-              <p className="text-xs font-bold text-neutral-600">
-                Người Bệnh lấy số và chờ đến lượt!
+              <div className="text-left text-xs space-y-1 font-bold text-neutral-600">
+                <p>Thời gian chờ ước tính: {estimatedWait} phút</p>
+                {startTime && <p>Giờ khám dự kiến: {startTime}</p>}
+              </div>
+
+              <p className="text-xs font-bold text-neutral-500">
+                Vui lòng giữ phiếu khám và chờ đến lượt!
               </p>
 
               <div className="border-t border-dashed border-neutral-300 pt-3 flex justify-between text-[11px] font-bold text-neutral-500">
                 <span>Ngày: {currentDateStr}</span>
                 <span>Giờ: {currentTimeStr}</span>
               </div>
-
-              {patientName && (
-                <div className="text-left text-[11px] font-semibold text-neutral-500 border-t border-dotted border-neutral-200 pt-2">
-                  Bệnh nhân: {patientName}
-                </div>
-              )}
             </div>
 
             {/* Modal Actions */}
@@ -234,29 +239,20 @@ export const PatientInfoView: React.FC = () => {
         </div>
       )}
 
-      {/* Top Header bar */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={goHome}
-            className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-neutral-50 rounded-2xl shadow-sm border border-neutral-200 text-sm font-extrabold text-neutral-800 transition-all cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" /> Trang chủ
-          </button>
-          <h2 className="text-3xl font-black text-[#1E2939] tracking-tight">
-            Thông tin khám bệnh
-          </h2>
-        </div>
-
+      {/* ── Top Header bar ── */}
+      <div className="flex items-center gap-4">
         <button
-          onClick={handleOpenPrintModal}
-          className="flex items-center gap-2 px-5 py-2.5 bg-white text-[#155DFC] rounded-2xl font-extrabold text-xs lg:text-sm border border-blue-200 shadow-sm hover:bg-blue-50 transition-all cursor-pointer"
+          onClick={goHome}
+          className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-neutral-50 rounded-2xl shadow-sm border border-neutral-200 text-sm font-extrabold text-neutral-800 transition-all cursor-pointer"
         >
-          <Printer className="w-4 h-4" /> In phiếu khám
+          <ArrowLeft className="w-4 h-4" /> Trang chủ
         </button>
+        <h2 className="text-3xl font-black text-[#1E2939] tracking-tight">
+          Thông tin khám bệnh
+        </h2>
       </div>
 
-      {/* Empty State when no active ticket */}
+      {/* ── Empty State ── */}
       {!activeTicket && !selectedDoctor ? (
         <div className="flex-1 flex flex-col items-center justify-center p-14 bg-white/90 backdrop-blur-xl rounded-[36px] border border-neutral-100 shadow-2xl space-y-6 text-center max-w-2xl mx-auto w-full my-auto">
           <div className="w-24 h-24 rounded-3xl bg-blue-50 text-[#155DFC] flex items-center justify-center shadow-inner">
@@ -288,155 +284,197 @@ export const PatientInfoView: React.FC = () => {
           </div>
         </div>
       ) : (
-        /* Main Grid (fills remaining height) */
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
-          {/* LEFT COLUMN (4 Cols) */}
-          <div className="lg:col-span-4 flex flex-col min-h-0 gap-6">
-            {/* Card 1: Điểm đến hiện tại (Solid Blue Gradient Card) */}
-            <div className="bg-gradient-to-br from-[#77A5F8] to-[#5588EC] text-white rounded-[28px] p-6 shadow-xl flex flex-col justify-between flex-1 space-y-4">
-              <div className="space-y-2">
-                <span className="text-xs font-black text-blue-100 uppercase tracking-wider block">{isPaymentStep ? 'Thanh toán hiện tại' : 'Điểm đến hiện tại'}</span>
-                <h3 className="text-3xl lg:text-4xl font-black text-white">{roomName || '---'}</h3>
-                {specialtyName && (
-                  <p className="text-base font-bold text-blue-100">{specialtyName}</p>
-                )}
+        /* ── Main 2-Column Layout ── */
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1 min-h-0">
+
+          {/* ════════════════════════════════
+              LEFT COLUMN — Phiếu khám bệnh
+              ════════════════════════════════ */}
+          <div className="flex flex-col min-h-0">
+            {/* Ticket card */}
+            <div className="bg-white rounded-[28px] shadow-lg border border-neutral-100 flex flex-col flex-1 overflow-hidden">
+              {/* Card header */}
+              <div className="bg-gradient-to-r from-[#155DFC] to-[#4F80E1] px-6 py-4">
+                <h3 className="text-white font-black text-lg tracking-wide text-center uppercase">
+                  Phiếu khám bệnh
+                </h3>
               </div>
 
-              <button
-                onClick={() => !isPaymentStep && navigateToMap(stripRoomName(activeTicket?.roomNumber || ''))}
-                disabled={isPaymentStep}
-                className={cn(
-                  "w-full py-3.5 rounded-2xl font-black text-xs lg:text-sm flex items-center justify-center gap-2 shadow-md transition-all mt-4",
-                  isPaymentStep
-                    ? "bg-neutral-100 text-neutral-400 border border-neutral-200 cursor-not-allowed shadow-none"
-                    : "bg-white text-[#155DFC] hover:bg-blue-50 active:scale-95 cursor-pointer"
-                )}
-              >
-                <Navigation className="w-4 h-4 rotate-45" /> Xem đường đi
-              </button>
-            </div>
-
-            {/* Card 2: Phiếu khám bệnh (White Card with Inner Light Blue QR Container) */}
-            <div className="bg-white rounded-[28px] p-6 shadow-md border border-neutral-100 flex flex-col justify-between flex-1 items-center text-center space-y-4">
-              <h4 className="font-black text-[#1E2939] text-base">Phiếu khám bệnh</h4>
-
-              <div className="w-full bg-[#E8F1FE] rounded-[24px] p-6 border border-blue-200/60 flex flex-col items-center justify-between flex-1 space-y-4">
-                <div className="w-40 h-40 bg-white rounded-2xl p-3 flex items-center justify-center border-2 border-[#A4C8FF] shadow-sm">
-                  {qrTicketUrl ? (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img
-                      src={qrTicketUrl}
-                      alt="Mã QR Phiếu khám"
-                      className="w-32 h-32 object-contain"
-                    />
-                  ) : (
-                    <div className="text-xs text-neutral-400 font-bold">Mã QR Phiếu</div>
+              {/* Card body */}
+              <div className="flex flex-col flex-1 p-6 gap-5">
+                {/* QR + ticket code */}
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-40 h-40 bg-[#EEF4FF] rounded-2xl p-3 flex items-center justify-center border-2 border-[#A4C8FF] shadow-sm">
+                    {qrTicketUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={qrTicketUrl}
+                        alt="Mã QR Phiếu khám"
+                        className="w-32 h-32 object-contain"
+                      />
+                    ) : (
+                      <div className="text-xs text-neutral-400 font-bold text-center">Mã QR Phiếu</div>
+                    )}
+                  </div>
+                  {ticketCode && ticketCode !== '---' && (
+                    <span className="text-sm font-black text-[#1E2939] tracking-widest font-mono bg-neutral-100 px-3 py-1 rounded-xl">
+                      Mã vé: {ticketCode}
+                    </span>
                   )}
                 </div>
 
-                <div className="space-y-1">
-                  <span className="text-xs font-bold text-neutral-500 uppercase">Số thứ tự</span>
-                  <h3 className="text-4xl lg:text-5xl font-black text-[#0F2C59] tracking-wider">{ticketNo || '---'}</h3>
-                </div>
+                {/* Divider */}
+                <div className="border-t border-neutral-100" />
 
-                <div className="w-full border-t border-blue-200/80 my-1" />
+                {/* Info rows */}
+                <div className="flex flex-col gap-3 text-sm">
+                  {/* Bệnh nhân */}
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-neutral-500">Bệnh nhân</span>
+                    <span className="font-black text-[#1E2939]">{patientName || '---'}</span>
+                  </div>
 
-                <div className="space-y-0.5">
-                  <span className="text-xs font-bold text-neutral-500 uppercase">Mã vé</span>
-                  <div className="text-sm font-black text-[#1E2939] tracking-wider">
-                    {ticketCode || '---'}
+                  {/* Mã bệnh nhân */}
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-neutral-500">Mã bệnh nhân</span>
+                    <span className="font-mono font-black text-[#1E2939]">{patientInfo?.idNumber || patientId || '---'}</span>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="border-t border-neutral-100 my-1" />
+
+                  {/* Số thứ tự */}
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-neutral-500">Số thứ tự</span>
+                    <span className="text-2xl font-black text-[#155DFC]">{ticketNo || '---'}</span>
+                  </div>
+
+                  {/* Trạng thái */}
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-neutral-500">Trạng thái</span>
+                    {activeTicket?.status === 'completed' ? (
+                      <span className="px-3 py-1 bg-green-50 text-green-700 border border-green-200 rounded-xl text-xs font-extrabold">
+                        Đã khám xong
+                      </span>
+                    ) : activeTicket?.status === 'in_consultation' ? (
+                      <span className="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-xl text-xs font-extrabold">
+                        Đang khám
+                      </span>
+                    ) : (
+                      <span className="px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-xs font-extrabold">
+                        Đang chờ khám
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Divider */}
+                  <div className="border-t border-neutral-100 my-1" />
+
+                  {/* Thời gian chờ */}
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-neutral-500">Thời gian chờ</span>
+                    <span className="font-black text-[#1E2939]">
+                      {estimatedWait} <span className="text-xs font-bold text-neutral-400">phút</span>
+                    </span>
+                  </div>
+
+                  {/* Giờ khám dự kiến */}
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-neutral-500">Giờ khám dự kiến</span>
+                    <span className="font-black text-[#1E2939]">{startTime || '---'}</span>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="border-t border-neutral-100 my-1" />
+
+                  {/* Phòng khám */}
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-neutral-500">Phòng khám</span>
+                    <span className="font-black text-[#1E2939]">{roomName || '---'}</span>
+                  </div>
+
+                  {/* Khoa */}
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-neutral-500">Khoa</span>
+                    <span className="font-black text-[#1E2939]">{specialtyName || '---'}</span>
+                  </div>
+
+                  {/* Bác sĩ */}
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-neutral-500">Bác sĩ</span>
+                    <span className="font-black text-[#1E2939]">{doctorName || '---'}</span>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* RIGHT COLUMN (8 Cols) */}
-          <div className="lg:col-span-8 flex flex-col min-h-0 gap-6">
-            {/* Card 3: Thông tin hàng đợi */}
-            <div className="bg-white rounded-[28px] p-7 shadow-md border border-neutral-100 flex flex-col justify-center flex-1 space-y-15">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-[#D6E6FE] text-[#155DFC] flex items-center justify-center shrink-0">
-                    <Clock className="w-6 h-6" />
-                  </div>
-                  <h3 className="text-xl font-black text-[#1E2939]">Thông tin hàng đợi</h3>
-                </div>
-                <span className="px-3.5 py-1.5 bg-[#FFF4DF] text-[#D98200] rounded-xl text-xs font-extrabold border border-amber-200/60">
-                  Đang chờ khám
-                </span>
-              </div>
-              {/* 3 Metric Cards */}
-              <div className="grid grid-cols-3 gap-4">
-                {/* Metric 1 (Highlighted Blue) */}
-                <div className="bg-[#D6E6FE] rounded-2xl p-5 border-2 border-[#A4C8FF] text-center space-y-1 shadow-sm">
-                  <span className="text-xs font-bold text-[#155DFC] block">Số của bạn</span>
-                  <span className="text-3xl lg:text-4xl font-black text-[#0F2C59] block">{ticketNo || '---'}</span>
-                </div>
+          {/* ════════════════════════════════
+              RIGHT COLUMN — Print + Destination
+              ════════════════════════════════ */}
+          <div className="flex flex-col min-h-0 gap-5">
 
-                {/* Metric 2: Giờ khám dự kiến */}
-                <div className="bg-[#F8FAFC] rounded-2xl p-5 border border-neutral-100 text-center space-y-1">
-                  <span className="text-xs font-bold text-neutral-400 block">Giờ khám dự kiến</span>
-                  <span className="text-3xl lg:text-4xl font-black text-[#1E2939] block">{startTime || '---'}</span>
-                </div>
+            {/* ── Print Button (large, prominent) ── */}
+            <div
+              style={{ flex: '4 4 0%' }}
+              className="bg-white rounded-[28px] shadow-lg border border-neutral-100 p-6 flex flex-col items-center justify-center gap-4 min-h-0"
+            >
+              <button
+                onClick={handleOpenPrintModal}
+                className="w-full flex items-center justify-center gap-3 px-8 py-4.5 bg-gradient-to-r from-[#155DFC] to-[#4F80E1] hover:from-[#1250d6] hover:to-[#3a6ad4] active:scale-95 text-white rounded-2xl font-black text-base transition-all cursor-pointer"
+              >
+                <Printer className="w-5 h-5" />
+                IN PHIẾU KHÁM
+              </button>
 
-                {/* Metric 3 */}
-                <div className="bg-[#F8FAFC] rounded-2xl p-5 border border-neutral-100 text-center space-y-1">
-                  <span className="text-xs font-bold text-neutral-400 block">Thời gian chờ</span>
-                  <div className="flex items-baseline justify-center gap-1">
-                    <span className="text-3xl lg:text-4xl font-black text-[#1E2939]">{estimatedWait}</span>
-                    <span className="text-xs font-bold text-neutral-500">phút</span>
-                  </div>
-                </div>
-              </div>
+              {/* ── View doctor route shortcut (inside print card) ── */}
+              <button
+                onClick={() => navigateToView('doctor_route')}
+                className="w-full flex items-center justify-center gap-2 py-4.5 bg-neutral-100 hover:bg-neutral-200 active:scale-95 text-[#155DFC] rounded-2xl font-black text-base transition-all cursor-pointer"
+              >
+                <Navigation className="w-5 h-5 rotate-45" />
+                Xem lộ trình bác sĩ chỉ định
+              </button>
             </div>
 
-            {/* Card 4: Thông tin bác sĩ */}
-            <div className="bg-white rounded-[28px] p-6 shadow-md border border-neutral-100 flex flex-col justify-between flex-1 space-y-5">
-              <div className="flex items-center justify-between">
-                <h3 className="text-[#1E2939] text-xl font-black">Thông tin bác sĩ</h3>
+            {/* ── Điểm đến hiện tại ── */}
+            <div
+              style={{ flex: '6 6 0%' }}
+              className="bg-gradient-to-br from-[#4F80E1] to-[#2563EB] rounded-[28px] shadow-xl flex flex-col justify-between p-8 gap-5 min-h-0"
+            >
+              {/* Card label */}
+              <div>
+                <span className="text-xs font-black text-blue-100 uppercase tracking-widest block mb-3">
+                  {isPaymentStep ? 'Thanh toán hiện tại' : 'Điểm đến hiện tại'}
+                </span>
 
-                <button
-                  onClick={() => navigateToView('doctor_route')}
-                  className="px-5 py-3 bg-[#77A5F8] hover:bg-blue-600 text-white rounded-2xl text-xs lg:text-sm font-black shadow-md transition-all cursor-pointer flex items-center gap-2"
-                >
-                  Xem lộ trình bác sĩ chỉ định
-                </button>
-              </div>
-
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-full bg-[#D6E6FE] text-[#155DFC] flex items-center justify-center shrink-0">
-                  <User className="w-8 h-8" />
-                </div>
                 <div className="space-y-1">
-                  <h4 className="text-xl font-black text-[#1E2939]">{doctorName || 'BS. Chuyên khoa phụ trách'}</h4>
+                  <h3 className="text-3xl font-black text-white leading-tight">
+                    {roomName || '---'}
+                  </h3>
                   {specialtyName && (
-                    <p className="text-sm font-bold text-neutral-500">Chuyên khoa: <span className="font-black text-[#1E2939]">{specialtyName}</span></p>
+                    <p className="text-base font-bold text-blue-100">{specialtyName}</p>
                   )}
                 </div>
               </div>
 
-              <div className="border-t border-neutral-100 pt-4 space-y-2.5 text-sm">
-                <div className="flex items-center gap-3">
-                  <span className="font-bold text-neutral-400 w-32 shrink-0">Phòng khám</span>
-                  <span className="font-black text-[#1E2939]">{roomName || '---'}</span>
-                </div>
-                {typeof activeTicket?.doctorExperience === 'number' && (
-                  <div className="flex items-center gap-3">
-                    <span className="font-bold text-neutral-400 w-32 shrink-0">Kinh nghiệm</span>
-                    <span className="font-black text-[#1E2939]">{activeTicket.doctorExperience} năm</span>
-                  </div>
+              {/* Map button */}
+              <button
+                onClick={() => !isPaymentStep && navigateToMap(stripRoomName(activeTicket?.roomNumber || ''))}
+                disabled={isPaymentStep}
+                className={cn(
+                  'w-full py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all',
+                  isPaymentStep
+                    ? 'bg-blue-300/30 text-blue-100/50 border border-blue-300/20 cursor-not-allowed'
+                    : 'bg-white text-[#155DFC] hover:bg-blue-50 active:scale-95 shadow-md cursor-pointer'
                 )}
-                {activeTicket?.doctorLicense && (
-                  <div className="flex items-center gap-3">
-                    <span className="font-bold text-neutral-400 w-32 shrink-0">GP hành nghề</span>
-                    <span className="font-black text-[#1E2939] font-mono bg-neutral-100 px-2 py-0.5 rounded text-xs">
-                      {activeTicket.doctorLicense}
-                    </span>
-                  </div>
-                )}
-              </div>
+              >
+                <Map className="w-4 h-4" />
+                Xem đường đi
+              </button>
             </div>
+
+
           </div>
         </div>
       )}

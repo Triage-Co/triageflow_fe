@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { authService } from '../services/authService';
 import { CCCDInfo } from '../types/kiosk.types';
 import { CCCDParsedResult } from '../utils/cccdParser';
+import { getUserFromToken } from '@/shared/utils/jwt';
 
 interface AuthStoreState {
   authToken?: string;
@@ -37,13 +38,17 @@ export const useAuthStore = create<AuthStoreState>((set) => ({
       const resCitizenId = resData?.citizen_id || (response as any)?.citizen_id || citizenId;
 
       if (token && patientId) {
+        // Decode token để lấy thông tin fullName
+        const decodedUser = getUserFromToken(token);
+        const nameFromToken = decodedUser?.fullName || '';
+
         set({
           authToken: token,
           patientId: patientId,
           citizenId: resCitizenId,
           patientInfo: {
             idNumber: citizenId,
-            fullName: 'BỆNH NHÂN',
+            fullName: nameFromToken,
             dob: '',
             gender: '',
             address: '',
@@ -73,7 +78,7 @@ export const useAuthStore = create<AuthStoreState>((set) => ({
           citizenId: resCitizenId,
           patientInfo: {
             idNumber: parsedCCCD.citizenId,
-            fullName: parsedCCCD.fullName || 'BỆNH NHÂN',
+            fullName: parsedCCCD.fullName || '',
             dob: parsedCCCD.dob || '',
             gender: parsedCCCD.gender || '',
             address: parsedCCCD.address || '',

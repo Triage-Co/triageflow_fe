@@ -188,7 +188,11 @@ export const mapApiToTicketData = (stepData: any, patientInfo: any, bookingId: s
     roomNumber: roomNumber,
     location: '',
     doctorName: staffObj?.full_name ?? '',
-    status: stepData.step_status === 'COMPLETED' ? 'completed' : 'waiting',
+    status: stepData.step_status === 'COMPLETED'
+      ? 'completed'
+      : stepData.step_status === 'IN_PROGRESS'
+        ? 'in_consultation'
+        : 'waiting',
     waitingCount: 0,
     currentCallingNo: queueNumber,
     estimatedWaitMinutes: computeWaitMinutes(slotObj?.start_time),

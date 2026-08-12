@@ -174,19 +174,28 @@ export const createTicketSlice: StateCreator<
         }
         let stepId: string | null = null;
         if (activeFlow && Array.isArray(activeFlow.steps)) {
-          const activeSteps = activeFlow.steps.filter(
-            (s: any) => s.step_status !== 'COMPLETED' && s.step_status !== 'CANCELLED'
+          // Ưu tiên tìm bước có tên "Khám bệnh" (không phân biệt hoa thường)
+          const examStep = activeFlow.steps.find(
+            (s: any) => s.step_name && s.step_name.toLowerCase().trim() === 'khám bệnh'
           );
 
-          const currentActiveStep = activeSteps.find((s: any) => {
-            if (!s.depends_on || s.depends_on.length === 0) return true;
-            return s.depends_on.every((depId: string) => {
-              const depStep = activeFlow.steps.find((fs: any) => fs.step_id === depId);
-              return !depStep || depStep.step_status === 'COMPLETED' || depStep.step_status === 'CANCELLED';
-            });
-          });
+          if (examStep) {
+            stepId = examStep.step_id;
+          } else {
+            const activeSteps = activeFlow.steps.filter(
+              (s: any) => s.step_status !== 'COMPLETED' && s.step_status !== 'CANCELLED'
+            );
 
-          stepId = currentActiveStep?.step_id || activeSteps[0]?.step_id || activeFlow.steps[0]?.step_id || null;
+            const currentActiveStep = activeSteps.find((s: any) => {
+              if (!s.depends_on || s.depends_on.length === 0) return true;
+              return s.depends_on.every((depId: string) => {
+                const depStep = activeFlow.steps.find((fs: any) => fs.step_id === depId);
+                return !depStep || depStep.step_status === 'COMPLETED' || depStep.step_status === 'CANCELLED';
+              });
+            });
+
+            stepId = currentActiveStep?.step_id || activeSteps[0]?.step_id || activeFlow.steps[0]?.step_id || null;
+          }
         } else {
           stepId = flowData?.step_id || null;
         }
