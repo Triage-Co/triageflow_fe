@@ -7,7 +7,7 @@ import { DoctorPrescriptionTab } from '@/modules/clinical/components/DoctorPresc
 export default function CreatePrescriptionPage() {
     return (
         <EMRWorkspaceLayout activeTabId="pharmacy_create" activeTabName="Kê Đơn Thuốc Mới">
-            <div className="flex-1 flex overflow-hidden p-4 md:p-6 bg-slate-50 dark:bg-slate-900">
+            <div className="flex-1 overflow-hidden p-6 h-full">
                 <DoctorPrescriptionTab />
             </div>
         </EMRWorkspaceLayout>

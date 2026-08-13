@@ -1,11 +1,15 @@
 import { apiClient } from '@/shared/services/apiClient';
-import { Medicine, CreateMedicineDto } from '@/shared/types/prescription.types';
+import { Medicine, CreateMedicineDto, UpdateMedicineDto } from '@/shared/types/prescription.types';
 
 export interface GetMedicinesParams {
     search?: string;
     is_active?: boolean;
     page?: number;
     limit?: number;
+    unit?: string;
+    usage_route?: string;
+    sort_by?: 'medicine_code' | 'medicine_name' | 'active_ingredient' | 'unit_price' | 'created_at';
+    sort_order?: 'asc' | 'desc';
 }
 
 export const MOCK_MEDICINES: Medicine[] = [
@@ -20,8 +24,8 @@ export const MOCK_MEDICINES: Medicine[] = [
         manufacturer: 'Dược Hậu Giang',
         description: 'Giảm đau nhẹ đến vừa, hạ sốt nhanh chóng',
         is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        created_at: new Date('2026-01-10').toISOString(),
+        updated_at: new Date('2026-01-10').toISOString()
     },
     {
         medicine_id: 'med-2',
@@ -34,8 +38,8 @@ export const MOCK_MEDICINES: Medicine[] = [
         manufacturer: 'AstraZeneca',
         description: 'Điều trị trào ngược dạ dày thực quản, viêm loét dạ dày',
         is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        created_at: new Date('2026-01-12').toISOString(),
+        updated_at: new Date('2026-01-12').toISOString()
     },
     {
         medicine_id: 'med-3',
@@ -48,8 +52,8 @@ export const MOCK_MEDICINES: Medicine[] = [
         manufacturer: 'Reckitt Benckiser',
         description: 'Giảm ợ nóng, ợ chua, trào ngược axit dạ dày',
         is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        created_at: new Date('2026-01-15').toISOString(),
+        updated_at: new Date('2026-01-15').toISOString()
     },
     {
         medicine_id: 'med-4',
@@ -62,8 +66,8 @@ export const MOCK_MEDICINES: Medicine[] = [
         manufacturer: 'Boehringer Ingelheim',
         description: 'Thuốc trung hòa axit dạ dày, giảm rát thượng vị',
         is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        created_at: new Date('2026-01-18').toISOString(),
+        updated_at: new Date('2026-01-18').toISOString()
     },
     {
         medicine_id: 'med-5',
@@ -76,8 +80,8 @@ export const MOCK_MEDICINES: Medicine[] = [
         manufacturer: 'Mekophar',
         description: 'Kháng sinh nhóm penicillin điều trị nhiễm khuẩn hô hấp',
         is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        created_at: new Date('2026-01-20').toISOString(),
+        updated_at: new Date('2026-01-20').toISOString()
     },
     {
         medicine_id: 'med-6',
@@ -90,8 +94,92 @@ export const MOCK_MEDICINES: Medicine[] = [
         manufacturer: 'GSK (GlaxoSmithKline)',
         description: 'Kháng sinh phổ rộng điều trị nhiễm khuẩn tai mũi họng',
         is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        created_at: new Date('2026-01-22').toISOString(),
+        updated_at: new Date('2026-01-22').toISOString()
+    },
+    {
+        medicine_id: 'med-7',
+        medicine_code: 'MED-PAN-EXT',
+        medicine_name: 'Panadol Extra (Đỏ)',
+        active_ingredient: 'Paracetamol 500mg + Caffeine 65mg',
+        unit: 'Vỉ',
+        usage_route: 'Uống',
+        unit_price: 15000,
+        manufacturer: 'GSK',
+        description: 'Giảm đau nhức đầu, giảm căng thẳng nhanh chóng',
+        is_active: true,
+        created_at: new Date('2026-01-25').toISOString(),
+        updated_at: new Date('2026-01-25').toISOString()
+    },
+    {
+        medicine_id: 'med-8',
+        medicine_code: 'MED-BER-100',
+        medicine_name: 'Berberin 100mg',
+        active_ingredient: 'Berberin chloride',
+        unit: 'Lọ',
+        usage_route: 'Uống',
+        unit_price: 28000,
+        manufacturer: 'Dược TW3',
+        description: 'Thuốc điều trị tiêu chảy, rối loạn tiêu hóa thảo dược',
+        is_active: true,
+        created_at: new Date('2026-01-28').toISOString(),
+        updated_at: new Date('2026-01-28').toISOString()
+    },
+    {
+        medicine_id: 'med-9',
+        medicine_code: 'MED-SMC-3G',
+        medicine_name: 'Smecta 3g (Bột pha uống)',
+        active_ingredient: 'Diosmectite',
+        unit: 'Gói',
+        usage_route: 'Uống',
+        unit_price: 5200,
+        manufacturer: 'Ipsen',
+        description: 'Bảo vệ niêm mạc tiêu hóa, điều trị tiêu chảy cấp',
+        is_active: true,
+        created_at: new Date('2026-02-01').toISOString(),
+        updated_at: new Date('2026-02-01').toISOString()
+    },
+    {
+        medicine_id: 'med-10',
+        medicine_code: 'MED-TEL-180',
+        medicine_name: 'Telfast HD 180mg',
+        active_ingredient: 'Fexofenadin HCl',
+        unit: 'Vỉ',
+        usage_route: 'Uống',
+        unit_price: 42000,
+        manufacturer: 'Sanofi',
+        description: 'Thuốc chống dị ứng, trị viêm mũi dị ứng và mày đay',
+        is_active: true,
+        created_at: new Date('2026-02-03').toISOString(),
+        updated_at: new Date('2026-02-03').toISOString()
+    },
+    {
+        medicine_id: 'med-11',
+        medicine_code: 'MED-SAL-100',
+        medicine_name: 'Ventolin Inhaler 100mcg',
+        active_ingredient: 'Salbutamol',
+        unit: 'Chai',
+        usage_route: 'Xịt',
+        unit_price: 95000,
+        manufacturer: 'GSK',
+        description: 'Bình xịt định liều giãn phế quản, cắt cơn hen cấp',
+        is_active: true,
+        created_at: new Date('2026-02-05').toISOString(),
+        updated_at: new Date('2026-02-05').toISOString()
+    },
+    {
+        medicine_id: 'med-12',
+        medicine_code: 'MED-MDR-16',
+        medicine_name: 'Medrol 16mg',
+        active_ingredient: 'Methylprednisolon',
+        unit: 'Viên',
+        usage_route: 'Uống',
+        unit_price: 11500,
+        manufacturer: 'Pfizer',
+        description: 'Kháng viêm corticoid trong các bệnh lý khớp và dị ứng nặng',
+        is_active: false,
+        created_at: new Date('2026-02-06').toISOString(),
+        updated_at: new Date('2026-02-06').toISOString()
     }
 ];
 
@@ -119,23 +207,11 @@ export const medicineService = {
             else if (responseData?.data?.items && Array.isArray(responseData.data.items)) list = responseData.data.items;
             else if (responseData?.items && Array.isArray(responseData.items)) list = responseData.items;
 
-            if (list.length > 0) return list;
+            return list;
         } catch (error) {
-            console.warn('[medicineService] API endpoint failed, falling back to mock medicine catalog:', error);
+            console.error('[medicineService] API endpoint failed:', error);
+            return [];
         }
-
-        // Return filtered mock list if API fails or returns empty
-        if (params?.search) {
-            const s = params.search.toLowerCase();
-            return MOCK_MEDICINES.filter(
-                (m) =>
-                    m.medicine_name.toLowerCase().includes(s) ||
-                    m.medicine_code.toLowerCase().includes(s) ||
-                    m.active_ingredient.toLowerCase().includes(s)
-            );
-        }
-
-        return MOCK_MEDICINES;
     },
 
     /**
@@ -143,27 +219,35 @@ export const medicineService = {
      * POST /api/medicine
      */
     async createMedicine(data: CreateMedicineDto): Promise<Medicine> {
-        try {
-            const res = await apiClient.post<any>('/api/medicine', data, { suppressLogError: true });
-            return res.data || res;
-        } catch (error) {
-            console.warn('[medicineService] API create failed, adding to mock list:', error);
-            const newMed: Medicine = {
-                medicine_id: `med-${Date.now()}`,
-                medicine_code: data.medicine_code,
-                medicine_name: data.medicine_name,
-                active_ingredient: data.active_ingredient,
-                unit: data.unit,
-                usage_route: data.usage_route,
-                unit_price: data.unit_price,
-                manufacturer: data.manufacturer,
-                description: data.description,
-                is_active: true,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-            };
-            MOCK_MEDICINES.unshift(newMed);
-            return newMed;
-        }
+        const res = await apiClient.post<any>('/api/medicine', data);
+        return res.data || res;
+    },
+
+    /**
+     * Cập nhật loại thuốc (Roles: PHARMACIST, ADMIN)
+     * PATCH /api/medicine/:id
+     */
+    async updateMedicine(id: string, data: UpdateMedicineDto): Promise<Medicine> {
+        const res = await apiClient.patch<any>(`/api/medicine/${id}`, data);
+        return res.data || res;
+    },
+
+    /**
+     * Tắt hoạt động / Xóa mềm thuốc (Roles: PHARMACIST, ADMIN)
+     * DELETE /api/medicine/:id
+     */
+    async deleteMedicine(id: string): Promise<Medicine> {
+        const res = await apiClient.delete<any>(`/api/medicine/${id}`);
+        return res.data || res;
+    },
+
+    /**
+     * Khôi phục hoạt động cho thuốc đã tắt (Roles: PHARMACIST, ADMIN)
+     * PATCH /api/medicine/:id/restore
+     */
+    async restoreMedicine(id: string): Promise<Medicine> {
+        const res = await apiClient.patch<any>(`/api/medicine/${id}/restore`, {});
+        return res.data || res;
     }
 };
+

@@ -30,7 +30,10 @@ export interface CreateMedicineDto {
     unit_price: number;
     manufacturer?: string;
     description?: string;
+    is_active?: boolean;
 }
+
+export type UpdateMedicineDto = Partial<CreateMedicineDto>;
 
 export interface PrescriptionDetail {
     prescription_detail_id: string;

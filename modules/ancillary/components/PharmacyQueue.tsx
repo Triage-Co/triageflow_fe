@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
     Search,
     QrCode,
@@ -29,6 +30,7 @@ export function PharmacyQueue({
     selectedPrescriptionId,
     refreshKey = 0
 }: PharmacyQueueProps) {
+    const router = useRouter();
     const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeStatus, setActiveStatus] = useState<PrescriptionStatusEnum | 'ALL'>('ALL');
@@ -171,16 +173,16 @@ export function PharmacyQueue({
     });
 
     return (
-        <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-3xl p-5 shadow-sm flex flex-col h-full">
+        <div className="flex flex-col h-full overflow-hidden">
             {/* Header & QR Scan Input */}
-            <div className="space-y-3">
+            <div className="space-y-3 shrink-0">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h3 className="text-base font-bold text-neutral-900 dark:text-white flex items-center gap-2">
-                            <Pill className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                        <h3 className="text-[18px] font-bold text-[#2D2D2D] tracking-tight flex items-center gap-2">
+                            <Pill className="w-5 h-5 text-[#8B7CF6]" />
                             Hàng Đợi Nhà Thuốc
                         </h3>
-                        <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                        <p className="text-[12px] text-[#7B7B7B] font-medium mt-0.5">
                             Quét mã QR hoặc nhập mã đơn thuốc để xử lý
                         </p>
                     </div>
@@ -188,7 +190,7 @@ export function PharmacyQueue({
                     <button
                         onClick={() => fetchQueue(false)}
                         disabled={loading}
-                        className="p-2 text-neutral-400 hover:text-neutral-600 dark:hover:text-white rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                        className="p-2 text-neutral-400 hover:text-[#8B7CF6] rounded-xl hover:bg-[#F5F3FF] transition-colors cursor-pointer"
                         title="Làm mới hàng đợi"
                     >
                         <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -197,78 +199,85 @@ export function PharmacyQueue({
 
                 {/* QR Scanner Form */}
                 <form onSubmit={handleScanSubmit} className="relative">
-                    <QrCode className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-indigo-500" />
+                    <button
+                        type="button"
+                        onClick={() => router.push('/pharmacy/checkin')}
+                        title="Đến màn hình tiếp nhận đơn tại quầy (Quét mã QR)"
+                        className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 text-[#8B7CF6] hover:text-[#7C6EE6] hover:bg-[#F5F3FF] rounded-xl transition-all cursor-pointer z-10"
+                    >
+                        <QrCode className="w-4 h-4" />
+                    </button>
                     <input
                         type="text"
                         placeholder="Quét mã QR / Nhập mã RX-..."
                         value={scanInput}
                         onChange={(e) => setScanInput(e.target.value)}
-                        className="w-full pl-10 pr-24 py-2.5 bg-neutral-50 dark:bg-neutral-800/80 border border-neutral-200 dark:border-neutral-700 rounded-2xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 text-neutral-900 dark:text-white"
+                        className="w-full pl-10 pr-24 py-2.5 bg-[#FBFBFF] border border-neutral-200/80 rounded-2xl text-xs font-mono focus:outline-none focus:border-[#8B7CF6] focus:bg-white text-[#2D2D2D] transition-all font-semibold"
                     />
                     <button
                         type="submit"
                         disabled={scanning || !scanInput.trim()}
-                        className="absolute right-1.5 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer"
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 px-3.5 py-1.5 bg-[#8B7CF6] hover:bg-[#7C6EE6] disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shadow-xs"
                     >
                         {scanning ? <RefreshCw className="w-3 h-3 animate-spin" /> : 'Tra cứu'}
                     </button>
                 </form>
 
                 {scanError && (
-                    <div className="p-2.5 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-300 text-xs flex items-center gap-2">
+                    <div className="p-2.5 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2 font-medium">
                         <AlertCircle className="w-4 h-4 shrink-0" />
                         <span>{scanError}</span>
                     </div>
                 )}
 
                 {/* Status Tabs */}
-                <div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar pt-1">
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar pt-1">
                     <button
                         onClick={() => setActiveStatus('ALL')}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
                             activeStatus === 'ALL'
-                                ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900'
-                                : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200'
+                                ? 'bg-[#8B7CF6] text-white shadow-sm'
+                                : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200/70'
                         }`}
                     >
                         Tất cả ({prescriptions.length})
                     </button>
                     <button
                         onClick={() => setActiveStatus('PENDING')}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1 cursor-pointer ${
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 cursor-pointer ${
                             activeStatus === 'PENDING'
-                                ? 'bg-neutral-600 text-white'
-                                : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200'
+                                ? 'bg-[#8B7CF6] text-white shadow-sm'
+                                : 'bg-purple-50 text-[#8B7CF6] hover:bg-purple-100/70'
                         }`}
                     >
                         Chờ nhận đơn ({countByStatus('PENDING')})
                     </button>
                     <button
                         onClick={() => setActiveStatus('PROCESSING')}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1 cursor-pointer ${
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 cursor-pointer ${
                             activeStatus === 'PROCESSING'
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100'
+                                ? 'bg-blue-600 text-white shadow-sm'
+                                : 'bg-blue-50 text-blue-700 hover:bg-blue-100/70'
                         }`}
                     >
                         Cần soạn ({countByStatus('PROCESSING')})
                     </button>
                     <button
                         onClick={() => setActiveStatus('PREPARED')}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1 cursor-pointer ${
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 cursor-pointer ${
                             activeStatus === 'PREPARED'
-                                ? 'bg-indigo-600 text-white'
-                                : 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100'
+                                ? 'bg-indigo-600 text-white shadow-sm'
+                                : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100/70'
                         }`}
                     >
                         Sẵn sàng giao ({countByStatus('PREPARED')})
                     </button>
                     <button
                         onClick={() => setActiveStatus('DISPENSED')}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
                             activeStatus === 'DISPENSED'
-                                ? 'bg-emerald-600 text-white'
-                                : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100'
+                                ? 'bg-emerald-600 text-white shadow-sm'
+                                : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100/70'
                         }`}
                     >
                         Đã giao ({countByStatus('DISPENSED')})
@@ -280,13 +289,13 @@ export function PharmacyQueue({
             <div className="mt-4 flex-1 overflow-y-auto no-scrollbar space-y-2.5 pr-1">
                 {loading ? (
                     <div className="py-12 text-center text-neutral-400">
-                        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-500" />
-                        <p className="text-xs">Đang tải danh sách đơn thuốc...</p>
+                        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#8B7CF6]" />
+                        <p className="text-xs font-medium">Đang tải danh sách đơn thuốc...</p>
                     </div>
                 ) : displayList.length === 0 ? (
-                    <div className="py-12 text-center text-neutral-400 bg-neutral-50 dark:bg-neutral-800/30 rounded-2xl border border-dashed border-neutral-200 dark:border-neutral-800">
-                        <Pill className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                        <p className="text-xs font-medium">Không có đơn thuốc nào trong hàng đợi</p>
+                    <div className="py-12 text-center text-neutral-400 bg-[#FBFBFF] rounded-2xl border border-dashed border-neutral-200/80">
+                        <Pill className="w-8 h-8 mx-auto mb-2 text-[#8B7CF6] opacity-40" />
+                        <p className="text-xs font-bold text-neutral-500">Không có đơn thuốc nào trong hàng đợi</p>
                     </div>
                 ) : (
                     displayList.map((item) => {
@@ -295,18 +304,18 @@ export function PharmacyQueue({
                             <div
                                 key={item.prescription_id}
                                 onClick={() => onSelectPrescription(item)}
-                                className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+                                className={`p-3 px-4.5 rounded-[32px] border transition-all cursor-pointer ${
                                     isSelected
-                                        ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-500 shadow-sm'
-                                        : 'bg-neutral-50/50 dark:bg-neutral-800/50 border-neutral-200 dark:border-neutral-800 hover:border-neutral-300 dark:hover:border-neutral-700'
+                                        ? 'bg-[#F5F3FF] border-[#8B7CF6] shadow-sm'
+                                        : 'bg-[#FBFBFF] border-neutral-100 hover:border-[#8B7CF6]/40 hover:bg-[#F5F3FF]/40'
                                 }`}
                             >
                                 <div className="flex items-start justify-between gap-2">
                                     <div>
-                                        <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                                        <span className="text-xs font-mono font-bold text-[#8B7CF6]">
                                             {item.prescription_code}
                                         </span>
-                                        <h4 className="text-sm font-bold text-neutral-900 dark:text-white mt-0.5 flex items-center gap-1.5">
+                                        <h4 className="text-[13px] font-bold text-[#2D2D2D] mt-0.5 flex items-center gap-1.5">
                                             <User className="w-3.5 h-3.5 text-neutral-400" />
                                             {item.patient_name || 'Bệnh nhân khám ngoại trú'}
                                         </h4>
@@ -314,11 +323,11 @@ export function PharmacyQueue({
                                     {getStatusBadge(item.status)}
                                 </div>
 
-                                <div className="mt-2.5 pt-2 border-t border-neutral-200/60 dark:border-neutral-700/60 flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400">
-                                    <span>
+                                <div className="mt-2 pt-1.5 border-t border-neutral-100 flex items-center justify-between text-[11px] text-[#7B7B7B]">
+                                    <span className="font-medium">
                                         {item.prescriptionDetails?.length || 0} loại thuốc
                                     </span>
-                                    <span className="font-bold text-neutral-900 dark:text-white">
+                                    <span className="font-extrabold text-[#2D2D2D] text-xs">
                                         {item.total_amount?.toLocaleString('vi-VN')} đ
                                     </span>
                                 </div>

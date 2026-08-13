@@ -32,26 +32,23 @@ export default function PharmacyPage() {
 
     return (
         <EMRWorkspaceLayout activeTabId="pharmacy" activeTabName="Quản Lý Nhà Thuốc & Cấp Phát">
-            <div className="flex-1 flex flex-col h-full overflow-hidden bg-neutral-100 dark:bg-neutral-950 p-4">
-                {/* Main Content Body: 2-column layout */}
-                <div className="flex-1 overflow-hidden">
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-full">
-                        {/* Left Column: Queue & QR Scan (4 cols - ~33% width) */}
-                        <div className="lg:col-span-4 h-full overflow-hidden">
-                            <PharmacyQueue
-                                onSelectPrescription={setSelectedPrescription}
-                                selectedPrescriptionId={selectedPrescription?.prescription_id}
-                                refreshKey={refreshQueueKey}
-                            />
-                        </div>
+            <div className="flex-1 overflow-hidden p-6 h-full w-full">
+                <div className="flex flex-col lg:flex-row gap-6 h-full w-full">
+                    {/* Left Column: Queue & QR Scan (4.5 parts - 45% width) */}
+                    <div className="w-full lg:w-[45%] h-full overflow-hidden border-r border-neutral-100 pr-0 lg:pr-6 shrink-0">
+                        <PharmacyQueue
+                            onSelectPrescription={setSelectedPrescription}
+                            selectedPrescriptionId={selectedPrescription?.prescription_id}
+                            refreshKey={refreshQueueKey}
+                        />
+                    </div>
 
-                        {/* Right Column: Prescription Details & Payment UI (8 cols - ~67% width) */}
-                        <div className="lg:col-span-8 h-full overflow-hidden">
-                            <MedicationDispense
-                                prescription={selectedPrescription}
-                                onStatusChange={handlePrescriptionStatusChange}
-                            />
-                        </div>
+                    {/* Right Column: Prescription Details & Payment UI (5.5 parts - 55% width) */}
+                    <div className="w-full lg:w-[55%] h-full overflow-hidden pl-0 lg:pl-2 min-w-0 flex-1">
+                        <MedicationDispense
+                            prescription={selectedPrescription}
+                            onStatusChange={handlePrescriptionStatusChange}
+                        />
                     </div>
                 </div>
             </div>

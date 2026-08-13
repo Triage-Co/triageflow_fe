@@ -478,35 +478,13 @@ export const pharmacyService = {
      * GET /api/prescription/scan/:code
      */
     async scanPrescription(code: string): Promise<Prescription> {
-        const clean = code.trim().toLowerCase();
-
-        // 1. Thử gọi API backend
-        try {
-            const cleanCode = encodeURIComponent(code.trim());
-            const res = await apiClient.get<any>(`/api/prescription/scan/${cleanCode}`, { suppressLogError: true });
-            const data: any = res;
-            if (data?.data || data?.prescription_id) {
-                return normalizePrescription(data.data || data);
-            }
-        } catch (error) {
-            console.warn('[pharmacyService] API scan failed, searching local list:', error);
+        const cleanCode = encodeURIComponent(code.trim());
+        const res = await apiClient.get<any>(`/api/prescription/scan/${cleanCode}`);
+        const data: any = res;
+        if (data?.data || data?.prescription_id) {
+            return normalizePrescription(data.data || data);
         }
-
-        // 2. Tìm kiếm trong MOCK_PRESCRIPTIONS
-        let found = MOCK_PRESCRIPTIONS.find(
-            (p) => p.prescription_code?.toLowerCase() === clean || p.prescription_id?.toLowerCase() === clean
-        );
-
-        if (!found) {
-            found = normalizePrescription({
-                prescription_id: code,
-                prescription_code: code.startsWith('RX-') ? code : `RX-${code}`,
-                status: 'PENDING'
-            });
-            MOCK_PRESCRIPTIONS.unshift(found);
-        }
-
-        return normalizePrescription(found);
+        throw new Error('Không tìm thấy đơn thuốc');
     },
 
     /**
@@ -528,11 +506,8 @@ export const pharmacyService = {
             else if (Array.isArray(responseData?.data)) rawList = responseData.data;
             else if (responseData?.data?.items && Array.isArray(responseData.data.items)) rawList = responseData.data.items;
         } catch (error) {
-            console.warn('[pharmacyService] Failed to fetch prescriptions from API, returning mock data:', error);
-        }
-
-        if (rawList.length === 0) {
-            rawList = [...MOCK_PRESCRIPTIONS];
+            console.error('[pharmacyService] Failed to fetch prescriptions from API:', error);
+            return [];
         }
 
         let result = rawList.map(normalizePrescription);
@@ -560,45 +535,11 @@ export const pharmacyService = {
      */
     async payPrescriptionOffline(prescriptionId: string): Promise<Prescription> {
         saveStatusOverride(prescriptionId, 'PROCESSING');
-
-        try {
-            const res = await apiClient.patch<any>(`/api/prescription/${prescriptionId}/pay`, {}, { suppressLogError: true });
-            const data: any = res;
-            if (data?.data || data?.prescription_id) {
-                const norm = normalizePrescription(data.data || data);
-                if (norm.prescription_code) saveStatusOverride(norm.prescription_code, 'PROCESSING');
-                return norm;
-            }
-        } catch (error) {
-            console.warn('[pharmacyService] API pay failed, updating local mock state:', error);
-        }
-
-        const clean = prescriptionId.trim().toLowerCase();
-        let item = MOCK_PRESCRIPTIONS.find(
-            (p) =>
-                p.prescription_id?.toLowerCase() === clean ||
-                p.prescription_code?.toLowerCase() === clean ||
-                p.prescription_code?.toLowerCase().includes(clean) ||
-                p.patient_name?.toLowerCase().includes(clean)
-        );
-
-        if (!item) {
-            item = normalizePrescription({
-                prescription_id: prescriptionId,
-                prescription_code: prescriptionId.startsWith('RX-') ? prescriptionId : `RX-${prescriptionId}`,
-                status: 'PROCESSING',
-                updated_at: new Date().toISOString()
-            });
-            MOCK_PRESCRIPTIONS.unshift(item);
-        } else {
-            item.status = 'PROCESSING';
-            item.updated_at = new Date().toISOString();
-        }
-
-        if (item.prescription_code) saveStatusOverride(item.prescription_code, 'PROCESSING');
-        if (item.prescription_id) saveStatusOverride(item.prescription_id, 'PROCESSING');
-
-        return normalizePrescription(item);
+        const res = await apiClient.patch<any>(`/api/prescription/${prescriptionId}/pay`, {});
+        const data: any = res;
+        const norm = normalizePrescription(data?.data || data);
+        if (norm.prescription_code) saveStatusOverride(norm.prescription_code, 'PROCESSING');
+        return norm;
     },
 
     /**
@@ -607,39 +548,11 @@ export const pharmacyService = {
      */
     async preparePrescription(prescriptionId: string): Promise<Prescription> {
         saveStatusOverride(prescriptionId, 'PREPARED');
-
-        try {
-            const res = await apiClient.patch<any>(`/api/prescription/${prescriptionId}/prepare`, {}, { suppressLogError: true });
-            const data: any = res;
-            if (data?.data || data?.prescription_id) {
-                const norm = normalizePrescription(data.data || data);
-                if (norm.prescription_code) saveStatusOverride(norm.prescription_code, 'PREPARED');
-                return norm;
-            }
-        } catch (error) {
-            console.warn('[pharmacyService] API prepare failed, updating local mock state:', error);
-        }
-
-        let item = MOCK_PRESCRIPTIONS.find(
-            (p) => p.prescription_id === prescriptionId || p.prescription_code === prescriptionId
-        );
-        if (!item) {
-            item = normalizePrescription({
-                prescription_id: prescriptionId,
-                prescription_code: prescriptionId.startsWith('RX-') ? prescriptionId : `RX-${prescriptionId}`,
-                status: 'PREPARED',
-                updated_at: new Date().toISOString()
-            });
-            MOCK_PRESCRIPTIONS.unshift(item);
-        } else {
-            item.status = 'PREPARED';
-            item.updated_at = new Date().toISOString();
-        }
-
-        if (item.prescription_code) saveStatusOverride(item.prescription_code, 'PREPARED');
-        if (item.prescription_id) saveStatusOverride(item.prescription_id, 'PREPARED');
-
-        return normalizePrescription(item);
+        const res = await apiClient.patch<any>(`/api/prescription/${prescriptionId}/prepare`, {});
+        const data: any = res;
+        const norm = normalizePrescription(data?.data || data);
+        if (norm.prescription_code) saveStatusOverride(norm.prescription_code, 'PREPARED');
+        return norm;
     },
 
     /**
@@ -648,39 +561,11 @@ export const pharmacyService = {
      */
     async dispensePrescription(prescriptionId: string): Promise<Prescription> {
         saveStatusOverride(prescriptionId, 'DISPENSED');
-
-        try {
-            const res = await apiClient.patch<any>(`/api/prescription/${prescriptionId}/dispense`, {}, { suppressLogError: true });
-            const data: any = res;
-            if (data?.data || data?.prescription_id) {
-                const norm = normalizePrescription(data.data || data);
-                if (norm.prescription_code) saveStatusOverride(norm.prescription_code, 'DISPENSED');
-                return norm;
-            }
-        } catch (error) {
-            console.warn('[pharmacyService] API dispense failed, updating local mock state:', error);
-        }
-
-        let item = MOCK_PRESCRIPTIONS.find(
-            (p) => p.prescription_id === prescriptionId || p.prescription_code === prescriptionId
-        );
-        if (!item) {
-            item = normalizePrescription({
-                prescription_id: prescriptionId,
-                prescription_code: prescriptionId.startsWith('RX-') ? prescriptionId : `RX-${prescriptionId}`,
-                status: 'DISPENSED',
-                updated_at: new Date().toISOString()
-            });
-            MOCK_PRESCRIPTIONS.unshift(item);
-        } else {
-            item.status = 'DISPENSED';
-            item.updated_at = new Date().toISOString();
-        }
-
-        if (item.prescription_code) saveStatusOverride(item.prescription_code, 'DISPENSED');
-        if (item.prescription_id) saveStatusOverride(item.prescription_id, 'DISPENSED');
-
-        return normalizePrescription(item);
+        const res = await apiClient.patch<any>(`/api/prescription/${prescriptionId}/dispense`, {});
+        const data: any = res;
+        const norm = normalizePrescription(data?.data || data);
+        if (norm.prescription_code) saveStatusOverride(norm.prescription_code, 'DISPENSED');
+        return norm;
     },
 
     /**
@@ -688,30 +573,8 @@ export const pharmacyService = {
      * PATCH /api/prescription/:id/status
      */
     async updatePrescriptionStatus(prescriptionId: string, status: PrescriptionStatusEnum): Promise<Prescription> {
-        try {
-            const res = await apiClient.patch<any>(`/api/prescription/${prescriptionId}/status`, { status }, { suppressLogError: true });
-            const data: any = res;
-            if (data?.data || data?.prescription_id) return normalizePrescription(data.data || data);
-        } catch (error) {
-            console.warn('[pharmacyService] API update status failed, updating local mock state:', error);
-        }
-
-        let item = MOCK_PRESCRIPTIONS.find(
-            (p) => p.prescription_id === prescriptionId || p.prescription_code === prescriptionId
-        );
-        if (!item) {
-            item = normalizePrescription({
-                prescription_id: prescriptionId,
-                prescription_code: prescriptionId.startsWith('RX-') ? prescriptionId : `RX-${prescriptionId}`,
-                status: status,
-                updated_at: new Date().toISOString()
-            });
-            MOCK_PRESCRIPTIONS.unshift(item);
-            return item;
-        }
-
-        item.status = status;
-        item.updated_at = new Date().toISOString();
-        return normalizePrescription(item);
+        const res = await apiClient.patch<any>(`/api/prescription/${prescriptionId}/status`, { status });
+        const data: any = res;
+        return normalizePrescription(data?.data || data);
     }
 };
