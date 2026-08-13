@@ -9,7 +9,6 @@ export interface GetMedicinesParams {
     page?: number;
     limit?: number;
     unit?: string;
-    usage_route?: string;
     sort_by?: 'medicine_code' | 'medicine_name' | 'active_ingredient' | 'unit_price' | 'created_at';
     sort_order?: 'asc' | 'desc';
 }
