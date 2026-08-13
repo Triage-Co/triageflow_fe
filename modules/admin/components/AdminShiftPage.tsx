@@ -14,6 +14,8 @@ import {
     Clock,
     Home,
     UserCheck,
+    Pencil,
+    CalendarRange,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useShiftStore } from '../store/shiftStore';
@@ -23,6 +25,7 @@ import { useAuthStore } from '@/modules/auth/store/authStore';
 import type { Shift, CreateShiftDto } from '../types/shift.types';
 import { getCompactPages } from '../utils/pagination';
 import { validateShiftAssignment, filterEligibleStaffForRoom } from '../utils/shiftValidation';
+import { BulkWeeklyShiftModal } from './BulkWeeklyShiftModal';
 
 /* ─── Role Badges Config ─────────────────────────────────────────────────── */
 
@@ -61,7 +64,7 @@ const toTimestamp = (dateValue: string): number => {
 export function AdminShiftPage() {
     const accessToken = useAuthStore((s) => s.accessToken);
 
-    const { shifts, isLoading, error, fetchShifts, createShift, deleteShift, clearError } = useShiftStore();
+    const { shifts, isLoading, error, fetchShifts, createShift, updateShift, deleteShift, clearError } = useShiftStore();
     const { staffs, fetchStaffs } = useStaffStore();
     const { rooms, fetchRooms } = useRoomStore();
 
@@ -89,6 +92,21 @@ export function AdminShiftPage() {
         start_time: '08:00',
         end_time: '17:00',
     });
+
+    // Edit Modal
+    const [editingShift, setEditingShift] = useState<Shift | null>(null);
+    const [isUpdating, setIsUpdating] = useState(false);
+    const [updateError, setUpdateError] = useState<string | null>(null);
+    const [editForm, setEditForm] = useState<CreateShiftDto>({
+        staff_id: '',
+        room_id: '',
+        date: '',
+        start_time: '08:00',
+        end_time: '17:00',
+    });
+
+    // Bulk Weekly Modal
+    const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
 
     // Delete Confirm
     const [deletingShift, setDeletingShift] = useState<Shift | null>(null);
@@ -194,6 +212,56 @@ export function AdminShiftPage() {
         }
     };
 
+    const openEditModal = (shift: Shift) => {
+        setEditingShift(shift);
+        setUpdateError(null);
+        setEditForm({
+            staff_id: shift.staff_id,
+            room_id: shift.room_id,
+            date: shift.date ? shift.date.split('T')[0] : '',
+            start_time: shift.start_time,
+            end_time: shift.end_time,
+        });
+    };
+
+    const handleUpdateShift = async () => {
+        if (!editingShift) return;
+        if (!editForm.staff_id || !editForm.room_id || !editForm.date || !editForm.start_time || !editForm.end_time) {
+            setUpdateError('Vui lòng điền đầy đủ tất cả các trường thông tin.');
+            return;
+        }
+        if (editForm.start_time >= editForm.end_time) {
+            setUpdateError('Giờ bắt đầu phải nhỏ hơn giờ kết thúc.');
+            return;
+        }
+
+        const valErr = validateShiftAssignment({
+            roomId: editForm.room_id,
+            staffId: editForm.staff_id,
+            date: editForm.date,
+            excludeShiftId: editingShift.shift_id,
+            rooms,
+            staffs,
+            specialties: useRoomStore.getState().specialties,
+            shifts,
+        });
+        if (valErr) {
+            setUpdateError(valErr);
+            return;
+        }
+
+        setIsUpdating(true);
+        setUpdateError(null);
+        try {
+            await updateShift(editingShift.shift_id, editForm, accessToken || '');
+            setEditingShift(null);
+        } catch (err) {
+            setUpdateError(err instanceof Error ? err.message : 'Cập nhật ca trực thất bại.');
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
     const handleDeleteShift = async () => {
         if (!deletingShift) return;
         setIsDeleting(true);
@@ -240,8 +308,8 @@ export function AdminShiftPage() {
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden relative">
-            <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-[#EEEDFC] via-[#F9ECF2] to-[#E6E9FC] pt-6">
-                <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-tl-[16px] shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
+            <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-[#EEEDFC] via-[#F9ECF2] to-[#E6E9FC] pt-6 pb-5">
+                <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-tl-[16px] rounded-bl-[48px] shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
                     <div className="flex-1 overflow-y-auto p-6">
 
                         {/* ── Title + Actions ── */}
@@ -254,13 +322,22 @@ export function AdminShiftPage() {
                                     Tạo và theo dõi lịch trực của nhân viên theo phòng khám
                                 </p>
                             </div>
-                            <button
-                                onClick={openCreateModal}
-                                className="flex items-center gap-2 px-4 py-2.5 bg-[#8B7CF6] hover:bg-[#7a6ae5] text-white text-[13px] font-bold rounded-xl transition-all shadow-sm cursor-pointer shrink-0"
-                            >
-                                <Plus className="w-4 h-4" />
-                                Tạo ca trực
-                            </button>
+                            <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                    onClick={() => setIsBulkModalOpen(true)}
+                                    className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#8B7CF6]/30 hover:bg-[#F5F2FF] text-[#8B7CF6] text-[13px] font-bold rounded-xl transition-all shadow-sm cursor-pointer"
+                                >
+                                    <CalendarRange className="w-4 h-4" />
+                                    Tạo theo tuần
+                                </button>
+                                <button
+                                    onClick={openCreateModal}
+                                    className="flex items-center gap-2 px-4 py-2.5 bg-[#8B7CF6] hover:bg-[#7a6ae5] text-white text-[13px] font-bold rounded-xl transition-all shadow-sm cursor-pointer"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    Tạo ca trực
+                                </button>
+                            </div>
                         </div>
 
                         {/* ── Error Alert ── */}
@@ -395,6 +472,13 @@ export function AdminShiftPage() {
                                                             <Eye className="w-3.5 h-3.5" />
                                                         </button>
                                                         <button
+                                                            onClick={() => openEditModal(shift)}
+                                                            title="Chỉnh sửa ca trực"
+                                                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-400 hover:text-[#8B7CF6] hover:border-[#8B7CF6]/30 hover:bg-[#F5F2FF] transition cursor-pointer"
+                                                        >
+                                                            <Pencil className="w-3.5 h-3.5" />
+                                                        </button>
+                                                        <button
                                                             onClick={() => { setDeleteError(null); setDeletingShift(shift); }}
                                                             title="Xóa ca trực"
                                                             className="w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition cursor-pointer"
@@ -466,10 +550,20 @@ export function AdminShiftPage() {
             </div>
 
             {/* ── Backdrop ── */}
-            {(isCreateModalOpen || !!deletingShift || !!selectedRoomShift) && (
+            {(isCreateModalOpen || !!editingShift || !!deletingShift || !!selectedRoomShift) && (
                 <div
                     className="fixed inset-0 bg-neutral-900/40 backdrop-blur-[2px] z-50"
-                    onClick={() => { setIsCreateModalOpen(false); setDeletingShift(null); setSelectedRoomShift(null); }}
+                    onClick={() => { setIsCreateModalOpen(false); setEditingShift(null); setDeletingShift(null); setSelectedRoomShift(null); }}
+                />
+            )}
+
+            {isBulkModalOpen && (
+                <BulkWeeklyShiftModal
+                    rooms={rooms}
+                    staffs={staffs}
+                    accessToken={accessToken}
+                    onClose={() => setIsBulkModalOpen(false)}
+                    onSuccess={() => { if (accessToken) fetchShifts(accessToken); }}
                 />
             )}
 
@@ -675,6 +769,118 @@ export function AdminShiftPage() {
                         >
                             {isCreating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                             Tạo ca trực
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* ════════════════════════════════════════════════════ */}
+            {/* ── Modal: Chỉnh sửa ca trực ──────────────────────── */}
+            {/* ════════════════════════════════════════════════════ */}
+            {editingShift && (
+                <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] max-h-[90vh] bg-white rounded-3xl shadow-2xl p-6 z-[60] flex flex-col gap-4 overflow-y-auto">
+                    <div className="flex items-center justify-between shrink-0 pb-2 border-b border-neutral-100">
+                        <div>
+                            <h2 className="text-[18px] font-bold text-[#2D2D2D]">Chỉnh sửa ca trực</h2>
+                            <p className="text-[11px] text-[#ADADAD] font-medium mt-0.5">Cập nhật phân công ca trực</p>
+                        </div>
+                        <button onClick={() => setEditingShift(null)} className="text-neutral-400 hover:text-neutral-600 cursor-pointer">
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+
+                    {updateError && (
+                        <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 p-3">
+                            <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                            <span className="text-[12px] text-red-700 font-semibold">{updateError}</span>
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5 col-span-2">
+                            <label className="text-[11px] font-bold text-neutral-500 uppercase">Phòng trực *</label>
+                            <select
+                                value={editForm.room_id}
+                                onChange={(e) => setEditForm((prev) => ({ ...prev, room_id: e.target.value, staff_id: '' }))}
+                                className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
+                            >
+                                <option value="">— Chọn phòng khám —</option>
+                                {rooms.map((room) => (
+                                    <option key={room.room_id} value={room.room_id}>
+                                        {room.room_name} ({room.specialty?.specialty_name || ''})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="space-y-1.5 col-span-2">
+                            <label className="text-[11px] font-bold text-neutral-500 uppercase">Nhân viên trực *</label>
+                            <select
+                                value={editForm.staff_id}
+                                onChange={(e) => setEditForm((prev) => ({ ...prev, staff_id: e.target.value }))}
+                                className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
+                            >
+                                <option value="">— Chọn nhân viên —</option>
+                                {filterEligibleStaffForRoom(
+                                    staffs,
+                                    rooms.find((r) => r.room_id === editForm.room_id)
+                                ).map((staff) => {
+                                    const rKey = (staff.account?.role || '').toUpperCase().replace(/^ROLE_/, '');
+                                    const roleLabel = rKey === 'DOCTOR' ? 'Bác sĩ' : rKey === 'NURSE' ? 'Y tá' : rKey;
+                                    return (
+                                        <option key={staff.staff_id} value={staff.staff_id}>
+                                            {staff.full_name} — {roleLabel}
+                                        </option>
+                                    );
+                                })}
+                            </select>
+                        </div>
+
+                        <div className="space-y-1.5 col-span-2">
+                            <label className="text-[11px] font-bold text-neutral-500 uppercase">Ngày trực *</label>
+                            <input
+                                type="date"
+                                value={editForm.date}
+                                onChange={(e) => setEditForm((prev) => ({ ...prev, date: e.target.value }))}
+                                className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
+                            />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-[11px] font-bold text-neutral-500 uppercase">Giờ bắt đầu *</label>
+                            <input
+                                type="time"
+                                value={editForm.start_time}
+                                onChange={(e) => setEditForm((prev) => ({ ...prev, start_time: e.target.value }))}
+                                className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
+                            />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-[11px] font-bold text-neutral-500 uppercase">Giờ kết thúc *</label>
+                            <input
+                                type="time"
+                                value={editForm.end_time}
+                                onChange={(e) => setEditForm((prev) => ({ ...prev, end_time: e.target.value }))}
+                                className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex gap-3 mt-2 pt-4 border-t border-neutral-100 shrink-0">
+                        <button
+                            onClick={() => setEditingShift(null)}
+                            className="flex-1 py-2.5 border border-neutral-200 hover:bg-neutral-50 rounded-xl text-xs font-bold text-neutral-500 transition cursor-pointer"
+                        >
+                            Hủy
+                        </button>
+                        <button
+                            onClick={handleUpdateShift}
+                            disabled={isUpdating}
+                            className="flex-1 py-2.5 bg-[#8B7CF6] hover:bg-[#7a6ae5] text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer flex items-center justify-center gap-1.5"
+                        >
+                            {isUpdating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                            Lưu thay đổi
                         </button>
                     </div>
                 </div>

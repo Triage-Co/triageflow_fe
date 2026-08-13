@@ -32,11 +32,8 @@ export type StaffRole =
     | 'DOCTOR'
     | 'NURSE'
     | 'RECEPTIONIST'
-    | 'LAB_STAFF'
     | 'LAB_TECHNICIAN'
-    | 'PHARMACY_STAFF'
     | 'PHARMACIST'
-    | 'CASHIER'
     | 'ADMIN';
 
 export interface RegisterRequest {

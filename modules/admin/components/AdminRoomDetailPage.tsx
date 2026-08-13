@@ -25,6 +25,9 @@ import type { HospitalRoom, Specialty } from '../types/room.types';
 import type { Shift } from '../types/shift.types';
 import { roomService } from '../services/roomService';
 import { validateShiftAssignment, filterEligibleStaffForRoom } from '../utils/shiftValidation';
+import { RoomServicesPanel } from './RoomServicesPanel';
+import { serviceCatalogService, extractServiceList } from '../services/serviceCatalogService';
+import type { CatalogService } from '../types/service.types';
 
 /* ─── Role Badges Config ─────────────────────────────────────────────────── */
 
@@ -72,6 +75,7 @@ export function AdminRoomDetailPage() {
 
     const [room, setRoom] = useState<HospitalRoom | null>(null);
     const [isFetchingDetail, setIsFetchingDetail] = useState(false);
+    const [allServices, setAllServices] = useState<CatalogService[]>([]);
 
     // Shift Modal state
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -127,6 +131,14 @@ export function AdminRoomDetailPage() {
 
         fetchDetail();
     }, [accessToken, roomId, rooms]);
+
+    useEffect(() => {
+        if (!accessToken) return;
+        serviceCatalogService
+            .getServices(accessToken, { limit: 500 })
+            .then((res) => setAllServices(extractServiceList(res?.data)))
+            .catch(() => setAllServices([]));
+    }, [accessToken]);
 
     /* ── Lookup Helper ── */
     const isStaffsLoading = useStaffStore((s) => s.isLoading);
@@ -293,8 +305,8 @@ export function AdminRoomDetailPage() {
     if (!room) {
         return (
             <div className="flex-1 flex flex-col overflow-hidden relative">
-                <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-[#EEEDFC] via-[#F9ECF2] to-[#E6E9FC] pt-6">
-                    <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-tl-[16px] shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
+                <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-[#EEEDFC] via-[#F9ECF2] to-[#E6E9FC] pt-6 pb-5">
+                    <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-tl-[16px] rounded-bl-[48px] shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
                         <div className="flex-1 overflow-y-auto p-6">
                             <div className="flex items-center gap-3 mb-8">
                                 <button
@@ -336,8 +348,8 @@ export function AdminRoomDetailPage() {
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden relative">
-            <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-[#EEEDFC] via-[#F9ECF2] to-[#E6E9FC] pt-6">
-                <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-tl-[16px] shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
+            <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-[#EEEDFC] via-[#F9ECF2] to-[#E6E9FC] pt-6 pb-5">
+                <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-tl-[16px] rounded-bl-[48px] shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
                     <div className="flex-1 overflow-y-auto p-6">
                         {/* ── Back + Title ── */}
                         <div className="flex items-center gap-3 mb-6">
@@ -527,6 +539,13 @@ export function AdminRoomDetailPage() {
                                 </div>
                             </div>
                         </div>
+
+                        <RoomServicesPanel
+                            roomId={room.room_id}
+                            roomName={room.room_name}
+                            allServices={allServices}
+                            accessToken={accessToken}
+                        />
 
                     </div>
                 </div>

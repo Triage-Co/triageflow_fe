@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Patient } from '@/modules/clinical/types/clinical.types';
 import { Heart, Activity, Thermometer, Gauge, AlertTriangle, User, Pencil, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WorkflowDiagram } from '@/modules/clinical/components/WorkflowDiagram';
 import { clinicalService } from '@/modules/clinical/services/clinicalService';
 import { useAuthStore } from '@/store/authStore';
+import { isClinicalEmrReadOnly } from '@/modules/clinical/utils/appointmentDate';
 
 type SidePanelTab = 'process' | 'info';
 type EditingField = 'visitReason' | 'medicalHistory' | 'vitals' | null;
@@ -31,6 +32,22 @@ interface VisitSessionData {
         throat?: string;
     };
 }
+
+type VitalEditKey = 'heart_rate' | 'temperature' | 'blood_pressure_sys' | 'blood_pressure_dia' | 'spo2';
+
+const VITAL_EDIT_FIELDS: Array<{
+    key: VitalEditKey;
+    label: string;
+    placeholder: string;
+    Icon: typeof Heart;
+    color: string;
+}> = [
+    { key: 'heart_rate', label: 'Nhịp tim', placeholder: 'bpm', Icon: Heart, color: '#EF4444' },
+    { key: 'temperature', label: 'Nhiệt độ', placeholder: '°C', Icon: Thermometer, color: '#F59E0B' },
+    { key: 'blood_pressure_sys', label: 'HA tâm thu', placeholder: 'mmHg', Icon: Activity, color: '#3B82F6' },
+    { key: 'blood_pressure_dia', label: 'HA tâm trương', placeholder: 'mmHg', Icon: Activity, color: '#3B82F6' },
+    { key: 'spo2', label: 'SpO₂', placeholder: '%', Icon: Gauge, color: '#22C55E' },
+];
 
 const VITALS_CONFIG = [
     { key: 'heartRate' as const, label: 'Nhịp tim', unit: 'bpm', Icon: Heart, color: '#EF4444' },
@@ -62,7 +79,7 @@ export function LeftPatientPanel({
 }: LeftPanelProps) {
     const user = useAuthStore((s) => s.user);
     const accessToken = useAuthStore((s) => s.accessToken);
-    const isReadOnly = user?.role === 'NURSE';
+    const isReadOnly = isClinicalEmrReadOnly(user?.role, patient.appointmentDate);
     const [tab, setTab] = useState<SidePanelTab>('info');
     const [sessionData, setSessionData] = useState<VisitSessionData | null>(null);
     const [editingField, setEditingField] = useState<EditingField>(null);
@@ -80,6 +97,13 @@ export function LeftPatientPanel({
         blood_pressure_dia: '',
         temperature: '',
         spo2: '',
+    });
+    const vitalInputRefs = useRef<Record<VitalEditKey, HTMLInputElement | null>>({
+        heart_rate: null,
+        temperature: null,
+        blood_pressure_sys: null,
+        blood_pressure_dia: null,
+        spo2: null,
     });
 
     useEffect(() => {
@@ -147,6 +171,12 @@ export function LeftPatientPanel({
         };
     }, [initialPatientId, patientQueueId, accessToken]);
 
+    useEffect(() => {
+        if (editingField === 'vitals') {
+            vitalInputRefs.current.heart_rate?.focus();
+        }
+    }, [editingField]);
+
     const displayVisitReason = sessionData?.chief_complaint
         || (patient.visitReason && patient.visitReason !== 'Chưa có lý do khám từ hệ thống' ? patient.visitReason : '')
         || 'Chưa có lý do khám';
@@ -173,6 +203,31 @@ export function LeftPatientPanel({
     const realAllergies = (patient.allergies || []).filter(
         (a) => a && !a.toLowerCase().includes('penicillin')
     );
+
+    const moveFocusToNextVitalField = (currentField: VitalEditKey) => {
+        const currentIndex = VITAL_EDIT_FIELDS.findIndex(({ key }) => key === currentField);
+        if (currentIndex === -1) return;
+
+        const nextField = VITAL_EDIT_FIELDS[currentIndex + 1];
+        if (nextField) {
+            vitalInputRefs.current[nextField.key]?.focus();
+            vitalInputRefs.current[nextField.key]?.select();
+        }
+    };
+
+    const handleVitalEnter = (currentField: VitalEditKey) => {
+        const currentIndex = VITAL_EDIT_FIELDS.findIndex(({ key }) => key === currentField);
+        const isLastField = currentIndex === VITAL_EDIT_FIELDS.length - 1;
+
+        if (isLastField) {
+            if (!isSaving) {
+                void handleSave('vitals');
+            }
+            return;
+        }
+
+        moveFocusToNextVitalField(currentField);
+    };
 
     const handleSave = async (field: EditingField) => {
         if (!sessionData?.visit_session_id || !accessToken || !field) return;
@@ -339,7 +394,6 @@ export function LeftPatientPanel({
                                         </div>
                                         <div className="min-w-0">
                                             <p className="text-[14px] font-bold text-neutral-800 leading-tight truncate">{patient.name}</p>
-                                            <p className="text-[10px] text-neutral-400 font-semibold mt-1">Mã BN: {patient.patientId || '—'}</p>
                                         </div>
                                     </div>
 
@@ -425,23 +479,28 @@ export function LeftPatientPanel({
 
                                     {editingField === 'vitals' ? (
                                         <div className="grid grid-cols-2 gap-2 mt-2">
-                                            {[
-                                                { key: 'heart_rate', label: 'Nhịp tim', placeholder: 'bpm', Icon: Heart, color: '#EF4444' },
-                                                { key: 'temperature', label: 'Nhiệt độ', placeholder: '°C', Icon: Thermometer, color: '#F59E0B' },
-                                                { key: 'blood_pressure_sys', label: 'HA tâm thu', placeholder: 'mmHg', Icon: Activity, color: '#3B82F6' },
-                                                { key: 'blood_pressure_dia', label: 'HA tâm trương', placeholder: 'mmHg', Icon: Activity, color: '#3B82F6' },
-                                                { key: 'spo2', label: 'SpO₂', placeholder: '%', Icon: Gauge, color: '#22C55E' },
-                                            ].map(({ key, label, placeholder, Icon, color }) => (
+                                            {VITAL_EDIT_FIELDS.map(({ key, label, placeholder, Icon, color }, index) => (
                                                 <div key={key} className="space-y-1">
                                                     <div className="flex items-center gap-1">
                                                         <Icon className="w-3 h-3" style={{ color }} />
                                                         <label className="text-[10px] text-neutral-400 font-bold">{label}</label>
                                                     </div>
                                                     <input
+                                                        ref={(el) => {
+                                                            vitalInputRefs.current[key] = el;
+                                                        }}
                                                         type="number"
-                                                        value={editVitals[key as keyof typeof editVitals]}
+                                                        value={editVitals[key]}
                                                         onChange={(e) => setEditVitals((prev) => ({ ...prev, [key]: e.target.value }))}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                e.preventDefault();
+                                                                handleVitalEnter(key);
+                                                            }
+                                                        }}
                                                         placeholder={placeholder}
+                                                        inputMode="decimal"
+                                                        enterKeyHint={index === VITAL_EDIT_FIELDS.length - 1 ? 'done' : 'next'}
                                                         className="w-full text-[12px] text-neutral-800 border border-neutral-200 rounded-lg px-2 py-1.5 focus:border-[#8B7CF6] outline-none"
                                                     />
                                                 </div>

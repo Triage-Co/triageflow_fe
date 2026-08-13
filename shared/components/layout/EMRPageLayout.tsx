@@ -44,6 +44,7 @@ export function EMRPageLayout({ patient: initialPatient }: EMRPageLayoutProps) {
                     patient={patient}
                     onUpdatePatient={handleUpdatePatient}
                     onFlowChanged={handleFlowChanged}
+                    flowRefreshKey={flowRefreshKey}
                 />
             </div>
         </EMRWorkspaceLayout>

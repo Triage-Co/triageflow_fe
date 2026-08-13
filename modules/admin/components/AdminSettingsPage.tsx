@@ -12,6 +12,7 @@ import {
     BellRing,
     MessageSquare,
     Save,
+    AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -100,8 +101,8 @@ export function AdminSettingsPage() {
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-[#EEEDFC] via-[#F9ECF2] to-[#E6E9FC] pt-6">
-                <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-tl-[16px] shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
+            <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-[#EEEDFC] via-[#F9ECF2] to-[#E6E9FC] pt-6 pb-5">
+                <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-tl-[16px] rounded-bl-[48px] shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
                     <div className="flex-1 overflow-y-auto p-6">
                         {/* ── Title ── */}
                         <div className="flex items-start justify-between gap-4 mb-6">
@@ -112,8 +113,16 @@ export function AdminSettingsPage() {
                                 <p className="text-[13px] text-[#7B7B7B] mt-1 font-medium">
                                     Quản lý cấu hình chung cho hệ thống TriageFlowOPD.
                                 </p>
+                                <p className="flex items-center gap-1.5 text-[11px] text-amber-600 font-bold mt-2">
+                                    <AlertTriangle className="w-3.5 h-3.5" />
+                                    Chưa kết nối API
+                                </p>
                             </div>
-                            <button className="flex items-center gap-2 px-4 py-2.5 bg-brand-500 text-white text-[13px] font-bold rounded-xl hover:bg-brand-600 transition-colors shadow-sm shrink-0 cursor-pointer">
+                            <button
+                                disabled
+                                title="Chưa kết nối API"
+                                className="flex items-center gap-2 px-4 py-2.5 bg-neutral-200 text-neutral-400 text-[13px] font-bold rounded-xl shrink-0 cursor-not-allowed"
+                            >
                                 <Save className="w-4 h-4" />
                                 Lưu thay đổi
                             </button>

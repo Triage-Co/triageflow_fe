@@ -4,6 +4,8 @@ import { Medicine, CreateMedicineDto } from '@/shared/types/prescription.types';
 export interface GetMedicinesParams {
     search?: string;
     is_active?: boolean;
+    usage_route?: string;
+    manufacturer?: string;
     page?: number;
     limit?: number;
 }
@@ -98,12 +100,14 @@ export const MOCK_MEDICINES: Medicine[] = [
 export const medicineService = {
     /**
      * Tra cứu danh sách thuốc (All Authenticated Users)
-     * GET /api/medicine?search=...&is_active=true&page=1&limit=20
+     * GET /api/medicine?search=...&is_active=true&usage_route=...&manufacturer=...&page=1&limit=20
      */
     async getMedicines(params?: GetMedicinesParams): Promise<Medicine[]> {
         const queryParams = new URLSearchParams();
         if (params?.search) queryParams.append('search', params.search);
         if (params?.is_active !== undefined) queryParams.append('is_active', String(params.is_active));
+        if (params?.usage_route) queryParams.append('usage_route', params.usage_route);
+        if (params?.manufacturer) queryParams.append('manufacturer', params.manufacturer);
         if (params?.page) queryParams.append('page', String(params.page));
         if (params?.limit) queryParams.append('limit', String(params.limit));
 
@@ -120,14 +124,28 @@ export const medicineService = {
             else if (responseData?.items && Array.isArray(responseData.items)) list = responseData.items;
 
             if (list.length > 0) return list;
+            // Empty API result is valid (no matches) — do not fall back to mock when filters used
+            if (params?.search || params?.usage_route || params?.manufacturer) return list;
         } catch (error) {
             console.warn('[medicineService] API endpoint failed, falling back to mock medicine catalog:', error);
         }
 
         // Return filtered mock list if API fails or returns empty
+        let list = [...MOCK_MEDICINES];
+        if (params?.is_active !== undefined) {
+            list = list.filter((m) => m.is_active === params.is_active);
+        }
+        if (params?.usage_route) {
+            const route = params.usage_route.toLowerCase();
+            list = list.filter((m) => (m.usage_route || '').toLowerCase() === route);
+        }
+        if (params?.manufacturer) {
+            const mfr = params.manufacturer.toLowerCase();
+            list = list.filter((m) => (m.manufacturer || '').toLowerCase().includes(mfr));
+        }
         if (params?.search) {
             const s = params.search.toLowerCase();
-            return MOCK_MEDICINES.filter(
+            list = list.filter(
                 (m) =>
                     m.medicine_name.toLowerCase().includes(s) ||
                     m.medicine_code.toLowerCase().includes(s) ||
@@ -135,7 +153,31 @@ export const medicineService = {
             );
         }
 
-        return MOCK_MEDICINES;
+        return list;
+    },
+
+    async getRoutes(): Promise<string[]> {
+        try {
+            const res = await apiClient.get<any>('/api/medicine/routes', { suppressLogError: true });
+            const data = res?.data ?? res;
+            if (Array.isArray(data)) return data.filter(Boolean);
+            if (Array.isArray(data?.data)) return data.data.filter(Boolean);
+        } catch {
+            // fallback below
+        }
+        return [...new Set(MOCK_MEDICINES.map((m) => m.usage_route).filter(Boolean))];
+    },
+
+    async getManufacturers(): Promise<string[]> {
+        try {
+            const res = await apiClient.get<any>('/api/medicine/manufacturers', { suppressLogError: true });
+            const data = res?.data ?? res;
+            if (Array.isArray(data)) return data.filter(Boolean);
+            if (Array.isArray(data?.data)) return data.data.filter(Boolean);
+        } catch {
+            // fallback below
+        }
+        return [...new Set(MOCK_MEDICINES.map((m) => m.manufacturer || '').filter(Boolean))];
     },
 
     /**

@@ -4,12 +4,12 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-    Activity,
     BarChart3,
     Bell,
+    Building2,
+    CalendarDays,
     ChevronLeft,
     ChevronRight,
-    Cpu,
     Home,
     LayoutDashboard,
     ListOrdered,
@@ -22,11 +22,9 @@ import {
     CreditCard,
     LogOut,
     User,
-    UserPlus,
     Search,
     Stethoscope,
     QrCode,
-    FilePlus,
     Package,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -42,8 +40,6 @@ interface NavItem {
 const NAV_BY_ROLE: Record<string, NavItem[]> = {
     DOCTOR: [
         { label: 'Danh sách bệnh nhân', href: '/doctor', icon: LayoutDashboard },
-        { label: 'Tiếp nhận khám', href: '/lab', icon: FlaskConical },
-        { label: 'Thanh toán', href: '/cashier', icon: CreditCard },
         { label: 'Thông báo', href: '/doctor/notification', icon: Bell },
         { label: 'Cài đặt', href: '/doctor/setting', icon: Settings },
     ],
@@ -62,10 +58,12 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
     ],
     LAB_STAFF: [
         { label: 'Danh Sách Bệnh Nhân', href: '/lab', icon: LayoutDashboard },
+        { label: 'Thông báo', href: '/lab/notification', icon: Bell },
         { label: 'Thông tin cá nhân', href: '/settings', icon: User },
     ],
     LAB_TECHNICIAN: [
         { label: 'Danh Sách Bệnh Nhân', href: '/lab', icon: LayoutDashboard },
+        { label: 'Thông báo', href: '/lab/notification', icon: Bell },
         { label: 'Thông tin cá nhân', href: '/settings', icon: User },
     ],
     PHARMACY_STAFF: [
@@ -103,15 +101,17 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
     ],
     ADMIN: [
         { label: 'Tổng quan', href: '/admin/dashboard', icon: LayoutDashboard },
-        { label: 'Biểu đồ nhiệt', href: '/admin/heatmap', icon: Activity },
         { label: 'Cấu hình bản đồ', href: '/admin/map', icon: Map },
-        { label: 'Hàng chờ bệnh nhân', href: '/admin/queue', icon: ListOrdered },
-        { label: 'Cấu hình AI', href: '/admin/ai-config', icon: Cpu },
+        { label: 'Quy tắc hàng chờ', href: '/admin/queue', icon: ListOrdered },
         { label: 'Quy trình khám bệnh', href: '/admin/process', icon: Stethoscope },
         { label: 'Quản lý dịch vụ', href: '/admin/services', icon: FlaskConical },
-        { label: 'Quản lý người dùng', href: '/admin/users', icon: Users },
-        { label: 'Quản lý phòng khám', href: '/admin/rooms', icon: Home },
-        { label: 'Quản lý nhân viên', href: '/admin/staff', icon: UserCheck },
+        { label: 'Gói khám', href: '/admin/exam-packages', icon: Package },
+        { label: 'Danh mục thuốc', href: '/admin/medicines', icon: Pill },
+        { label: 'Chuyên khoa', href: '/admin/specialties', icon: Building2 },
+        { label: 'Phòng khám', href: '/admin/rooms', icon: Home },
+        { label: 'Ca trực', href: '/admin/shift', icon: CalendarDays },
+        { label: 'Người dùng', href: '/admin/users', icon: Users },
+        { label: 'Nhân viên', href: '/admin/staff', icon: UserCheck },
         { label: 'Cài đặt', href: '/admin/settings', icon: Settings },
     ],
     default: [
@@ -219,7 +219,7 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
     return (
         <aside
             className={cn(
-                'relative flex flex-col h-full bg-[#F5F2FF] shrink-0 select-none transition-all duration-300 ease-in-out overflow-hidden',
+                'relative flex flex-col h-full bg-transparent shrink-0 select-none transition-all duration-300 ease-in-out overflow-hidden',
                 isCollapsed ? 'w-14' : 'w-62',
             )}
         >

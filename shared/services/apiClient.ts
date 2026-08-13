@@ -54,12 +54,17 @@ async function request<T>(
   const { headers: extraHeaders, suppressLogError, ...restOptions } = options ?? {};
   const authHeaders = getAuthHeader();
 
+  const headers: Record<string, string> = {
+    ...authHeaders,
+    ...(extraHeaders as Record<string, string>),
+  };
+  // Avoid Content-Type: application/json on body-less DELETE/GET — some Nest parsers reject it
+  if (restOptions.body != null && headers['Content-Type'] == null && headers['content-type'] == null) {
+    headers['Content-Type'] = 'application/json';
+  }
+
   const res = await fetch(`${API_BASE_URL}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders,
-      ...extraHeaders,
-    },
+    headers,
     ...restOptions,
   });
 
@@ -69,6 +74,11 @@ async function request<T>(
     json = text ? JSON.parse(text) : {};
   } catch {
     json = text ? { message: text } : {};
+  }
+
+  // 204 / empty success body
+  if (res.ok && !text) {
+    return { code: res.status, message: 'OK', status: 'success', data: null as T };
   }
 
   if (!res.ok) {

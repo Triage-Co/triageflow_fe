@@ -1,0 +1,33 @@
+/* Print stylesheet source for PrescriptionPrintView.
+ * When printing via window.open, CSS is injected inline from PRESCRIPTION_PRINT_CSS.
+ */
+
+@page {
+  size: A5 portrait;
+  margin: 15mm;
+}
+
+.prescription-print-root {
+  font-family: "Times New Roman", "Noto Serif", Georgia, serif;
+  color: #111;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .prescription-print-root,
+  .prescription-print-root * {
+    visibility: visible;
+  }
+
+  .prescription-print-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}

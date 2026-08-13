@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { HospitalRoom, CreateRoomDto, UpdateRoomDto, Specialty } from '../types/room.types';
 import { roomService } from '../services/roomService';
+import { extractSpecialtyList } from '../services/specialtyService';
 
 export interface RoomState {
     rooms: HospitalRoom[];
@@ -51,7 +52,9 @@ export const useRoomStore = create<RoomStore>()(
                 set({ isLoading: true, error: null }, false, 'fetchSpecialties/pending');
                 try {
                     const res = await roomService.getSpecialties(token);
-                    set({ specialties: res.data || [], isLoading: false }, false, 'fetchSpecialties/success');
+                    // GET /api/specialty trả { data: Specialty[], meta } — không phải array thuần
+                    const { data } = extractSpecialtyList(res?.data);
+                    set({ specialties: data, isLoading: false }, false, 'fetchSpecialties/success');
                 } catch (err) {
                     set({
                         error: err instanceof Error ? err.message : 'Không thể tải danh sách chuyên khoa.',

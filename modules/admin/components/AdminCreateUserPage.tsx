@@ -42,10 +42,15 @@ export function AdminCreateUserPage() {
         setIsCreating(true);
         setCreateError(null);
         try {
-            const STAFF_ROLES = ['DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_STAFF', 'LAB_TECHNICIAN', 'PHARMACY_STAFF', 'PHARMACIST', 'CASHIER', 'ADMIN'];
-            let sendRole = createForm.role as string;
-            if (sendRole === 'PHARMACY_STAFF') sendRole = 'PHARMACIST';
-            if (sendRole === 'LAB_STAFF') sendRole = 'LAB_TECHNICIAN';
+            const STAFF_ROLES: StaffRole[] = [
+                'DOCTOR',
+                'NURSE',
+                'RECEPTIONIST',
+                'LAB_TECHNICIAN',
+                'PHARMACIST',
+                'ADMIN',
+            ];
+            const sendRole = createForm.role;
 
             if (STAFF_ROLES.includes(createForm.role) && accessToken) {
                 await staffService.createStaff({
@@ -86,8 +91,8 @@ export function AdminCreateUserPage() {
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden relative">
-            <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-[#EEEDFC] via-[#F9ECF2] to-[#E6E9FC] pt-6">
-                <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-tl-[16px] shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
+            <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-[#EEEDFC] via-[#F9ECF2] to-[#E6E9FC] pt-6 pb-5">
+                <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-tl-[16px] rounded-bl-[48px] shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
                     <div className="flex-1 overflow-y-auto p-6">
                         {/* ── Back + Title ── */}
                         <div className="flex items-center gap-3 mb-8">
@@ -193,9 +198,7 @@ export function AdminCreateUserPage() {
                                         <option value="NURSE">Y tá / Điều dưỡng</option>
                                         <option value="RECEPTIONIST">Lễ tân</option>
                                         <option value="LAB_TECHNICIAN">Kỹ thuật viên Xét nghiệm</option>
-                                        <option value="PHARMACIST">Dược sĩ (PHARMACIST)</option>
-                                        <option value="PHARMACY_STAFF">Dược sĩ (PHARMACY_STAFF)</option>
-                                        <option value="CASHIER">Thu ngân</option>
+                                        <option value="PHARMACIST">Dược sĩ</option>
                                         <option value="ADMIN">Quản trị viên</option>
                                         <option value="USER">Bệnh nhân</option>
                                     </select>

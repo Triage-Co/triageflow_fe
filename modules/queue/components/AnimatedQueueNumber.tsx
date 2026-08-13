@@ -44,33 +44,33 @@ export function AnimatedQueueNumber({
     const isCalling = status === 'CALLING';
 
     return (
-        <div className="flex-1 flex flex-col items-center justify-center py-2 px-4 text-center overflow-hidden">
-            {/* Status Pill */}
-            <div className={`flex items-center justify-center gap-2 font-black text-lg tracking-[0.35em] uppercase mb-2 px-6 py-1.5 rounded-full transition-all ${
+        <div className="flex-1 flex flex-col items-center justify-center py-2 px-3 sm:px-6 text-center overflow-hidden h-full">
+            {/* Status Pill — slightly tighter for 60% column */}
+            <div className={`flex items-center justify-center gap-2 font-black text-sm sm:text-base md:text-lg tracking-[0.25em] sm:tracking-[0.35em] uppercase mb-2 px-4 sm:px-6 py-1.5 rounded-full transition-all ${
                 isCalling
                     ? 'bg-purple-600/10 text-purple-700 border border-purple-300 shadow-sm'
                     : 'text-[#6B5FD6]'
             }`}>
-                <span className="relative flex h-3.5 w-3.5">
+                <span className="relative flex h-3 w-3 sm:h-3.5 sm:w-3.5">
                     <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
                         isCalling ? 'bg-purple-600' : 'bg-[#6B5FD6]'
                     }`} />
-                    <span className={`relative inline-flex rounded-full h-3.5 w-3.5 ${
+                    <span className={`relative inline-flex rounded-full h-3 w-3 sm:h-3.5 sm:w-3.5 ${
                         isCalling ? 'bg-purple-600' : 'bg-[#6B5FD6]'
                     }`} />
                 </span>
-                <span>{displayStatusLabel}</span>
-                <span className="relative flex h-3.5 w-3.5">
+                <span className="truncate max-w-full">{displayStatusLabel}</span>
+                <span className="relative flex h-3 w-3 sm:h-3.5 sm:w-3.5">
                     <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
                         isCalling ? 'bg-purple-600' : 'bg-[#6B5FD6]'
                     }`} />
-                    <span className={`relative inline-flex rounded-full h-3.5 w-3.5 ${
+                    <span className={`relative inline-flex rounded-full h-3 w-3 sm:h-3.5 sm:w-3.5 ${
                         isCalling ? 'bg-purple-600' : 'bg-[#6B5FD6]'
                     }`} />
                 </span>
             </div>
 
-            {/* Ticket Number */}
+            {/* Ticket Number — sized for ~60% viewport width */}
             <div
                 className={`font-black tracking-widest leading-none drop-shadow-md transition-all duration-300 transform ${
                     isAnimating
@@ -79,19 +79,19 @@ export function AnimatedQueueNumber({
                 } ${
                     isCalling ? 'text-[#5244C9] scale-105' : 'text-[#6B5FD6]/85'
                 }`}
-                style={{ fontSize: 'clamp(100px, 24vw, 240px)' }}
+                style={{ fontSize: 'clamp(72px, 14vw, 200px)' }}
             >
                 {displayNumber}
             </div>
 
             {/* Patient Name */}
             <div
-                className={`font-extrabold text-[#2D1F5E] tracking-tight mt-1 transition-all duration-300 transform ${
+                className={`font-extrabold text-[#2D1F5E] tracking-tight mt-2 px-2 max-w-full truncate transition-all duration-300 transform ${
                     isAnimating
                         ? 'opacity-0 translate-y-2'
                         : 'opacity-100 translate-y-0'
                 }`}
-                style={{ fontSize: 'clamp(32px, 5.5vw, 68px)' }}
+                style={{ fontSize: 'clamp(24px, 3.5vw, 56px)' }}
             >
                 {displayName}
             </div>

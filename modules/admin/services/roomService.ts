@@ -39,9 +39,16 @@ function normalizeRoom(raw: unknown): HospitalRoom | null {
                       typeof specialty.description === 'string'
                           ? specialty.description
                           : null,
-                  createdAt: String(specialty.createdAt || ''),
-                  updatedAt: String(specialty.updatedAt || ''),
-              } as Specialty)
+                  is_active: specialty.is_active !== false,
+                  createdAt:
+                      typeof specialty.createdAt === 'string'
+                          ? specialty.createdAt
+                          : undefined,
+                  updatedAt:
+                      typeof specialty.updatedAt === 'string'
+                          ? specialty.updatedAt
+                          : undefined,
+              } satisfies Specialty)
             : undefined,
         room_type: typeof rec.room_type === 'string' ? rec.room_type : null,
     };

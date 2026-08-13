@@ -38,6 +38,33 @@ const ROLE_CONFIG: Record<string, { label: string; bg: string; text: string; bor
     ADMIN: { label: 'Quản trị viên', bg: 'bg-rose-50', text: 'text-rose-600', border: 'border-rose-100' },
 };
 
+/** Thứ tự hiển thị theo role (không gồm USER/bệnh nhân). */
+const ROLE_SORT_ORDER = [
+    'ADMIN',
+    'DOCTOR',
+    'LAB_TECHNICIAN',
+    'PHARMACIST',
+    'NURSE',
+    'RECEPTIONIST',
+] as const;
+
+const normalizeStaffRole = (role?: string) => {
+    const raw = (role || '').toUpperCase().replace(/^ROLE_/, '');
+    if (raw === 'LAB_STAFF') return 'LAB_TECHNICIAN';
+    if (raw === 'PHARMACY_STAFF') return 'PHARMACIST';
+    return raw;
+};
+
+const getRoleSortIndex = (role?: string) => {
+    const idx = ROLE_SORT_ORDER.indexOf(normalizeStaffRole(role) as (typeof ROLE_SORT_ORDER)[number]);
+    return idx === -1 ? ROLE_SORT_ORDER.length : idx;
+};
+
+const getStaffDisplayName = (staff: {
+    full_name?: string;
+    account?: { user_name?: string; email?: string } | null;
+}) => (staff.full_name || staff.account?.user_name || staff.account?.email || '').trim();
+
 const getRoleBadge = (role: string) => {
     const config = ROLE_CONFIG[role.toUpperCase()] || { label: role, bg: 'bg-neutral-50', text: 'text-neutral-600', border: 'border-neutral-100' };
     return (
@@ -289,7 +316,7 @@ export function AdminStaffPage() {
     /* ── Computed ─────────────────────────────────────────────── */
 
     const filteredStaffs = staffs.filter((staff) => {
-        const fullName = staff.full_name || staff.account?.user_name || '';
+        const fullName = getStaffDisplayName(staff);
         const email = staff.account?.email || '';
         const userName = staff.account?.user_name || '';
         const q = searchQuery.toLowerCase();
@@ -299,16 +326,22 @@ export function AdminStaffPage() {
             email.toLowerCase().includes(q) ||
             userName.toLowerCase().includes(q);
 
-        const staffRole = (staff.account?.role || '').toUpperCase().replace(/^ROLE_/, '');
-        const filterRole = roleFilter.toUpperCase().replace(/^ROLE_/, '');
+        const staffRole = normalizeStaffRole(staff.account?.role);
+        // Bỏ USER khỏi màn nhân viên nếu lọt vào danh sách staff
+        if (staffRole === 'USER') return false;
 
+        const filterRole = normalizeStaffRole(roleFilter);
         const matchesRole = roleFilter === 'ALL' || staffRole === filterRole;
         return matchesSearch && matchesRole;
     });
 
-    const sortedStaffs = [...filteredStaffs].sort((a, b) =>
-        a.full_name.localeCompare(b.full_name, undefined, { sensitivity: 'base' })
-    );
+    const sortedStaffs = filteredStaffs.toSorted((a, b) => {
+        const roleDiff = getRoleSortIndex(a.account?.role) - getRoleSortIndex(b.account?.role);
+        if (roleDiff !== 0) return roleDiff;
+        return getStaffDisplayName(a).localeCompare(getStaffDisplayName(b), 'vi', {
+            sensitivity: 'base',
+        });
+    });
 
     const totalPages = Math.ceil(sortedStaffs.length / ITEMS_PER_PAGE);
     const paginatedStaffs = sortedStaffs.slice(
@@ -320,8 +353,8 @@ export function AdminStaffPage() {
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden relative">
-            <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-[#EEEDFC] via-[#F9ECF2] to-[#E6E9FC] pt-6">
-                <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-tl-[16px] shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
+            <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-[#EEEDFC] via-[#F9ECF2] to-[#E6E9FC] pt-6 pb-5">
+                <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-tl-[16px] rounded-bl-[48px] shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
                     <div className="flex-1 overflow-y-auto p-6">
 
                         {/* ── Title + Actions ── */}
@@ -382,13 +415,12 @@ export function AdminStaffPage() {
                                         className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
                                     >
                                         <option value="ALL">Tất cả vai trò</option>
+                                        <option value="ADMIN">Quản trị viên</option>
                                         <option value="DOCTOR">Bác sĩ</option>
-                                        <option value="NURSE">Điều dưỡng</option>
-                                        <option value="RECEPTIONIST">Lễ tân</option>
                                         <option value="LAB_TECHNICIAN">Kỹ thuật viên Xét nghiệm</option>
                                         <option value="PHARMACIST">Dược sĩ</option>
-                                        <option value="CASHIER">Thu ngân</option>
-                                        <option value="ADMIN">Quản trị viên</option>
+                                        <option value="NURSE">Điều dưỡng</option>
+                                        <option value="RECEPTIONIST">Lễ tân</option>
                                     </select>
                                 </div>
                                 <div className="space-y-1">

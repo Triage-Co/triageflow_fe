@@ -16,7 +16,7 @@ import { Badge } from '@/shared/components/ui/Badge';
 import { Input } from '@/shared/components/ui/Input';
 import { cn } from '@/lib/utils';
 import { ParaclinicalOrdersTab } from './ParaclinicalOrdersTab';
-import { DoctorPrescriptionTab } from './DoctorPrescriptionTab';
+import { EmrPrescriptionTab } from './EmrPrescriptionTab';
 
 const STAGE_TABS: {
     key: ClinicalStage;
@@ -140,6 +140,7 @@ export function ClinicalProcessPanel({
                 {activeStage === 'paraclinical' && (
                     <ParaclinicalOrdersTab
                         patient={patient}
+                        serviceTypes={['DIAGNOSTIC_TEST']}
                         refreshKey={flowRefreshKey}
                         flowSnapshot={flowSnapshot}
                         onFlowChanged={onFlowChanged}
@@ -152,10 +153,20 @@ export function ClinicalProcessPanel({
                     <StagePlaceholder title="Chẩn đoán & điều trị" />
                 )}
                 {activeStage === 'procedure' && (
-                    <StagePlaceholder title="Thủ thuật" />
+                    <ParaclinicalOrdersTab
+                        patient={patient}
+                        serviceTypes={['PROCEDURE']}
+                        refreshKey={flowRefreshKey}
+                        flowSnapshot={flowSnapshot}
+                        onFlowChanged={onFlowChanged}
+                    />
                 )}
                 {activeStage === 'prescription' && (
-                    <DoctorPrescriptionTab patientName={patient?.name} />
+                    <EmrPrescriptionTab
+                        patient={patient}
+                        refreshKey={flowRefreshKey}
+                        onFlowChanged={() => onFlowChanged?.(flowSnapshot)}
+                    />
                 )}
             </div>
         </div>
