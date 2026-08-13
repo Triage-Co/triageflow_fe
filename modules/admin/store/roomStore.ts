@@ -51,7 +51,8 @@ export const useRoomStore = create<RoomStore>()(
                 set({ isLoading: true, error: null }, false, 'fetchSpecialties/pending');
                 try {
                     const res = await roomService.getSpecialties(token);
-                    set({ specialties: res.data || [], isLoading: false }, false, 'fetchSpecialties/success');
+                    const list = Array.isArray(res.data) ? res.data : [];
+                    set({ specialties: list, isLoading: false }, false, 'fetchSpecialties/success');
                 } catch (err) {
                     set({
                         error: err instanceof Error ? err.message : 'Không thể tải danh sách chuyên khoa.',

@@ -1,5 +1,6 @@
 import { apiClient } from '@/shared/services/apiClient';
 import type { HospitalRoom, CreateRoomDto, UpdateRoomDto, Specialty } from '../types/room.types';
+import { extractSpecialtyList } from './specialtyService';
 
 interface PaginatedMeta {
     total?: number;
@@ -118,8 +119,13 @@ export const roomService = {
     },
 
     getSpecialties: async (token: string) => {
-        return apiClient.get<Specialty[]>('/api/specialty', {
+        const res = await apiClient.get<unknown>('/api/specialty?limit=500', {
             headers: { Authorization: `Bearer ${token}` },
         });
+        const extracted = extractSpecialtyList(res.data);
+        return {
+            ...res,
+            data: extracted.data,
+        };
     },
 };

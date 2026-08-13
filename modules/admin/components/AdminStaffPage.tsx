@@ -90,6 +90,7 @@ export function AdminStaffPage() {
         clearError,
     } = useStaffStore();
     const { specialties, fetchSpecialties } = useRoomStore();
+    const safeSpecialties = Array.isArray(specialties) ? specialties : [];
 
     const [searchQuery, setSearchQuery] = useState('');
     const [roleFilter, setRoleFilter] = useState('ALL');
@@ -157,7 +158,7 @@ export function AdminStaffPage() {
             phone: staff.account.phone || '',
             license_number: staff.license_number || '',
             experience_years: staff.experience_years?.toString() || '',
-            specialty_id: staff.specialty_id || (specialties[0]?.specialty_id || ''),
+            specialty_id: staff.specialty_id || (safeSpecialties[0]?.specialty_id || ''),
         });
         setEditError(null);
         setEditingStaff(staff);
@@ -223,7 +224,7 @@ export function AdminStaffPage() {
                 phone: '',
                 license_number: '',
                 experience_years: '',
-                specialty_id: specialties[0]?.specialty_id || '',
+                specialty_id: safeSpecialties[0]?.specialty_id || '',
             });
             if (accessToken) {
                 await fetchStaffs(accessToken, { mergeAccounts: true });
@@ -377,7 +378,7 @@ export function AdminStaffPage() {
                                         phone: '',
                                         license_number: '',
                                         experience_years: '',
-                                        specialty_id: specialties[0]?.specialty_id || '',
+                                        specialty_id: safeSpecialties[0]?.specialty_id || '',
                                     });
                                 }}
                                 className="flex items-center gap-2 px-4 py-2.5 bg-[#8B7CF6] hover:bg-[#7a6ae5] text-white text-[13px] font-bold rounded-xl transition-all shadow-sm cursor-pointer"
@@ -730,7 +731,7 @@ export function AdminStaffPage() {
                                     onChange={(e) => setCreateForm(prev => ({ ...prev, specialty_id: e.target.value }))}
                                     className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
                                 >
-                                    {specialties.map((sp) => (
+                                    {safeSpecialties.map((sp) => (
                                         <option key={sp.specialty_id} value={sp.specialty_id}>
                                             {sp.specialty_name || sp.specialty_code}
                                         </option>
@@ -896,7 +897,7 @@ export function AdminStaffPage() {
                                     onChange={(e) => setEditForm(prev => ({ ...prev, specialty_id: e.target.value }))}
                                     className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
                                 >
-                                    {specialties.map((sp) => (
+                                    {safeSpecialties.map((sp) => (
                                         <option key={sp.specialty_id} value={sp.specialty_id}>
                                             {sp.specialty_name || sp.specialty_code}
                                         </option>

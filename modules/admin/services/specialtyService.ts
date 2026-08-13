@@ -16,12 +16,16 @@ export function extractSpecialtyList(raw: unknown): { data: Specialty[]; meta?: 
     if (Array.isArray(raw)) return { data: raw as Specialty[] };
     const root = asRecord(raw);
     if (!root) return { data: [] };
-    if (Array.isArray(root.data)) {
-        return { data: root.data as Specialty[], meta: root.meta as PaginationMeta | undefined };
+    const rootList = root.data ?? root.items ?? root.specialties ?? root.results;
+    if (Array.isArray(rootList)) {
+        return { data: rootList as Specialty[], meta: root.meta as PaginationMeta | undefined };
     }
     const nested = asRecord(root.data);
-    if (nested && Array.isArray(nested.data)) {
-        return { data: nested.data as Specialty[], meta: nested.meta as PaginationMeta | undefined };
+    if (nested) {
+        const nestedList = nested.data ?? nested.items ?? nested.specialties ?? nested.results;
+        if (Array.isArray(nestedList)) {
+            return { data: nestedList as Specialty[], meta: (nested.meta || root.meta) as PaginationMeta | undefined };
+        }
     }
     return { data: [] };
 }

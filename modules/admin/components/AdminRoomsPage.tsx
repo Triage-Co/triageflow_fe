@@ -25,7 +25,8 @@ import { getCompactPages } from '../utils/pagination';
 
 const getSpecialtyName = (room: HospitalRoom, specialties: Specialty[]): string => {
     if (room.specialty?.specialty_name) return room.specialty.specialty_name;
-    const found = specialties.find((s) => s.specialty_id === room.specialty_id);
+    const list = Array.isArray(specialties) ? specialties : [];
+    const found = list.find((s) => s.specialty_id === room.specialty_id);
     if (found?.specialty_name) return found.specialty_name;
     if (room.specialty?.specialty_code) return room.specialty.specialty_code;
     if (found?.specialty_code) return found.specialty_code;
@@ -36,7 +37,8 @@ const getSpecialtyName = (room: HospitalRoom, specialties: Specialty[]): string 
 /** Trả về mã chuyên khoa từ nested specialty object, fallback lookup trong danh sách chuyên khoa */
 const getSpecialtyCode = (room: HospitalRoom, specialties: Specialty[]): string => {
     if (room.specialty?.specialty_code) return room.specialty.specialty_code;
-    const found = specialties.find((s) => s.specialty_id === room.specialty_id);
+    const list = Array.isArray(specialties) ? specialties : [];
+    const found = list.find((s) => s.specialty_id === room.specialty_id);
     if (found?.specialty_code) return found.specialty_code;
     return 'N/A';
 };
@@ -132,7 +134,7 @@ export function AdminRoomsPage() {
         try {
             await createRoom({ room_name: createForm.room_name, specialty_id: specId }, accessToken || '');
             setIsCreateModalOpen(false);
-            setCreateForm({ room_name: '', specialty_id: specialties[0]?.specialty_id || '', custom_specialty_id: '' });
+            setCreateForm({ room_name: '', specialty_id: (Array.isArray(specialties) ? specialties : [])[0]?.specialty_id || '', custom_specialty_id: '' });
             // Refetch to sync updated relationship from database
             if (accessToken) {
                 await fetchRooms(accessToken);
@@ -232,7 +234,7 @@ export function AdminRoomsPage() {
                                     setIsCreateModalOpen(true);
                                     setCreateForm({
                                         room_name: '',
-                                        specialty_id: specialties[0]?.specialty_id || '',
+                                        specialty_id: (Array.isArray(specialties) ? specialties : [])[0]?.specialty_id || '',
                                         custom_specialty_id: '',
                                     });
                                 }}
@@ -271,7 +273,7 @@ export function AdminRoomsPage() {
                                         className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
                                     >
                                         <option value="ALL">Tất cả chuyên khoa</option>
-                                        {specialties.map((sp) => (
+                                        {(Array.isArray(specialties) ? specialties : []).map((sp) => (
                                             <option key={sp.specialty_id} value={sp.specialty_id}>
                                                 {sp.specialty_name || sp.specialty_code}
                                             </option>
@@ -481,7 +483,7 @@ export function AdminRoomsPage() {
                                 onChange={(e) => setCreateForm(prev => ({ ...prev, specialty_id: e.target.value }))}
                                 className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
                             >
-                                {specialties.map((sp) => (
+                                {(Array.isArray(specialties) ? specialties : []).map((sp) => (
                                     <option key={sp.specialty_id} value={sp.specialty_id}>
                                         {sp.specialty_name || sp.specialty_code}
                                     </option>
@@ -561,7 +563,7 @@ export function AdminRoomsPage() {
                                 onChange={(e) => setEditForm(prev => ({ ...prev, specialty_id: e.target.value }))}
                                 className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
                             >
-                                {specialties.map((sp) => (
+                                {(Array.isArray(specialties) ? specialties : []).map((sp) => (
                                     <option key={sp.specialty_id} value={sp.specialty_id}>
                                         {sp.specialty_name || sp.specialty_code}
                                     </option>

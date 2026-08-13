@@ -48,11 +48,11 @@ export function AdminStaffDetailPage() {
             if (staffs.length === 0) {
                 fetchStaffs(accessToken, { mergeAccounts: true });
             }
-            if (specialties.length === 0) {
+            if (!Array.isArray(specialties) || specialties.length === 0) {
                 fetchSpecialties(accessToken);
             }
         }
-    }, [accessToken, staffs.length, specialties.length, fetchStaffs, fetchSpecialties]);
+    }, [accessToken, staffs.length, Array.isArray(specialties) ? specialties.length : 0, fetchStaffs, fetchSpecialties]);
 
     useEffect(() => {
         if (!accessToken || !staffId) {
@@ -121,7 +121,8 @@ export function AdminStaffDetailPage() {
         );
     }
 
-    const matchedSpecialty = specialties.find((s) => s.specialty_id === staff.specialty_id);
+    const safeSpecialties = Array.isArray(specialties) ? specialties : [];
+    const matchedSpecialty = safeSpecialties.find((s) => s.specialty_id === staff.specialty_id);
     const specialtyName = matchedSpecialty ? (matchedSpecialty.specialty_name || matchedSpecialty.specialty_code) : 'Chưa chỉ định';
 
     return (
