@@ -100,7 +100,7 @@ async function fetchPatientAccounts(token: string): Promise<ReceptionAccount[]> 
     };
 
     if (cached && Array.isArray(cached) && cached.length > 0) {
-        fetchFresh().catch(() => {});
+        fetchFresh().catch(() => { });
         return cached;
     }
 
@@ -198,8 +198,8 @@ async function verifyPatientAgainstDb(
         known_patient_id: known,
         found_by_cccd: foundByCccd
             ? {
-                  ...foundByCccd,
-              }
+                ...foundByCccd,
+            }
             : null,
         found_by_patient_id: foundByPatientId,
         get_by_id_ok: getByIdOk,
@@ -278,8 +278,8 @@ export const receptionService = {
                         );
                         const citizenId = String(accFromMap?.citizen_id ?? bAcc.citizen_id ?? b.citizen_id ?? '');
                         const email = String(accFromMap?.email ?? bAcc.email ?? b.email ?? '');
-                        const dob = String(accFromMap?.dob ?? bAcc.dob ?? b.dob ?? '1995-01-01');
-                        const gender = String(accFromMap?.gender ?? bAcc.gender ?? b.gender ?? 'MALE');
+                        const dob = String(accFromMap?.dob ?? bAcc.dob ?? b.dob ?? '');
+                        const gender = String(accFromMap?.gender ?? bAcc.gender ?? b.gender ?? '');
                         const phone = (accFromMap?.phone ?? bAcc.phone ?? b.phone ?? null) as string | null;
 
                         return {
@@ -300,8 +300,8 @@ export const receptionService = {
                                         status: String(b.status ?? 'CONFIRMED'),
                                         slot: {
                                             slot_id: String(slotObj.slot_id ?? `s-${index + 1}`),
-                                            start_time: String(slotObj.start_time ?? '08:00'),
-                                            end_time: String(slotObj.end_time ?? '08:30'),
+                                            start_time: String(slotObj.start_time ?? ''),
+                                            end_time: String(slotObj.end_time ?? ''),
                                             shift: {
                                                 date: String(shiftObj.date ?? date),
                                             },
@@ -336,7 +336,7 @@ export const receptionService = {
 
         const cached = getLocalStorageCache<BackendQueuePatient[]>(cacheKey);
         if (cached && Array.isArray(cached) && cached.length > 0) {
-            fetchFreshData().catch(() => {});
+            fetchFreshData().catch(() => { });
             return cached;
         }
 
@@ -397,6 +397,43 @@ export const receptionService = {
         apiClient.get<ReceptionPatientRecord>(`/api/patient/${id}`, {
             headers: { Authorization: `Bearer ${token}` },
         }),
+
+    async getTicketByPatientId(patientId: string, token: string): Promise<Record<string, unknown> | null> {
+        if (!patientId) return null;
+        try {
+            const res = await apiClient.get<unknown>(`/api/ticket/patient/${encodeURIComponent(patientId)}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const raw = (res as { data?: unknown }).data ?? res;
+            if (raw && typeof raw === 'object') return raw as Record<string, unknown>;
+        } catch {
+            // Try fallback query param endpoint
+        }
+        try {
+            const res = await apiClient.get<unknown>(`/api/ticket/by-patient?patient_id=${encodeURIComponent(patientId)}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const raw = (res as { data?: unknown }).data ?? res;
+            if (raw && typeof raw === 'object') return raw as Record<string, unknown>;
+        } catch {
+            // ignore
+        }
+        return null;
+    },
+
+    async getTicketByCode(code: string, token: string): Promise<Record<string, unknown> | null> {
+        if (!code?.trim()) return null;
+        try {
+            const res = await apiClient.get<unknown>(`/api/ticket/${encodeURIComponent(code.trim())}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const raw = (res as { data?: unknown }).data ?? res;
+            if (raw && typeof raw === 'object') return raw as Record<string, unknown>;
+        } catch {
+            return null;
+        }
+        return null;
+    },
 
     async getSlots(token: string): Promise<ReceptionSlot[]> {
         try {
@@ -648,7 +685,7 @@ export const receptionService = {
         };
 
         if (cached && Array.isArray(cached) && cached.length > 0) {
-            fetchFresh().catch(() => {});
+            fetchFresh().catch(() => { });
             return cached;
         }
 
@@ -658,46 +695,63 @@ export const receptionService = {
     async searchPatients(query: string, token: string): Promise<PatientSearchResult[]> {
         const trimmed = query.trim();
         if (!trimmed) {
-            return receptionService.listPatients(token);
+            return [];
         }
 
         let patientLoadError: Error | null = null;
         let accounts: ReceptionAccount[] = [];
+        let queueItems: BackendQueuePatient[] = [];
 
         try {
-            accounts = await fetchPatientAccounts(token);
+            const [accs, qItems] = await Promise.all([
+                fetchPatientAccounts(token),
+                receptionService.getQueueByDate(getTodayDateString(), token).catch(() => []),
+            ]);
+            accounts = accs;
+            queueItems = qItems;
         } catch (err) {
             patientLoadError =
                 err instanceof Error ? err : new Error('Không tải được danh sách bệnh nhân.');
         }
 
-        const [queueItems, bookingRes] = await Promise.all([
-            receptionService.getQueueByDate(getTodayDateString(), token),
-            receptionService.getBookings(token).catch(() => null),
-        ]);
-
-        const bookings =
-            bookingRes && bookingRes.status !== 'error' && (bookingRes.code ?? 200) < 400
-                ? normalizeBookingListResponse(bookingRes.data ?? bookingRes)
-                : [];
-
         const fromPatients = searchPatientRecords(query, accounts, queueItems);
-        const fromBookings = searchPatientRecordsFromBookings(query, bookings, queueItems);
 
-        const seen = new Set<string>();
-        const merged: PatientSearchResult[] = [];
-        for (const item of [...fromPatients, ...fromBookings]) {
-            const key = `${item.citizenId}:${item.accountId}:${item.queueId ?? ''}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            merged.push(item);
-        }
-
-        if (merged.length === 0 && patientLoadError) {
+        if (fromPatients.length === 0 && patientLoadError) {
             throw patientLoadError;
         }
 
-        return merged.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+        // For top search results without ticketNo, check ticket API in background/parallel
+        const updatedResults = await Promise.all(
+            fromPatients.slice(0, 5).map(async (item) => {
+                if (item.ticketNo) return item;
+                const patientId = item.patient_id || item.accountId;
+                if (!patientId) return item;
+                try {
+                    const ticketRaw = await receptionService.getTicketByPatientId(patientId, token);
+                    if (ticketRaw) {
+                        const data = (ticketRaw as any).data ?? ticketRaw;
+                        const qInfo = data.queue_info ?? {};
+                        const ticketNo = String(
+                            qInfo.queue_number ?? data.ticket_code ?? data.ticket_number ?? data.queue_number ?? data.ticket_no ?? ''
+                        );
+                        if (ticketNo && ticketNo !== '—') {
+                            return {
+                                ...item,
+                                ticketNo,
+                                queueId: data.queue_id || qInfo.queue_id || item.queueId,
+                                inQueueToday: true,
+                            };
+                        }
+                    }
+                } catch {
+                    // Ignore error for individual patient ticket check
+                }
+                return item;
+            })
+        );
+
+        const finalResults = [...updatedResults, ...fromPatients.slice(5)];
+        return finalResults.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
     },
 
     async createPatientProfile(
@@ -758,7 +812,7 @@ export const receptionService = {
             } catch (err) {
                 console.warn('[createPatientProfile] Step 1 register exception:', err);
                 debug?.('auth.register.failed_or_exists', { message: String(err) });
-                
+
                 // Nếu account đã tồn tại, tìm lại account_id từ danh sách bệnh nhân
                 const accountsAfter = await fetchPatientAccounts(token).catch(() => []);
                 const match = accountsAfter.find(

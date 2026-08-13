@@ -277,6 +277,7 @@ const PRIORITY_STYLES: Record<ReceptionPriority, string> = {
 const STATUS_STYLES: Record<ReceptionStatus | 'Không trong hàng đợi', string> = {
     'Đang khám': 'bg-[#ECFDF5] text-[#059669]',
     'Chờ khám': 'bg-[#EFF6FF] text-[#2563EB]',
+    'Chờ Khám': 'bg-[#EFF6FF] text-[#2563EB]',
     'Chờ TT': 'bg-[#FFFBEB] text-[#D97706]',
     'Đã TT': 'bg-[#ECFDF5] text-[#059669]',
     'Đã gọi': 'bg-[#F5F3FF] text-[#7C3AED]',

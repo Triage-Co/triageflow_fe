@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { NextRequest } from 'next/server';
 
 const SDK_ROOT = path.join(
     process.cwd(),
@@ -16,7 +17,7 @@ const ALLOWED_FILES: Record<string, string> = {
 };
 
 export async function GET(
-    _request: Request,
+    _request: NextRequest,
     context: { params: Promise<{ path: string[] }> },
 ) {
     const { path: segments } = await context.params;

@@ -1,9 +1,9 @@
-'use client';
-
+import { useState } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, User, Clock, CreditCard, Ticket, Loader2, AlertCircle } from 'lucide-react';
+import { ChevronLeft, User, Clock, CreditCard, Ticket, Loader2, AlertCircle, Printer } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { ReceptionPatientDetail as PatientDetail } from '@/modules/reception/types/reception.types';
+import type { ReceptionPatientDetail as PatientDetail, PatientSearchResult } from '@/modules/reception/types/reception.types';
+import { TicketReissueModal } from '@/modules/reception/components/TicketRecovery';
 
 const PRIORITY_STYLES = {
     'Khẩn cấp': 'bg-[#FEF2F2] text-[#DC2626] border-[#FECACA]',
@@ -15,11 +15,32 @@ const PRIORITY_STYLES = {
 const STATUS_STYLES = {
     'Đang khám': 'bg-[#ECFDF5] text-[#059669]',
     'Chờ khám': 'bg-[#EFF6FF] text-[#2563EB]',
+    'Chờ Khám': 'bg-[#EFF6FF] text-[#2563EB]',
     'Chờ TT': 'bg-[#FFFBEB] text-[#D97706]',
     'Đã TT': 'bg-[#ECFDF5] text-[#059669]',
     'Đã gọi': 'bg-[#F5F3FF] text-[#7C3AED]',
     'Check-in': 'bg-[#F3F4F6] text-[#6B7280]',
 } as const;
+
+function formatViStatus(status?: string): string {
+    if (!status) return '—';
+    const s = status.toUpperCase();
+    switch (s) {
+        case 'AVAILABLE': return 'Sẵn sàng';
+        case 'WAITING': return 'Chờ khám';
+        case 'CALLED': return 'Đã gọi';
+        case 'CHECK_IN': return 'Đã check-in';
+        case 'IN_PROGRESS':
+        case 'PROCESSING': return 'Đang xử lý';
+        case 'COMPLETED': return 'Hoàn tất';
+        case 'PENDING':
+        case 'UNPAID': return 'Chờ thanh toán';
+        case 'PAID': return 'Đã thanh toán';
+        case 'CONFIRMED': return 'Đã xác nhận';
+        case 'CANCELLED': return 'Đã hủy';
+        default: return status;
+    }
+}
 
 function InfoRow({ label, value }: { label: string; value: string }) {
     return (
@@ -37,6 +58,8 @@ interface ReceptionPatientDetailProps {
 }
 
 export function ReceptionPatientDetailView({ patient, isLoading, error }: ReceptionPatientDetailProps) {
+    const [isReissueModalOpen, setIsReissueModalOpen] = useState(false);
+
     if (isLoading) {
         return (
             <div className="flex-1 flex flex-col overflow-hidden bg-[#F5F2FF] py-6">
@@ -70,6 +93,22 @@ export function ReceptionPatientDetailView({ patient, isLoading, error }: Recept
         );
     }
 
+    const searchResult: PatientSearchResult = {
+        accountId: patient.queueId || patient.bookingId,
+        name: patient.name,
+        citizenId: patient.citizenId,
+        phone: patient.phone || '',
+        specialty: patient.specialty || 'Khoa khám bệnh',
+        ticketNo: patient.ticketNo,
+        priority: patient.priority,
+        status: patient.status,
+        waitMinutes: patient.waitMinutes,
+        queueId: patient.queueId,
+        bookingId: patient.bookingId,
+        inQueueToday: true,
+        bhyt: null,
+    };
+
     return (
         <div className="flex-1 flex flex-col overflow-hidden bg-[#F5F2FF] py-6">
             <div className="flex-1 flex flex-col min-h-0 bg-white rounded-tl-[48px] rounded-bl-[48px] overflow-hidden shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
@@ -82,7 +121,7 @@ export function ReceptionPatientDetailView({ patient, isLoading, error }: Recept
                         Quay lại tổng quan
                     </Link>
 
-                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                         <div className="flex items-start gap-4">
                             <div className="w-12 h-12 rounded-[12px] bg-[#EDE9FE] flex items-center justify-center shrink-0">
                                 <User className="w-6 h-6 text-[#8B7CF6]" />
@@ -102,6 +141,15 @@ export function ReceptionPatientDetailView({ patient, isLoading, error }: Recept
                                 </div>
                             </div>
                         </div>
+
+                        <button
+                            type="button"
+                            onClick={() => setIsReissueModalOpen(true)}
+                            className="inline-flex items-center justify-center gap-1.5 min-h-[40px] px-4 py-2 rounded-xl border border-[#FDE68A] bg-[#FFFBEB] text-[#D97706] text-[12px] font-bold hover:bg-[#FEF3C7] transition-colors shadow-sm cursor-pointer shrink-0"
+                        >
+                            <Printer className="w-4 h-4 text-[#D97706]" />
+                            In lại vé (Cấp lại vé)
+                        </button>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
@@ -111,8 +159,8 @@ export function ReceptionPatientDetailView({ patient, isLoading, error }: Recept
                                 <h2 className="text-[13px] font-bold text-[#374151]">Hàng đợi</h2>
                             </div>
                             <InfoRow label="Số vé" value={patient.ticketNo} />
-                            <InfoRow label="Trạng thái queue" value={patient.queueStatus} />
-                            <InfoRow label="Bước khám" value={patient.stepStatus} />
+                            <InfoRow label="Trạng thái queue" value={formatViStatus(patient.queueStatus)} />
+                            <InfoRow label="Bước khám" value={formatViStatus(patient.stepStatus)} />
                             <InfoRow label="Chờ" value={`${patient.waitMinutes} phút`} />
                         </div>
 
@@ -123,7 +171,7 @@ export function ReceptionPatientDetailView({ patient, isLoading, error }: Recept
                             </div>
                             <InfoRow label="Ngày" value={patient.slotDate} />
                             <InfoRow label="Giờ" value={patient.slotTime} />
-                            <InfoRow label="Booking" value={patient.bookingStatus} />
+                            <InfoRow label="Booking" value={formatViStatus(patient.bookingStatus)} />
                         </div>
 
                         <div className="rounded-[12px] border border-[#EBEBEB] bg-white p-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
@@ -131,7 +179,7 @@ export function ReceptionPatientDetailView({ patient, isLoading, error }: Recept
                                 <CreditCard className="w-4 h-4 text-[#F59E0B]" />
                                 <h2 className="text-[13px] font-bold text-[#374151]">Thanh toán</h2>
                             </div>
-                            <InfoRow label="Trạng thái TT" value={patient.paymentStatus} />
+                            <InfoRow label="Trạng thái TT" value={formatViStatus(patient.paymentStatus)} />
                         </div>
                     </div>
 
@@ -158,6 +206,13 @@ export function ReceptionPatientDetailView({ patient, isLoading, error }: Recept
                     </div>
                 </div>
             </div>
+
+            {isReissueModalOpen && (
+                <TicketReissueModal
+                    patient={searchResult}
+                    onClose={() => setIsReissueModalOpen(false)}
+                />
+            )}
         </div>
     );
 }

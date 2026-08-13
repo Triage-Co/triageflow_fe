@@ -21,6 +21,7 @@ import {
     Plus,
     ScanLine,
     CalendarDays,
+    TicketCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/modules/auth/store/authStore';
@@ -42,6 +43,7 @@ import {
     saveRegisterPrefill,
 } from '@/modules/reception/utils/registerPrefill';
 import { ReceptionBackLink, ReceptionPageShell } from '@/modules/reception/components/ReceptionPageShell';
+import { TicketReissueModal } from '@/modules/reception/components/TicketRecovery';
 
 function handleReprintTicket(result: PatientSearchResult) {
     if (!result.ticketNo) return;
@@ -66,8 +68,10 @@ h1{font-size:22px;margin:0 0 8px}p{margin:4px 0;font-size:14px}.ticket{font-size
 
 function PatientResultCard({
     result,
+    onReissue,
 }: {
     result: PatientSearchResult;
+    onReissue: (patient: PatientSearchResult) => void;
 }) {
     return (
         <div className="rounded-[14px] border border-[#EBEBEB] bg-white p-4 md:p-5 shadow-[0_1px_6px_rgba(0,0,0,0.04)]">
@@ -95,14 +99,6 @@ function PatientResultCard({
                                     {result.priority}
                                 </span>
                             )}
-                            <span
-                                className={cn(
-                                    'text-[10px] font-bold px-2 py-0.5 rounded-full',
-                                    statusBadgeClass(result.status),
-                                )}
-                            >
-                                {result.status}
-                            </span>
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-[12px]">
@@ -157,15 +153,6 @@ function PatientResultCard({
                             <ChevronRight className="w-4 h-4" />
                         </Link>
                     )}
-                    <button
-                        type="button"
-                        onClick={() => handleReprintTicket(result)}
-                        disabled={!result.ticketNo}
-                        className="inline-flex flex-1 md:flex-none items-center justify-center gap-1.5 min-h-[44px] px-4 py-2.5 rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] text-[#2563EB] text-[12px] font-bold hover:bg-[#DBEAFE] transition-colors disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
-                    >
-                        <Printer className="w-4 h-4" />
-                        In vé
-                    </button>
                 </div>
             </div>
         </div>
@@ -183,6 +170,7 @@ export function ReceptionSearchForm() {
     const [isPending, startTransition] = useTransition();
 
     const [successBanner, setSuccessBanner] = useState<string | null>(null);
+    const [reissueTarget, setReissueTarget] = useState<PatientSearchResult | null>(null);
     const [createModalOpen, setCreateModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [modalError, setModalError] = useState<string | null>(null);
@@ -198,30 +186,28 @@ export function ReceptionSearchForm() {
         address: '',
     });
 
+    // Không tự động nạp danh sách toàn bộ bệnh nhân khi vào trang
     useEffect(() => {
-        if (!accessToken) return;
-
-        startTransition(async () => {
-            try {
-                setError(null);
-                const data = await receptionService.listPatients(accessToken);
-                setResults(data);
-                setIsListMode(true);
-                setHasSearched(false);
-            } catch (err) {
-                setError(err instanceof Error ? err.message : 'Không tải được danh sách bệnh nhân.');
-                setResults([]);
-            }
-        });
-    }, [accessToken]);
+        setResults([]);
+        setHasSearched(false);
+        setIsListMode(false);
+    }, []);
 
     function runSearch(searchQuery: string) {
-        if (!accessToken || !searchQuery.trim()) return;
+        if (!accessToken) return;
+        const q = searchQuery.trim();
+        if (!q) {
+            setResults([]);
+            setHasSearched(false);
+            setError(null);
+            return;
+        }
+
         setError(null);
 
         startTransition(async () => {
             try {
-                const data = await receptionService.searchPatients(searchQuery, accessToken);
+                const data = await receptionService.searchPatients(q, accessToken);
                 setResults(data);
                 setHasSearched(true);
                 setIsListMode(false);
@@ -230,24 +216,6 @@ export function ReceptionSearchForm() {
                 setResults([]);
                 setHasSearched(true);
                 setIsListMode(false);
-            }
-        });
-    }
-
-    function loadAllPatients() {
-        if (!accessToken) return;
-        setQuery('');
-        setError(null);
-
-        startTransition(async () => {
-            try {
-                const data = await receptionService.listPatients(accessToken);
-                setResults(data);
-                setHasSearched(false);
-                setIsListMode(true);
-            } catch (err) {
-                setError(err instanceof Error ? err.message : 'Không tải được danh sách bệnh nhân.');
-                setResults([]);
             }
         });
     }
@@ -441,15 +409,6 @@ export function ReceptionSearchForm() {
                             </button>
                             <button
                                 type="button"
-                                onClick={loadAllPatients}
-                                disabled={isPending}
-                                className="inline-flex items-center justify-center gap-2 min-h-[48px] px-4 rounded-lg border border-[#E5E7EB] bg-white text-[#374151] text-[13px] font-bold hover:bg-[#F9FAFB] transition-colors disabled:opacity-50 touch-manipulation"
-                            >
-                                <User className="w-4 h-4 text-[#8B7CF6]" />
-                                <span className="hidden sm:inline">Tất cả</span>
-                            </button>
-                            <button
-                                type="button"
                                 onClick={() => setScannerOpen(true)}
                                 className="inline-flex items-center justify-center gap-2 min-h-[48px] px-4 rounded-lg border border-[#E5E7EB] bg-white text-[#374151] text-[13px] font-bold hover:bg-[#F9FAFB] transition-colors touch-manipulation"
                             >
@@ -469,42 +428,18 @@ export function ReceptionSearchForm() {
 
             {error && (
                 <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-                    <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                    <p className="text-[13px] text-red-700">{error}</p>
+                    <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
+                    <div>
+                        <p className="text-sm text-red-800 font-bold">Lỗi tra cứu</p>
+                        <p className="text-xs text-red-700 mt-1">{error}</p>
+                    </div>
                 </div>
             )}
 
-            {hasSearched && !isPending && results.length > 0 && (
+            {hasSearched && results.length > 0 && (
                 <p className="text-[12px] font-semibold text-[#6B7280] mb-3">
-                    {results.length} kết quả tìm thấy
+                    Tìm thấy {results.length} kết quả
                 </p>
-            )}
-
-            {isListMode && !hasSearched && !isPending && results.length > 0 && (
-                <p className="text-[12px] font-semibold text-[#6B7280] mb-3">
-                    {results.length} bệnh nhân trong hệ thống
-                </p>
-            )}
-
-            {isListMode && !hasSearched && !isPending && results.length === 0 && !error && (
-                <div className="rounded-[14px] border border-[#EBEBEB] bg-[#FAFAFA] p-8 text-center mb-3">
-                    <User className="w-10 h-10 text-[#D1D5DB] mx-auto mb-3" />
-                    <p className="text-[14px] font-semibold text-[#6B7280]">Chưa có bệnh nhân trong hệ thống</p>
-                    <p className="text-[12px] text-[#9CA3AF] mt-1">
-                        Đăng ký bệnh nhân mới hoặc chạy seed dữ liệu mẫu
-                    </p>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setCreateModalOpen(true);
-                            setModalError(null);
-                        }}
-                        className="inline-flex items-center gap-1.5 mt-4 text-[12px] font-bold text-[#8B7CF6] hover:underline"
-                    >
-                        <CalendarDays className="w-4 h-4" />
-                        Đăng ký khám ngay
-                    </button>
-                </div>
             )}
 
             {hasSearched && results.length === 0 && !error && !isPending && (
@@ -528,14 +463,25 @@ export function ReceptionSearchForm() {
                 </div>
             )}
 
-            <div className="space-y-3">
-                {results.map((result) => (
-                    <PatientResultCard
-                        key={`${result.accountId}-${result.queueId ?? 'account'}`}
-                        result={result}
-                    />
-                ))}
-            </div>
+            {hasSearched && results.length > 0 && (
+                <div className="space-y-3">
+                    {results.map((result) => (
+                        <PatientResultCard
+                            key={`${result.accountId}-${result.queueId ?? 'account'}`}
+                            result={result}
+                            onReissue={setReissueTarget}
+                        />
+                    ))}
+                </div>
+            )}
+
+            {/* Modal Cấp lại vé */}
+            {reissueTarget && (
+                <TicketReissueModal
+                    patient={reissueTarget}
+                    onClose={() => setReissueTarget(null)}
+                />
+            )}
 
             {/* Modal Đăng Ký Khám Mới */}
             {createModalOpen && (

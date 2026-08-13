@@ -22,7 +22,14 @@ import {
     MapPin,
     Loader2,
     AlertCircle,
+    Search,
+    Filter,
+    ChevronLeft,
+    ChevronRight,
+    TicketCheck,
 } from 'lucide-react';
+import { TicketReissueModal } from '@/modules/reception/components/TicketRecovery';
+import type { PatientSearchResult } from '@/modules/reception/types/reception.types';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/modules/auth/store/authStore';
 import { receptionService } from '@/modules/reception/services/receptionService';
@@ -72,6 +79,7 @@ const PRIORITY_STYLES: Record<ReceptionPriority, { pill: string; dot: string }> 
 const STATUS_STYLES: Record<ReceptionStatus, string> = {
     'Đang khám': 'bg-[#ECFDF5] text-[#059669]',
     'Chờ khám': 'bg-[#EFF6FF] text-[#2563EB]',
+    'Chờ Khám': 'bg-[#EFF6FF] text-[#2563EB]',
     'Chờ TT': 'bg-[#FFFBEB] text-[#D97706]',
     'Đã TT': 'bg-[#ECFDF5] text-[#059669]',
     'Đã gọi': 'bg-[#F5F3FF] text-[#7C3AED]',
@@ -179,6 +187,35 @@ export function ReceptionDashboard() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    const [searchQuery, setSearchQuery] = useState('');
+    const [priorityFilter, setPriorityFilter] = useState<string>('ALL');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [reissueTarget, setReissueTarget] = useState<PatientSearchResult | null>(null);
+    const [isReissueModalOpen, setIsReissueModalOpen] = useState(false);
+    const pageSize = 5;
+
+    const filteredQueuePatients = useMemo(() => {
+        return queuePatients.filter((p) => {
+            if (priorityFilter !== 'ALL' && p.priority !== priorityFilter) return false;
+            if (searchQuery.trim()) {
+                const query = searchQuery.trim().toLowerCase();
+                const matchName = p.name.toLowerCase().includes(query);
+                const matchTicket = p.ticketNo.toLowerCase().includes(query);
+                const matchSpecialty = p.specialty.toLowerCase().includes(query);
+                if (!matchName && !matchTicket && !matchSpecialty) return false;
+            }
+            return true;
+        });
+    }, [queuePatients, priorityFilter, searchQuery]);
+
+    const totalPages = Math.ceil(filteredQueuePatients.length / pageSize) || 1;
+    const safePage = Math.min(Math.max(currentPage, 1), totalPages);
+
+    const paginatedQueuePatients = useMemo(() => {
+        const start = (safePage - 1) * pageSize;
+        return filteredQueuePatients.slice(start, start + pageSize);
+    }, [filteredQueuePatients, safePage, pageSize]);
+
     useEffect(() => {
         if (!accessToken) return;
 
@@ -231,13 +268,26 @@ export function ReceptionDashboard() {
                             </h1>
                             <p className="text-[12px] text-[#9CA3AF] mt-1 font-medium">{subtitle}</p>
                         </div>
-                        <Link
-                            href="/reception/register"
-                            className="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-lg bg-[#8B7CF6] hover:bg-[#7C6FE0] text-white text-[12px] font-bold shadow-[0_2px_8px_rgba(139,124,246,0.35)] transition-colors shrink-0"
-                        >
-                            <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
-                            Đăng ký bệnh nhân mới
-                        </Link>
+                        <div className="flex items-center gap-2 shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setReissueTarget(null);
+                                    setIsReissueModalOpen(true);
+                                }}
+                                className="inline-flex items-center justify-center gap-1.5 h-9 px-3.5 rounded-lg border border-[#FDE68A] bg-[#FFFBEB] text-[#D97706] hover:bg-[#FEF3C7] text-[12px] font-bold shadow-sm transition-colors cursor-pointer"
+                            >
+                                <TicketCheck className="w-4 h-4 text-[#D97706]" />
+                                Cấp lại vé
+                            </button>
+                            <Link
+                                href="/reception/register"
+                                className="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-lg bg-[#8B7CF6] hover:bg-[#7C6FE0] text-white text-[12px] font-bold shadow-[0_2px_8px_rgba(139,124,246,0.35)] transition-colors"
+                            >
+                                <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
+                                Đăng ký bệnh nhân mới
+                            </Link>
+                        </div>
                     </div>
 
                     {error && (
@@ -257,8 +307,8 @@ export function ReceptionDashboard() {
                         </div>
                     ) : (
                         <>
-                            {/* Stats — 8 cột full width như design */}
-                            <div className="grid grid-cols-2 sm:grid-cols-4 2xl:grid-cols-8 gap-2.5 mb-5">
+                            {/* Stats — 5 chỉ số từ API */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 mb-5">
                                 {stats.map((stat) => (
                                     <StatCard key={stat.label} stat={stat} />
                                 ))}
@@ -275,22 +325,61 @@ export function ReceptionDashboard() {
                                                 <ListOrdered className="w-4 h-4 text-[#10B981] shrink-0" strokeWidth={2.25} />
                                                 <h2 className="text-[15px] font-bold text-[#374151]">Hàng đợi hiện tại</h2>
                                                 <span className="text-[11px] font-semibold text-[#059669] bg-[#D1FAE5] px-2.5 py-0.5 rounded-full">
-                                                    {queuePatients.length} bệnh nhân
+                                                    {filteredQueuePatients.length} bệnh nhân
                                                 </span>
                                             </div>
                                             <button
                                                 type="button"
+                                                onClick={() => {
+                                                    setSearchQuery('');
+                                                    setPriorityFilter('ALL');
+                                                    setCurrentPage(1);
+                                                }}
                                                 className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#10B981] hover:text-[#059669] transition-colors"
                                             >
-                                                Xem tất cả
-                                                <ArrowRight className="w-3.5 h-3.5" />
+                                                Đặt lại bộ lọc
                                             </button>
                                         </div>
+
+                                        {/* Filter Toolbar */}
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-2.5 border-b border-[#F3F4F6] bg-[#FAFAFA]/50">
+                                            <div className="relative flex-1 max-w-xs">
+                                                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Tìm tên, số vé, khoa..."
+                                                    value={searchQuery}
+                                                    onChange={(e) => {
+                                                        setSearchQuery(e.target.value);
+                                                        setCurrentPage(1);
+                                                    }}
+                                                    className="w-full pl-9 pr-3 py-1.5 bg-white border border-[#E5E7EB] rounded-lg text-[12px] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-1 focus:ring-[#8B7CF6]"
+                                                />
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Filter className="w-3.5 h-3.5 text-[#6B7280] shrink-0" />
+                                                <select
+                                                    value={priorityFilter}
+                                                    onChange={(e) => {
+                                                        setPriorityFilter(e.target.value);
+                                                        setCurrentPage(1);
+                                                    }}
+                                                    className="bg-white border border-[#E5E7EB] rounded-lg px-2.5 py-1.5 text-[12px] font-medium text-[#374151] focus:outline-none focus:ring-1 focus:ring-[#8B7CF6] cursor-pointer"
+                                                >
+                                                    <option value="ALL">Tất cả đối tượng</option>
+                                                    <option value="Khẩn cấp">Khẩn cấp</option>
+                                                    <option value="Người cao tuổi">Người cao tuổi</option>
+                                                    <option value="Ưu tiên">Ưu tiên</option>
+                                                    <option value="Thường">Thường</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
                                         <div className="overflow-x-auto">
                                             <table className="w-full min-w-[680px]">
                                                 <thead>
                                                     <tr className="border-b border-[#F3F4F6] bg-[#FAFAFA]">
-                                                        {['Số vé', 'Bệnh nhân', 'Chuyên khoa', 'Ưu tiên', 'Trạng thái', 'Chờ', 'Thao tác'].map((col) => (
+                                                        {['Số vé', 'Bệnh nhân', 'Chuyên khoa', 'Ưu tiên', 'Chờ', 'Thao tác'].map((col) => (
                                                             <th
                                                                 key={col}
                                                                 className="text-left text-[11px] font-medium text-[#9CA3AF] px-5 py-3"
@@ -301,21 +390,23 @@ export function ReceptionDashboard() {
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {queuePatients.length === 0 ? (
+                                                    {paginatedQueuePatients.length === 0 ? (
                                                         <tr>
-                                                            <td colSpan={7} className="px-5 py-12 text-center">
+                                                            <td colSpan={6} className="px-5 py-12 text-center">
                                                                 <p className="text-[13px] font-semibold text-[#9CA3AF]">
-                                                                    Chưa có bệnh nhân trong hàng đợi hôm nay
+                                                                    {filteredQueuePatients.length === 0 && queuePatients.length > 0
+                                                                        ? 'Không tìm thấy bệnh nhân nào khớp bộ lọc'
+                                                                        : 'Chưa có bệnh nhân trong hàng đợi hôm nay'}
                                                                 </p>
                                                             </td>
                                                         </tr>
                                                     ) : (
-                                                        queuePatients.map((patient, idx) => (
+                                                        paginatedQueuePatients.map((patient, idx) => (
                                                             <tr
                                                                 key={patient.id}
                                                                 className={cn(
                                                                     'hover:bg-[#FAFAFF] transition-colors',
-                                                                    idx < queuePatients.length - 1 && 'border-b border-[#F9FAFB]',
+                                                                    idx < paginatedQueuePatients.length - 1 && 'border-b border-[#F9FAFB]',
                                                                 )}
                                                             >
                                                                 <td className="px-5 py-3">
@@ -333,20 +424,45 @@ export function ReceptionDashboard() {
                                                                     <PriorityBadge priority={patient.priority} />
                                                                 </td>
                                                                 <td className="px-5 py-3">
-                                                                    <StatusBadge status={patient.status} />
-                                                                </td>
-                                                                <td className="px-5 py-3">
                                                                     <span className="text-[12px] font-medium text-[#6B7280]">
                                                                         {patient.waitMinutes} phút
                                                                     </span>
                                                                 </td>
                                                                 <td className="px-5 py-3">
-                                                                    <Link
-                                                                        href={`/reception/${patient.id}`}
-                                                                        className="text-[11px] font-bold text-[#8B7CF6] hover:text-[#7C3AED] hover:underline transition-colors"
-                                                                    >
-                                                                        Chi tiết
-                                                                    </Link>
+                                                                    <div className="flex items-center gap-3">
+                                                                        <Link
+                                                                            href={`/reception/${patient.id}`}
+                                                                            className="text-[11px] font-bold text-[#8B7CF6] hover:text-[#7C3AED] hover:underline transition-colors"
+                                                                        >
+                                                                            Chi tiết
+                                                                        </Link>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setReissueTarget({
+                                                                                    accountId: patient.accountId || patient.id,
+                                                                                    patient_id: patient.accountId || patient.id,
+                                                                                    name: patient.name,
+                                                                                    citizenId: '—',
+                                                                                    phone: null,
+                                                                                    specialty: patient.specialty,
+                                                                                    ticketNo: patient.ticketNo,
+                                                                                    priority: patient.priority,
+                                                                                    status: patient.status,
+                                                                                    waitMinutes: patient.waitMinutes,
+                                                                                    bhyt: null,
+                                                                                    inQueueToday: true,
+                                                                                    queueId: patient.id,
+                                                                                    bookingId: patient.bookingId,
+                                                                                });
+                                                                                setIsReissueModalOpen(true);
+                                                                            }}
+                                                                            className="text-[11px] font-bold text-[#D97706] hover:text-[#B45309] hover:underline transition-colors cursor-pointer inline-flex items-center gap-1"
+                                                                        >
+                                                                            <TicketCheck className="w-3 h-3" />
+                                                                            In vé
+                                                                        </button>
+                                                                    </div>
                                                                 </td>
                                                             </tr>
                                                         ))
@@ -354,6 +470,38 @@ export function ReceptionDashboard() {
                                                 </tbody>
                                             </table>
                                         </div>
+
+                                        {/* Pagination Controls */}
+                                        {filteredQueuePatients.length > 0 && (
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-3 border-t border-[#F3F4F6] bg-[#FAFAFA]/50 text-[12px] text-[#6B7280]">
+                                                <div>
+                                                    Hiển thị <strong className="font-bold text-[#1F2937]">{(safePage - 1) * pageSize + 1}</strong> - <strong className="font-bold text-[#1F2937]">{Math.min(safePage * pageSize, filteredQueuePatients.length)}</strong> trong tổng số <strong className="font-bold text-[#1F2937]">{filteredQueuePatients.length}</strong> bệnh nhân
+                                                </div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <button
+                                                        type="button"
+                                                        disabled={safePage <= 1}
+                                                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-[#E5E7EB] bg-white text-[#374151] hover:bg-[#F9FAFB] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                                    >
+                                                        <ChevronLeft className="w-3.5 h-3.5" />
+                                                        Trước
+                                                    </button>
+                                                    <span className="px-2 font-semibold text-[#374151]">
+                                                        Trang {safePage} / {totalPages}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        disabled={safePage >= totalPages}
+                                                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-[#E5E7EB] bg-[#FFFFFF] text-[#374151] hover:bg-[#F9FAFB] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                                    >
+                                                        Sau
+                                                        <ChevronRight className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Quick actions */}
@@ -469,6 +617,16 @@ export function ReceptionDashboard() {
                     )}
                 </div>
             </div>
+
+            {isReissueModalOpen && (
+                <TicketReissueModal
+                    patient={reissueTarget}
+                    onClose={() => {
+                        setIsReissueModalOpen(false);
+                        setReissueTarget(null);
+                    }}
+                />
+            )}
         </div>
     );
 }
