@@ -164,12 +164,11 @@ export function PatientCheckinPanel({
     const handleStartScan = async () => {
         setIsScanning(true);
         try {
-            if (patientList.length > 0) {
-                const found = patientList[0];
-                setSelectedPatientForModal(found);
-            }
+            // QR Camera scanning will be implemented in a future update
+            setToastMessage('Tính năng quét QR bằng camera đang được phát triển.');
+            setTimeout(() => setToastMessage(null), 2500);
         } finally {
-            setIsScanning(false);
+            setTimeout(() => setIsScanning(false), 800);
         }
     };
 
