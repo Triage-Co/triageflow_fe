@@ -40,7 +40,6 @@ interface NavItem {
 const NAV_BY_ROLE: Record<string, NavItem[]> = {
     DOCTOR: [
         { label: 'Danh sách bệnh nhân', href: '/doctor', icon: LayoutDashboard },
-        { label: 'Thanh toán', href: '/cashier', icon: CreditCard },
         { label: 'Thông báo', href: '/doctor/notification', icon: Bell },
         { label: 'Cài đặt', href: '/doctor/setting', icon: Settings },
     ],
@@ -59,10 +58,12 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
     ],
     LAB_STAFF: [
         { label: 'Danh Sách Bệnh Nhân', href: '/lab', icon: LayoutDashboard },
+        { label: 'Thông báo', href: '/lab/notification', icon: Bell },
         { label: 'Thông tin cá nhân', href: '/settings', icon: User },
     ],
     LAB_TECHNICIAN: [
         { label: 'Danh Sách Bệnh Nhân', href: '/lab', icon: LayoutDashboard },
+        { label: 'Thông báo', href: '/lab/notification', icon: Bell },
         { label: 'Thông tin cá nhân', href: '/settings', icon: User },
     ],
     PHARMACY_STAFF: [
@@ -165,7 +166,20 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
     const handleToggle = onToggle ?? (() => setInternalCollapsed(v => !v));
 
     const roleKey = normalizeRoleKey(user?.role);
-    const navItems = NAV_BY_ROLE[roleKey] ?? NAV_BY_ROLE.default;
+    const [activeRoleKey, setActiveRoleKey] = useState(roleKey);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const hasProcShift = localStorage.getItem('tfopd_active_room_type') === 'PROCEDURE_ROOM';
+            if (roleKey === 'DOCTOR' && hasProcShift) {
+                setActiveRoleKey('LAB_TECHNICIAN');
+            } else {
+                setActiveRoleKey(roleKey);
+            }
+        }
+    }, [roleKey]);
+
+    const navItems = NAV_BY_ROLE[activeRoleKey] ?? NAV_BY_ROLE.default;
 
     const activeNavHref = navItems
         .filter(({ href }) => pathname === href || pathname.startsWith(`${href}/`))
@@ -196,13 +210,16 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
         authService.logout();
         logout();
         setIsDropdownOpen(false);
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem('tfopd_active_room_type');
+        }
         router.push('/login');
     };
 
     return (
         <aside
             className={cn(
-                'relative flex flex-col h-full bg-[#F5F2FF] shrink-0 select-none transition-all duration-300 ease-in-out overflow-hidden',
+                'relative flex flex-col h-full bg-transparent shrink-0 select-none transition-all duration-300 ease-in-out overflow-hidden',
                 isCollapsed ? 'w-14' : 'w-62',
             )}
         >

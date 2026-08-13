@@ -46,6 +46,11 @@ export interface ServiceOrder {
     booking_id?: string;
     assign_by_staff_id?: string | null;
     name: string;
+    /**
+     * Order-level type from GET /api/service-order/{id} (e.g. LAB_TEST).
+     * Used for the "Nhóm" column — not specialty.
+     */
+    type?: string | null;
     /** Flat name from GET /api/service-order/booking/{id} */
     service_name?: string;
     /** Legacy flat fields — prefer detail.service when present */
@@ -154,10 +159,8 @@ export function normalizeBookingServiceOrder(
 
 export interface CreateServiceOrderReqDto {
     booking_id: string;
-    assign_by_staff_id: string;
-    name: string;
-    service_code: string;
-    specialty_id?: string | null;
+    /** One or more catalog service codes → BE creates order + details */
+    service_code: string[];
     room_id: string;
 }
 
@@ -244,6 +247,43 @@ export function getOrderServiceType(order: ServiceOrder): string {
     }
     if (roomType === 'CLINICAL_ROOM') return 'CLINICAL_EXAMINATION';
     return '';
+}
+
+/** Order-level `type` (e.g. LAB_TEST) — preferred for UI "Nhóm". */
+export function getOrderType(order: ServiceOrder): string {
+    const fromType = (order.type || '').trim().toUpperCase();
+    if (fromType) return fromType;
+    return getOrderServiceType(order);
+}
+
+const ORDER_TYPE_LABELS: Record<string, string> = {
+    LAB_TEST: 'Xét nghiệm',
+    LABORATORY: 'Xét nghiệm',
+    DIAGNOSTIC_TEST: 'Cận lâm sàng',
+    IMAGING: 'Chẩn đoán hình ảnh',
+    IMAGING_TEST: 'Chẩn đoán hình ảnh',
+    IMAGING_ROOM: 'Chẩn đoán hình ảnh',
+    FUNCTIONAL_EXPLORATION: 'Thăm dò chức năng',
+    PROCEDURE: 'Thủ thuật',
+    CLINICAL: 'Khám lâm sàng',
+    CLINICAL_EXAMINATION: 'Khám lâm sàng',
+    CLINICAL_ROOM: 'Khám lâm sàng',
+    PRESCRIPTION: 'Cấp phát thuốc',
+    MEDICATION: 'Cấp phát thuốc',
+    PHARMACY: 'Cấp phát thuốc',
+    PAYMENT: 'Thanh toán',
+};
+
+export function orderTypeLabel(type?: string | null): string {
+    const key = (type || '').trim().toUpperCase();
+    if (!key) return '';
+    if (ORDER_TYPE_LABELS[key]) return ORDER_TYPE_LABELS[key];
+    return key
+        .toLowerCase()
+        .split('_')
+        .filter(Boolean)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
 }
 
 export function filterOrdersByBookingId(

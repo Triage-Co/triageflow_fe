@@ -132,6 +132,12 @@ function normalizePrescription(item: any): Prescription {
         ...item,
         prescription_id: item.prescription_id || item.id || `rx-${rxCode || Date.now()}`,
         prescription_code: rxCode || `RX-${Date.now()}`,
+        // Compat: SO may be nested or omitted on some list payloads
+        service_order_id:
+            item.service_order_id ||
+            item.serviceOrder?.service_order_id ||
+            item.service_order?.service_order_id ||
+            '',
         patient_name: patientName,
         patient_code: patientCode,
         prescribed_by_name: doctorName,

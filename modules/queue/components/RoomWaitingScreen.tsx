@@ -15,8 +15,6 @@ import {
   VolumeX,
   Wifi,
   WifiOff,
-  Calendar,
-  Shuffle,
 } from "lucide-react";
 
 const UPCOMING_DISPLAY_LIMIT = 7;
@@ -255,7 +253,6 @@ export function RoomWaitingScreen({
       id: p.queue_id ? String(p.queue_id) : `socket-${idx}`,
       queueNumber: String(p.queue_number),
       patientName: p.patient_name,
-      queueType: p.queue_type,
       position: idx + 1,
     }));
 
@@ -408,13 +405,13 @@ export function RoomWaitingScreen({
               {displayUpcoming.map((p, idx) => (
                 <div
                   key={p.id}
-                  className={`flex items-center justify-between py-1.5 sm:py-2 text-base sm:text-lg md:text-xl lg:text-2xl font-bold ${
+                  className={`flex items-center py-1.5 sm:py-2 text-base sm:text-lg md:text-xl lg:text-2xl font-bold ${
                     idx < displayUpcoming.length - 1 ?
                       "border-b border-black/10"
                     : ""
                   }`}
                 >
-                  <div className="flex items-center gap-2 sm:gap-3 truncate min-w-0">
+                  <div className="flex items-center gap-2 sm:gap-3 truncate min-w-0 w-full">
                     <span className="text-[10px] sm:text-xs font-black bg-indigo-950 text-white w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center shrink-0">
                       {p.position}
                     </span>
@@ -425,19 +422,6 @@ export function RoomWaitingScreen({
                     <span className="text-black font-semibold truncate">
                       {p.patientName}
                     </span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                    {p.queueType === "APPOINTMENT" && (
-                      <span className="text-[10px] sm:text-xs font-extrabold bg-blue-600 text-white px-1.5 sm:px-2 py-0.5 rounded-md flex items-center gap-1">
-                        <Calendar className="w-3 h-3" /> HẸN
-                      </span>
-                    )}
-                    {p.queueType === "TRANSFER" && (
-                      <span className="text-[10px] sm:text-xs font-extrabold bg-orange-600 text-white px-1.5 sm:px-2 py-0.5 rounded-md flex items-center gap-1">
-                        <Shuffle className="w-3 h-3" /> CHUYỂN
-                      </span>
-                    )}
                   </div>
                 </div>
               ))}

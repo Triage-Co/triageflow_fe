@@ -1961,35 +1961,12 @@ export function WorkflowDiagram({
             return;
         }
 
-        const selectedService = serviceOptions.find((s) => s.service_code === resolvedServiceCode);
-        const resolvedStepName =
-            selectedService?.service_name?.trim() ||
-            room?.room_name ||
-            'Bước khám mới';
-
-        const resolvedStaffId =
-            selectedStaffId ||
-            pickDoctorOnDutyForRoom(selectedRoomId) ||
-            authProfile?.account_id ||
-            authUser?.id ||
-            '';
-        if (!resolvedStaffId) {
-            setError('Không tìm thấy bác sĩ/nhân viên để gán chỉ định.');
-            return;
-        }
-
         const bookingId =
             (typeof flowData?.booking_id === 'string' && flowData.booking_id) ||
             patient?.bookingId ||
             '';
         if (!bookingId) {
             setError('Không tìm thấy booking_id để tạo service order.');
-            return;
-        }
-
-        const specialtyId = selectedSpecialtyId || room?.specialty_id || '';
-        if (!specialtyId) {
-            setError('Vui lòng chọn chuyên khoa / phòng có specialty_id.');
             return;
         }
 
@@ -2009,10 +1986,7 @@ export function WorkflowDiagram({
             await serviceOrderService.createOrder(
                 {
                     booking_id: bookingId,
-                    assign_by_staff_id: resolvedStaffId,
-                    name: resolvedStepName,
-                    service_code: resolvedServiceCode,
-                    specialty_id: specialtyId,
+                    service_code: [resolvedServiceCode],
                     room_id: selectedRoomId,
                 },
                 accessToken

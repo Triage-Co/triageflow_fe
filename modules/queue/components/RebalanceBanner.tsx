@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import type { RebalanceSuggestionData } from '../types/rebalance.types';
-import { ArrowRight, Clock, Shuffle } from 'lucide-react';
+import { Clock, Shuffle } from 'lucide-react';
 
 interface RebalanceBannerProps {
     suggestions: RebalanceSuggestionData[];
@@ -10,7 +10,9 @@ interface RebalanceBannerProps {
 }
 
 export function RebalanceBanner({ suggestions, currentRoomId }: RebalanceBannerProps) {
-    const [now, setNow] = useState(Date.now());
+    // Lazy initializer — avoids impure Date.now() on every render (react-hooks/purity)
+    // and avoids sync setState at effect start (react-hooks/set-state-in-effect).
+    const [now, setNow] = useState(() => Date.now());
 
     useEffect(() => {
         const timer = setInterval(() => setNow(Date.now()), 1000);

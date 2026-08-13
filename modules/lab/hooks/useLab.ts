@@ -82,8 +82,8 @@ export function useLab() {
             const shifts = await labService.getMyShifts(todayStr);
             setMyShifts(shifts);
 
-            // Tìm ca trực của phòng Lab (LABORATORY)
-            const labShift = shifts.find(s => s.room?.room_type === 'LABORATORY') || shifts[0];
+            // Tìm ca trực của phòng Lab (LABORATORY) hoặc phòng thủ thuật (PROCEDURE_ROOM)
+            const labShift = shifts.find(s => s.room?.room_type === 'LABORATORY' || s.room?.room_type === 'PROCEDURE_ROOM') || shifts[0];
             if (labShift) {
                 setActiveShift(labShift);
                 // 2. Fetch Hàng chờ của Room ID này

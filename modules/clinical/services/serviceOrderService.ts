@@ -118,6 +118,10 @@ export function normalizeDetailServiceOrder(raw: unknown): ServiceOrder | null {
                 ? rec.assign_by_staff_id
                 : null,
         name: String(rec.name || serviceName || 'Dịch vụ'),
+        type:
+            typeof rec.type === 'string' && rec.type.trim()
+                ? rec.type.trim().toUpperCase()
+                : null,
         service_name: serviceName || undefined,
         service_code: serviceCode || undefined,
         service_type: serviceType || null,
@@ -137,18 +141,20 @@ export function normalizeDetailServiceOrder(raw: unknown): ServiceOrder | null {
                     ...(roomType ? { room_type: roomType } : {}),
                   }
                 : undefined,
-        specialty_info: specialtyInfo
-            ? {
-                specialty_id:
-                    typeof specialtyInfo.specialty_id === 'string'
-                        ? specialtyInfo.specialty_id
-                        : undefined,
-                specialty_name:
-                    typeof specialtyInfo.specialty_name === 'string'
-                        ? specialtyInfo.specialty_name
-                        : undefined,
-            }
-            : undefined,
+        specialty_info: (() => {
+            const sid =
+                (typeof specialtyInfo?.specialty_id === 'string' &&
+                    specialtyInfo.specialty_id) ||
+                (typeof rec.specialty_id === 'string' && rec.specialty_id) ||
+                undefined;
+            const sname =
+                (typeof specialtyInfo?.specialty_name === 'string' &&
+                    specialtyInfo.specialty_name) ||
+                (typeof rec.specialty_name === 'string' && rec.specialty_name) ||
+                undefined;
+            if (!sid && !sname) return undefined;
+            return { specialty_id: sid, specialty_name: sname };
+        })(),
         is_payment: (rec.is_payment as string | boolean | null | undefined) ?? null,
         payment_status: paymentRaw || 'PENDING',
         status: String(rec.status || paymentRaw || 'PENDING'),

@@ -12,7 +12,11 @@ interface EMRWorkspaceLayoutProps {
 
 export function EMRWorkspaceLayout({ activeTabId, activeTabName, children }: EMRWorkspaceLayoutProps) {
     const user = useAuthStore((s) => s.user);
-    const isLabRole = user?.role === 'LAB_TECHNICIAN';
+    const isLabRole =
+        user?.role === 'LAB_TECHNICIAN' ||
+        (user?.role === 'DOCTOR' &&
+            typeof window !== 'undefined' &&
+            localStorage.getItem('tfopd_active_room_type') === 'PROCEDURE_ROOM');
     const isPharmacyRole = user?.role === 'PHARMACIST' || user?.role === 'PHARMACY_STAFF';
 
     const hideHeaderIds = [
@@ -34,7 +38,7 @@ export function EMRWorkspaceLayout({ activeTabId, activeTabName, children }: EMR
     const showHeader = !isLabRole && !isPharmacyRole && !hideHeaderIds.includes(activeTabId);
 
     return (
-        <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-[#EEEDFC] via-[#F9ECF2] to-[#E6E9FC] pt-6 pb-5 relative">
+        <div className="flex-1 flex flex-col overflow-hidden bg-transparent pt-6 pb-5 relative">
             {/* Background decoration purple circle at bottom-left */}
             <div className="absolute bottom-5 left-5 w-12 h-12 rounded-full bg-[#8B7CF6]/60" />
 

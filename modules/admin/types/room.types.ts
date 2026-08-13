@@ -1,4 +1,4 @@
-import { Specialty } from './specialty.types';
+import type { Specialty } from './specialty.types';
 
 export type { Specialty };
 

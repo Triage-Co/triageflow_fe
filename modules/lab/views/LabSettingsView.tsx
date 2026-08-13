@@ -79,7 +79,7 @@ export default function LabSettingsView() {
             setIsLoadingShifts(true);
             labService.getMyShifts(todayStr)
                 .then((shifts) => {
-                    const labShift = shifts.find(s => s.room?.room_type === 'LABORATORY') || shifts[0];
+                    const labShift = shifts.find(s => s.room?.room_type === 'LABORATORY' || s.room?.room_type === 'PROCEDURE_ROOM') || shifts[0];
                     if (labShift) {
                         setActiveShift(labShift);
                     }
@@ -251,7 +251,7 @@ export default function LabSettingsView() {
                     {profile?.role && (
                         <div className="flex flex-col items-end gap-1.5 text-right shrink-0">
                             <span className="px-3 py-1.5 bg-[#8B7CF6]/10 text-[#8B7CF6] rounded-full text-[11px] font-bold tracking-wide">
-                                {profile.role === 'LAB_TECHNICIAN' ? 'Kỹ thuật viên Xét nghiệm' : 'Nhân viên Xét nghiệm'}
+                                {profile.role === 'LAB_TECHNICIAN' || (profile.role === 'DOCTOR' && typeof window !== 'undefined' && localStorage.getItem('tfopd_active_room_type') === 'PROCEDURE_ROOM') ? 'Kỹ thuật viên Xét nghiệm' : 'Nhân viên Xét nghiệm'}
                             </span>
                             {isLoadingShifts ? (
                                 <div className="space-y-1 mt-1 flex flex-col items-end">

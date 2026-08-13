@@ -1,17 +1,44 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Patient } from '@/modules/clinical/types/clinical.types';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { EMRWorkspaceLayout } from '@/shared/components/layout/EMRWorkspaceLayout';
-import { StatCards } from './StatCards';
-import { PatientTable } from './PatientTable';
-import { clinicalService, mapBackendPatientToFrontend } from '@/modules/clinical/services/clinicalService';
-import type { BackendQueuePatient } from '@/modules/clinical/services/clinicalService';
-import { queueService } from '@/modules/queue/services/queueService';
 import { usePatientTabsStore } from '@/modules/clinical/store/clinicalStore';
 import { useAuthStore } from '@/modules/auth/store/authStore';
-import { Loader2, AlertCircle, PhoneCall, CheckCircle2, XCircle, Tv } from 'lucide-react';
+import { labService } from '@/modules/lab/services/labService';
+import type { ShiftInfo } from '@/modules/lab/types/lab.types';
+import { useRoomQueue } from '@/modules/queue/hooks/useRoomQueue';
+import { RoomQueueDesk } from '@/modules/queue/components/RoomQueueDesk';
+
+const CLINICAL_ROOM_TYPES = new Set([
+    'CLINICAL_ROOM',
+    'CLINIC',
+    'EXAMINATION',
+    'CONSULTATION',
+]);
+
+const PROCEDURE_ROOM_TYPES = new Set([
+    'PROCEDURE_ROOM',
+    'PROCEDURE',
+    'LABORATORY',
+    'IMAGING_ROOM',
+    'FUNCTIONAL_EXPLORATION',
+]);
+
+function pickStaffShift(shifts: ShiftInfo[], role?: string): ShiftInfo | null {
+    const upperRole = (role || '').toUpperCase();
+    if (upperRole === 'NURSE' || upperRole === 'LAB_TECHNICIAN' || upperRole === 'LAB_STAFF') {
+        const proc = shifts.find((s) =>
+            PROCEDURE_ROOM_TYPES.has(String(s.room?.room_type || '').toUpperCase()),
+        );
+        return proc || shifts[0] || null;
+    }
+    const clinical = shifts.find((s) =>
+        CLINICAL_ROOM_TYPES.has(String(s.room?.room_type || '').toUpperCase()),
+    );
+    return clinical || shifts[0] || null;
+}
 
 export function DoctorDashboard() {
     const router = useRouter();
@@ -20,376 +47,137 @@ export function DoctorDashboard() {
     const accessToken = useAuthStore((s) => s.accessToken);
     const basePath = user?.role === 'NURSE' ? '/nurse' : '/doctor';
 
-    // Generate tabs: 3 past days + today + 3 future days — timezone-safe
-    const dateTabs = useMemo(() => {
-        const days = [];
-        const nowLocal = new Date();
-        const localYear = nowLocal.getFullYear();
-        const localMonth = nowLocal.getMonth();
-        const localDay = nowLocal.getDate();
+    const [mounted, setMounted] = useState(false);
+    const [shifts, setShifts] = useState<ShiftInfo[]>([]);
+    const [activeShift, setActiveShift] = useState<ShiftInfo | null>(null);
+    const [shiftError, setShiftError] = useState<string | null>(null);
+    const [loadingShifts, setLoadingShifts] = useState(true);
 
-        for (let i = -3; i <= 3; i++) {
-            // i=-3 → 3 days ago, i=0 → today, i=3 → 3 days in future
-            const d = new Date(localYear, localMonth, localDay + i);
-
-            const yyyy = d.getFullYear();
-            const mm = String(d.getMonth() + 1).padStart(2, '0');
-            const dd = String(d.getDate()).padStart(2, '0');
-            const dateStr = `${yyyy}-${mm}-${dd}`;
-
-            let label = '';
-            if (i === 0) {
-                label = `Hôm nay, ${dd}/${mm}`;
-            } else if (i === -1) {
-                label = `Hôm qua, ${dd}/${mm}`;
-            } else if (i === 1) {
-                label = `Ngày mai, ${dd}/${mm}`;
-            } else {
-                const weekday = d.getDay();
-                const daysOfWeek = ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
-                label = `${daysOfWeek[weekday]}, ${dd}/${mm}`;
-            }
-
-            days.push({ value: dateStr, label });
-        }
-        return days;
+    const todayStr = useMemo(() => {
+        const d = new Date();
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
     }, []);
 
-    const [selectedDate, setSelectedDate] = useState(() => {
-        const nowLocal = new Date();
-        const yyyy = nowLocal.getFullYear();
-        const mm = String(nowLocal.getMonth() + 1).padStart(2, '0');
-        const dd = String(nowLocal.getDate()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd}`;
-    });
-    const [patients, setPatients] = useState<Patient[]>([]);
-    const [rawPatients, setRawPatients] = useState<BackendQueuePatient[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
-    // Call-next state
-    const [isCallingNext, setIsCallingNext] = useState(false);
-    const [callStatus, setCallStatus] = useState<'idle' | 'success' | 'error'>('idle');
-    const [callMessage, setCallMessage] = useState<string>('');
-
-    const fetchPatients = useCallback(async () => {
-        if (!accessToken) return;
-
-        try {
-            setIsLoading(true);
-            setError(null);
-            const res = await clinicalService.getPatients(selectedDate, accessToken);
-            if (res && res.data) {
-                setRawPatients(res.data);
-                const mapped = res.data.map(mapBackendPatientToFrontend);
-                setPatients(mapped);
-            } else {
-                setRawPatients([]);
-                setPatients([]);
-            }
-        } catch (err) {
-            const errMsg = err instanceof Error ? err.message : '';
-            if (
-                errMsg.includes('rỗng') ||
-                errMsg.includes('empty') ||
-                errMsg.includes('cơ sở dữ liệu') ||
-                errMsg.includes('Prisma') ||
-                errMsg.includes('404') ||
-                errMsg.includes('500')
-            ) {
-                setPatients([]);
-                setRawPatients([]);
-                setError(null);
-            } else {
-                setError(errMsg || 'Không thể kết nối tới máy chủ.');
-                setPatients([]);
-                setRawPatients([]);
-            }
-        } finally {
-            setIsLoading(false);
-        }
-    }, [selectedDate, accessToken]);
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     useEffect(() => {
-        fetchPatients();
-    }, [fetchPatients]);
-
-    const stats = useMemo(() => {
-        return [
-            { value: patients.length, label: 'LỊCH HẸN' },
-            { value: patients.filter((p) => p.status === 'Đang chờ').length, label: 'ĐANG CHỜ' },
-            { value: patients.filter((p) => p.status === 'Đã khám').length, label: 'ĐÃ KHÁM' },
-        ];
-    }, [patients]);
-
-    const handleSelectPatient = (patient: Patient) => {
-        openTab({ id: patient.id, name: patient.name, stt: patient.stt });
-        router.push(`${basePath}/${patient.id}`);
-    };
-
-    /**
-     * call-next / TV need a waiting queue in PENDING or QUEUED (BE enums).
-     * Prefer queue.room_id (denormalized) then step.room_id.
-     */
-    const nextWaitingRaw = useMemo(() => {
-        return rawPatients.find((p) => {
-            const queueStatus = (p.status || '').toUpperCase();
-            const stepStatus = (p.step?.step_status || '').toUpperCase();
-
-            if (
-                stepStatus === 'IN_PROGRESS' ||
-                stepStatus === 'PROCESSING' ||
-                stepStatus === 'COMPLETED' ||
-                stepStatus === 'DECLINED' ||
-                queueStatus === 'CALLED' ||
-                queueStatus === 'CALLING' ||
-                queueStatus === 'SERVING' ||
-                queueStatus === 'IN_PROGRESS' ||
-                queueStatus === 'FINISHED' ||
-                queueStatus === 'COMPLETED' ||
-                queueStatus === 'CANCELLED'
-            ) {
-                return false;
+        if (!mounted || !accessToken) return;
+        let cancelled = false;
+        (async () => {
+            setLoadingShifts(true);
+            setShiftError(null);
+            try {
+                const list = await labService.getMyShifts(todayStr);
+                if (cancelled) return;
+                setShifts(list);
+                setActiveShift(pickStaffShift(list, user?.role));
+            } catch (e) {
+                if (cancelled) return;
+                setShiftError(
+                    e instanceof Error ? e.message : 'Không tải được ca trực hôm nay',
+                );
+                setShifts([]);
+                setActiveShift(null);
+            } finally {
+                if (!cancelled) setLoadingShifts(false);
             }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [mounted, accessToken, todayStr, user?.role]);
 
-            return (
-                queueStatus === 'PENDING' ||
-                queueStatus === 'QUEUED' ||
-                queueStatus === 'WAITING' ||
-                queueStatus === 'MISSING' ||
-                stepStatus === 'PENDING'
-            );
-        });
-    }, [rawPatients]);
+    const roomQueue = useRoomQueue({
+        roomId: activeShift?.room_id,
+        staffId: user?.id,
+        enabled: !!activeShift?.room_id && !!accessToken,
+    });
 
-    const resolvePatientRoomId = (patient: typeof nextWaitingRaw): string | undefined => {
-        if (!patient) return undefined;
+    const handleOpenEmr = (queueId: string) => {
+        const serving = roomQueue.queue?.serving;
+        const name = serving?.patient?.full_name || 'Bệnh nhân';
+        const stt = serving?.queue_number || '';
+        openTab({ id: queueId, name, stt });
+        router.push(`${basePath}/${queueId}`);
+    };
+
+    if (!mounted) {
         return (
-            patient.room_id ||
-            patient.step?.room_id ||
-            patient.step?.room?.room_id ||
-            undefined
+            <div className="flex min-h-[50vh] items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+            </div>
         );
-    };
-
-    const handleCallNextPatient = async () => {
-        if (!accessToken || !user?.id) {
-            setCallStatus('error');
-            setCallMessage('Vui lòng đăng nhập để thực hiện thao tác này.');
-            setTimeout(() => setCallStatus('idle'), 3000);
-            return;
-        }
-        if (!nextWaitingRaw) {
-            setCallStatus('error');
-            setCallMessage('Không có bệnh nhân nào đang chờ.');
-            setTimeout(() => setCallStatus('idle'), 3000);
-            return;
-        }
-
-        const stepId = nextWaitingRaw.step?.step_id;
-        const roomId = resolvePatientRoomId(nextWaitingRaw);
-
-        if (!stepId) {
-            setCallStatus('error');
-            setCallMessage('Không tìm thấy thông tin bước khám của bệnh nhân.');
-            setTimeout(() => setCallStatus('idle'), 3000);
-            return;
-        }
-
-        if (!roomId) {
-            setCallStatus('error');
-            setCallMessage('Bệnh nhân chưa được gán phòng khám — không thể gọi số.');
-            setTimeout(() => setCallStatus('idle'), 3000);
-            return;
-        }
-
-        try {
-            setIsCallingNext(true);
-            setCallStatus('idle');
-            const res = await queueService.callNextPatient(
-                {
-                    step_id: stepId,
-                    room_id: roomId,
-                    staff_id: user.id,
-                },
-                accessToken,
-            );
-            const called = res?.data?.current_patient;
-            const calledLabel = called
-                ? `Số ${String(called.queue_number).padStart(2, '0')} — ${called.patient_name}`
-                : null;
-            setCallStatus('success');
-            setCallMessage(
-                calledLabel
-                    ? `Đã gọi: ${calledLabel}`
-                    : 'Đã gọi bệnh nhân tiếp theo thành công!',
-            );
-            // Refresh patient list in background asynchronously
-            fetchPatients();
-            setTimeout(() => {
-                setCallStatus('idle');
-            }, 2000);
-        } catch (err) {
-            setCallStatus('error');
-            setCallMessage(err instanceof Error ? err.message : 'Gọi bệnh nhân thất bại. Vui lòng thử lại.');
-            setTimeout(() => setCallStatus('idle'), 3000);
-        } finally {
-            setIsCallingNext(false);
-        }
-    };
-
-    const nextWaitingPatient = useMemo(
-        () => patients.find((p) => p.status === 'Đang chờ'),
-        [patients],
-    );
+    }
 
     return (
-        <EMRWorkspaceLayout activeTabId="dashboard">
-            {/* ── Page content ────────────────── */}
-            <div className="flex-1 flex flex-col p-3 pb-5 overflow-hidden">
-                <div className="h-fit max-h-full flex flex-col bg-white rounded-[24px] border border-neutral-200/50 shadow-[0_4px_24px_-4px_rgba(139,124,246,0.02)] overflow-hidden">
-                    <div className="flex-1 overflow-y-auto p-6">
-                    {/* Title + Stats row */}
-                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-5 mb-6">
-                        <div>
-                            <h1 className="text-[22px] font-bold text-[#2D2D2D] tracking-tight">
-                                Danh sách bệnh nhân
-                            </h1>
-                            <p className="text-[13px] text-[#7B7B7B] mt-1 font-medium">
-                                Quản lý hàng đợi và tiếp nhận bệnh nhân khám bệnh.
+        <EMRWorkspaceLayout activeTabId="dashboard" activeTabName="Hàng chờ phòng">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 pb-6">
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-neutral-200/60 bg-white p-5 shadow-sm">
+                    {loadingShifts && (
+                        <div className="flex flex-1 items-center justify-center gap-2 text-sm text-neutral-500">
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                            Đang tải ca trực…
+                        </div>
+                    )}
+
+                    {!loadingShifts && shiftError && (
+                        <div className="flex items-start gap-2 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                            {shiftError}
+                        </div>
+                    )}
+
+                    {!loadingShifts && !shiftError && !activeShift && (
+                        <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
+                            <AlertCircle className="h-8 w-8 text-amber-400" />
+                            <p className="text-sm font-semibold text-neutral-700">
+                                Không có ca trực hôm nay
+                            </p>
+                            <p className="max-w-md text-xs text-neutral-500">
+                                Cần được xếp ca tại phòng khám để xem hàng chờ và gọi bệnh nhân.
                             </p>
                         </div>
-                        <div className="flex items-center gap-3">
-                            <StatCards stats={stats} />
+                    )}
 
-                            {/* ── Mở màn hình TV & Gọi bệnh nhân ── */}
-                            <div className="flex flex-col items-end gap-1.5">
-                                <div className="flex items-center gap-2">
-                                    {resolvePatientRoomId(nextWaitingRaw) ? (
-                                        <a
-                                            href={`/display/room/${resolvePatientRoomId(nextWaitingRaw)}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            title="Mở màn hình TV phòng khám trên tab mới"
-                                            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-50 shadow-sm transition active:scale-95 whitespace-nowrap"
+                    {!loadingShifts && activeShift && (
+                        <>
+                            {shifts.length > 1 && (
+                                <div className="mb-3 flex flex-wrap gap-2">
+                                    {shifts.map((s) => (
+                                        <button
+                                            key={s.shift_id}
+                                            type="button"
+                                            onClick={() => setActiveShift(s)}
+                                            className={`rounded-xl px-3 py-1.5 text-xs font-bold ${
+                                                activeShift.shift_id === s.shift_id
+                                                    ? 'bg-indigo-600 text-white'
+                                                    : 'bg-neutral-100 text-neutral-600'
+                                            }`}
                                         >
-                                            <Tv className="w-4 h-4 text-[#8B7CF6]" />
-                                            <span>Màn hình TV</span>
-                                        </a>
-                                    ) : (
-                                        <a
-                                            href="/display/room"
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            title="Chọn phòng để mở màn hình TV"
-                                            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-50 shadow-sm transition active:scale-95 whitespace-nowrap"
-                                        >
-                                            <Tv className="w-4 h-4 text-[#8B7CF6]" />
-                                            <span>Màn hình TV</span>
-                                        </a>
-                                    )}
-
-                                    <button
-                                        id="call-next-patient-btn"
-                                        onClick={handleCallNextPatient}
-                                        disabled={isCallingNext || !nextWaitingPatient}
-                                        title={
-                                            !nextWaitingPatient
-                                                ? 'Không có bệnh nhân đang chờ'
-                                                : `Gọi bệnh nhân: ${nextWaitingPatient.name && nextWaitingPatient.name !== 'undefined' ? nextWaitingPatient.name : 'Bệnh nhân'}`
-                                        }
-                                        className={[
-                                            'flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold transition-all duration-200 shadow-sm border',
-                                            isCallingNext
-                                                ? 'bg-[#8B7CF6]/70 text-white border-[#8B7CF6]/50 cursor-wait'
-                                                : !nextWaitingPatient
-                                                ? 'bg-neutral-100 text-neutral-400 border-neutral-200 cursor-not-allowed'
-                                                : 'bg-[#8B7CF6] text-white border-[#8B7CF6] hover:bg-[#7C6EE6] hover:shadow-md active:scale-95',
-                                        ].join(' ')}
-                                    >
-                                        {isCallingNext ? (
-                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                        ) : (
-                                            <PhoneCall className="w-4 h-4" />
-                                        )}
-                                        <span>
-                                            {isCallingNext
-                                                ? 'Đang gọi...'
-                                                : nextWaitingPatient
-                                                ? `Gọi: ${nextWaitingPatient.stt}${nextWaitingPatient.name && nextWaitingPatient.name !== 'undefined' ? ` — ${nextWaitingPatient.name}` : ''}`
-                                                : 'Không có bệnh nhân chờ'}
-                                        </span>
-                                    </button>
+                                            {s.room?.room_name || s.room_id}
+                                        </button>
+                                    ))}
                                 </div>
-
-                                {/* Feedback toast */}
-                                {callStatus !== 'idle' && (
-                                    <div
-                                        className={[
-                                            'flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl animate-in fade-in-0 slide-in-from-top-2 duration-200',
-                                            callStatus === 'success'
-                                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                                : 'bg-red-50 text-red-700 border border-red-200',
-                                        ].join(' ')}
-                                    >
-                                        {callStatus === 'success' ? (
-                                            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                                        ) : (
-                                            <XCircle className="w-3.5 h-3.5 shrink-0" />
-                                        )}
-                                        {callMessage}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Date Selector Tabs */}
-                    <div className="flex border-b border-[#EBEBEB] mb-6 overflow-x-auto gap-8">
-                        {dateTabs.map((tab) => {
-                            const isActive = selectedDate === tab.value;
-                            return (
-                                <button
-                                    key={tab.value}
-                                    onClick={() => setSelectedDate(tab.value)}
-                                    className={`pb-3 text-sm font-bold border-b-2 transition-all duration-200 shrink-0 cursor-pointer ${isActive
-                                        ? 'border-[#8B7CF6] text-[#8B7CF6]'
-                                        : 'border-transparent text-neutral-400 hover:text-neutral-700'
-                                        }`}
-                                >
-                                    {tab.label}
-                                </button>
-                            );
-                        })}
-                    </div>
-
-                    {/* Main Table Content */}
-                    {isLoading ? (
-                        <div className="flex flex-col items-center justify-center py-20 text-neutral-400 gap-3">
-                            <Loader2 className="w-8 h-8 animate-spin text-[#8B7CF6]" />
-                            <p className="text-sm font-semibold">Đang tải danh sách bệnh nhân...</p>
-                        </div>
-                    ) : error ? (
-                        <div className="flex items-start gap-2.5 rounded-2xl border border-red-200 bg-red-50 p-4 mb-6">
-                            <AlertCircle className="w-5.5 h-5.5 text-red-500 shrink-0 mt-0.5" />
-                            <div>
-                                <p className="text-sm text-red-800 font-bold">Lỗi tải dữ liệu</p>
-                                <p className="text-xs text-red-700 font-semibold mt-1">{error}</p>
-                            </div>
-                        </div>
-                    ) : patients.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-20 text-neutral-400 gap-3 bg-[#FBFBFF] rounded-3xl border border-neutral-100 border-dashed">
-                            <p className="text-sm font-bold text-neutral-500">Hôm nay không có bệnh nhân đến khám</p>
-                        </div>
-                    ) : (
-                        <PatientTable
-                            patients={patients}
-                            onSelectPatient={handleSelectPatient}
-                        />
+                            )}
+                            <RoomQueueDesk
+                                title={
+                                    user?.role === 'NURSE'
+                                        ? 'Hàng chờ điều dưỡng / thủ thuật'
+                                        : 'Hàng chờ phòng khám'
+                                }
+                                roomLabel={`${activeShift.room?.room_name || 'Phòng'} · ${activeShift.start_time}–${activeShift.end_time}`}
+                                roomQueue={roomQueue}
+                                onOpenEmr={handleOpenEmr}
+                            />
+                        </>
                     )}
                 </div>
             </div>
-        </div>
         </EMRWorkspaceLayout>
     );
 }

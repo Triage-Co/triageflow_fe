@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils';
 import { EMRWorkspaceLayout } from '@/shared/components/layout/EMRWorkspaceLayout';
 import { useNotificationStore } from '@/modules/clinical/store/notificationStore';
 
-export default function DoctorNotificationPage() {
+export default function NurseNotificationPage() {
     const router = useRouter();
     const accessToken = useAuthStore((s) => s.accessToken);
     const [mounted, setMounted] = useState(false);
