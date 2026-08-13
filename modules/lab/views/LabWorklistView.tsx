@@ -53,6 +53,8 @@ export default function LabWorklistView() {
         handleCallNext,
         isCompleting,
         handleCompleteQueue,
+        isCompletingDetail,
+        handleCompleteOrderDetail,
         isRecalling,
         handleRecallQueue,
         overrideConfirmData,
@@ -270,7 +272,26 @@ export default function LabWorklistView() {
 
                                                     {/* Name */}
                                                     <TableCell className="py-3.5 font-bold text-neutral-800 text-sm">
-                                                        {patient.patient_name}
+                                                        <div className="flex flex-col gap-1">
+                                                            <span>{patient.patient_name}</span>
+                                                            {patient.service_order?.details && (
+                                                                <div className="flex flex-wrap gap-1.5 mt-0.5">
+                                                                    {patient.service_order.details.map((detail: any, idx: number) => (
+                                                                        <span
+                                                                            key={detail.service_order_detail_id || idx}
+                                                                            className={cn(
+                                                                                "text-[10px] font-bold px-2 py-0.5 rounded-full border",
+                                                                                detail.status === 'PAID'
+                                                                                    ? "bg-emerald-50/50 border-emerald-100 text-emerald-700"
+                                                                                    : "bg-amber-50/50 border-amber-100 text-amber-700"
+                                                                            )}
+                                                                        >
+                                                                            {detail.service_name || detail.name}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </TableCell>
 
                                                     {/* Conditional Columns based on Tab */}
@@ -370,6 +391,8 @@ export default function LabWorklistView() {
                 isOpen={activeModal === 'view'}
                 onClose={() => setActiveModal(null)}
                 selectedPatient={selectedPatient}
+                onCompleteOrderDetail={handleCompleteOrderDetail}
+                isCompletingDetail={isCompletingDetail}
             />
 
             <OverrideConfirmModal

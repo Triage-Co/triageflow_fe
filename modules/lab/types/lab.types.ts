@@ -48,6 +48,7 @@ export interface QueuePatientItem {
     patient?: ServingPatient;
     step?: ServingStep;
     serving_started_at?: string;
+    service_order?: any;
 }
 
 export interface ServingPatient {

@@ -41,6 +41,15 @@ export const labService = {
     },
 
     /**
+     * POST /api/queue/{queueId}/service-order-details/{detailId}/complete
+     * Hoàn thành một Service Order Detail (queue vẫn SERVING).
+     */
+    async completeOrderDetail(queueId: string, detailId: string): Promise<any> {
+        const res = await apiClient.post<any>(`/api/queue/${queueId}/service-order-details/${detailId}/complete`, {});
+        return res.data;
+    },
+
+    /**
      * POST /api/queue/{queueId}/recall
      * Gọi lại bệnh nhân vắng mặt vào lại hàng chờ.
      */
