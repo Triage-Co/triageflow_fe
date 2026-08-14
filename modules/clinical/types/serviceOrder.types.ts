@@ -161,7 +161,6 @@ export interface CreateServiceOrderReqDto {
     booking_id: string;
     /** One or more catalog service codes → BE creates order + details */
     service_code: string[];
-    room_id: string;
 }
 
 export interface UpdateServiceOrderReqDto {
@@ -172,6 +171,12 @@ export interface UpdateServiceOrderReqDto {
     specialty_id?: string | null;
     room_id?: string;
     status?: ServiceOrderStatus;
+}
+
+/** PATCH /api/service-order/detail/{serviceOrderDetailId} */
+export interface UpdateServiceOrderDetailReqDto {
+    service_code?: string;
+    room_id?: string;
 }
 
 export function getServiceOrderId(order: ServiceOrder): string {

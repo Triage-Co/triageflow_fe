@@ -15,8 +15,8 @@ import type { Patient, ClinicalStage, LabOrder } from '@/modules/clinical/types/
 import { Badge } from '@/shared/components/ui/Badge';
 import { Input } from '@/shared/components/ui/Input';
 import { cn } from '@/lib/utils';
-import { ParaclinicalOrdersTab } from './ParaclinicalOrdersTab';
-import { EmrPrescriptionTab } from './EmrPrescriptionTab';
+import { ParaclinicalOrdersTab } from '@/modules/clinical/components/ParaclinicalOrdersTab';
+import { EmrPrescriptionTab } from '@/modules/clinical/components/EmrPrescriptionTab';
 
 const STAGE_TABS: {
     key: ClinicalStage;

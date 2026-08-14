@@ -9,8 +9,6 @@ interface EMRSidebarProps {
 
 const NAV_ITEMS = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { id: 'patients', icon: Users, label: 'Bệnh nhân' },
-    { id: 'calendar', icon: CalendarDays, label: 'Lịch hẹn' },
     { id: 'notifications', icon: Bell, label: 'Thông báo' },
     { id: 'settings', icon: Settings, label: 'Cài đặt' },
 ];

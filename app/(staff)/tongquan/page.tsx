@@ -1,4 +1,4 @@
-import { DoctorDashboard } from '@/modules/clinical/components/DoctorDashboard';
+import { DoctorDashboard } from '@/app/(staff)/doctor/_components/DoctorDashboard';
 
 export default function TongQuanPage() {
     return <DoctorDashboard />;

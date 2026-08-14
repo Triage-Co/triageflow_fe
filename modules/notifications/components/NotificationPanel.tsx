@@ -1,233 +1,242 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
-    CheckCircle2,
-    Package,
-    AlertTriangle,
-    Check,
+    AlertCircle,
     Bell,
-    Settings,
-    X,
+    Check,
+    CheckCircle2,
+    Loader2,
+    RefreshCw,
+    Trash2,
 } from 'lucide-react';
+import { useAuthStore } from '@/store/authStore';
+import { Card } from '@/shared/components/ui/Card';
+import { Button } from '@/shared/components/ui/Button';
+import { cn } from '@/lib/utils';
+import { useNotificationStore } from '@/modules/clinical/store/notificationStore';
 
-export interface NotificationBannerItem {
-    id: string;
-    title: string;
-    content: string;
-    time: string;
-    read: boolean;
-    type: 'checkin' | 'pharmacy' | 'inventory' | 'emergency' | 'payment';
-}
-
-const INITIAL_BANNERS: NotificationBannerItem[] = [
-    {
-        id: 'b1',
-        title: 'Bệnh nhân đã check-in',
-        content: 'Nguyễn Văn An (P001) đã check-in thành công',
-        time: '2 phút trước',
-        read: false,
-        type: 'checkin',
-    },
-    {
-        id: 'b2',
-        title: 'Thuốc sẵn sàng',
-        content: 'Đơn thuốc RX-2024-002 đã được chuẩn bị xong',
-        time: '5 phút trước',
-        read: false,
-        type: 'pharmacy',
-    },
-    {
-        id: 'b3',
-        title: 'Tồn kho thấp',
-        content: 'Amoxicillin 500mg còn 45 viên, cần đặt hàng',
-        time: '15 phút trước',
-        read: false,
-        type: 'inventory',
-    },
-    {
-        id: 'b4',
-        title: 'Bệnh nhân cấp cứu',
-        content: 'Lê Thị Hương (E001) - Ưu tiên cao đã đến',
-        time: '20 phút trước',
-        read: false,
-        type: 'emergency',
-    },
-    {
-        id: 'b5',
-        title: 'Thanh toán xác nhận',
-        content: 'Thanh toán cho đơn RX-2024-001 đã được xác nhận',
-        time: '25 phút trước',
-        read: false,
-        type: 'payment',
-    },
-];
-
+/**
+ * Shared notifications panel for roles that expose a "Thông báo" nav item.
+ * Uses GET/DELETE /api/notification (+ /all).
+ */
 export function NotificationPanel() {
-    const [banners, setBanners] = useState<NotificationBannerItem[]>(INITIAL_BANNERS);
+    const router = useRouter();
+    const accessToken = useAuthStore((s) => s.accessToken);
+    const [mounted, setMounted] = useState(false);
 
-    // Notification Toggles State (Screenshot 1 bottom section)
-    const [settings, setSettings] = useState({
-        checkin: true,
-        inventory: true,
-        emergency: true,
-        lateRx: true,
-    });
+    const {
+        notifications,
+        isLoading,
+        error,
+        fetchNotifications,
+        toggleRead,
+        markAllRead,
+        deleteNotification,
+        deleteAllNotifications,
+        clearError,
+    } = useNotificationStore();
 
-    const handleMarkAllRead = () => {
-        setBanners((prev) => prev.map((b) => ({ ...b, read: true })));
-    };
+    useEffect(() => {
+        const timer = setTimeout(() => setMounted(true), 0);
+        return () => clearTimeout(timer);
+    }, []);
 
-    const toggleSetting = (key: keyof typeof settings) => {
-        setSettings((prev) => ({ ...prev, [key]: !prev[key] }));
-    };
-
-    const getBannerStyle = (type: NotificationBannerItem['type']) => {
-        switch (type) {
-            case 'checkin':
-            case 'payment':
-                return {
-                    bg: 'bg-emerald-50/60 border-emerald-200/80 text-emerald-950',
-                    iconBg: 'bg-emerald-100 text-emerald-600',
-                    icon: CheckCircle2,
-                };
-            case 'pharmacy':
-                return {
-                    bg: 'bg-blue-50/60 border-blue-200/80 text-blue-950',
-                    iconBg: 'bg-blue-100 text-blue-600',
-                    icon: Package,
-                };
-            case 'inventory':
-                return {
-                    bg: 'bg-amber-50/60 border-amber-200/80 text-amber-950',
-                    iconBg: 'bg-amber-100 text-amber-600',
-                    icon: AlertTriangle,
-                };
-            case 'emergency':
-                return {
-                    bg: 'bg-red-50/60 border-red-200/80 text-red-950',
-                    iconBg: 'bg-red-100 text-red-600',
-                    icon: AlertTriangle,
-                };
-            default:
-                return {
-                    bg: 'bg-slate-50 border-slate-200 text-slate-900',
-                    iconBg: 'bg-slate-100 text-slate-600',
-                    icon: Bell,
-                };
+    useEffect(() => {
+        if (!mounted) return;
+        if (!accessToken) {
+            router.push('/login');
         }
-    };
+    }, [accessToken, mounted, router]);
+
+    useEffect(() => {
+        if (!mounted || !accessToken) return;
+        void fetchNotifications(accessToken);
+    }, [mounted, accessToken, fetchNotifications]);
+
+    if (!mounted || !accessToken) {
+        return (
+            <div className="flex-1 flex items-center justify-center bg-neutral-50/50 min-h-[60vh]">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#8B7CF6]" />
+            </div>
+        );
+    }
+
+    const unreadCount = notifications.filter((n) => !n.read).length;
 
     return (
-        <div className="flex-1 flex flex-col overflow-y-auto bg-white rounded-tl-[48px] rounded-bl-[48px] p-6 md:p-10">
-            <div className="max-w-5xl w-full mx-auto space-y-8">
-                {/* ── Page Header ── */}
-                <div className="flex items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl lg:text-3xl font-extrabold text-slate-800 tracking-tight">
-                            Thông Báo
-                        </h1>
-                        <p className="text-xs lg:text-sm text-slate-400 font-medium mt-1">
-                            Cập nhật hoạt động và cảnh báo
-                        </p>
-                    </div>
-
-                    <button
-                        onClick={handleMarkAllRead}
-                        className="px-5 py-2.5 rounded-[14px] bg-[#8B7CF6] hover:bg-[#7C6CF5] text-white text-xs font-bold shadow-md shadow-purple-500/20 transition cursor-pointer active:scale-95 flex items-center gap-2"
-                    >
-                        <span>Đánh Dấu Đã Đọc Tất Cả</span>
-                    </button>
-                </div>
-
-                {/* ── Section 1: Full-Width Colored Banner Notifications matching Screenshot 1 ── */}
-                <div className="space-y-3.5">
-                    {banners.map((item) => {
-                        const style = getBannerStyle(item.type);
-                        const IconComponent = style.icon;
-
-                        return (
-                            <div
-                                key={item.id}
-                                className={`p-4 md:p-5 rounded-[20px] border flex items-center justify-between gap-4 transition duration-200 shadow-sm ${style.bg}`}
-                            >
-                                <div className="flex items-center gap-4 min-w-0">
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 shadow-sm ${style.iconBg}`}>
-                                        <IconComponent className="w-5 h-5" />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <h4 className="font-bold text-sm text-slate-900 tracking-tight">{item.title}</h4>
-                                        <p className="text-xs text-slate-600 font-medium mt-0.5 truncate">{item.content}</p>
-                                    </div>
-                                </div>
-
-                                <span className="text-xs font-semibold text-slate-400 shrink-0 tabular-nums">
-                                    {item.time}
-                                </span>
+        <div className="flex-1 flex flex-col p-4 pb-6 overflow-hidden">
+            <div className="h-fit max-h-full flex flex-col bg-white rounded-[24px] border border-neutral-200/50 shadow-[0_4px_24px_-4px_rgba(139,124,246,0.02)] overflow-hidden">
+                <div className="flex-1 overflow-y-auto p-6 md:p-8">
+                    <div className="max-w-4xl mx-auto">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+                            <div>
+                                <h1 className="text-[28px] font-bold text-neutral-900 tracking-tight leading-snug">
+                                    Thông báo
+                                </h1>
+                                <p className="text-sm text-neutral-400 mt-1 font-medium">
+                                    Cập nhật tình trạng bệnh nhân, lịch khám và hệ thống
+                                </p>
                             </div>
-                        );
-                    })}
-                </div>
-
-                {/* ── Section 2: Cài Đặt Thông Báo matching Screenshot 1 bottom card ── */}
-                <div className="bg-white rounded-[24px] border border-slate-200/80 p-6 md:p-8 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.03)] space-y-6">
-                    <div className="flex items-center gap-2">
-                        <Bell className="w-5 h-5 text-emerald-600" />
-                        <h3 className="font-bold text-slate-800 text-base">Cài Đặt Thông Báo</h3>
-                    </div>
-
-                    <div className="divide-y divide-slate-100">
-                        {/* Toggle 1 */}
-                        <div className="py-4 flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-700">Thông báo bệnh nhân check-in</span>
-                            <button
-                                onClick={() => toggleSetting('checkin')}
-                                className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer ${
-                                    settings.checkin ? 'bg-blue-600 justify-end' : 'bg-slate-300 justify-start'
-                                }`}
-                            >
-                                <span className="w-4 h-4 rounded-full bg-white shadow-sm" />
-                            </button>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Button
+                                    onClick={() => {
+                                        clearError();
+                                        void fetchNotifications(accessToken);
+                                    }}
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-full shadow-sm bg-white"
+                                    startIcon={
+                                        <RefreshCw
+                                            className={cn('w-4 h-4', isLoading && 'animate-spin')}
+                                        />
+                                    }
+                                >
+                                    Làm mới
+                                </Button>
+                                <Button
+                                    onClick={markAllRead}
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-full shadow-sm bg-white"
+                                    startIcon={<Check className="w-4 h-4" />}
+                                    disabled={unreadCount === 0}
+                                >
+                                    Đánh dấu đã đọc tất cả
+                                </Button>
+                                <Button
+                                    onClick={() => void deleteAllNotifications(accessToken)}
+                                    variant="destructive"
+                                    size="sm"
+                                    className="rounded-full shadow-sm"
+                                    startIcon={<Trash2 className="w-4 h-4" />}
+                                    disabled={notifications.length === 0 || isLoading}
+                                >
+                                    Xoá tất cả
+                                </Button>
+                            </div>
                         </div>
 
-                        {/* Toggle 2 */}
-                        <div className="py-4 flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-700">Cảnh báo tồn kho thấp</span>
-                            <button
-                                onClick={() => toggleSetting('inventory')}
-                                className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer ${
-                                    settings.inventory ? 'bg-blue-600 justify-end' : 'bg-slate-300 justify-start'
-                                }`}
-                            >
-                                <span className="w-4 h-4 rounded-full bg-white shadow-sm" />
-                            </button>
-                        </div>
+                        {isLoading && notifications.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-20 text-neutral-400 gap-3">
+                                <Loader2 className="w-8 h-8 animate-spin text-[#8B7CF6]" />
+                                <p className="text-sm font-semibold">Đang tải thông báo...</p>
+                            </div>
+                        ) : error ? (
+                            <div className="flex items-start gap-2.5 rounded-2xl border border-red-200 bg-red-50 p-4">
+                                <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="text-sm text-red-800 font-bold">
+                                        Lỗi tải thông báo
+                                    </p>
+                                    <p className="text-xs text-red-700 font-semibold mt-1">
+                                        {error}
+                                    </p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {notifications.length > 0 ? (
+                                    <p className="text-[12px] text-[#9C9C9C] font-medium mb-2">
+                                        {notifications.length} thông báo · {unreadCount} chưa đọc
+                                    </p>
+                                ) : null}
 
-                        {/* Toggle 3 */}
-                        <div className="py-4 flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-700">Thông báo bệnh nhân cấp cứu</span>
-                            <button
-                                onClick={() => toggleSetting('emergency')}
-                                className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer ${
-                                    settings.emergency ? 'bg-blue-600 justify-end' : 'bg-slate-300 justify-start'
-                                }`}
-                            >
-                                <span className="w-4 h-4 rounded-full bg-white shadow-sm" />
-                            </button>
-                        </div>
+                                {notifications.length > 0 ? (
+                                    notifications.map((item) => (
+                                        <Card
+                                            key={item.id}
+                                            className={cn(
+                                                'p-5 hover:shadow-[0_8px_30px_rgb(0,0,0,0.02)] transition-all duration-300 border flex items-start gap-4',
+                                                !item.read
+                                                    ? 'bg-white border-neutral-200 shadow-sm'
+                                                    : 'bg-white/60 border-neutral-100 text-neutral-500'
+                                            )}
+                                        >
+                                            <div
+                                                className={cn(
+                                                    'w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 shadow-sm',
+                                                    !item.read
+                                                        ? 'bg-purple-50/70 border-purple-100/50'
+                                                        : 'bg-neutral-50 border-neutral-100'
+                                                )}
+                                            >
+                                                <Bell
+                                                    className={cn(
+                                                        'w-4 h-4',
+                                                        !item.read
+                                                            ? 'text-[#8B7CF6]'
+                                                            : 'text-neutral-400'
+                                                    )}
+                                                />
+                                            </div>
 
-                        {/* Toggle 4 */}
-                        <div className="py-4 flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-700">Thông báo đơn thuốc trễ</span>
-                            <button
-                                onClick={() => toggleSetting('lateRx')}
-                                className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors duration-200 cursor-pointer ${
-                                    settings.lateRx ? 'bg-blue-600 justify-end' : 'bg-slate-300 justify-start'
-                                }`}
-                            >
-                                <span className="w-4 h-4 rounded-full bg-white shadow-sm" />
-                            </button>
-                        </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <p
+                                                        className={cn(
+                                                            'text-[13px] font-bold text-neutral-800 leading-relaxed',
+                                                            item.read &&
+                                                                'text-neutral-500 font-medium'
+                                                        )}
+                                                    >
+                                                        {item.content}
+                                                    </p>
+                                                    {!item.read ? (
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-[#8B7CF6] shrink-0" />
+                                                    ) : null}
+                                                </div>
+                                                <span className="text-[10px] text-neutral-400 font-semibold block mt-2">
+                                                    {item.time}
+                                                </span>
+                                            </div>
+
+                                            <div className="flex items-center gap-1.5 self-center shrink-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => toggleRead(item.id)}
+                                                    title={
+                                                        item.read
+                                                            ? 'Đánh dấu chưa đọc'
+                                                            : 'Đánh dấu đã đọc'
+                                                    }
+                                                    className={cn(
+                                                        'p-2 rounded-xl transition-colors cursor-pointer border border-transparent',
+                                                        item.read
+                                                            ? 'hover:bg-neutral-100 text-neutral-400 hover:text-neutral-600'
+                                                            : 'hover:bg-purple-50 text-[#8B7CF6]'
+                                                    )}
+                                                >
+                                                    <CheckCircle2 className="w-4.5 h-4.5" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        void deleteNotification(
+                                                            item.id,
+                                                            accessToken
+                                                        )
+                                                    }
+                                                    title="Xoá thông báo"
+                                                    className="p-2 rounded-xl text-neutral-400 hover:text-red-600 hover:bg-red-50/60 transition-colors cursor-pointer border border-transparent"
+                                                >
+                                                    <Trash2 className="w-4.5 h-4.5" />
+                                                </button>
+                                            </div>
+                                        </Card>
+                                    ))
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center py-20 text-neutral-400 gap-3">
+                                        <Bell className="w-12 h-12 text-neutral-300" />
+                                        <p className="text-sm font-semibold">
+                                            Chưa có thông báo nào
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
