@@ -13,21 +13,21 @@ export const PackageSelectView: React.FC = () => {
   }, [fetchPackages]);
 
   return (
-    <div className="w-full min-h-screen p-6 lg:p-8 z-10 select-none flex flex-col gap-6 max-w-7xl mx-auto">
+    <div className="w-full h-full min-h-0 p-4 sm:p-6 lg:p-8 z-10 select-none flex flex-col gap-4 sm:gap-6 max-w-7xl mx-auto overflow-hidden">
       {/* Top Header Bar */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigateToView('booking_mode')}
-            className="flex items-center gap-2 px-6 py-1 bg-white hover:bg-neutral-50 active:scale-95 rounded-2xl text-md font-bold text-neutral-800 shadow-md border border-neutral-100 transition-all cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2 sm:px-6 sm:py-2.5 bg-white hover:bg-neutral-50 active:scale-95 rounded-2xl text-xs sm:text-sm font-bold text-neutral-800 shadow-md border border-neutral-100 transition-all cursor-pointer shrink-0"
           >
-            <ArrowLeft className="w-12 h-12 text-neutral-600" /> Quay lại
+            <ArrowLeft className="w-4 h-4 text-neutral-600" /> Quay lại
           </button>
-          <div className="ml-2">
-            <h2 className="text-2xl sm:text-3xl font-black text-[#1E2939] tracking-tight">
+          <div>
+            <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-[#1E2939] tracking-tight">
               Danh sách gói khám sức khỏe
             </h2>
-            <p className="text-xs sm:text-sm font-semibold text-neutral-500 mt-1">
+            <p className="text-xs sm:text-sm font-semibold text-neutral-500 mt-0.5">
               Vui lòng chọn một trong các gói dịch vụ được thiết kế sẵn bên dưới
             </p>
           </div>
@@ -35,7 +35,7 @@ export const PackageSelectView: React.FC = () => {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1">
+      <div className="flex-1 min-h-0 overflow-y-auto pr-1">
         {isFetchingPackages ? (
           <div className="flex flex-col items-center justify-center space-y-4">
             <Loader2 className="w-12 h-12 text-teal-600 animate-spin" />

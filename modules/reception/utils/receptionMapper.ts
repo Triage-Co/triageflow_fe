@@ -105,6 +105,11 @@ function mapDoctorRecord(
             doctor.rating_count,
             profile?.review_count,
         ),
+        room_name:
+            (doctor.room_name as string | undefined) ??
+            (doctor.room as any)?.name ??
+            (doctor.room as any)?.room_name ??
+            (profile?.room_name as string | undefined),
     };
 }
 
@@ -238,17 +243,27 @@ export function mapShiftResponse(raw: unknown): ReceptionSlot[] {
 export function mapPatientRecordToAccount(record: ReceptionPatientRecord): ReceptionAccount {
     const account = record.account;
     const patientId = record.patient_id?.trim() || undefined;
+    const dob = (record.dob || account?.dob || '').trim();
+    const gender = (record.gender || account?.gender || '').trim();
+    const fullName = (record.full_name || account?.full_name || '').trim();
+    const citizenId = (record.citizen_id || account?.citizen_id || '').trim();
+    const email = (record.email || account?.email || '').trim();
+    const phone = record.phone || account?.phone || null;
+
     return {
         account_id: account?.account_id ?? '',
         patient_id: patientId,
-        full_name: account?.full_name ?? record.full_name ?? '',
-        citizen_id: account?.citizen_id ?? record.citizen_id ?? '',
-        email: account?.email ?? record.email ?? '',
-        dob: account?.dob ?? record.dob ?? '',
-        gender: account?.gender ?? record.gender ?? '',
+        full_name: fullName,
+        citizen_id: citizenId,
+        email: email,
+        dob: dob,
+        gender: gender,
         role: account?.role ?? 'PATIENT',
-        phone: account?.phone ?? record.phone ?? null,
+        phone: phone,
         bhyt: record.medical_coverage_id ?? null,
+        blood_type: record.blood_type ?? null,
+        allergy_notes: record.allergy_notes ?? null,
+        createdAt: record.createdAt,
     };
 }
 
@@ -301,24 +316,41 @@ function normalizePatientRecord(raw: unknown): ReceptionPatientRecord | null {
     const account = (record.account ??
         record.Account ??
         record.user ??
-        record.User) as ReceptionPatientRecord['account'];
+        record.User) as ReceptionPatientRecord['account'] | undefined;
 
-    const patient_id = extractRealPatientId(record) ?? '';
-    const citizen_id = String(account?.citizen_id ?? record.citizen_id ?? '').trim();
-    const full_name = String(account?.full_name ?? record.full_name ?? '').trim();
+    const patient_id = extractRealPatientId(record) ?? String(record.patient_id ?? '').trim();
+    const citizen_id = String(record.citizen_id || account?.citizen_id || '').trim();
+    const full_name = String(record.full_name || account?.full_name || '').trim();
 
     if (!patient_id && !citizen_id && !full_name) return null;
 
+    const rawDob =
+        record.dob ||
+        record.date_of_birth ||
+        record.birth_date ||
+        record.birthday ||
+        account?.dob ||
+        (account as Record<string, unknown> | undefined)?.date_of_birth;
+
+    const rawGender = record.gender || account?.gender;
+    const rawPhone = record.phone || account?.phone;
+    const rawEmail = record.email || account?.email;
+    const rawCoverage = record.medical_coverage_id || record.bhyt || record.insurance_id;
+
     return {
         patient_id,
-        medical_coverage_id: (record.medical_coverage_id as string | null | undefined) ?? null,
+        medical_coverage_id: rawCoverage ? String(rawCoverage).trim() : null,
         account,
         full_name: full_name || undefined,
         citizen_id: citizen_id || undefined,
-        email: (account?.email ?? record.email) as string | undefined,
-        dob: (account?.dob ?? record.dob) as string | undefined,
-        gender: (account?.gender ?? record.gender) as string | undefined,
-        phone: (account?.phone ?? record.phone) as string | null | undefined,
+        email: rawEmail ? String(rawEmail).trim() : undefined,
+        dob: rawDob ? String(rawDob).trim() : undefined,
+        gender: rawGender ? String(rawGender).trim() : undefined,
+        phone: rawPhone ? String(rawPhone).trim() : null,
+        blood_type: ((record.blood_type ?? (account as Record<string, unknown> | undefined)?.blood_type) as string | null | undefined) ?? null,
+        allergy_notes: ((record.allergy_notes ?? (account as Record<string, unknown> | undefined)?.allergy_notes) as string | null | undefined) ?? null,
+        createdAt: (record.createdAt ?? record.created_at) as string | undefined,
+        updatedAt: (record.updatedAt ?? record.updated_at) as string | undefined,
     };
 }
 
@@ -441,10 +473,8 @@ export function extractBookingFlowFields(
 }
 
 export function formatQueueTicketNo(queueNumber?: string): string {
-    if (!queueNumber) return 'A-—';
-    const trimmed = queueNumber.trim();
-    if (/^[A-Z]-/i.test(trimmed)) return trimmed.toUpperCase();
-    return `A-${trimmed}`;
+    if (!queueNumber) return '—';
+    return String(queueNumber).trim();
 }
 
 function formatTicketNo(queueNumber?: string): string {

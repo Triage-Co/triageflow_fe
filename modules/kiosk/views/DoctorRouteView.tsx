@@ -226,25 +226,25 @@ export const DoctorRouteView: React.FC = () => {
   const isPaymentStep = currentStepItem?.title?.toLowerCase().trim().startsWith('thanh toán') || false;
 
   return (
-    <div className="flex-1 min-h-0 px-8 py-6 z-10 flex flex-col gap-5">
+    <div className="w-full h-full min-h-0 p-4 sm:p-6 lg:p-8 z-10 select-none flex flex-col justify-between gap-4 max-w-7xl mx-auto overflow-hidden">
       {/* Header bar */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigateToView('patient_info')}
-            className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-neutral-50 rounded-2xl shadow-sm border border-neutral-200 text-sm font-extrabold text-neutral-800 transition-all cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 bg-white hover:bg-neutral-50 active:scale-95 rounded-2xl shadow-sm border border-neutral-200 text-xs sm:text-sm font-extrabold text-neutral-800 transition-all cursor-pointer shrink-0"
           >
             <ArrowLeft className="w-4 h-4" /> Quay lại
           </button>
-          <h2 className="text-3xl font-black text-[#1E2939] tracking-tight">
+          <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-[#1E2939] tracking-tight">
             Lộ trình bác sĩ chỉ định
           </h2>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 shrink-0">
           <button
             onClick={handleOpenServiceOrders}
-            className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-2xl text-xs lg:text-sm font-extrabold shadow-md shadow-amber-500/10 transition-all cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-2xl text-xs sm:text-sm font-extrabold shadow-md shadow-amber-500/10 transition-all cursor-pointer"
           >
             Các mục cần thanh toán
           </button>
@@ -252,7 +252,7 @@ export const DoctorRouteView: React.FC = () => {
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="flex items-center gap-2 px-5 py-2.5 bg-white rounded-2xl text-xs lg:text-sm font-extrabold text-[#1E2939] shadow-sm border border-neutral-200 hover:bg-neutral-50 active:scale-95 disabled:opacity-60 transition-all cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 bg-white rounded-2xl text-xs sm:text-sm font-extrabold text-[#1E2939] shadow-sm border border-neutral-200 hover:bg-neutral-50 active:scale-95 disabled:opacity-60 transition-all cursor-pointer"
           >
             <RotateCw className={cn("w-4 h-4 text-[#155DFC]", isRefreshing && "animate-spin")} />
             Cập nhật
@@ -261,10 +261,10 @@ export const DoctorRouteView: React.FC = () => {
       </div>
 
       {/* Main Grid (fills remaining height) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 flex-1 min-h-0 overflow-hidden">
         {/* Left Card Column: Điểm đến hiện tại (Solid Blue Card) */}
-        <div className="lg:col-span-4 flex flex-col min-h-0">
-          <div className="bg-[#4F80E1] text-white rounded-[28px] p-6 shadow-xl flex flex-col justify-between flex-1 h-full">
+        <div className="lg:col-span-4 flex flex-col min-h-0 h-full overflow-hidden">
+          <div className="bg-[#4F80E1] text-white rounded-[28px] p-5 sm:p-6 shadow-xl flex flex-col justify-between flex-1 h-full overflow-y-auto">
             {currentStepItem ? (
               <div className="space-y-4">
                 <span className="text-xs font-black text-blue-100 uppercase tracking-wider block">{isPaymentStep ? 'Thanh toán hiện tại' : 'Điểm đến hiện tại'}</span>
@@ -391,8 +391,8 @@ export const DoctorRouteView: React.FC = () => {
                             <div className="flex items-center gap-3 shrink-0">
                               <span className={cn(
                                 "px-3 py-1.5 rounded-xl text-xs font-extrabold border shadow-xs tracking-wide",
-                                isCompleted && "bg-emerald-50 border-emerald-200 text-emerald-700",
-                                isInProgress && "bg-blue-50 border-blue-200 text-blue-700",
+                                isCompleted && "bg-blue-100/90 text-[#155DFC] border-blue-200",
+                                isInProgress && "bg-[#155DFC] text-white border-transparent shadow-sm",
                                 isPending && "bg-amber-50 border-amber-200 text-amber-700",
                                 isWaiting && "bg-neutral-50 border-neutral-200 text-neutral-500"
                               )}>

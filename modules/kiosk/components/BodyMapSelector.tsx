@@ -25,9 +25,9 @@ export const BodyMapSelector: React.FC<BodyMapSelectorProps> = ({ onRegionClick 
   };
 
   return (
-    <div className="w-full flex-1 bg-white rounded-[36px] p-6 shadow-sm border border-neutral-100/80 flex flex-col items-center justify-between select-none">
+    <div className="w-full h-full min-h-0 flex-1 bg-white rounded-[28px] sm:rounded-[36px] p-4 sm:p-6 shadow-sm border border-neutral-100/80 flex flex-col items-center justify-between select-none overflow-hidden">
       {/* Main SVG Interactive Map Canvas */}
-      <div className="relative w-full flex-1 min-h-[500px] flex items-center justify-center pt-2 pb-2">
+      <div className="relative w-full flex-1 min-h-0 flex items-center justify-center py-2 overflow-hidden [&>svg]:max-h-full [&>svg]:w-auto">
         {selectedGender === 'male' ? (
           isBackView ? (
             <MaleBack selectedBodyPart={selectedBodyPart} onSelectBodyPart={handleSelectPart} />
@@ -48,9 +48,9 @@ export const BodyMapSelector: React.FC<BodyMapSelectorProps> = ({ onRegionClick 
         <button
           type="button"
           onClick={() => setIsBackView(!isBackView)}
-          className="flex items-center gap-2 text-[#4F80E1] hover:text-[#155DFC] font-bold text-base transition-colors cursor-pointer select-none"
+          className="flex items-center gap-2 text-[#4F80E1] hover:text-[#155DFC] font-bold text-sm sm:text-base transition-colors cursor-pointer select-none active:scale-95"
         >
-          <RotateCcw className="w-5 h-5" /> Rotate model
+          <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" /> Đổi góc nhìn (Trước / Sau)
         </button>
       </div>
     </div>

@@ -61,19 +61,24 @@ function mapQueueItem(item: BackendQueuePatient): PatientSearchResult {
 
     return {
         accountId: patient.patient_id,
+        patient_id: patient.patient_id,
         queueId: item.queue_id,
         name: patient.full_name || account?.full_name || account?.user_name || 'Bệnh nhân',
         citizenId: patient.citizen_id || account?.citizen_id || '',
         phone: account?.phone || null,
         email: account?.email || '',
+        dob: patient.dob || account?.dob || undefined,
+        gender: (patient.gender || account?.gender) as any,
         ticketNo: queue.ticketNo,
         specialty: 'Nội khoa',
-        bhyt: patient.medical_coverage_id,
+        bhyt: patient.medical_coverage_id || null,
         priority: queue.priority,
         status: queue.status,
         waitMinutes: queue.waitMinutes,
         bookingId: queue.bookingId,
         inQueueToday: true,
+        blood_type: (patient as any).blood_type || null,
+        allergy_notes: (patient as any).allergy_notes || null,
     };
 }
 
@@ -90,11 +95,16 @@ function mapAccountOnly(account: ReceptionAccount): PatientSearchResult {
         citizenId: account.citizen_id,
         phone: account.phone,
         email: account.email,
+        dob: account.dob ?? undefined,
+        gender: account.gender ?? undefined,
         specialty: '—',
         bhyt: account.bhyt ?? null,
         priority,
         status: 'Không trong hàng đợi',
         inQueueToday: false,
+        blood_type: account.blood_type ?? null,
+        allergy_notes: account.allergy_notes ?? null,
+        createdAt: account.createdAt,
     };
 }
 

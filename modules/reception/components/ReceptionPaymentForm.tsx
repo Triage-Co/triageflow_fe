@@ -25,7 +25,7 @@ export function ReceptionPaymentForm() {
 
     const [queue, setQueue] = useState<QueuePatient[]>([]);
     const [selectedQueueId, setSelectedQueueId] = useState('');
-    const [amount, setAmount] = useState('200000');
+    const [amount, setAmount] = useState('');
     const [qrResult, setQrResult] = useState<TransactionQrResponse | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isLoadingQueue, setIsLoadingQueue] = useState(true);
@@ -157,6 +157,7 @@ export function ReceptionPaymentForm() {
                             type="number"
                             min={1000}
                             step={1000}
+                            placeholder="Nhập số tiền thanh toán (VD: 150000)"
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}
                             disabled={isPending}

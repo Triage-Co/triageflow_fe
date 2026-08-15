@@ -264,9 +264,11 @@ export const mapApiToTicketData = (stepData: any, patientInfo: any, bookingId: s
 };
 
 export const mapApiToRouteSteps = (detailedSteps: any[]): RouteStepItem[] => {
-  return detailedSteps.map((result, index: number) => {
-    const step = result.status === 'fulfilled' ? result.value : result;
+  const steps = detailedSteps
+    .map((result) => (result.status === 'fulfilled' ? result.value : result))
+    .filter((step) => step && step.step_status !== 'CANCELLED');
 
+  return steps.map((step, index: number) => {
     const roomObj = step.room_info || step.room || step.flow?.booking?.slot?.shift?.room;
     const stepName = step.step_name || '';
     const isPaymentStep = stepName.toLowerCase().trim().startsWith('thanh toán');

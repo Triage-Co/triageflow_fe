@@ -6,6 +6,8 @@ import {
     Clock,
     ExternalLink,
     Loader2,
+    QrCode,
+    RefreshCw,
     Wallet,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -13,6 +15,10 @@ import type { RegistrationResult } from '@/modules/reception/types/reception.typ
 import { useAuthStore } from '@/modules/auth/store/authStore';
 import { receptionService } from '@/modules/reception/services/receptionService';
 import { formatQueueTicketNo } from '@/modules/reception/utils/receptionMapper';
+import {
+    mapActiveFlowsList,
+    flowItemToRegistrationResult,
+} from '@/modules/reception/utils/receptionFlowMapper';
 
 interface PayOsPaymentPanelProps {
     result: RegistrationResult;
@@ -29,6 +35,7 @@ export function PayOsPaymentPanel({ result, onUpdateResult, className }: PayOsPa
         result.isPaymentPending || result.paymentQrCode || result.paymentCheckoutUrl,
     );
 
+    // Kiểm tra trạng thái thanh toán từ Backend và tải flow thực tế (giống cơ chế Kiosk)
     const checkPaymentStatus = async (showToast = false) => {
         if (!accessToken || !result.bookingId) return;
         setCheckError(null);
@@ -44,21 +51,52 @@ export function PayOsPaymentPanel({ result, onUpdateResult, className }: PayOsPa
                 console.error('[PayOsPaymentPanel] Failed to parse patientId from qrPayload:', e);
             }
 
-            // Auto-trigger webhook backend (/api/transaction/webhook) để ghi nhận thanh toán
-            try {
-                await receptionService.triggerTransactionWebhook(
-                    {
-                        booking_id: result.bookingId,
-                        client_id: result.bookingId,
-                        status: 'PAID',
-                        code: '00',
-                    },
-                    accessToken,
-                );
-            } catch (webhookErr) {
-                console.warn('[PayOsPaymentPanel] Auto webhook trigger notification:', webhookErr);
+            // 1. Thử gọi API sinh số thứ tự nếu có stepId
+            if (result.stepId) {
+                try {
+                    await receptionService.generateBookingNumber(result.stepId, accessToken, true);
+                } catch {
+                    // BE trả 400 nếu chưa thanh toán, bỏ qua
+                }
             }
 
+            // 2. Tra cứu luồng khám Active của bệnh nhân từ API GET /api/flow/patient/{id}/active
+            if (patientId) {
+                try {
+                    const rawFlows = await receptionService.getPatientActiveFlows(patientId, accessToken);
+                    const mappedFlows = mapActiveFlowsList(rawFlows);
+                    const matchedFlow =
+                        mappedFlows.find((f) => f.bookingId === result.bookingId) ||
+                        mappedFlows.find((f) => f.queueNumber) ||
+                        mappedFlows[0];
+
+                    if (matchedFlow && (matchedFlow.queueNumber || matchedFlow.ticketNo !== '—')) {
+                        const flowResult = flowItemToRegistrationResult(matchedFlow, {
+                            full_name: result.fullName,
+                            citizen_id: result.citizenId,
+                            phone: result.phone,
+                            medical_coverage_id: result.insuranceId,
+                        });
+
+                        onUpdateResult?.({
+                            ...result,
+                            ...flowResult,
+                            ticketNo: flowResult.ticketNo,
+                            queueNumber: matchedFlow.queueNumber,
+                            specialty: flowResult.specialty || result.specialty,
+                            doctorLabel: flowResult.doctorLabel || result.doctorLabel,
+                            roomLabel: flowResult.roomLabel || result.roomLabel,
+                            slotTimeLabel: flowResult.slotTimeLabel || result.slotTimeLabel,
+                            isPaymentPending: false,
+                        });
+                        return;
+                    }
+                } catch (flowErr) {
+                    console.warn('[PayOsPaymentPanel] getPatientActiveFlows error:', flowErr);
+                }
+            }
+
+            // 3. Fallback kiểm tra resolveQueueNumberAfterBooking
             const fields = await receptionService.resolveQueueNumberAfterBooking(
                 {
                     stepId: result.stepId,
@@ -84,32 +122,23 @@ export function PayOsPaymentPanel({ result, onUpdateResult, className }: PayOsPa
                     queueId: fields.queueId || result.queueId,
                     qrPayload: updatedPayload,
                     isPaymentPending: false,
-                    debugLogs: [
-                        ...(result.debugLogs || []),
-                        ...(fields.debugLogs || []),
-                        '[FE] Tự động gọi POST /api/transaction/webhook và cấp số thứ tự thành công.',
-                    ],
                 });
             } else if (showToast) {
-                setCheckError(
-                    'Hệ thống chưa nhận được thanh toán cho booking này. Vui lòng kiểm tra lại.',
-                );
+                setCheckError('Chưa nhận được giao dịch từ ngân hàng. Nếu bệnh nhân đã quét mã, vui lòng đợi vài giây và bấm kiểm tra lại!');
             }
         } catch (err) {
             console.error('[PayOsPaymentPanel] Error checking payment:', err);
             if (showToast) {
-                setCheckError('Lỗi hệ thống khi kiểm tra thanh toán. Vui lòng thử lại.');
+                setCheckError('Chưa nhận được giao dịch từ ngân hàng. Vui lòng kiểm tra lại.');
             }
         } finally {
             setIsChecking(false);
         }
     };
 
+    // Auto poll mỗi 3 giây
     useEffect(() => {
         if (!result.isPaymentPending) return;
-
-        // Auto load ngay khi mount
-        void checkPaymentStatus(false);
 
         const interval = setInterval(() => {
             void checkPaymentStatus(false);
@@ -118,187 +147,151 @@ export function PayOsPaymentPanel({ result, onUpdateResult, className }: PayOsPa
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [result.isPaymentPending, result.bookingId, accessToken]);
 
-    const handleManualConfirmPayment = async () => {
-        if (!accessToken || !result.bookingId) return;
-        setIsChecking(true);
-        try {
-            let patientId = '';
-            try {
-                if (result.qrPayload) {
-                    const parsed = JSON.parse(result.qrPayload);
-                    patientId = parsed.patientId || '';
-                }
-            } catch (e) {
-                console.error('[PayOsPaymentPanel] Failed to parse patientId from qrPayload:', e);
-            }
-
-            // Gọi API Webhook BE (/api/transaction/webhook) để cập nhật trạng thái đã thanh toán
-            try {
-                await receptionService.triggerTransactionWebhook(
-                    {
-                        booking_id: result.bookingId,
-                        client_id: result.bookingId,
-                        status: 'PAID',
-                        code: '00',
-                    },
-                    accessToken,
-                );
-            } catch (webhookErr) {
-                console.warn('[PayOsPaymentPanel] Webhook trigger notification:', webhookErr);
-            }
-
-            // Sau khi gọi webhook, lấy số thứ tự từ Backend
-            const fields = await receptionService.resolveQueueNumberAfterBooking(
-                {
-                    stepId: result.stepId,
-                    bookingId: result.bookingId,
-                },
-                patientId,
-                accessToken,
-            );
-
-            const queueNo = fields.queueNumber || `A-${Math.floor(100 + Math.random() * 899)}`;
-            const finalTicketNo = formatQueueTicketNo(queueNo);
-            const updatedPayload = JSON.stringify({
-                ticket: finalTicketNo,
-                bookingId: fields.bookingId || result.bookingId,
-                citizenId: result.citizenId,
-                patientId,
-            });
-
-            onUpdateResult?.({
-                ...result,
-                ticketNo: finalTicketNo,
-                queueNumber: fields.queueNumber || queueNo,
-                queueId: fields.queueId || result.queueId,
-                qrPayload: updatedPayload,
-                isPaymentPending: false,
-                debugLogs: [
-                    ...(result.debugLogs || []),
-                    '[FE] Đã kích hoạt POST /api/transaction/webhook & cấp số thứ tự thành công.',
-                ],
-            });
-        } catch (err) {
-            console.error('[PayOsPaymentPanel] Manual confirm error:', err);
-        } finally {
-            setIsChecking(false);
-        }
-    };
-
     if (!hasPaymentUi) return null;
 
+    const qrData = result.paymentQrCode || result.paymentCheckoutUrl || '';
+    const qrImageUrl = qrData
+        ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrData)}`
+        : '';
+
     return (
-        <div
-            className={cn(
-                'rounded-2xl p-5 border transition-all',
-                result.isPaymentPending
-                    ? 'border-amber-300 bg-amber-50/60 shadow-[0_4px_20px_rgba(245,158,11,0.1)]'
-                    : 'border-[#FDE68A] bg-[#FFFBEB]',
-                className,
-            )}
-        >
-            <div className="flex items-center justify-between gap-3 mb-3">
-                <h3 className="text-[14px] font-bold text-[#92400E] flex items-center gap-2">
-                    <Wallet className="w-4 h-4 text-amber-600" />
-                    Thanh toán phí khám bệnh (PayOS / VietQR)
-                </h3>
-                {result.isPaymentPending && (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-200 text-amber-900 animate-pulse">
-                        <Clock className="w-3 h-3 animate-spin" />
-                        Đang chờ chuyển khoản...
-                    </span>
-                )}
+        <div className={cn('max-w-4xl mx-auto w-full space-y-6', className)}>
+            {/* Header Title */}
+            <div className="text-center space-y-1">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold mb-2">
+                    <QrCode className="w-3.5 h-3.5" />
+                    Thanh toán chuyển khoản VietQR / PayOS
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-black text-[#1E2939] tracking-tight">
+                    Quét mã VietQR để hoàn tất đặt lịch
+                </h2>
+                <p className="text-xs sm:text-sm text-neutral-500 font-medium">
+                    Bệnh nhân quét mã QR bằng ứng dụng ngân hàng hoặc ví điện tử để thanh toán
+                </p>
             </div>
 
-            {result.paymentCheckoutUrl && (
-                <div className="mb-4 bg-white border border-amber-200 rounded-xl p-3.5 shadow-sm">
-                    <p className="text-[12px] text-neutral-600 mb-2 font-medium">
-                        Link chuyển khoản trực tiếp (PayOS):
-                    </p>
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-                        <a
-                            href={result.paymentCheckoutUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-[#0066FF] hover:bg-[#0052CC] text-white text-[13px] font-bold shadow-md shadow-blue-500/20 transition-colors shrink-0"
-                        >
-                            <ExternalLink className="w-4 h-4" />
-                            Mở trang thanh toán PayOS
-                        </a>
-                        <span className="text-[11px] text-neutral-500 truncate font-mono bg-neutral-50 border border-neutral-200 px-3 py-2 rounded-lg flex-1 select-all">
-                            {result.paymentCheckoutUrl}
-                        </span>
-                    </div>
-                </div>
-            )}
+            {/* Main 2-column card */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 bg-white rounded-3xl p-6 sm:p-8 border border-neutral-200/80 shadow-lg items-stretch">
+                {/* Left Column: VietQR Image */}
+                <div className="md:col-span-6 flex flex-col items-center justify-center p-6 bg-neutral-50 rounded-2xl border border-neutral-200/70 space-y-4">
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-neutral-500">
+                        Mã VietQR Thanh Toán
+                    </span>
 
-            <div className="flex flex-col sm:flex-row gap-4 items-start">
-                {(result.paymentQrCode || result.paymentCheckoutUrl) && (
-                    <div className="relative shrink-0 mx-auto sm:mx-0">
-                        <img
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=140&data=${encodeURIComponent(result.paymentQrCode || result.paymentCheckoutUrl || '')}`}
-                            alt="Mã QR thanh toán"
-                            width={140}
-                            height={140}
-                            className="rounded-xl border border-neutral-200 bg-white p-1 shadow-sm"
-                        />
+                    <div className="bg-white p-4 rounded-2xl border-2 border-[#155DFC]/20 shadow-md relative">
+                        {qrImageUrl ? (
+                            <img
+                                src={qrImageUrl}
+                                alt="Mã VietQR Thanh toán"
+                                className="w-56 h-56 object-contain rounded-xl"
+                            />
+                        ) : (
+                            <div className="w-56 h-56 flex flex-col items-center justify-center text-neutral-400 text-xs font-semibold">
+                                <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-2" />
+                                Đang tạo mã QR...
+                            </div>
+                        )}
                         {result.isPaymentPending && (
-                            <div className="absolute -bottom-1 -right-1 bg-amber-500 text-white rounded-full p-1.5 animate-pulse shadow">
+                            <div className="absolute -bottom-2 -right-2 bg-amber-500 text-white rounded-full p-2 animate-pulse shadow-md">
                                 <Clock className="w-4 h-4" />
                             </div>
                         )}
                     </div>
-                )}
 
-                <div className="space-y-2 flex-1 min-w-0 w-full text-[12px]">
-                    <p className="text-[#B45309] font-medium leading-relaxed">
-                        Bệnh nhân quét mã VietQR bên cạnh hoặc bấm nút thanh toán để chuyển khoản số tiền:
-                    </p>
+                    {result.paymentCheckoutUrl && (
+                        <a
+                            href={result.paymentCheckoutUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs font-bold text-[#155DFC] hover:underline pt-1"
+                        >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            Mở trang thanh toán PayOS trực tiếp
+                        </a>
+                    )}
+                </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-white/90 border border-amber-200/80 rounded-xl p-3 shadow-xs">
-                        <div>
-                            <span className="text-[#9CA3AF] font-medium">Số tiền: </span>
-                            <span className="font-extrabold text-[#D97706] text-[14px]">
-                                {(result.paymentAmount || 200000).toLocaleString('vi-VN')} VND
+                {/* Right Column: Transaction Details & Status */}
+                <div className="md:col-span-6 flex flex-col justify-between space-y-6">
+                    <div className="space-y-4">
+                        <div className="border-b border-neutral-100 pb-3 flex items-center justify-between">
+                            <h4 className="font-extrabold text-[#1E2939] text-base">
+                                Chi tiết thanh toán
+                            </h4>
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 animate-pulse">
+                                <Clock className="w-3 h-3 animate-spin text-amber-600" />
+                                Chờ chuyển khoản...
                             </span>
                         </div>
-                        {result.paymentAccountName && (
+
+                        <div className="space-y-3 text-xs font-medium text-neutral-600">
                             <div>
-                                <span className="text-[#9CA3AF] font-medium">Chủ TK: </span>
-                                <span className="font-bold text-[#374151]">{result.paymentAccountName}</span>
+                                <span className="text-neutral-400 block mb-0.5">Bệnh nhân</span>
+                                <span className="font-bold text-[#1E2939] text-sm">{result.fullName}</span>
                             </div>
-                        )}
-                        {result.paymentAccountNumber && (
+
                             <div>
-                                <span className="text-[#9CA3AF] font-medium">Số TK: </span>
-                                <span className="font-bold text-[#374151] font-mono">
-                                    {result.paymentAccountNumber}
+                                <span className="text-neutral-400 block mb-0.5">Khoa / Dịch vụ khám</span>
+                                <span className="font-bold text-[#1E2939] text-sm">{result.specialty}</span>
+                            </div>
+
+                            {result.paymentAccountName && (
+                                <div>
+                                    <span className="text-neutral-400 block mb-0.5">Chủ tài khoản thụ hưởng</span>
+                                    <span className="font-bold text-[#1E2939]">{result.paymentAccountName}</span>
+                                </div>
+                            )}
+
+                            {result.paymentAccountNumber && (
+                                <div>
+                                    <span className="text-neutral-400 block mb-0.5">Số tài khoản</span>
+                                    <span className="font-bold text-[#1E2939] font-mono text-sm">{result.paymentAccountNumber}</span>
+                                </div>
+                            )}
+
+                            {result.paymentDescription && (
+                                <div>
+                                    <span className="text-neutral-400 block mb-0.5">Nội dung chuyển khoản</span>
+                                    <span className="font-bold text-[#1E2939] font-mono text-xs bg-neutral-100 px-2 py-1 rounded select-all block break-all">
+                                        {result.paymentDescription}
+                                    </span>
+                                </div>
+                            )}
+
+                            <div className="pt-2 border-t border-neutral-100">
+                                <span className="text-neutral-400 block mb-0.5">Tổng số tiền cần thanh toán</span>
+                                <span className="font-black text-2xl text-[#155DFC]">
+                                    {result.paymentAmount
+                                        ? `${result.paymentAmount.toLocaleString('vi-VN')} đ`
+                                        : 'Theo thông báo PayOS'}
                                 </span>
                             </div>
-                        )}
-                        {result.paymentDescription && (
-                            <div>
-                                <span className="text-[#9CA3AF] font-medium">Nội dung CK: </span>
-                                <span className="font-bold text-[#374151] font-mono">
-                                    {result.paymentDescription}
-                                </span>
+                        </div>
+
+                        {checkError && (
+                            <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 font-semibold flex items-center gap-2">
+                                <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+                                <span>{checkError}</span>
                             </div>
                         )}
                     </div>
 
-                    {result.isPaymentPending && (
-                        <div className="pt-2 flex items-center gap-2 text-[12px] font-medium text-amber-800 bg-amber-100/70 border border-amber-200/80 rounded-xl px-3.5 py-2">
-                            <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600 shrink-0" />
-                            <span>Hệ thống đang tự động kiểm tra giao dịch chuyển khoản và sẽ cấp số ngay khi nhận tiền...</span>
-                        </div>
-                    )}
-
-                    {checkError && (
-                        <div className="mt-2 text-[12px] text-red-600 font-semibold flex items-center gap-1.5 bg-red-50 border border-red-200 rounded-lg p-2.5">
-                            <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
-                            <span>{checkError}</span>
-                        </div>
-                    )}
+                    {/* Action Buttons */}
+                    <div className="pt-4 border-t border-neutral-100">
+                        <button
+                            type="button"
+                            onClick={() => void checkPaymentStatus(true)}
+                            disabled={isChecking}
+                            className="w-full py-3 px-4 rounded-xl bg-[#155DFC] hover:bg-blue-700 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                        >
+                            {isChecking ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                                <RefreshCw className="w-4 h-4" />
+                            )}
+                            Kiểm tra trạng thái thanh toán
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
