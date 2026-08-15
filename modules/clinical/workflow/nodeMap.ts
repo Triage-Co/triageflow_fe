@@ -331,7 +331,7 @@ export function buildDynamicSteps(input: {
             dynamicSteps.push({
                 id: dStep.tempId,
                 Icon: getIconForStep(dStep.room_type, roomObj?.room_name || dStep.room_type, label),
-                status: 'current',
+                status: 'pending',
                 label,
                 roomName: roomObj?.room_name || 'Chưa phân phòng',
                 staffName: getStaffOnDutyForRoom(dStep.room_id) || 'Chưa phân công',

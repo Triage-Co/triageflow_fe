@@ -5,7 +5,6 @@ import type { HospitalRoom } from '@/modules/admin/types/room.types';
 import {
     Dialog,
     DialogContent,
-    DialogDescription,
     DialogHeader,
     DialogTitle,
 } from '@/shared/components/ui/Dialog';
@@ -65,10 +64,6 @@ export function ConfigureDraftDialog({
             >
                 <DialogHeader>
                     <DialogTitle>Cấu hình & Thêm template</DialogTitle>
-                    <DialogDescription>
-                        Chọn chuyên khoa rồi chọn phòng thuộc chuyên khoa đó. Bước thanh toán được
-                        hệ thống xử lý tự động — không hiện / không sửa tại đây.
-                    </DialogDescription>
                 </DialogHeader>
 
                 <div className="my-6 space-y-4">

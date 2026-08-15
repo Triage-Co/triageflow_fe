@@ -154,19 +154,9 @@ export function expandDraftsWithPaymentSteps(
             continue;
         }
 
-        seq += 1;
-        const stepId = `step_${seq}`;
-        const prevId = seq > 1 ? `step_${seq - 1}` : undefined;
+        const prevId = seq > 0 ? `step_${seq}` : undefined;
 
-        result.push({
-            ...draft,
-            template_step_id: stepId,
-            template_id: draft.template_id || stepId,
-            step_type: stepType,
-            room_type: roomType,
-            depends_on: prevId ? [prevId] : [],
-        });
-
+        // Pay-first: thanh toán xong mới được làm dịch vụ / khám.
         if (draft.requires_payment) {
             seq += 1;
             const payId = `step_${seq}`;
@@ -186,9 +176,32 @@ export function expandDraftsWithPaymentSteps(
                 template_step_id: payId,
                 step_type: 'PAYMENT',
                 requires_payment: false,
-                depends_on: [stepId],
+                depends_on: prevId ? [prevId] : [],
             });
+
+            seq += 1;
+            const serviceId = `step_${seq}`;
+            result.push({
+                ...draft,
+                template_step_id: serviceId,
+                template_id: draft.template_id || serviceId,
+                step_type: stepType,
+                room_type: roomType,
+                depends_on: [payId],
+            });
+            continue;
         }
+
+        seq += 1;
+        const stepId = `step_${seq}`;
+        result.push({
+            ...draft,
+            template_step_id: stepId,
+            template_id: draft.template_id || stepId,
+            step_type: stepType,
+            room_type: roomType,
+            depends_on: prevId ? [prevId] : [],
+        });
     }
 
     return result;
