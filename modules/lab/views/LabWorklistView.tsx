@@ -69,7 +69,7 @@ export default function LabWorklistView() {
 
     const roomQueue = useRoomQueue({
         roomId: activeShift?.room_id,
-        staffId: user?.id,
+        staffId: activeShift?.staff_id || user?.id,
         enabled: !!activeShift?.room_id && !!accessToken,
     });
 

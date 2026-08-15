@@ -63,7 +63,8 @@ export function useDoctorDashboard() {
 
     const roomQueue = useRoomQueue({
         roomId: activeShift?.room_id,
-        staffId: user?.id,
+        // call-next requires staff_id from shift — not account_id / user.id
+        staffId: activeShift?.staff_id || user?.id,
         enabled: Boolean(activeShift?.room_id && accessToken),
     });
 
