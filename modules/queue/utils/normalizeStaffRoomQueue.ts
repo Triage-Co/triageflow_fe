@@ -1,5 +1,4 @@
 import type {
-    CallNextResponse,
     MissingEntry,
     RoomQueueData,
     Serving,
@@ -149,12 +148,11 @@ export function normalizeStaffRoomQueue(raw: unknown): RoomQueueData | null {
         ? envelope.data
         : envelope) as Record<string, unknown>;
 
-    // Staff payloads must have waiting array and/or serving key (even if null)
+    // Staff payloads must expose waiting/serving/missing.
+    // Do NOT treat `room_id` alone as staff — TV broadcasts also carry room_id and
+    // would otherwise normalize to empty waiting[] and wipe a good REST load.
     const hasStaffShape =
-        'waiting' in body ||
-        'serving' in body ||
-        'missing' in body ||
-        'room_id' in body;
+        'waiting' in body || 'serving' in body || 'missing' in body;
     if (!hasStaffShape) return null;
 
     const waitingRaw = Array.isArray(body.waiting) ? body.waiting : [];
@@ -174,38 +172,97 @@ export function normalizeStaffRoomQueue(raw: unknown): RoomQueueData | null {
 }
 
 /**
+ * Map TV `current_patient` → staff `serving` when call-next omits `serving`.
+ */
+function servingFromCallNextPatient(raw: unknown): Serving | null {
+    const p = asRecord(raw);
+    if (!p) return null;
+    const queueId = asString(p.queue_id);
+    if (!queueId) return null;
+    return {
+        queue_id: queueId,
+        queue_number: asString(p.queue_number),
+        serving_started_at: null,
+        patient: {
+            patient_id: asString(p.patient_id),
+            full_name: asString(p.patient_name || p.full_name),
+            dob: p.dob != null ? asString(p.dob) : null,
+            gender: asString(p.gender),
+        },
+        step: null,
+        service_order: null,
+    };
+}
+
+function unwrapQueueBody(raw: unknown): Record<string, unknown> | null {
+    const envelope = asRecord(raw);
+    if (!envelope) return null;
+    const nested = asRecord(envelope.data);
+    return nested || envelope;
+}
+
+/**
  * After call-next, BE may return TV fields + serving. Prefer staff shape when present.
+ * If `waiting` is present but `serving` is omitted, fill serving from `current_patient`
+ * so the desk does not clear the room panel while emptying the wait list.
  */
 export function extractStaffQueueFromCallNext(
     raw: unknown,
     fallbackRoomId?: string,
 ): RoomQueueData | null {
+    const body = unwrapQueueBody(raw);
+    const servingFromTv = servingFromCallNextPatient(body?.current_patient);
+
     const staff = normalizeStaffRoomQueue(raw);
     if (staff) {
-        if (!staff.room_id && fallbackRoomId) {
-            return { ...staff, room_id: fallbackRoomId };
+        const withRoom =
+            !staff.room_id && fallbackRoomId
+                ? { ...staff, room_id: fallbackRoomId }
+                : staff;
+        if (!withRoom.serving && servingFromTv) {
+            return { ...withRoom, serving: servingFromTv };
         }
-        return staff;
+        return withRoom;
     }
 
-    // TV-only response after call-next: keep previous waiting via null (caller refreshes)
-    const tv = raw as Partial<CallNextResponse>;
-    if (tv?.serving) {
+    if (servingFromTv) {
+        const waitingRaw = Array.isArray(body?.waiting)
+            ? body!.waiting
+            : Array.isArray(body?.upcoming_patients)
+              ? body!.upcoming_patients
+              : [];
+        const missingRaw = Array.isArray(body?.missing) ? body!.missing : [];
         return {
-            room_id: fallbackRoomId || asString(tv.room_id),
-            expected_service_minutes: asNumber(tv.expected_service_minutes),
-            serving: normalizeServing(tv.serving),
-            waiting: Array.isArray(tv.waiting)
-                ? tv.waiting
+            room_id: fallbackRoomId || asString(body?.room_id),
+            expected_service_minutes: asNumber(body?.expected_service_minutes),
+            serving: servingFromTv,
+            waiting: waitingRaw
+                .map((item, i) => normalizeWaiting(item, i))
+                .filter((x): x is WaitingEntry => x != null),
+            missing: missingRaw
+                .map(normalizeMissing)
+                .filter((x): x is MissingEntry => x != null),
+        };
+    }
+
+    const nestedServing = normalizeServing(body?.serving);
+    if (nestedServing) {
+        return {
+            room_id: fallbackRoomId || asString(body?.room_id),
+            expected_service_minutes: asNumber(body?.expected_service_minutes),
+            serving: nestedServing,
+            waiting: Array.isArray(body?.waiting)
+                ? body!.waiting
                       .map((item, i) => normalizeWaiting(item, i))
                       .filter((x): x is WaitingEntry => x != null)
                 : [],
-            missing: Array.isArray(tv.missing)
-                ? tv.missing
+            missing: Array.isArray(body?.missing)
+                ? body!.missing
                       .map(normalizeMissing)
                       .filter((x): x is MissingEntry => x != null)
                 : [],
         };
     }
+
     return null;
 }

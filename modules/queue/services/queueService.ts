@@ -68,12 +68,16 @@ export const queueService = {
         const raw = unwrapData(res) ?? res;
         const tv = normalizeQueueUpdatePayload(raw);
         const staff = extractStaffQueueFromCallNext(raw, dto.room_id);
+        const servingFromRaw =
+            staff?.serving ??
+            (raw as CallNextResponse)?.serving ??
+            null;
 
         return {
             ...res,
             data: tv ?? (raw as CallNextResponse),
             staffQueue: staff,
-            serving: staff?.serving ?? (raw as CallNextResponse)?.serving ?? null,
+            serving: servingFromRaw,
         };
     },
 

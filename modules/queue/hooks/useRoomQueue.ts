@@ -123,6 +123,9 @@ export function useRoomQueue({
                 const payload: { roomId: string; staffId?: string } = { roomId: roomId! };
                 if (resolvedStaffId) payload.staffId = resolvedStaffId;
                 socket.emit('joinRoomDisplay', payload);
+                // Authoritative staff list comes from REST — sync after join so the
+                // desk is filled even if the first WS push is TV-shaped / empty.
+                void refresh();
             });
 
             socket.on('disconnect', () => setIsConnected(false));
@@ -139,7 +142,7 @@ export function useRoomQueue({
                         return;
                     }
                 }
-                // TV-only push: refresh REST for full staff payload
+                // TV-only / unrecognized push: refresh REST for full staff payload
                 void refresh();
             });
 
@@ -192,7 +195,9 @@ export function useRoomQueue({
     const callNext = useCallback(
         async (stepId?: string): Promise<Serving | null> => {
             if (!roomId || !resolvedStaffId) {
-                throw new Error('Thiếu room_id hoặc staff_id để gọi bệnh nhân');
+                const msg = 'Thiếu room_id hoặc staff_id để gọi bệnh nhân';
+                setError(msg);
+                throw new Error(msg);
             }
             return withActing(async () => {
                 const dto: CallNextRequestDto = {
@@ -201,12 +206,13 @@ export function useRoomQueue({
                 };
                 if (stepId) dto.step_id = stepId;
                 const res = await queueService.callNext(dto, accessToken || undefined);
-                if (res.staffQueue) {
+                if (res.staffQueue?.serving) {
                     setQueue(res.staffQueue);
-                    return res.staffQueue.serving;
                 }
+                // Always re-fetch staff room queue — call-next often returns TV shape
+                // (current_patient) without a full serving payload.
                 await refresh();
-                return res.serving ?? null;
+                return res.staffQueue?.serving ?? res.serving ?? null;
             });
         },
         [roomId, resolvedStaffId, accessToken, withActing, refresh],

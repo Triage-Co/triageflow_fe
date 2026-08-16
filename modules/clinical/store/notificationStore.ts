@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { notificationService } from '../services/notificationService';
-import type { NotificationItem } from '../types/notification.types';
+import type { ApiNotification, NotificationItem } from '../types/notification.types';
 
 export interface NotificationState {
     notifications: NotificationItem[];
@@ -16,6 +16,7 @@ export interface NotificationState {
 
 function formatRelativeTime(dateStr: string): string {
     const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return dateStr || '';
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMinutes = Math.floor(diffMs / 60000);
@@ -28,7 +29,49 @@ function formatRelativeTime(dateStr: string): string {
     if (diffDays === 1) return 'Hôm qua';
     if (diffDays < 7) return `${diffDays} ngày trước`;
 
-    return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    return date.toLocaleDateString('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+    });
+}
+
+function extractNotificationList(raw: unknown): ApiNotification[] {
+    if (Array.isArray(raw)) return raw as ApiNotification[];
+    if (!raw || typeof raw !== 'object') return [];
+    const root = raw as Record<string, unknown>;
+    if (Array.isArray(root.data)) return root.data as ApiNotification[];
+    const nested = root.data;
+    if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+        const nestedRec = nested as Record<string, unknown>;
+        if (Array.isArray(nestedRec.data)) return nestedRec.data as ApiNotification[];
+        if (Array.isArray(nestedRec.items)) return nestedRec.items as ApiNotification[];
+        if (Array.isArray(nestedRec.notifications)) {
+            return nestedRec.notifications as ApiNotification[];
+        }
+    }
+    if (Array.isArray(root.items)) return root.items as ApiNotification[];
+    if (Array.isArray(root.notifications)) return root.notifications as ApiNotification[];
+    return [];
+}
+
+function mapApiNotification(item: ApiNotification, index: number): NotificationItem | null {
+    const id = String(item.id || item.notification_id || '').trim();
+    if (!id && !item.message && !item.content && !item.title) return null;
+
+    const content = String(
+        item.message || item.content || item.title || 'Thông báo hệ thống'
+    ).trim();
+    const createdRaw = item.created_at || item.updated_at || '';
+    const createdAt = createdRaw ? new Date(createdRaw) : new Date();
+
+    return {
+        id: id || `notif-${index}-${createdAt.getTime()}`,
+        content,
+        time: formatRelativeTime(createdAt.toISOString()),
+        read: Boolean(item.is_read ?? item.read ?? false),
+        createdAt,
+    };
 }
 
 export const useNotificationStore = create<NotificationState>((set) => ({
@@ -40,19 +83,12 @@ export const useNotificationStore = create<NotificationState>((set) => ({
         set({ isLoading: true, error: null });
         try {
             const res = await notificationService.getNotifications(token);
-            if (res && res.data) {
-                const mapped: NotificationItem[] = res.data.map((item) => ({
-                    id: item.id,
-                    content: item.message,
-                    time: formatRelativeTime(item.created_at),
-                    read: false,
-                    createdAt: new Date(item.created_at),
-                }));
-                mapped.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-                set({ notifications: mapped, isLoading: false });
-            } else {
-                set({ notifications: [], isLoading: false });
-            }
+            const list = extractNotificationList(res?.data ?? res);
+            const mapped = list
+                .map(mapApiNotification)
+                .filter((n): n is NotificationItem => Boolean(n));
+            mapped.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+            set({ notifications: mapped, isLoading: false });
         } catch (err) {
             set({
                 error: err instanceof Error ? err.message : 'Không thể tải thông báo.',

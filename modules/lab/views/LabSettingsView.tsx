@@ -8,7 +8,6 @@ import {
     Save,
     CheckCircle2,
     Loader2,
-    ArrowRight,
     ChevronDown,
     Eye,
     EyeOff,
@@ -336,11 +335,50 @@ export default function LabSettingsView() {
                     {/* 2x2 Input Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                         <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-600">Tên đăng nhập</label>
+                            <label className="text-xs font-bold text-slate-600">Tên người dùng</label>
                             <input
                                 type="text"
                                 value={userName}
                                 onChange={(e) => setUserName(e.target.value)}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-[14px] px-4 py-3 text-xs font-bold text-slate-800 focus:outline-none focus:border-[#8B7CF6] focus:bg-white transition"
+                            />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-600">Vai trò</label>
+                            <input
+                                type="text"
+                                value={
+                                    profile?.role === 'LAB_TECHNICIAN' ||
+                                    (profile?.role === 'DOCTOR' &&
+                                        typeof window !== 'undefined' &&
+                                        localStorage.getItem('tfopd_active_room_type') === 'PROCEDURE_ROOM')
+                                        ? 'Kỹ thuật viên Xét nghiệm'
+                                        : profile?.role === 'LAB_STAFF'
+                                            ? 'Nhân viên Xét nghiệm'
+                                            : profile?.role || '—'
+                                }
+                                readOnly
+                                className="w-full bg-slate-100 border border-slate-200 rounded-[14px] px-4 py-3 text-xs font-semibold text-slate-500 cursor-not-allowed outline-none"
+                            />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-600">Email</label>
+                            <input
+                                type="email"
+                                value={profile?.email || ''}
+                                readOnly
+                                className="w-full bg-slate-100 border border-slate-200 rounded-[14px] px-4 py-3 text-xs font-semibold text-slate-500 cursor-not-allowed outline-none"
+                            />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-600">Số điện thoại</label>
+                            <input
+                                type="text"
+                                value={phone}
+                                onChange={(e) => setPhone(e.target.value)}
                                 className="w-full bg-slate-50 border border-slate-200 rounded-[14px] px-4 py-3 text-xs font-bold text-slate-800 focus:outline-none focus:border-[#8B7CF6] focus:bg-white transition"
                             />
                         </div>
@@ -356,27 +394,6 @@ export default function LabSettingsView() {
                                 <option value="FEMALE">Nữ</option>
                                 <option value="OTHER">Khác</option>
                             </select>
-                        </div>
-
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-600">Số điện thoại</label>
-                            <input
-                                type="text"
-                                value={phone}
-                                onChange={(e) => setPhone(e.target.value)}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-[14px] px-4 py-3 text-xs font-bold text-slate-800 focus:outline-none focus:border-[#8B7CF6] focus:bg-white transition"
-                            />
-                        </div>
-
-
-<div className="space-y-1.5 sm:col-span-2">
-                            <label className="text-xs font-bold text-slate-600">Email liên hệ</label>
-                            <input
-                                type="email"
-                                value={profile?.email || ''}
-                                readOnly
-                                className="w-full bg-slate-100 border border-slate-200 rounded-[14px] px-4 py-3 text-xs font-semibold text-slate-500 cursor-not-allowed outline-none"
-                            />
                         </div>
                     </div>
                 </div>

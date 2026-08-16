@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Patient } from '@/modules/clinical/types/clinical.types';
 import { Heart, Activity, Thermometer, Gauge, AlertTriangle, User, Pencil, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { WorkflowDiagram } from '@/modules/clinical/components/WorkflowDiagram';
+import { WorkflowDiagram } from '@/app/(staff)/doctor/_components/workflow/WorkflowDiagram';
 import { clinicalService } from '@/modules/clinical/services/clinicalService';
 import { useAuthStore } from '@/store/authStore';
 import { isClinicalEmrReadOnly } from '@/modules/clinical/utils/appointmentDate';
