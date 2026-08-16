@@ -43,7 +43,7 @@ export function getUserFromToken(token: string): AuthUser | null {
 
     // Common claim names for name
     const fullName = String(
-        payload.fullName ?? payload.full_name ?? payload.name ?? payload.userName ?? ''
+        (payload.patient as any)?.full_name ?? payload.fullName ?? payload.full_name ?? payload.name ?? payload.userName ?? ''
     );
 
     // Common claim names for role

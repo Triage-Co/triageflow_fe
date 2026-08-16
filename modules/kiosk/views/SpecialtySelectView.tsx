@@ -143,18 +143,18 @@ export const SpecialtySelectView: React.FC = () => {
   };
 
   return (
-    <div className="w-full min-h-screen p-6 lg:p-8 z-10 select-none flex flex-col justify-between space-y-6 max-w-7xl mx-auto relative">
+    <div className="w-full h-full min-h-0 p-4 sm:p-6 lg:p-8 z-10 select-none flex flex-col justify-between gap-4 max-w-7xl mx-auto relative overflow-hidden">
       {/* Top Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigateToView('booking_mode')}
-            className="flex items-center gap-2 px-5 py-1 bg-white hover:bg-neutral-50 active:scale-95 rounded-2xl text-sm font-bold text-neutral-800 shadow-md border border-neutral-100 transition-all cursor-pointer shrink-0"
+            className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-neutral-50 active:scale-95 rounded-2xl text-xs sm:text-sm font-bold text-neutral-800 shadow-md border border-neutral-100 transition-all cursor-pointer shrink-0"
           >
-            <ArrowLeft className="w-12 h-12 text-neutral-600" /> Quay lại
+            <ArrowLeft className="w-4 h-4 text-neutral-600" /> Quay lại
           </button>
           <div>
-            <h2 className="text-2xl sm:text-3xl font-black text-[#1E2939] tracking-tight">
+            <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-[#1E2939] tracking-tight">
               Danh mục Chuyên khoa khám
             </h2>
             <p className="text-xs sm:text-sm font-semibold text-neutral-500 mt-0.5">
@@ -164,31 +164,31 @@ export const SpecialtySelectView: React.FC = () => {
         </div>
 
         {/* Search Bar */}
-        <div className="relative w-full sm:w-80">
-          <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" />
+        <div className="relative w-full sm:w-80 shrink-0">
+          <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Tìm kiếm chuyên khoa..."
-            className="w-full pl-12 pr-4 py-3 bg-white/90 backdrop-blur-md border border-neutral-200 rounded-2xl text-sm font-bold text-[#1E2939] placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#155DFC] shadow-sm transition-all"
+            className="w-full pl-11 pr-4 py-2.5 sm:py-3 bg-white/90 backdrop-blur-md border border-neutral-200 rounded-2xl text-xs sm:text-sm font-bold text-[#1E2939] placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#155DFC] shadow-sm transition-all"
           />
         </div>
       </div>
 
       {/* Main Grid View */}
-      <div className="flex-1 min-h-0 py-2">
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {isFetchingSpecialties ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {Array.from({ length: 15 }).map((_, idx) => (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 flex-1 min-h-0 overflow-y-auto pr-1">
+            {Array.from({ length: 18 }).map((_, idx) => (
               <div
                 key={idx}
-                className="lg:size-40 bg-white/60 rounded-3xl animate-pulse border border-neutral-100"
+                className="aspect-square bg-white/60 rounded-3xl animate-pulse border border-neutral-100"
               />
             ))}
           </div>
         ) : filteredSpecialties.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-12 bg-white/80 backdrop-blur-xl rounded-[32px] border border-neutral-100 shadow-lg text-center space-y-4 max-w-md mx-auto my-12">
+          <div className="flex-1 flex flex-col items-center justify-center p-8 sm:p-12 bg-white/80 backdrop-blur-xl rounded-[32px] border border-neutral-100 shadow-lg text-center space-y-4 max-w-md mx-auto my-auto">
             <div className="w-16 h-16 rounded-2xl bg-blue-50 text-[#155DFC] flex items-center justify-center">
               <Search className="w-8 h-8" />
             </div>
@@ -204,18 +204,18 @@ export const SpecialtySelectView: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 overflow-y-auto max-h-[calc(100vh-210px)] pr-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 overflow-y-auto flex-1 min-h-0 pr-1">
             {filteredSpecialties.map((item) => (
               <button
                 key={item.specialty_id}
                 onClick={() => handleSelectSpecialty(item)}
-                className="group bg-white/90 hover:bg-gradient-to-br hover:from-white hover:to-blue-50/80 backdrop-blur-md rounded-3xl p-5 border border-neutral-100/80 hover:border-blue-200 shadow-sm hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-200 flex flex-col items-center text-center justify-center space-y-3 cursor-pointer active:scale-95"
+                className="group bg-white/90 hover:bg-gradient-to-br hover:from-white hover:to-blue-50/80 backdrop-blur-md rounded-3xl p-4 sm:p-5 border border-neutral-100/80 hover:border-blue-200 shadow-sm hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-200 flex flex-col items-center text-center justify-center space-y-2.5 cursor-pointer active:scale-95"
               >
-                <div className="w-14 h-14 rounded-2xl bg-neutral-50 group-hover:bg-white flex items-center justify-center shadow-inner transition-colors duration-200">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-neutral-50 group-hover:bg-white flex items-center justify-center shadow-inner transition-colors duration-200 shrink-0">
                   {getSpecialtyIcon(item.specialty_name)}
                 </div>
                 <div className="space-y-0.5">
-                  <h4 className="text-sm sm:text-base font-black text-[#1E2939] group-hover:text-[#155DFC] transition-colors line-clamp-2 leading-snug">
+                  <h4 className="text-xs sm:text-sm lg:text-base font-black text-[#1E2939] group-hover:text-[#155DFC] transition-colors line-clamp-2 leading-snug">
                     {item.specialty_name}
                   </h4>
                 </div>

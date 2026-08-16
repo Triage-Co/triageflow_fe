@@ -19,8 +19,7 @@ body{font-family:'Courier New',Courier,monospace,system-ui,sans-serif;padding:8p
 .doc-title{font-size:11px;font-weight:bold;margin-bottom:8px;text-transform:uppercase}
 .ticket-box{border:2px solid #000;padding:16px 0;margin:12px auto;width:95%;box-sizing:border-box}
 .ticket-box-title{font-size:11px;font-weight:bold;text-transform:uppercase;margin-bottom:6px;letter-spacing:1px}
-.ticket-number{font-size:46px;font-weight:900;letter-spacing:2px;line-height:1;margin-bottom:10px}
-.priority-box{display:inline-block;border:1px solid #000;padding:4px 10px;font-size:10px;font-weight:bold;text-transform:uppercase}
+.ticket-number{font-size:46px;font-weight:900;letter-spacing:2px;line-height:1;margin-bottom:6px}
 .dashed-line{border-top:1px dashed #000;margin:16px 0;width:100%}
 .solid-line{border-top:2px solid #000;margin:16px 0 12px 0;width:100%}
 .info-table{width:100%;border-collapse:collapse;font-size:12px}
@@ -43,7 +42,6 @@ body{font-family:'Courier New',Courier,monospace,system-ui,sans-serif;padding:8p
     <div class="ticket-box">
         <div class="centered ticket-box-title">Số thứ tự khám</div>
         <div class="centered ticket-number">${result.ticketNo}</div>
-        <div class="centered"><div class="priority-box">Đối tượng: ${result.priority}</div></div>
     </div>
     
     <div class="dashed-line"></div>

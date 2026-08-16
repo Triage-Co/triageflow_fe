@@ -1,26 +1,34 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
-import Link from 'next/link';
 import {
+    Brain,
+    Building2,
+    CalendarDays,
     ChevronLeft,
+    ChevronRight,
+    CreditCard,
+    FileText,
+    IdCard,
     Loader2,
     AlertCircle,
     CheckCircle2,
     ArrowRight,
+    Mail,
+    Package,
+    Phone,
     ScanLine,
-    User,
+    ShieldCheck,
     Stethoscope,
-    CreditCard,
-    Clock,
-    Wallet,
-    ExternalLink,
+    User,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/modules/auth/store/authStore';
 import { receptionService } from '@/modules/reception/services/receptionService';
 import { CccdQrScanner } from '@/modules/reception/components/CccdQrScanner';
-import { CccdImageUpload } from '@/modules/reception/components/CccdImageUpload';
+import { BookingModeSelector, type BookingMode } from '@/modules/reception/components/BookingModeSelector';
+import { SpecialtyPickStep } from '@/modules/reception/components/SpecialtyPickStep';
+import { PackagePickStep } from '@/modules/reception/components/PackagePickStep';
 import { SymptomTriageStep } from '@/modules/reception/components/SymptomTriageStep';
 import {
     RegisterConfirmStep,
@@ -32,7 +40,6 @@ import type { CccdScanResult } from '@/modules/reception/utils/cccdQrParser';
 import type {
     BackendSpecialtyCatalogItem,
     ReceptionAccount,
-    ReceptionPriority,
     ReceptionSlot,
     ReceptionSpecialty,
     RegistrationResult,
@@ -53,14 +60,11 @@ import {
 } from '@/modules/reception/utils/receptionMapper';
 import {
     applyRegisterPrefillToForm,
-    applyRegisterStep1DraftToForm,
-    clearRegisterStep1Draft,
     consumeRegisterPrefill,
-    loadRegisterStep1Draft,
-    saveRegisterStep1Draft,
     type RegisterPrefill,
 } from '@/modules/reception/utils/registerPrefill';
 import { REGISTER_DEPARTMENTS, resolveCatalogSpecialty, translateSpecialtyDisplayName } from '@/modules/reception/constants/registerDepartments';
+import { mapActiveFlowsList } from '@/modules/reception/utils/receptionFlowMapper';
 
 import type { Gender } from '@/shared/types/auth.types';
 
@@ -79,7 +83,7 @@ interface FormState {
     department_id: string;
     slot_id: string;
     specialty_id: string;
-    priority: ReceptionPriority;
+    package_id: string;
     payment_method: RegisterPaymentMethod;
 }
 
@@ -96,21 +100,19 @@ const INITIAL: FormState = {
     department_id: '',
     slot_id: '',
     specialty_id: '',
-    priority: 'Thường',
-    payment_method: 'bhyt',
+    package_id: '',
+    payment_method: 'qr',
 };
 
 const STEPS = [
     { num: 1, label: 'Thông tin bệnh nhân', icon: User },
-    { num: 2, label: 'Triệu chứng & khoa', icon: Stethoscope },
+    { num: 2, label: 'Chọn khám & Lịch hẹn', icon: Stethoscope },
     { num: 3, label: 'Thanh toán & xác nhận', icon: CreditCard },
     { num: 4, label: 'Hoàn tất', icon: CheckCircle2 },
 ] as const;
 
 const PAYMENT_LABELS: Record<RegisterPaymentMethod, string> = {
-    bhyt: 'BHYT',
     qr: 'QR Code / VietQR',
-    card: 'Thẻ ngân hàng',
     cash: 'Tiền mặt',
 };
 
@@ -201,11 +203,42 @@ function Stepper({ current }: { current: Step }) {
     );
 }
 
+function InfoRow({
+    icon,
+    label,
+    value,
+    highlight,
+    badge,
+}: {
+    icon: React.ReactNode;
+    label: string;
+    value: string;
+    highlight?: boolean;
+    badge?: boolean;
+}) {
+    return (
+        <div className="flex items-start gap-2.5 p-3 rounded-xl bg-white/70 border border-[#F3F4F6]">
+            <span className="text-[#9CA3AF] shrink-0 mt-0.5">{icon}</span>
+            <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[#9CA3AF] mb-0.5">{label}</p>
+                {badge ? (
+                    <span className="inline-flex text-[12px] font-bold text-[#2563EB] bg-[#EFF6FF] border border-[#BFDBFE] px-2 py-0.5 rounded-md">
+                        {value}
+                    </span>
+                ) : (
+                    <p className={cn('text-[13px] font-semibold truncate', highlight ? 'text-[#8B7CF6]' : 'text-[#1F2937]')}>{value}</p>
+                )}
+            </div>
+        </div>
+    );
+}
+
 export function ReceptionRegisterForm() {
     const accessToken = useAuthStore((s) => s.accessToken);
     const [isPending, startTransition] = useTransition();
 
     const [step, setStep] = useState<Step>(1);
+    const [bookingMode, setBookingMode] = useState<BookingMode | null>(null);
     const [form, setForm] = useState<FormState>(INITIAL);
     const [slots, setSlots] = useState<ReceptionSlot[]>([]);
     const [specialties, setSpecialties] = useState<ReceptionSpecialty[]>([]);
@@ -220,226 +253,49 @@ export function ReceptionRegisterForm() {
     const [registrationResult, setRegistrationResult] = useState<RegistrationResult | null>(null);
     const [triageSession, setTriageSession] = useState<SymptomTriageSession>(EMPTY_TRIAGE_SESSION);
     const prefillRef = useRef<RegisterPrefill | null>(null);
-    const prefillLookupDoneRef = useRef(false);
-    const draftHydratedRef = useRef(false);
+    const prefillHydratedRef = useRef(false);
+    const patientPromiseRef = useRef<Promise<string | undefined> | null>(null);
 
     const [createdBooking, setCreatedBooking] = useState<{ bookingId: string; stepId: string } | null>(null);
-    const [qrTransaction, setQrTransaction] = useState<TransactionQrResponse | null>(null);
-    const [isCreatingTx, setIsCreatingTx] = useState(false);
 
     useEffect(() => {
         setCreatedBooking(null);
-        setQrTransaction(null);
     }, [form.slot_id, form.specialty_id]);
 
-    const handleQrPaymentSelected = async () => {
-        if (!accessToken) return;
-        if (qrTransaction) return;
-        
-        setIsCreatingTx(true);
-        setError(null);
-        try {
-            let patientId = existingAccount?.patient_id;
-            const email = form.email || `bn.${form.citizen_id.slice(-8)}@patient.triageflow.me`;
-            
-            if (!patientId) {
-                const suffix = form.citizen_id.slice(-6);
-                patientId = await receptionService.registerPatient({
-                    email,
-                    full_name: form.full_name,
-                    dob: form.dob,
-                    password: `Patient@${suffix}`,
-                    gender: form.gender,
-                    citizen_id: form.citizen_id,
-                    phone: form.phone || undefined,
-                    bhyt: form.insurance_id || undefined,
-                }, accessToken);
-                if (patientId) {
-                    setExistingAccount((prev) =>
-                        prev
-                            ? { ...prev, patient_id: patientId }
-                            : {
-                                  account_id: '',
-                                  patient_id: patientId,
-                                  full_name: form.full_name.trim(),
-                                  citizen_id: form.citizen_id.trim(),
-                                  email: form.email,
-                                  dob: form.dob,
-                                  gender: form.gender,
-                                  role: 'PATIENT',
-                                  phone: form.phone || null,
-                                  bhyt: form.insurance_id || null,
-                              },
-                    );
-                }
-            }
-            
-            if (!patientId) {
-                throw new Error('Không tìm thấy hồ sơ bệnh nhân để đặt lịch.');
-            }
-
-            let bookingId = createdBooking?.bookingId;
-            let stepId = createdBooking?.stepId;
-            let paymentData = qrTransaction;
-
-            console.log('[Register Debug] Input - patientId:', patientId, 'slot_id:', form.slot_id);
-
-            if (!bookingId) {
-                const bookingRes = await receptionService.createBooking(
-                    { patient_id: patientId, slot_id: form.slot_id },
-                    accessToken,
-                );
-                console.log('[Register Debug] Response from API /api/booking:', bookingRes);
-                const extracted = extractBookingCreateFields(bookingRes);
-                const bData = bookingRes?.data as any;
-
-                bookingId =
-                    extracted.bookingId ||
-                    bData?.data?.booking_id ||
-                    bData?.booking_id ||
-                    bData?.data?.id ||
-                    bData?.id ||
-                    extracted.stepId ||
-                    bData?.step_id;
-                stepId =
-                    extracted.stepId ||
-                    bData?.step_id ||
-                    (bData?.steps && bData.steps.length > 0 ? bData.steps[0].id : undefined) ||
-                    bookingId ||
-                    'step-1';
-                
-                console.log('[Register Debug] Parsed bookingId:', bookingId, 'stepId:', stepId);
-
-                if (bookingId) {
-                    setCreatedBooking({ bookingId, stepId: stepId || 'step-1' });
-                }
-
-                if (bData?.payment?.data) {
-                    paymentData = bData.payment.data;
-                    setQrTransaction(bData.payment.data);
-                }
-            }
-
-            if (!bookingId) {
-                throw new Error('Không nhận được mã lịch khám từ hệ thống.');
-            }
-
-            if (!paymentData) {
-                const tx = await receptionService.createTransaction(
-                    {
-                        transType: 'BOOKING_PAYMENT_1',
-                        amount: 200000,
-                        clientId: bookingId,
-                        returnUrl: 'https://triageflow.me/reception',
-                        cancelUrl: 'https://triageflow.me/reception',
-                    },
-                    accessToken,
-                );
-                if (tx && tx.data) {
-                    setQrTransaction(tx.data);
-                } else {
-                    throw new Error('Không tạo được giao dịch PayOS.');
-                }
-            }
-        } catch (err) {
-            console.error('[Register] Error generating QR in Step 3:', err);
-            setError(err instanceof Error ? err.message : 'Tạo mã thanh toán QR thất bại.');
-        } finally {
-            setIsCreatingTx(false);
-        }
-    };
-
     useEffect(() => {
-        if (step === 3 && form.payment_method === 'qr') {
-            void handleQrPaymentSelected();
-        }
-    }, [step, form.payment_method]);
+        if (prefillHydratedRef.current) return;
+        prefillHydratedRef.current = true;
 
-    useEffect(() => {
-        if (draftHydratedRef.current) return;
-        draftHydratedRef.current = true;
+        const prefill = consumeRegisterPrefill();
+        prefillRef.current = prefill;
 
-        const hydrateTimer = window.setTimeout(() => {
-            const prefill = consumeRegisterPrefill();
-            prefillRef.current = prefill;
-
-            if (prefill) {
-                setForm((prev) => applyRegisterPrefillToForm(prev, prefill));
-                if (prefill.patient_id || prefill.account_id) {
-                    setExistingAccount({
-                        account_id: prefill.account_id ?? '',
-                        patient_id: prefill.patient_id,
-                        full_name: prefill.full_name,
-                        citizen_id: prefill.citizen_id,
-                        email: prefill.email ?? '',
-                        dob: '',
-                        gender: 'FEMALE',
-                        role: 'PATIENT',
-                        phone: prefill.phone ?? null,
-                        bhyt: prefill.insurance_id || null,
-                    });
-                }
-                setScanBanner('Đã tải thông tin bệnh nhân từ tra cứu.');
-                return;
-            }
-
-            const draft = loadRegisterStep1Draft();
-            if (!draft) return;
-
-            setForm((prev) => applyRegisterStep1DraftToForm(prev, draft));
-            if (draft.lookup_banner) setLookupBanner(draft.lookup_banner);
-            if (draft.existing_patient_id || draft.existing_account_id) {
-                setExistingAccount({
-                    account_id: draft.existing_account_id ?? '',
-                    patient_id: draft.existing_patient_id ?? undefined,
-                    full_name: draft.full_name,
-                    citizen_id: draft.citizen_id,
-                    email: draft.email,
-                    dob: draft.dob,
-                    gender: draft.gender,
+        if (prefill) {
+            setForm((prev) => applyRegisterPrefillToForm(prev, prefill));
+            if (prefill.patient_id || prefill.account_id) {
+                const acc: ReceptionAccount = {
+                    account_id: prefill.account_id ?? '',
+                    patient_id: prefill.patient_id,
+                    full_name: prefill.full_name,
+                    citizen_id: prefill.citizen_id,
+                    email: prefill.email ?? '',
+                    dob: prefill.dob ?? '',
+                    gender: prefill.gender ?? 'FEMALE',
                     role: 'PATIENT',
-                    phone: draft.phone || null,
-                    bhyt: draft.insurance_id || null,
-                });
+                    phone: prefill.phone ?? null,
+                    bhyt: prefill.insurance_id || null,
+                };
+                setExistingAccount(acc);
+                if (prefill.patient_id) {
+                    patientPromiseRef.current = Promise.resolve(prefill.patient_id);
+                }
             }
-            if (draft.citizen_id || draft.full_name) {
-                setScanBanner('Đã khôi phục thông tin bệnh nhân từ lần nhập trước.');
-            }
-        }, 0);
-
-        return () => window.clearTimeout(hydrateTimer);
+            setLookupBanner('found');
+            setScanBanner(`Đã tải hồ sơ bệnh nhân ${prefill.full_name}. Vui lòng chọn phương thức khám.`);
+            // Chuyển thẳng sang bước 2 (mục chọn 3 loại khám Kiosk)
+            setStep(2);
+            setBookingMode(null);
+        }
     }, []);
-
-    useEffect(() => {
-        if (!draftHydratedRef.current || step === 4) return;
-
-        saveRegisterStep1Draft({
-            citizen_id: form.citizen_id,
-            full_name: form.full_name,
-            email: form.email,
-            dob: form.dob,
-            gender: form.gender,
-            phone: form.phone,
-            address: form.address,
-            insurance_id: form.insurance_id,
-            existing_patient_id: existingAccount?.patient_id ?? null,
-            existing_account_id: existingAccount?.account_id ?? null,
-            lookup_banner: lookupBanner,
-        });
-    }, [
-        form.citizen_id,
-        form.full_name,
-        form.email,
-        form.dob,
-        form.gender,
-        form.phone,
-        form.address,
-        form.insurance_id,
-        existingAccount?.patient_id,
-        existingAccount?.account_id,
-        lookupBanner,
-        step,
-    ]);
 
     useEffect(() => {
         if (!accessToken) return;
@@ -472,64 +328,13 @@ export function ReceptionRegisterForm() {
         form.citizen_id.length >= 9 &&
         form.dob.length > 0;
 
-    const step2Valid =
-        form.symptoms.trim().length >= 5 &&
+    const step2Valid = Boolean(
+        bookingMode &&
         form.department_id.length > 0 &&
         form.specialty_id.length > 0 &&
-        form.slot_id.length > 0;
-
-    useEffect(() => {
-        if (step !== 2 || !accessToken || !step1Valid) return;
-
-        void receptionService
-            .ensurePatientProfileForTriage(
-                {
-                    citizen_id: form.citizen_id.trim(),
-                    full_name: form.full_name.trim(),
-                    dob: form.dob,
-                    gender: form.gender,
-                    medical_coverage_id: form.insurance_id,
-                    phone: form.phone,
-                    email: form.email,
-                    known_patient_id: existingAccount?.patient_id,
-                },
-                accessToken,
-            )
-            .then((patientId) => {
-                if (!patientId) return;
-                setExistingAccount((prev) =>
-                    prev
-                        ? { ...prev, patient_id: patientId }
-                        : {
-                            account_id: '',
-                            patient_id: patientId,
-                            full_name: form.full_name.trim(),
-                            citizen_id: form.citizen_id.trim(),
-                            email: form.email,
-                            dob: form.dob,
-                            gender: form.gender,
-                            role: 'PATIENT',
-                            phone: form.phone || null,
-                            bhyt: form.insurance_id || null,
-                        },
-                );
-            })
-            .catch(() => {
-                /* lỗi sẽ hiện khi phân tích / trả lời AI */
-            });
-    }, [
-        step,
-        accessToken,
-        step1Valid,
-        form.citizen_id,
-        form.full_name,
-        form.dob,
-        form.gender,
-        form.insurance_id,
-        form.phone,
-        form.email,
-        existingAccount?.patient_id,
-    ]);
+        form.slot_id.length > 0 &&
+        (bookingMode !== 'ai_triage' || form.symptoms.trim().length >= 5)
+    );
 
     async function lookupPatientByCitizen(citizenId: string) {
         const cleanId = citizenId.replace(/\D/g, '');
@@ -590,15 +395,6 @@ export function ReceptionRegisterForm() {
         }
     }
 
-    useEffect(() => {
-        if (!accessToken || prefillLookupDoneRef.current || !prefillRef.current) return;
-        const citizenId = prefillRef.current.citizen_id.replace(/\D/g, '');
-        if (citizenId.length < 9) return;
-
-        prefillLookupDoneRef.current = true;
-        void lookupPatientByCitizen(citizenId);
-    }, [accessToken]);
-
     async function handleCccdData(data: CccdScanResult, source: 'qr' | 'image' = 'qr') {
         setError(null);
         setScanBanner(
@@ -642,28 +438,79 @@ export function ReceptionRegisterForm() {
                 setError('Vui lòng điền đầy đủ thông tin bắt buộc.');
                 return;
             }
+            const cleanEmail = form.email || `bn.${form.citizen_id.slice(-8)}@patient.triageflow.me`;
             if (!form.email) {
-                update('email', `bn.${form.citizen_id.slice(-8)}@patient.triageflow.me`);
+                update('email', cleanEmail);
             }
+            // Chuyển màn hình ngay lập tức (không chờ đợi API)
             setStep(2);
+
+            // Chạy API tạo / kiểm tra hồ sơ bệnh nhân ở chế độ chạy ngầm
+            if (accessToken) {
+                patientPromiseRef.current = receptionService
+                    .ensurePatientProfileForTriage(
+                        {
+                            citizen_id: form.citizen_id.trim(),
+                            full_name: form.full_name.trim(),
+                            dob: form.dob,
+                            gender: form.gender,
+                            medical_coverage_id: form.insurance_id,
+                            phone: form.phone,
+                            email: cleanEmail,
+                            known_patient_id: existingAccount?.patient_id,
+                        },
+                        accessToken,
+                    )
+                    .then((patientId) => {
+                        if (patientId) {
+                            setExistingAccount((prev) =>
+                                prev
+                                    ? { ...prev, patient_id: patientId }
+                                    : {
+                                        account_id: '',
+                                        patient_id: patientId,
+                                        full_name: form.full_name.trim(),
+                                        citizen_id: form.citizen_id.trim(),
+                                        email: cleanEmail,
+                                        dob: form.dob,
+                                        gender: form.gender,
+                                        role: 'PATIENT',
+                                        phone: form.phone || null,
+                                        bhyt: form.insurance_id || null,
+                                    },
+                            );
+                        }
+                        return patientId;
+                    })
+                    .catch(() => existingAccount?.patient_id);
+            }
         } else if (step === 2) {
-            if (!form.symptoms.trim()) {
-                setError('Vui lòng mô tả triệu chứng.');
+            if (!bookingMode) {
+                setError('Vui lòng chọn 1 trong 3 phương thức tiếp nhận khám.');
                 return;
             }
-            if (!step2Valid) {
-                if (!form.department_id) {
-                    setError('Vui lòng chọn chuyên khoa.');
-                } else if (!form.specialty_id) {
-                    setError('Vui lòng chọn bác sĩ.');
-                } else if (!form.slot_id) {
-                    setError('Vui lòng chọn khung giờ khám.');
-                } else if (form.symptoms.trim().length < 5) {
-                    setError('Vui lòng mô tả triệu chứng (ít nhất 5 ký tự).');
-                } else {
-                    setError('Vui lòng điền đủ thông tin bước 2.');
-                }
+            if (!form.department_id) {
+                setError('Vui lòng chọn chuyên khoa khám.');
                 return;
+            }
+            if (!form.specialty_id) {
+                setError('Vui lòng chọn bác sĩ khám.');
+                return;
+            }
+            if (!form.slot_id) {
+                setError('Vui lòng chọn khung giờ khám.');
+                return;
+            }
+            if (bookingMode === 'ai_triage' && form.symptoms.trim().length < 5) {
+                setError('Vui lòng mô tả triệu chứng (ít nhất 5 ký tự) để AI chẩn đoán.');
+                return;
+            }
+            if (!form.symptoms.trim()) {
+                if (bookingMode === 'package') {
+                    update('symptoms', 'Đăng ký khám theo gói sức khỏe');
+                } else if (bookingMode === 'specialty') {
+                    update('symptoms', 'Đăng ký khám theo chuyên khoa');
+                }
             }
             setStep(3);
         }
@@ -671,13 +518,14 @@ export function ReceptionRegisterForm() {
 
     function handleReset() {
         setError(null);
-        clearRegisterStep1Draft();
         setForm(INITIAL);
+        setBookingMode(null);
         setTriageSession(EMPTY_TRIAGE_SESSION);
         setExistingAccount(null);
         setLookupBanner(null);
         setScanBanner(null);
         setRegistrationResult(null);
+        patientPromiseRef.current = null;
         setStep(1);
     }
 
@@ -723,15 +571,17 @@ export function ReceptionRegisterForm() {
         startTransition(async () => {
             try {
                 let patientId = existingAccount?.patient_id;
-                const email = form.email || `bn.${form.citizen_id.slice(-8)}@patient.triageflow.me`;
-
+                if (!patientId && patientPromiseRef.current) {
+                    try {
+                        patientId = await patientPromiseRef.current;
+                    } catch {
+                        // ignore
+                    }
+                }
                 if (!patientId) {
-                    const suffix = form.citizen_id.slice(-6);
                     patientId = await receptionService.registerPatient({
-                        email,
                         full_name: form.full_name,
                         dob: form.dob,
-                        password: `Patient@${suffix}`,
                         gender: form.gender,
                         citizen_id: form.citizen_id,
                         phone: form.phone || undefined,
@@ -750,39 +600,126 @@ export function ReceptionRegisterForm() {
                 // Nếu là QR và đã tạo booking trước đó, dùng lại bookingId. Nếu chưa có, tạo mới.
                 let bookingId = createdBooking?.bookingId;
                 let stepId = createdBooking?.stepId;
-                let bData = null;
+                let bData: any = null;
+                let paymentObj: any = null;
 
                 if (!bookingId) {
-                    const bookingRes = await receptionService.createBooking(
-                        { patient_id: patientId, slot_id: form.slot_id },
-                        accessToken,
-                    );
+                    let bookingRes;
+                    if (bookingMode === 'package' && form.package_id) {
+                        bookingRes = await receptionService.createBookingWithPackage(
+                            {
+                                patient_id: patientId,
+                                slot_id: form.slot_id,
+                                package_id: form.package_id,
+                            },
+                            accessToken,
+                        );
+                    } else if (bookingMode === 'ai_triage' && triageSession.interview_token && !form.slot_id) {
+                        bookingRes = await receptionService.createBookingRecommend(
+                            {
+                                patient_id: patientId,
+                                interview_token: triageSession.interview_token,
+                            },
+                            accessToken,
+                        );
+                    } else {
+                        bookingRes = await receptionService.createBooking(
+                            {
+                                patient_id: patientId,
+                                slot_id: form.slot_id,
+                            },
+                            accessToken,
+                        );
+                    }
+
                     const extracted = extractBookingCreateFields(bookingRes);
-                    bData = bookingRes.data as any;
+                    bData = (bookingRes?.data as any) || (bookingRes as any);
+                    const dataBody = bData?.data || bData;
+
                     bookingId =
                         extracted.bookingId ||
-                        bData?.data?.booking_id ||
+                        dataBody?.booking_id ||
                         bData?.booking_id ||
-                        bData?.data?.id ||
+                        dataBody?.id ||
                         bData?.id ||
                         extracted.stepId ||
-                        bData?.step_id;
+                        dataBody?.step_id;
                     stepId =
                         extracted.stepId ||
-                        bData?.step_id ||
-                        (bData?.steps && bData.steps.length > 0 ? bData.steps[0].id : undefined) ||
+                        dataBody?.step_id ||
+                        (dataBody?.steps && dataBody.steps.length > 0 ? dataBody.steps[0].id : undefined) ||
                         bookingId ||
                         'step-1';
+
+                    paymentObj =
+                        dataBody?.payment?.data ||
+                        dataBody?.payment ||
+                        bData?.payment?.data ||
+                        bData?.payment;
                 }
 
                 if (!bookingId) {
                     throw new Error('Không tạo được lịch khám.');
                 }
 
-                let queueFields: { queueNumber?: string; queueId?: string } = {};
-                let ticketNo = 'A-—';
+                let roomLabel =
+                    selectedSpecialty?.room_name ||
+                    selectedSlot?.room_name ||
+                    (selectedSlot?.room as any)?.name ||
+                    (selectedSlot?.room as any)?.room_name ||
+                    `Phòng khám ${specialtyLabel}`;
+                let currentSpecialty = specialtyLabel;
 
-                // Kiểm tra / Lấy số thứ tự (chỉ cấp số khi đã thanh toán thành công hoặc không bắt buộc thanh toán QR)
+                if (form.payment_method === 'qr') {
+                    const qrCode = paymentObj?.qrCode || paymentObj?.qr_code || '';
+                    const checkoutUrl = paymentObj?.checkoutUrl || paymentObj?.checkout_url || '';
+                    const amount = paymentObj?.amount;
+                    const accountName = paymentObj?.accountName || '';
+                    const accountNumber = paymentObj?.accountNumber || '';
+                    const description = paymentObj?.description || '';
+
+                    // Thanh toán QR → chuyển sang bước 4 ở trạng thái chờ thanh toán để quét mã VietQR PayOS
+                    const doctorLabelQr = getDoctorDisplayLabel(selectedSpecialty);
+                    const slotTimeLabelQr = slotTimeLabelWithDate;
+                    const qrPayloadPending = JSON.stringify({
+                        ticket: 'Chờ thanh toán',
+                        bookingId,
+                        citizenId: form.citizen_id,
+                        patientId,
+                    });
+                    setRegistrationResult({
+                        ticketNo: 'Chờ thanh toán',
+                        queueNumber: undefined,
+                        bookingId,
+                        stepId,
+                        queueId: undefined,
+                        fullName: form.full_name,
+                        citizenId: form.citizen_id,
+                        phone: form.phone,
+                        specialty: currentSpecialty,
+                        paymentLabel: PAYMENT_LABELS[form.payment_method],
+                        doctorLabel: doctorLabelQr,
+                        slotTimeLabel: slotTimeLabelQr,
+                        roomLabel,
+                        waitTimeLabel: getWaitTimeLabel(triageSession),
+                        insuranceId: form.insurance_id,
+                        qrPayload: qrPayloadPending,
+                        isPaymentPending: true,
+                        paymentQrCode: qrCode,
+                        paymentCheckoutUrl: checkoutUrl,
+                        paymentAmount: amount,
+                        paymentAccountName: accountName,
+                        paymentAccountNumber: accountNumber,
+                        paymentDescription: description,
+                    });
+                    setStep(4);
+                    return;
+                }
+
+                let queueFields: { queueNumber?: string; queueId?: string } = {};
+                let ticketNo = 'A-001';
+
+                // Với các phương thức khác (Tiền mặt, BHYT, Thẻ), cấp số thứ tự
                 try {
                     queueFields = await receptionService.resolveQueueNumberAfterBooking(
                         bData || { bookingId, stepId },
@@ -793,72 +730,43 @@ export function ReceptionRegisterForm() {
                     console.warn('[Register] Queue resolution fallback:', err);
                 }
 
-                if (form.payment_method === 'qr' && !queueFields.queueNumber && bookingId) {
-                    // Thử gọi Webhook API kích hoạt thanh toán nếu hệ thống sandbox
-                    try {
-                        await receptionService.triggerTransactionWebhook(
-                            { booking_id: bookingId, client_id: bookingId, status: 'PAID', code: '00' },
-                            accessToken,
-                        );
-                        queueFields = await receptionService.resolveQueueNumberAfterBooking(
-                            bData || { bookingId, stepId },
-                            patientId,
-                            accessToken,
-                        );
-                    } catch {
-                        // bỏ qua lỗi webhook retry
-                    }
-                }
-
-                if (form.payment_method === 'qr' && !queueFields.queueNumber) {
-                    // Thanh toán QR chưa hoàn tất → chuyển sang bước 4 ở trạng thái chờ thanh toán
-                    // PayOsPaymentPanel sẽ tự động polling mỗi 3 giây
-                    const doctorLabelQr = getDoctorDisplayLabel(selectedSpecialty);
-                    const slotTimeLabelQr = slotTimeLabelWithDate;
-                    const qrPayloadPending = JSON.stringify({
-                        ticket: 'A-—',
-                        bookingId,
-                        citizenId: form.citizen_id,
-                        patientId,
-                    });
-                    clearRegisterStep1Draft();
-                    setRegistrationResult({
-                        ticketNo: 'A-—',
-                        queueNumber: undefined,
-                        bookingId,
-                        stepId,
-                        queueId: undefined,
-                        fullName: form.full_name,
-                        citizenId: form.citizen_id,
-                        phone: form.phone,
-                        specialty: specialtyLabel,
-                        priority: form.priority,
-                        paymentLabel: PAYMENT_LABELS[form.payment_method],
-                        doctorLabel: doctorLabelQr,
-                        slotTimeLabel: slotTimeLabelQr,
-                        roomLabel: 'Phòng 201, Tầng 2',
-                        waitTimeLabel: getWaitTimeLabel(triageSession),
-                        insuranceId: form.insurance_id,
-                        qrPayload: qrPayloadPending,
-                        isPaymentPending: true,
-                        paymentQrCode: qrTransaction?.qrCode || qrTransaction?.qr_code || qrTransaction?.checkoutUrl || qrTransaction?.checkout_url || '',
-                        paymentCheckoutUrl: qrTransaction?.checkoutUrl || qrTransaction?.checkout_url || '',
-                        paymentAmount: qrTransaction?.amount || 200000,
-                        paymentAccountName: '',
-                        paymentAccountNumber: '',
-                        paymentDescription: '',
-                    });
-                    setStep(4);
-                    return;
-                }
-
                 ticketNo = queueFields.queueNumber
-                    ? formatQueueTicketNo(queueFields.queueNumber)
-                    : `A-${Math.floor(100 + Math.random() * 899)}`;
+                    ? String(queueFields.queueNumber).trim()
+                    : '—';
 
                 // uses outer specialtyLabel
-                const doctorLabel = getDoctorDisplayLabel(selectedSpecialty);
-                const slotTimeLabel = slotTimeLabelWithDate;
+                let doctorLabel = getDoctorDisplayLabel(selectedSpecialty);
+                let slotTimeLabel = slotTimeLabelWithDate;
+
+                // Đồng bộ từ Active Flow thực tế của Backend (giống Kiosk)
+                try {
+                    const rawFlows = await receptionService.getPatientActiveFlows(patientId, accessToken);
+                    const mappedFlows = mapActiveFlowsList(rawFlows);
+                    const matchedFlow = mappedFlows.find((f) => f.bookingId === bookingId) || mappedFlows[0];
+                    if (matchedFlow) {
+                        if (matchedFlow.ticketNo && matchedFlow.ticketNo !== '—') {
+                            ticketNo = matchedFlow.ticketNo;
+                        }
+                        if (matchedFlow.queueNumber) {
+                            queueFields.queueNumber = matchedFlow.queueNumber;
+                        }
+                        if (matchedFlow.doctorLabel && matchedFlow.doctorLabel !== 'Bác sĩ phụ trách') {
+                            doctorLabel = matchedFlow.doctorLabel;
+                        }
+                        if (matchedFlow.roomLabel) {
+                            roomLabel = matchedFlow.roomLabel;
+                        }
+                        if (matchedFlow.specialty) {
+                            currentSpecialty = matchedFlow.specialty;
+                        }
+                        if (matchedFlow.slotTimeLabel) {
+                            slotTimeLabel = matchedFlow.slotTimeLabel;
+                        }
+                    }
+                } catch {
+                    // ignore
+                }
+
                 const qrPayload = JSON.stringify({
                     ticket: ticketNo,
                     bookingId: bookingId,
@@ -866,7 +774,6 @@ export function ReceptionRegisterForm() {
                     patientId,
                 });
 
-                clearRegisterStep1Draft();
                 setRegistrationResult({
                     ticketNo,
                     queueNumber: queueFields.queueNumber,
@@ -876,19 +783,18 @@ export function ReceptionRegisterForm() {
                     fullName: form.full_name,
                     citizenId: form.citizen_id,
                     phone: form.phone,
-                    specialty: specialtyLabel,
-                    priority: form.priority,
+                    specialty: currentSpecialty,
                     paymentLabel: PAYMENT_LABELS[form.payment_method],
                     doctorLabel,
                     slotTimeLabel,
-                    roomLabel: 'Phòng 201, Tầng 2',
+                    roomLabel,
                     waitTimeLabel: getWaitTimeLabel(triageSession),
                     insuranceId: form.insurance_id,
                     qrPayload,
                     isPaymentPending: false, // Đã có số thứ tự tức là đã thanh toán thành công
                     paymentQrCode: '',
                     paymentCheckoutUrl: '',
-                    paymentAmount: 200000,
+                    paymentAmount: undefined,
                     paymentAccountName: '',
                     paymentAccountNumber: '',
                     paymentDescription: '',
@@ -927,23 +833,14 @@ export function ReceptionRegisterForm() {
             <div className="flex-1 flex flex-col min-h-0 bg-white rounded-none md:rounded-tl-[48px] md:rounded-bl-[48px] overflow-hidden shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
                 <div className="flex-1 overflow-y-auto overscroll-y-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden px-4 py-5 md:px-10 md:py-8 pb-8">
                     <div className={cn('mx-auto', step >= 2 ? 'max-w-6xl' : 'max-w-3xl')}>
-                        {step < 4 && (
-                            <Link
-                                href="/reception"
-                                className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#8B7CF6] mb-6"
-                            >
-                                <ChevronLeft className="w-4 h-4" />
-                                Quay lại tổng quan
-                            </Link>
-                        )}
 
                         <h1 className="text-[22px] font-bold text-[#1F2937] tracking-tight">
-                            {step === 4 ? 'Hoàn tất đăng ký' : 'Đăng ký khám mới'}
+                            {step === 4 ? 'Hoàn tất đăng ký' : 'Tiếp Nhận Bệnh Nhân'}
                         </h1>
                         <p className="text-[13px] text-[#9CA3AF] mt-1 mb-6">
                             {step === 4
                                 ? 'Vé khám đã được cấp — in hoặc tải PDF để bệnh nhân mang theo'
-                                : 'Điền thông tin hoặc quét CCCD/VNeID để tự động điền'}
+                                : 'Đăng ký khám mới'}
                         </p>
 
                         <Stepper current={step} />
@@ -994,7 +891,7 @@ export function ReceptionRegisterForm() {
                                 <button
                                     type="button"
                                     onClick={handleOpenScanner}
-                                    className="w-full rounded-[12px] border-2 border-dashed border-[#D1D5DB] bg-[#FAFAFA] px-5 py-8 sm:px-6 flex flex-col items-center text-center touch-manipulation cursor-pointer select-none active:bg-[#F5F2FF] active:border-[#8B7CF6] transition-colors relative z-10 min-h-[200px]"
+                                    className="w-full rounded-[12px] border-2 border-dashed border-[#D1D5DB] bg-[#FAFAFA] px-5 py-8 sm:px-6 flex flex-col items-center text-center touch-manipulation cursor-pointer select-none active:bg-[#F5F2FF] active:border-[#8B7CF6] transition-colors relative z-10 min-h-[200px] mb-6"
                                 >
                                     <div className="w-14 h-14 rounded-xl bg-[#EDE9FE] flex items-center justify-center mb-3 pointer-events-none">
                                         <ScanLine className="w-7 h-7 text-[#8B7CF6]" strokeWidth={2} />
@@ -1010,14 +907,6 @@ export function ReceptionRegisterForm() {
                                         Bắt đầu quét
                                     </span>
                                 </button>
-
-                                <CccdImageUpload
-                                    accessToken={accessToken}
-                                    onSuccess={(data) => handleCccdData(data, 'image')}
-                                    onError={(message) => setError(message)}
-                                    disabled={isPending || isLookingUp}
-                                    className="mb-1"
-                                />
 
                                 {/* Personal info card */}
                                 <div className="rounded-[12px] border border-[#EBEBEB] bg-white p-5 md:p-6 shadow-[0_1px_6px_rgba(0,0,0,0.04)]">
@@ -1099,126 +988,289 @@ export function ReceptionRegisterForm() {
                                                 className={inputClass}
                                             />
                                         </div>
-                                        <div className="space-y-1.5 sm:col-span-2">
-                                            <label className="block text-[13px] font-medium text-[#374151]">Địa chỉ</label>
-                                            <input
-                                                type="text"
-                                                placeholder="Số nhà, đường, quận/huyện, tỉnh/thành phố"
-                                                value={form.address}
-                                                onChange={(e) => update('address', e.target.value)}
-                                                className={inputClass}
-                                            />
-                                        </div>
                                     </div>
                                 </div>
                             </div>
                         )}
 
+                        {/* ── STEP 2 ── */}
                         {step === 2 && accessToken && (
-                            <SymptomTriageStep
-                                accessToken={accessToken}
-                                citizenId={form.citizen_id}
-                                fullName={form.full_name}
-                                dob={form.dob}
-                                gender={form.gender}
-                                insuranceId={form.insurance_id}
-                                phone={form.phone}
-                                email={form.email}
-                                knownPatientId={existingAccount?.patient_id}
-                                symptoms={form.symptoms}
-                                onSymptomsChange={(value) => {
-                                    update('symptoms', value);
-                                    if (triageSession.is_analyzed) {
-                                        setTriageSession(EMPTY_TRIAGE_SESSION);
-                                        update('department_id', '');
-                                        update('specialty_id', '');
-                                        update('slot_id', '');
-                                    }
-                                }}
-                                specialtyId={form.specialty_id}
-                                onSpecialtyChange={(value) => update('specialty_id', value)}
-                                departmentId={form.department_id}
-                                onDepartmentChange={(value) => update('department_id', value)}
-                                slotId={form.slot_id}
-                                onSlotChange={(value) => update('slot_id', value)}
-                                priority={form.priority}
-                                onPriorityChange={(value) => update('priority', value)}
-                                slots={slots}
-                                specialties={specialties}
-                                specialtyCatalog={specialtyCatalog}
-                                onSlotsChange={setSlots}
-                                onSpecialtiesChange={setSpecialties}
-                                triageSession={triageSession}
-                                onTriageSessionChange={setTriageSession}
-                                inputClass={inputClass}
-                                isLoadingMeta={isLoadingMeta}
-                            />
+                            <div>
+                                {bookingMode === null ? (
+                                    /* Layout 2 cột: 2/3 thông tin bệnh nhân | 1/3 chọn phương án */
+                                    <div className="flex flex-col lg:flex-row gap-6 items-start">
+
+                                        {/* ─── CỘT TRÁI: Thông tin bệnh nhân (2/3) ─── */}
+                                        <div className="w-full lg:w-2/3 space-y-4">
+                                            {/* Header */}
+                                            <div className="flex items-center gap-2.5 mb-1">
+                                                <div className="w-8 h-8 rounded-xl bg-[#8B7CF6] flex items-center justify-center shadow-sm">
+                                                    <User className="w-4 h-4 text-white" strokeWidth={2.5} />
+                                                </div>
+                                                <div>
+                                                    <h2 className="text-[16px] font-bold text-[#1F2937] leading-tight">Thông tin bệnh nhân</h2>
+                                                    <p className="text-[12px] text-[#9CA3AF]">Đã tải từ hồ sơ hệ thống</p>
+                                                </div>
+                                            </div>
+
+                                            {/* Main info card */}
+                                            <div className="rounded-2xl border border-[#EDE9FE] bg-gradient-to-br from-[#FAF5FF] to-white p-5 shadow-sm">
+                                                {/* Avatar + tên */}
+                                                <div className="flex items-center gap-4 mb-5 pb-4 border-b border-[#F3F4F6]">
+                                                    <div className="w-14 h-14 rounded-2xl bg-[#8B7CF6] text-white flex items-center justify-center text-[20px] font-bold shadow-md shrink-0">
+                                                        {form.full_name
+                                                            ? form.full_name
+                                                                .trim()
+                                                                .split(' ')
+                                                                .slice(-2)
+                                                                .map((w) => w[0])
+                                                                .join('')
+                                                                .toUpperCase()
+                                                            : '?'}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <h3 className="text-[18px] font-bold text-[#1F2937] leading-tight truncate">
+                                                            {form.full_name || '—'}
+                                                        </h3>
+                                                        <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                                                            {form.gender && (
+                                                                <span className={cn(
+                                                                    'text-[10px] font-bold px-2 py-0.5 rounded-full',
+                                                                    form.gender.toUpperCase() === 'FEMALE'
+                                                                        ? 'bg-[#FCE7F3] text-[#DB2777]'
+                                                                        : 'bg-[#E0F2FE] text-[#0369A1]',
+                                                                )}>
+                                                                    {form.gender.toUpperCase() === 'FEMALE' ? 'Nữ' : 'Nam'}
+                                                                </span>
+                                                            )}
+                                                            <span className="text-[11px] font-semibold text-[#8B7CF6] bg-[#EDE9FE] px-2.5 py-0.5 rounded-full">
+                                                                Bệnh nhân tiếp nhận
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Thông tin chi tiết dạng grid */}
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                    <InfoRow
+                                                        icon={<IdCard className="w-3.5 h-3.5" />}
+                                                        label="Số CCCD"
+                                                        value={form.citizen_id || '—'}
+                                                        highlight
+                                                    />
+                                                    <InfoRow
+                                                        icon={<CalendarDays className="w-3.5 h-3.5" />}
+                                                        label="Ngày sinh"
+                                                        value={
+                                                            form.dob
+                                                                ? new Date(form.dob).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                                                                : '—'
+                                                        }
+                                                    />
+                                                    {form.phone && (
+                                                        <InfoRow
+                                                            icon={<Phone className="w-3.5 h-3.5" />}
+                                                            label="Số điện thoại"
+                                                            value={form.phone}
+                                                        />
+                                                    )}
+                                                    {form.email && (
+                                                        <InfoRow
+                                                            icon={<Mail className="w-3.5 h-3.5" />}
+                                                            label="Email"
+                                                            value={form.email}
+                                                        />
+                                                    )}
+                                                    {form.insurance_id && (
+                                                        <InfoRow
+                                                            icon={<ShieldCheck className="w-3.5 h-3.5" />}
+                                                            label="Mã BHYT"
+                                                            value={form.insurance_id}
+                                                            badge
+                                                        />
+                                                    )}
+                                                    {existingAccount?.patient_id && (
+                                                        <InfoRow
+                                                            icon={<FileText className="w-3.5 h-3.5" />}
+                                                            label="Mã bệnh nhân"
+                                                            value={existingAccount.patient_id.slice(0, 16) + (existingAccount.patient_id.length > 16 ? '…' : '')}
+                                                        />
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Scan banner */}
+                                            {scanBanner && (
+                                                <div className="flex items-start gap-2.5 rounded-xl border border-[#BBF7D0] bg-[#ECFDF5] px-4 py-3">
+                                                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#10B981]" />
+                                                    <p className="text-[13px] text-[#065F46] font-medium">{scanBanner}</p>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* ─── CỘT PHẢI: Chọn phương án (1/3) ─── */}
+                                        <div className="w-full lg:w-1/3 lg:sticky lg:top-0">
+                                            <div className="mb-4">
+                                                <h2 className="text-[15px] font-bold text-[#1F2937]">Chọn phương thức khám</h2>
+                                                <p className="text-[12px] text-[#9CA3AF] mt-0.5">Chọn 1 trong 3 cách thức phù hợp</p>
+                                            </div>
+
+                                            {/* 3 card dọc */}
+                                            <div className="flex flex-col gap-3">
+                                                {([
+                                                    {
+                                                        id: 'specialty' as const,
+                                                        title: 'Theo chuyên khoa',
+                                                        description: 'Chọn trực tiếp chuyên khoa cần khám',
+                                                        badge: 'Trực tiếp',
+                                                        iconBg: 'bg-[#EDE9FE]',
+                                                        iconColor: 'text-[#8B7CF6]',
+                                                        Icon: Building2,
+                                                    },
+                                                    {
+                                                        id: 'ai_triage' as const,
+                                                        title: 'Gợi ý từ AI',
+                                                        description: 'Nhập triệu chứng, AI phân tích và gợi ý chuyên khoa',
+                                                        badge: 'AI Triage',
+                                                        iconBg: 'bg-[#DCFCE7]',
+                                                        iconColor: 'text-[#16A34A]',
+                                                        Icon: Brain,
+                                                    },
+                                                    {
+                                                        id: 'package' as const,
+                                                        title: 'Gói khám định sẵn',
+                                                        description: 'Khám tổng quát, tầm soát theo gói cấu hình sẵn',
+                                                        badge: 'Gói tổng hợp',
+                                                        iconBg: 'bg-[#FEF3C7]',
+                                                        iconColor: 'text-[#D97706]',
+                                                        Icon: Package,
+                                                    },
+                                                ] as const).map((mode) => (
+                                                    <button
+                                                        key={mode.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setBookingMode(mode.id);
+                                                            if (mode.id === 'package') update('symptoms', 'Đăng ký khám theo gói sức khỏe');
+                                                            else if (mode.id === 'specialty') update('symptoms', 'Đăng ký khám theo chuyên khoa');
+                                                        }}
+                                                        className="group relative flex items-start gap-3 p-4 rounded-2xl border border-[#E5E7EB] bg-white text-left transition-all hover:border-[#C4B5FD] hover:shadow-[0_4px_16px_rgba(139,124,246,0.12)] hover:-translate-y-0.5 active:translate-y-0 touch-manipulation cursor-pointer"
+                                                    >
+                                                        <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105', mode.iconBg)}>
+                                                            <mode.Icon className={cn('w-5 h-5', mode.iconColor)} strokeWidth={2.25} />
+                                                        </div>
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="flex items-center justify-between gap-1 mb-0.5">
+                                                                <span className="text-[14px] font-bold text-[#1F2937] group-hover:text-[#8B7CF6] transition-colors leading-tight">
+                                                                    {mode.title}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-[11px] text-[#6B7280] leading-relaxed line-clamp-1">
+                                                                {mode.description}
+                                                            </p>
+                                                        </div>
+                                                        <ChevronRight className="w-4 h-4 text-[#9CA3AF] shrink-0 self-center transition-transform group-hover:translate-x-0.5 group-hover:text-[#8B7CF6]" />
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : bookingMode === 'specialty' ? (
+                                    <SpecialtyPickStep
+                                        accessToken={accessToken}
+                                        departmentId={form.department_id}
+                                        onDepartmentChange={(val) => update('department_id', val)}
+                                        specialtyId={form.specialty_id}
+                                        onSpecialtyChange={(val) => update('specialty_id', val)}
+                                        slotId={form.slot_id}
+                                        onSlotChange={(val) => update('slot_id', val)}
+                                        slots={slots}
+                                        onSlotsChange={setSlots}
+                                        specialties={specialties}
+                                        onSpecialtiesChange={setSpecialties}
+                                        specialtyCatalog={specialtyCatalog}
+                                        isLoadingMeta={isLoadingMeta}
+                                        onChangeMode={() => setBookingMode(null)}
+                                    />
+                                ) : bookingMode === 'package' ? (
+                                    <PackagePickStep
+                                        accessToken={accessToken}
+                                        departmentId={form.department_id}
+                                        onDepartmentChange={(val) => update('department_id', val)}
+                                        specialtyId={form.specialty_id}
+                                        onSpecialtyChange={(val) => update('specialty_id', val)}
+                                        slotId={form.slot_id}
+                                        onSlotChange={(val) => update('slot_id', val)}
+                                        packageId={form.package_id}
+                                        onPackageChange={(val) => update('package_id', val)}
+                                        slots={slots}
+                                        onSlotsChange={setSlots}
+                                        specialties={specialties}
+                                        onSpecialtiesChange={setSpecialties}
+                                        specialtyCatalog={specialtyCatalog}
+                                        isLoadingMeta={isLoadingMeta}
+                                        onChangeMode={() => setBookingMode(null)}
+                                    />
+                                ) : (
+                                    <SymptomTriageStep
+                                        accessToken={accessToken}
+                                        citizenId={form.citizen_id}
+                                        fullName={form.full_name}
+                                        dob={form.dob}
+                                        gender={form.gender}
+                                        insuranceId={form.insurance_id}
+                                        phone={form.phone}
+                                        email={form.email}
+                                        knownPatientId={existingAccount?.patient_id}
+                                        symptoms={form.symptoms}
+                                        onSymptomsChange={(value) => {
+                                            update('symptoms', value);
+                                            if (triageSession.is_analyzed) {
+                                                setTriageSession(EMPTY_TRIAGE_SESSION);
+                                                update('department_id', '');
+                                                update('specialty_id', '');
+                                                update('slot_id', '');
+                                            }
+                                        }}
+                                        specialtyId={form.specialty_id}
+                                        onSpecialtyChange={(value) => update('specialty_id', value)}
+                                        departmentId={form.department_id}
+                                        onDepartmentChange={(value) => update('department_id', value)}
+                                        slotId={form.slot_id}
+                                        onSlotChange={(value) => update('slot_id', value)}
+                                        slots={slots}
+                                        specialties={specialties}
+                                        specialtyCatalog={specialtyCatalog}
+                                        onSlotsChange={setSlots}
+                                        onSpecialtiesChange={setSpecialties}
+                                        triageSession={triageSession}
+                                        onTriageSessionChange={setTriageSession}
+                                        inputClass={inputClass}
+                                        isLoadingMeta={isLoadingMeta}
+                                        onChangeMode={() => setBookingMode(null)}
+                                    />
+                                )}
+                            </div>
                         )}
 
                         {/* ── STEP 3 ── */}
                         {step === 3 && (
-                            <div className="space-y-6">
-                                <RegisterConfirmStep
-                                    fullName={form.full_name}
-                                    citizenId={form.citizen_id}
-                                    dob={form.dob}
-                                    phone={form.phone}
-                                    insuranceId={form.insurance_id}
-                                    symptoms={form.symptoms}
-                                    priority={form.priority}
-                                    paymentMethod={form.payment_method}
-                                    onPaymentMethodChange={(method) => update('payment_method', method)}
-                                    departmentId={form.department_id}
-                                    specialtyCatalog={specialtyCatalog}
-                                    selectedSpecialty={selectedSpecialty}
-                                    selectedSlot={selectedSlot}
-                                    triageSession={triageSession}
-                                />
-
-                                {form.payment_method === 'qr' && (
-                                    <div className="space-y-4">
-                                        {isCreatingTx && (
-                                            <div className="rounded-xl border border-dashed border-[#E5E7EB] bg-[#FAFAFA] p-6 flex flex-col items-center justify-center gap-2">
-                                                <Loader2 className="w-6 h-6 animate-spin text-[#8B7CF6]" />
-                                                <span className="text-[13px] font-semibold text-[#6B7280]">Đang khởi tạo mã QR thanh toán PayOS...</span>
-                                            </div>
-                                        )}
-
-                                        {!isCreatingTx && qrTransaction && (
-                                            <PayOsPaymentPanel
-                                                result={{
-                                                    ticketNo: 'A-—',
-                                                    fullName: form.full_name,
-                                                    citizenId: form.citizen_id,
-                                                    phone: form.phone,
-                                                    specialty: specialtyLabel,
-                                                    priority: form.priority,
-                                                    paymentLabel: 'QR Code / VietQR',
-                                                    doctorLabel: getDoctorDisplayLabel(selectedSpecialty),
-                                                    slotTimeLabel: slotTimeLabelWithDate,
-                                                    roomLabel: 'Phòng 201, Tầng 2',
-                                                    waitTimeLabel: getWaitTimeLabel(triageSession),
-                                                    insuranceId: form.insurance_id,
-                                                    qrPayload: JSON.stringify({ patientId: existingAccount?.patient_id || '' }),
-                                                    isPaymentPending: true,
-                                                    bookingId: createdBooking?.bookingId,
-                                                    stepId: createdBooking?.stepId,
-                                                    paymentQrCode: qrTransaction.qrCode || qrTransaction.qr_code || '',
-                                                    paymentCheckoutUrl: qrTransaction.checkoutUrl || qrTransaction.checkout_url || '',
-                                                    paymentAmount: qrTransaction.amount ?? 200000,
-                                                    paymentAccountName: (qrTransaction as any).accountName || 'Dự án TriageFlow',
-                                                    paymentAccountNumber: (qrTransaction as any).accountNumber || '',
-                                                    paymentDescription: (qrTransaction as any).description || '',
-                                                }}
-                                                onUpdateResult={(updated) => {
-                                                    setRegistrationResult(updated);
-                                                    setStep(4);
-                                                }}
-                                            />
-                                        )}
-                                    </div>
-                                )}
-                            </div>
+                            <RegisterConfirmStep
+                                fullName={form.full_name}
+                                citizenId={form.citizen_id}
+                                dob={form.dob}
+                                phone={form.phone}
+                                insuranceId={form.insurance_id}
+                                symptoms={form.symptoms}
+                                paymentMethod={form.payment_method}
+                                onPaymentMethodChange={(method) => update('payment_method', method)}
+                                departmentId={form.department_id}
+                                specialtyCatalog={specialtyCatalog}
+                                selectedSpecialty={selectedSpecialty}
+                                selectedSlot={selectedSlot}
+                                triageSession={triageSession}
+                                bookingMode={bookingMode}
+                            />
                         )}
 
                         {step === 4 && !registrationResult && (
@@ -1228,7 +1280,16 @@ export function ReceptionRegisterForm() {
                             </div>
                         )}
 
-                        {step === 4 && registrationResult && (
+                        {step === 4 && registrationResult?.isPaymentPending && (
+                            <PayOsPaymentPanel
+                                result={registrationResult}
+                                onUpdateResult={(updated) => {
+                                    setRegistrationResult(updated);
+                                }}
+                            />
+                        )}
+
+                        {step === 4 && registrationResult && !registrationResult.isPaymentPending && (
                             <RegisterSuccessStep result={registrationResult} onRegisterNew={handleReset} />
                         )}
 
@@ -1285,7 +1346,11 @@ export function ReceptionRegisterForm() {
                                             ) : (
                                                 <CheckCircle2 className="w-4 h-4" />
                                             )}
-                                            {isPending ? 'Đang xử lý...' : 'Xác nhận & Cấp số thứ tự'}
+                                            {isPending
+                                                ? 'Đang xử lý...'
+                                                : form.payment_method === 'qr'
+                                                    ? 'Tiếp tục & Tạo mã QR'
+                                                    : 'Xác nhận & Cấp số thứ tự'}
                                         </button>
                                     </div>
                                 )}

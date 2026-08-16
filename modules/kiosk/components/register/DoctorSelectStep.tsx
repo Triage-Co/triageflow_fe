@@ -61,80 +61,82 @@ export const DoctorSelectStep: React.FC = () => {
   }, [selectedDoctorObj, availableSlots]);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 flex-1 min-h-0 overflow-hidden">
       {/* Cột trái: Danh sách Bác sĩ thực tế */}
-      <div className="lg:col-span-7 space-y-4 overflow-y-auto max-h-[520px] pr-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-        <h3 className="font-extrabold text-[#1E2939] text-base">Danh sách Bác sĩ sẵn sàng</h3>
+      <div className="lg:col-span-7 flex flex-col min-h-0 space-y-3 h-full overflow-hidden">
+        <h3 className="font-extrabold text-[#1E2939] text-base shrink-0">Danh sách Bác sĩ sẵn sàng</h3>
 
         {isDoctorLoading && availableDoctors.length === 0 ? (
-          <div className="flex items-center justify-center p-12 bg-white rounded-3xl border border-neutral-100">
+          <div className="flex-1 flex items-center justify-center p-12 bg-white rounded-3xl border border-neutral-100">
             <Loader2 className="w-8 h-8 text-[#155DFC] animate-spin" />
             <span className="text-xs font-bold text-neutral-500 ml-2">Đang tải danh sách Bác sĩ...</span>
           </div>
         ) : availableDoctors.length > 0 ? (
-          availableDoctors.map((doc, idx) => {
-            const docId = doc.staff_id || doc.doctor_id || `idx-${idx}`;
-            const selectedDocId = selectedDoctorObj?.staff_id || selectedDoctorObj?.doctor_id;
-            const isSelected = selectedDocId === docId;
-            const avatarUrl = doc.account?.avatar;
-            const specialtyName = doc.specialty?.specialty_name || doc.specialty_name || 'Chuyên khoa';
+          <div className="flex-1 min-h-0 space-y-3 overflow-y-auto pr-1">
+            {availableDoctors.map((doc, idx) => {
+              const docId = doc.staff_id || doc.doctor_id || `idx-${idx}`;
+              const selectedDocId = selectedDoctorObj?.staff_id || selectedDoctorObj?.doctor_id;
+              const isSelected = selectedDocId === docId;
+              const avatarUrl = doc.account?.avatar;
+              const specialtyName = doc.specialty?.specialty_name || doc.specialty_name || 'Chuyên khoa';
 
-            return (
-              <button
-                key={`doc-${docId}`}
-                onClick={() => handleSelectDoctor(doc)}
-                className={cn(
-                  "w-full p-5 rounded-[24px] border text-left flex items-start gap-4 transition-all cursor-pointer",
-                  isSelected
-                    ? "bg-blue-50/80 border-[#155DFC] ring-2 ring-blue-200 shadow-md"
-                    : "bg-white border-neutral-100 hover:border-neutral-200 hover:shadow-sm"
-                )}
-              >
-                {/* Avatar bác sĩ */}
-                <div className="relative shrink-0">
-                  {avatarUrl ? (
-                    <img
-                      src={avatarUrl}
-                      alt={doc.full_name}
-                      className="w-14 h-14 rounded-full object-cover border-2 border-blue-200 shadow-sm"
-                      onError={(e) => {
-                        // Fallback icon khi lỗi tải ảnh
-                        e.currentTarget.style.display = 'none';
-                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                      }}
-                    />
-                  ) : null}
-                  <div className={cn("w-14 h-14 rounded-full bg-blue-100 text-[#155DFC] flex items-center justify-center font-bold text-xl shrink-0 shadow-inner", avatarUrl && "hidden")}>
-                    👨‍⚕️
-                  </div>
-                </div>
-
-                <div className="space-y-1 flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <h4 className="font-extrabold text-[#1E2939] text-base truncate">{doc.full_name}</h4>
-                    {doc.experience_years ? (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-amber-700 bg-amber-50 border border-amber-200/80 px-2.5 py-0.5 rounded-full shrink-0">
-                        <Award className="w-3 h-3" /> {doc.experience_years} năm KN
-                      </span>
+              return (
+                <button
+                  key={`doc-${docId}`}
+                  onClick={() => handleSelectDoctor(doc)}
+                  className={cn(
+                    "w-full p-4 sm:p-5 rounded-[24px] border text-left flex items-start gap-4 transition-all cursor-pointer",
+                    isSelected
+                      ? "bg-blue-50/80 border-[#155DFC] ring-2 ring-blue-200 shadow-md"
+                      : "bg-white border-neutral-100 hover:border-neutral-200 hover:shadow-sm"
+                  )}
+                >
+                  {/* Avatar bác sĩ */}
+                  <div className="relative shrink-0">
+                    {avatarUrl ? (
+                      <img
+                        src={avatarUrl}
+                        alt={doc.full_name}
+                        className="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover border-2 border-blue-200 shadow-sm"
+                        onError={(e) => {
+                          // Fallback icon khi lỗi tải ảnh
+                          e.currentTarget.style.display = 'none';
+                          e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                        }}
+                      />
                     ) : null}
+                    <div className={cn("w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-blue-100 text-[#155DFC] flex items-center justify-center font-bold text-xl shrink-0 shadow-inner", avatarUrl && "hidden")}>
+                      👨‍⚕️
+                    </div>
                   </div>
 
-                  <p className="text-xs text-[#155DFC] font-black">{specialtyName}</p>
+                  <div className="space-y-1 flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <h4 className="font-extrabold text-[#1E2939] text-sm sm:text-base truncate">{doc.full_name}</h4>
+                      {doc.experience_years ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-amber-700 bg-amber-50 border border-amber-200/80 px-2.5 py-0.5 rounded-full shrink-0">
+                          <Award className="w-3 h-3" /> {doc.experience_years} năm KN
+                        </span>
+                      ) : null}
+                    </div>
 
-                  <div className="flex items-center gap-3 text-[11px] text-neutral-400 font-medium">
-                    {doc.room_name && <span>Phòng: {doc.room_name}</span>}
-                    {doc.license_number && (
-                      <span className="flex items-center gap-1">
-                        <ShieldCheck className="w-3 h-3 text-emerald-600" /> CCHN: {doc.license_number}
-                      </span>
-                    )}
+                    <p className="text-xs text-[#155DFC] font-black">{specialtyName}</p>
+
+                    <div className="flex items-center gap-3 text-[11px] text-neutral-400 font-medium">
+                      {doc.room_name && <span>Phòng: {doc.room_name}</span>}
+                      {doc.license_number && (
+                        <span className="flex items-center gap-1">
+                          <ShieldCheck className="w-3 h-3 text-emerald-600" /> CCHN: {doc.license_number}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </button>
-            );
-          })
+                </button>
+              );
+            })}
+          </div>
         ) : (
-          <div className="p-8 bg-neutral-50 rounded-3xl border border-neutral-100 text-center text-xs font-bold text-neutral-500 space-y-3">
+          <div className="flex-1 flex flex-col items-center justify-center p-8 bg-neutral-50 rounded-3xl border border-neutral-100 text-center text-xs font-bold text-neutral-500 space-y-3">
             <p>Không tìm thấy bác sĩ khả dụng cho chuyên khoa này vào hôm nay.</p>
             <button
               onClick={executeAutoBooking}
@@ -147,18 +149,18 @@ export const DoctorSelectStep: React.FC = () => {
       </div>
 
       {/* Cột phải: Bác sĩ đã chọn & Khung giờ trống */}
-      <div className="lg:col-span-5 bg-white rounded-[36px] p-6 shadow-sm border border-neutral-100 flex flex-col space-y-6 min-h-0 h-full">
-        <div className="flex-1 flex flex-col min-h-0 space-y-4">
-          <h3 className="font-extrabold text-[#1E2939] text-base">Bác sĩ & Khung giờ khám chọn</h3>
+      <div className="lg:col-span-5 bg-white rounded-[28px] sm:rounded-[36px] p-4 sm:p-6 shadow-sm border border-neutral-100 flex flex-col justify-between min-h-0 h-full overflow-hidden">
+        <div className="flex-1 flex flex-col min-h-0 space-y-3 sm:space-y-4 overflow-hidden">
+          <h3 className="font-extrabold text-[#1E2939] text-sm sm:text-base shrink-0">Bác sĩ & Khung giờ khám chọn</h3>
 
           {selectedDoctorObj ? (
-            <div className="flex-1 flex flex-col min-h-0 space-y-4">
-              <div className="flex items-center gap-3 p-4 bg-blue-50/60 rounded-2xl border border-blue-100 shrink-0">
-                <div className="w-12 h-12 rounded-full bg-[#155DFC] text-white flex items-center justify-center font-bold text-xl shrink-0 shadow-md">
+            <div className="flex-1 flex flex-col min-h-0 space-y-3 sm:space-y-4 overflow-hidden">
+              <div className="flex items-center gap-3 p-3.5 bg-blue-50/60 rounded-2xl border border-blue-100 shrink-0">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#155DFC] text-white flex items-center justify-center font-bold text-lg sm:text-xl shrink-0 shadow-md">
                   👨‍⚕️
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h4 className="font-black text-[#1E2939] text-sm truncate">{selectedDoctorObj.full_name}</h4>
+                  <h4 className="font-black text-[#1E2939] text-xs sm:text-sm truncate">{selectedDoctorObj.full_name}</h4>
                   <p className="text-xs text-[#155DFC] font-bold">
                     {selectedDoctorObj.specialty?.specialty_name || selectedDoctorObj.specialty_name || 'Chuyên khoa'}
                   </p>
@@ -166,17 +168,17 @@ export const DoctorSelectStep: React.FC = () => {
               </div>
 
               {/* Danh sách Khung giờ trống của Bác sĩ */}
-              <div className="flex-1 flex flex-col min-h-0 space-y-2">
+              <div className="flex-1 flex flex-col min-h-0 space-y-2 overflow-hidden">
                 <label className="text-xs font-extrabold text-neutral-700 block shrink-0">
                   Chọn khung giờ khám khả dụng:
                 </label>
 
                 {isDoctorLoading && currentSlots.length === 0 ? (
-                  <div className="text-center py-6 text-xs font-bold text-neutral-400 flex items-center justify-center gap-2 shrink-0">
+                  <div className="flex-1 text-center py-6 text-xs font-bold text-neutral-400 flex items-center justify-center gap-2 shrink-0">
                     <Loader2 className="w-4 h-4 animate-spin text-[#155DFC]" /> Đang nạp khung giờ khám...
                   </div>
                 ) : currentSlots.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-2 flex-1 overflow-y-auto p-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                  <div className="grid grid-cols-2 gap-2 flex-1 min-h-0 overflow-y-auto p-1">
                     {currentSlots.map((slot, idx) => {
                       const isSlotSelected = selectedSlotObj?.slot_id === slot.slot_id;
                       const isPast = isSlotInPast(slot.start_time);
@@ -207,14 +209,14 @@ export const DoctorSelectStep: React.FC = () => {
                     })}
                   </div>
                 ) : (
-                  <div className="text-xs text-neutral-400 italic p-4 bg-neutral-50 rounded-2xl text-center border border-neutral-100 shrink-0">
+                  <div className="flex-1 flex items-center justify-center text-xs text-neutral-400 italic p-4 bg-neutral-50 rounded-2xl text-center border border-neutral-100">
                     Bác sĩ hiện không còn khung giờ khám trống nào trong ngày.
                   </div>
                 )}
               </div>
             </div>
           ) : (
-            <div className="text-xs text-neutral-400 italic p-8 bg-neutral-50 rounded-2xl text-center border border-neutral-100">
+            <div className="flex-1 flex items-center justify-center text-xs text-neutral-400 italic p-8 bg-neutral-50 rounded-2xl text-center border border-neutral-100">
               Vui lòng chọn một Bác sĩ từ danh sách bên trái.
             </div>
           )}
@@ -230,7 +232,7 @@ export const DoctorSelectStep: React.FC = () => {
           }}
           disabled={!selectedDoctorObj || isBookingProcessing}
           className={cn(
-            "w-full py-4 rounded-2xl text-white font-black text-base shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2",
+            "w-full py-3.5 sm:py-4 rounded-2xl text-white font-black text-sm sm:text-base shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 shrink-0 mt-3",
             selectedDoctorObj && !isBookingProcessing
               ? "bg-[#155DFC] hover:bg-blue-700 active:scale-95 shadow-blue-500/25"
               : "bg-neutral-300 cursor-not-allowed shadow-none"

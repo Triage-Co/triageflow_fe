@@ -73,6 +73,7 @@ export const sortStepsTopologically = (steps: any[]): any[] => {
     return new Date(dateStr).getTime();
   };
 
+  // Build the adjacency list and in-degree map
   const inDegree = new Map<string, number>();
   const graph = new Map<string, string[]>();
 
@@ -84,7 +85,6 @@ export const sortStepsTopologically = (steps: any[]): any[] => {
     }
   }
 
-  // Build the dependency graph
   for (const step of steps) {
     const id = step.step_id || step.id;
     if (!id) continue;
@@ -97,6 +97,46 @@ export const sortStepsTopologically = (steps: any[]): any[] => {
       }
     }
   }
+
+  // Group steps by service_order_id
+  const orderGroups = new Map<string, any[]>();
+  for (const step of steps) {
+    const serviceOrderId = step.service_order_id;
+    if (serviceOrderId) {
+      if (!orderGroups.has(serviceOrderId)) {
+        orderGroups.set(serviceOrderId, []);
+      }
+      orderGroups.get(serviceOrderId)!.push(step);
+    }
+  }
+
+  // Sort steps inside each service order group by created_at time
+  for (const [key, groupSteps] of orderGroups.entries()) {
+    groupSteps.sort((a, b) => getCreatedTime(a) - getCreatedTime(b));
+  }
+
+  const sorted: any[] = [];
+  const sortedIds = new Set<string>();
+
+  // Helper to process a step, decrementing neighbors' inDegrees
+  const processNeighbors = (step: any, q: any[]) => {
+    const id = step.step_id || step.id;
+    if (!id) return;
+    const neighbors = graph.get(id) || [];
+    for (const neighborId of neighbors) {
+      const currentDeg = inDegree.get(neighborId);
+      if (currentDeg !== undefined) {
+        const newDeg = currentDeg - 1;
+        inDegree.set(neighborId, newDeg);
+        if (newDeg === 0) {
+          const neighborStep = steps.find((s) => (s.step_id || s.id) === neighborId);
+          if (neighborStep) {
+            q.push(neighborStep);
+          }
+        }
+      }
+    }
+  };
 
   const sortQueue = (arr: any[]) => {
     return arr.sort((a, b) => {
@@ -111,6 +151,7 @@ export const sortStepsTopologically = (steps: any[]): any[] => {
     });
   };
 
+  // Find start nodes
   const startNodes = steps.filter((step) => {
     const id = step.step_id || step.id;
     return !id || inDegree.get(id) === 0;
@@ -119,35 +160,49 @@ export const sortStepsTopologically = (steps: any[]): any[] => {
   const queue = [...startNodes];
   sortQueue(queue);
 
-  const sorted: any[] = [];
-
   while (queue.length > 0) {
     const current = queue.shift()!;
-    sorted.push(current);
-
     const currentId = current.step_id || current.id;
-    if (!currentId) continue;
 
-    const neighbors = graph.get(currentId) || [];
-    for (const neighborId of neighbors) {
-      const currentDeg = inDegree.get(neighborId);
-      if (currentDeg !== undefined) {
-        const newDeg = currentDeg - 1;
-        inDegree.set(neighborId, newDeg);
-        if (newDeg === 0) {
-          const neighborStep = steps.find((s) => (s.step_id || s.id) === neighborId);
-          if (neighborStep) {
-            queue.push(neighborStep);
-          }
+    if (currentId && sortedIds.has(currentId)) {
+      continue; // Already processed as part of a service order group
+    }
+
+    sorted.push(current);
+    if (currentId) {
+      sortedIds.add(currentId);
+    }
+
+    // Process neighbors of the current step
+    processNeighbors(current, queue);
+
+    // Grouping logic: If this is a Payment step belonging to a service order,
+    // pull all its sibling test steps and output them immediately.
+    if (isPaymentStep(current) && current.service_order_id) {
+      const siblings = orderGroups.get(current.service_order_id) || [];
+      const testSiblings = siblings.filter((s) => !isPaymentStep(s));
+
+      for (const sibling of testSiblings) {
+        const siblingId = sibling.step_id || sibling.id;
+        if (siblingId && !sortedIds.has(siblingId)) {
+          sorted.push(sibling);
+          sortedIds.add(siblingId);
+          // Process neighbors of the sibling as well
+          processNeighbors(sibling, queue);
         }
       }
     }
+
     sortQueue(queue);
   }
 
-  // Thêm các step không có trong đồ thị (không có id)
+  // Fallback for any step not processed
   for (const step of steps) {
-    if (!sorted.includes(step)) {
+    const id = step.step_id || step.id;
+    if (id && !sortedIds.has(id)) {
+      sorted.push(step);
+      sortedIds.add(id);
+    } else if (!id && !sorted.includes(step)) {
       sorted.push(step);
     }
   }
@@ -188,7 +243,11 @@ export const mapApiToTicketData = (stepData: any, patientInfo: any, bookingId: s
     roomNumber: roomNumber,
     location: '',
     doctorName: staffObj?.full_name ?? '',
-    status: stepData.step_status === 'COMPLETED' ? 'completed' : 'waiting',
+    status: stepData.step_status === 'COMPLETED'
+      ? 'completed'
+      : stepData.step_status === 'IN_PROGRESS'
+        ? 'in_consultation'
+        : 'waiting',
     waitingCount: 0,
     currentCallingNo: queueNumber,
     estimatedWaitMinutes: computeWaitMinutes(slotObj?.start_time),
@@ -205,9 +264,11 @@ export const mapApiToTicketData = (stepData: any, patientInfo: any, bookingId: s
 };
 
 export const mapApiToRouteSteps = (detailedSteps: any[]): RouteStepItem[] => {
-  return detailedSteps.map((result, index: number) => {
-    const step = result.status === 'fulfilled' ? result.value : result;
+  const steps = detailedSteps
+    .map((result) => (result.status === 'fulfilled' ? result.value : result))
+    .filter((step) => step && step.step_status !== 'CANCELLED');
 
+  return steps.map((step, index: number) => {
     const roomObj = step.room_info || step.room || step.flow?.booking?.slot?.shift?.room;
     const stepName = step.step_name || '';
     const isPaymentStep = stepName.toLowerCase().trim().startsWith('thanh toán');

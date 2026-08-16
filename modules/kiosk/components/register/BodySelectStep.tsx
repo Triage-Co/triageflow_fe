@@ -27,25 +27,25 @@ export const BodySelectStep: React.FC = () => {
 
   return (
     <>
-      <div className="flex-1 flex flex-col self-stretch">
+      <div className="flex-1 min-h-0 flex flex-col self-stretch overflow-hidden">
         <BodyMapSelector onRegionClick={handleOpenRegionModal} />
       </div>
 
       {/* Right Sidebar Area */}
-      <div className="w-full lg:w-80 shrink-0 flex flex-col justify-between space-y-5 h-full">
-        <div className="bg-white rounded-[36px] p-6 shadow-sm border border-neutral-100/80 space-y-4">
-          <h3 className="font-extrabold text-[#1E2939] text-base">
+      <div className="w-full lg:w-80 shrink-0 flex flex-col justify-between gap-3 sm:gap-4 h-full min-h-0">
+        <div className="bg-white rounded-[28px] sm:rounded-[36px] p-5 sm:p-6 shadow-sm border border-neutral-100/80 flex-1 min-h-0 flex flex-col space-y-3">
+          <h3 className="font-extrabold text-[#1E2939] text-sm sm:text-base shrink-0">
             Triệu chứng đã chọn ({selectedSymptoms.length})
           </h3>
 
-          <div className="space-y-3 max-h-56 overflow-y-auto">
+          <div className="space-y-2.5 flex-1 min-h-0 overflow-y-auto pr-1">
             {selectedSymptoms.length > 0 ? (
               selectedSymptoms.map((item, idx) => (
                 <div
                   key={item.id ? `sym-${item.id}` : `sym-idx-${idx}`}
-                  className="flex items-center justify-between bg-[#D8E6FE] px-5 py-3.5 rounded-2xl text-xs font-extrabold text-[#1E2939]"
+                  className="flex items-center justify-between bg-[#D8E6FE] px-4 py-2.5 rounded-2xl text-xs font-extrabold text-[#1E2939]"
                 >
-                  <span className="truncate max-w-[180px]">{item.labelVn}</span>
+                  <span className="truncate max-w-[170px]">{item.labelVn}</span>
                   <button
                     type="button"
                     onClick={() => removeSymptom(item.id)}
@@ -63,7 +63,7 @@ export const BodySelectStep: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-[#EBF3FF] rounded-[28px] p-6 text-xs text-neutral-600 font-semibold text-center leading-relaxed">
+        <div className="bg-[#EBF3FF] rounded-[24px] p-4 text-xs text-neutral-600 font-semibold text-center leading-relaxed shrink-0">
           <strong>Lưu ý:</strong> Bạn có thể chọn nhiều triệu chứng đau. Hệ thống AI sẽ phân tích và đề xuất chuyên khoa phù hợp.
         </div>
 
@@ -72,7 +72,7 @@ export const BodySelectStep: React.FC = () => {
           onClick={startDiagnosisFlow}
           disabled={selectedSymptoms.length === 0 || isApiLoading}
           className={cn(
-            "w-full py-4 rounded-full text-white font-bold text-base shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer",
+            "w-full py-3.5 sm:py-4 rounded-full text-white font-bold text-sm sm:text-base shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0 active:scale-95",
             selectedSymptoms.length > 0 && !isApiLoading ? "bg-[#74A4F6] hover:bg-[#2563EB]" : "bg-neutral-300 cursor-not-allowed"
           )}
         >

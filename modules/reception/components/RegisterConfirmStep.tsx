@@ -3,7 +3,6 @@
 import {
     Banknote,
     Check,
-    CreditCard,
     IdCard,
     QrCode,
     Sparkles,
@@ -16,21 +15,20 @@ import {
     getDoctorDisplayLabel,
 } from '@/modules/reception/utils/receptionMapper';
 import type { SymptomTriageSession } from '@/modules/reception/types/infermedica.types';
-import type { BackendSpecialtyCatalogItem, ReceptionPriority, ReceptionSlot, ReceptionSpecialty } from '@/modules/reception/types/reception.types';
+import type { BackendSpecialtyCatalogItem, ReceptionSlot, ReceptionSpecialty } from '@/modules/reception/types/reception.types';
+import type { BookingMode } from '@/modules/reception/components/BookingModeSelector';
 
-export type RegisterPaymentMethod = 'bhyt' | 'qr' | 'card' | 'cash';
+export type RegisterPaymentMethod = 'qr' | 'cash';
 
 const PAYMENT_OPTIONS: Array<{
     id: RegisterPaymentMethod;
     label: string;
     hint: string;
-    icon: typeof IdCard;
+    icon: typeof Banknote;
 }> = [
-    { id: 'bhyt', label: 'Bảo hiểm y tế', hint: 'Áp dụng BHYT', icon: IdCard },
-    { id: 'qr', label: 'QR Code / VietQR', hint: 'MoMo, ZaloPay, VietQR', icon: QrCode },
-    { id: 'card', label: 'Thẻ ngân hàng', hint: 'ATM, Visa, Mastercard', icon: CreditCard },
-    { id: 'cash', label: 'Tiền mặt', hint: 'Thanh toán tại quầy thu ngân', icon: Banknote },
-];
+        { id: 'qr', label: 'QR Code / VietQR', hint: 'MoMo, ZaloPay, VietQR', icon: QrCode },
+        { id: 'cash', label: 'Tiền mặt', hint: 'Thanh toán tại quầy thu ngân', icon: Banknote },
+    ];
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
     return (
@@ -47,7 +45,6 @@ interface RegisterConfirmStepProps {
     dob: string;
     phone: string;
     insuranceId: string;
-    priority: ReceptionPriority;
     symptoms?: string;
     paymentMethod: RegisterPaymentMethod;
     onPaymentMethodChange: (method: RegisterPaymentMethod) => void;
@@ -56,6 +53,7 @@ interface RegisterConfirmStepProps {
     selectedSpecialty: ReceptionSpecialty | undefined;
     selectedSlot: ReceptionSlot | undefined;
     triageSession: SymptomTriageSession;
+    bookingMode?: BookingMode | null;
 }
 
 function formatDob(dob: string): string {
@@ -108,8 +106,8 @@ function getAiSuggestion(
         triageSession.triage_level === 'emergency'
             ? 'Ưu tiên ngay'
             : triageSession.triage_level === 'consultation'
-              ? '~20–30 phút'
-              : '~15–25 phút';
+                ? '~20–30 phút'
+                : '~15–25 phút';
 
     return `Gợi ý tham khảo AI: **${dept}** – Thời gian chờ dự kiến: ${waitHint}. Lễ tân đã chọn chuyên khoa chính thức ở bước trước.`;
 }
@@ -120,7 +118,6 @@ export function RegisterConfirmStep({
     dob,
     phone,
     insuranceId,
-    priority,
     paymentMethod,
     onPaymentMethodChange,
     departmentId,
@@ -128,12 +125,18 @@ export function RegisterConfirmStep({
     selectedSpecialty,
     selectedSlot,
     triageSession,
+    bookingMode,
 }: RegisterConfirmStepProps) {
     const departmentLabel = getDepartmentLabel(departmentId, specialtyCatalog, selectedSpecialty, triageSession);
     const aiReference = getAiReferenceLabel(triageSession);
     const doctorLabel = getDoctorLabel(selectedSpecialty);
     const bhytLabel = insuranceId.trim() ? insuranceId : 'Không có';
-    const aiText = getAiSuggestion(triageSession, aiReference);
+    const isAiTriaged =
+        bookingMode === 'ai_triage' &&
+        (triageSession.is_analyzed ||
+            Boolean(triageSession.recommended_specialist) ||
+            Boolean(triageSession.recommended_department_label));
+    const aiText = isAiTriaged ? getAiSuggestion(triageSession, aiReference) : '';
 
     return (
         <div className="space-y-4">
@@ -145,14 +148,12 @@ export function RegisterConfirmStep({
                         <SummaryRow label="Họ tên" value={fullName} />
                         <SummaryRow label="CCCD" value={citizenId} />
                         <SummaryRow label="Ngày sinh" value={formatDob(dob)} />
-                        <SummaryRow label="Điện thoại" value={phone} />
                         <SummaryRow label="Chuyên khoa" value={departmentLabel} />
-                        {aiReference && aiReference !== departmentLabel && (
+                        {isAiTriaged && aiReference && aiReference !== departmentLabel && (
                             <SummaryRow label="AI tham khảo" value={aiReference} />
                         )}
                         <SummaryRow label="BHYT" value={bhytLabel} />
                         <SummaryRow label="Bác sĩ" value={doctorLabel} />
-                        <SummaryRow label="Ưu tiên" value={priority} />
                         <SummaryRow
                             label="Giờ khám"
                             value={formatSlotTimeLabel(selectedSlot) || '—'}
@@ -201,16 +202,16 @@ export function RegisterConfirmStep({
                 </div>
             </div>
 
-            {/* AI banner */}
-            <div className="rounded-[14px] border border-[#E0E7FF] bg-[#F5F3FF] px-5 py-4 flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#8B7CF6] flex items-center justify-center shrink-0">
-                    <Sparkles className="w-5 h-5 text-white" strokeWidth={2} />
-                </div>
-                <div className="min-w-0">
-                    <p className="text-[14px] font-bold text-[#5B21B6]">Kết quả phân loại AI</p>
-                    <p className="text-[12px] text-[#6D28D9] mt-1 leading-relaxed">
-                        {triageSession.is_analyzed || triageSession.recommended_specialist ? (
-                            aiText.split('**').map((part, i) =>
+            {/* AI banner - Chỉ hiển thị khi chọn chế độ Gợi ý chuyên khoa AI */}
+            {isAiTriaged && (
+                <div className="rounded-[14px] border border-[#E0E7FF] bg-[#F5F3FF] px-5 py-4 flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-[#8B7CF6] flex items-center justify-center shrink-0">
+                        <Sparkles className="w-5 h-5 text-white" strokeWidth={2} />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-[14px] font-bold text-[#5B21B6]">Kết quả phân loại AI</p>
+                        <p className="text-[12px] text-[#6D28D9] mt-1 leading-relaxed">
+                            {aiText.split('**').map((part, i) =>
                                 i % 2 === 1 ? (
                                     <strong key={i} className="font-bold text-[#5B21B6]">
                                         {part}
@@ -218,19 +219,11 @@ export function RegisterConfirmStep({
                                 ) : (
                                     <span key={i}>{part}</span>
                                 ),
-                            )
-                        ) : (
-                            <>
-                                Chưa có kết quả AI chi tiết. Chuyên khoa đề xuất:{' '}
-                                <strong className="font-bold text-[#5B21B6]">
-                                    {departmentLabel !== '—' ? departmentLabel : 'theo triệu chứng'}
-                                </strong>
-                                . Số thứ tự sẽ được cấp sau khi xác nhận.
-                            </>
-                        )}
-                    </p>
+                            )}
+                        </p>
+                    </div>
                 </div>
-            </div>
+            )}
 
             {paymentMethod === 'qr' && (
                 <div className="rounded-xl border border-[#8B7CF6]/20 bg-[#F5F2FF] px-4 py-3 flex items-center gap-3 text-[12.5px] text-[#5B4EC9]">

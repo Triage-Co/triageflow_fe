@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-    BarChart3,
     Bell,
     Building2,
     CalendarDays,
@@ -16,6 +15,7 @@ import {
     Map,
     Settings,
     UserCheck,
+    UserPlus,
     Users,
     FlaskConical,
     Pill,
@@ -50,11 +50,9 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
         { label: 'Cài đặt', href: '/nurse/setting', icon: Settings },
     ],
     RECEPTIONIST: [
-        { label: 'Tổng quan', href: '/reception', icon: LayoutDashboard },
+        { label: 'Tiếp nhận bệnh nhân', href: '/reception', icon: UserPlus },
         { label: 'Tra cứu bệnh nhân', href: '/reception/search', icon: Search },
-        { label: 'Thông báo', href: '/notifications', icon: Bell },
-        { label: 'Thống kê', href: '/reception/stats', icon: BarChart3 },
-        { label: 'Cài đặt', href: '/settings', icon: Settings },
+        { label: 'Thông tin cá nhân', href: '/settings', icon: User },
     ],
     LAB_STAFF: [
         { label: 'Danh Sách Bệnh Nhân', href: '/lab', icon: LayoutDashboard },

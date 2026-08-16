@@ -31,21 +31,21 @@ export const PackageDetailView: React.FC = () => {
   const steps = selectedPackageDetail?.template?.steps || [];
 
   return (
-    <div className="w-full min-h-screen p-6 lg:p-10 z-10 select-none flex flex-col justify-between max-w-7xl mx-auto space-y-8">
+    <div className="w-full h-full min-h-0 p-4 sm:p-6 lg:p-8 z-10 select-none flex flex-col justify-between max-w-7xl mx-auto gap-4 overflow-hidden">
       {/* Top Header Bar */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
           <button
             onClick={handleBack}
-            className="flex items-center gap-2 px-6 py-3 bg-white hover:bg-neutral-50 active:scale-95 rounded-2xl text-sm font-bold text-neutral-800 shadow-md border border-neutral-100 transition-all cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2 sm:px-6 sm:py-2.5 bg-white hover:bg-neutral-50 active:scale-95 rounded-2xl text-xs sm:text-sm font-bold text-neutral-800 shadow-md border border-neutral-100 transition-all cursor-pointer shrink-0"
           >
-            <ArrowLeft className="w-5 h-5 text-neutral-600" /> Quay lại
+            <ArrowLeft className="w-4 h-4 text-neutral-600" /> Quay lại
           </button>
-          <div className="ml-2">
-            <h2 className="text-2xl sm:text-3xl font-black text-[#1E2939] tracking-tight">
+          <div>
+            <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-[#1E2939] tracking-tight">
               Chi tiết gói dịch vụ
             </h2>
-            <p className="text-xs sm:text-sm font-semibold text-neutral-500 mt-1">
+            <p className="text-xs sm:text-sm font-semibold text-neutral-500 mt-0.5">
               Xem lộ trình khám và các chuyên khoa bao gồm trong gói khám
             </p>
           </div>
@@ -55,15 +55,15 @@ export const PackageDetailView: React.FC = () => {
         {!isFetchingPackageDetail && selectedPackageDetail && (
           <button
             onClick={handleContinue}
-            className="flex items-center gap-2 px-6 py-3.5 bg-teal-600 hover:bg-teal-700 active:scale-95 text-white rounded-2xl text-sm font-extrabold shadow-lg shadow-teal-600/20 transition-all cursor-pointer"
+            className="flex items-center gap-2 px-5 py-2.5 sm:px-6 sm:py-3 bg-teal-600 hover:bg-teal-700 active:scale-95 text-white rounded-2xl text-xs sm:text-sm font-extrabold shadow-lg shadow-teal-600/20 transition-all cursor-pointer shrink-0"
           >
-            Tiếp tục <ArrowRight className="w-5 h-5" />
+            Tiếp tục <ArrowRight className="w-4 h-4" />
           </button>
         )}
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col justify-center py-4">
+      <div className="flex-1 min-h-0 overflow-y-auto pr-1">
         {isFetchingPackageDetail ? (
           <div className="flex flex-col items-center justify-center space-y-4">
             <Loader2 className="w-12 h-12 text-teal-600 animate-spin" />

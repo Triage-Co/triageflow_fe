@@ -3,6 +3,7 @@
 import { EMRWorkspaceLayout } from '@/shared/components/layout/EMRWorkspaceLayout';
 import { SettingsWorkflowPanel } from '@/modules/settings/components/SettingsWorkflowPanel';
 import LabSettingsView from '@/modules/lab/views/LabSettingsView';
+import ReceptionSettingsView from '@/modules/reception/components/ReceptionSettingsView';
 import { useAuthStore } from '@/store/authStore';
 
 export default function SettingsPage() {
@@ -12,10 +13,18 @@ export default function SettingsPage() {
         (user?.role === 'DOCTOR' &&
             typeof window !== 'undefined' &&
             localStorage.getItem('tfopd_active_room_type') === 'PROCEDURE_ROOM');
+    const isReceptionRole = user?.role === 'RECEPTIONIST';
 
     return (
         <EMRWorkspaceLayout activeTabId="settings" activeTabName="Cài đặt">
-            {isLabRole ? <LabSettingsView /> : <SettingsWorkflowPanel />}
+            {isLabRole ? (
+                <LabSettingsView />
+            ) : isReceptionRole ? (
+                <ReceptionSettingsView />
+            ) : (
+                <SettingsWorkflowPanel />
+            )}
         </EMRWorkspaceLayout>
     );
 }
+

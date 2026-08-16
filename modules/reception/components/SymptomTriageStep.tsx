@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import {
     AlertCircle,
     AlertTriangle,
+    ArrowLeft,
     Brain,
     CalendarDays,
     Check,
@@ -38,7 +39,6 @@ import { dobToAge } from '@/modules/reception/utils/infermedicaMapper';
 import { formatCaughtError } from '@/shared/utils/apiError';
 import type {
     BackendSpecialtyCatalogItem,
-    ReceptionPriority,
     ReceptionSlot,
     ReceptionSpecialty,
 } from '@/modules/reception/types/reception.types';
@@ -57,13 +57,6 @@ import {
     getTodayDateString,
 } from '@/modules/reception/utils/receptionMapper';
 import type { Gender } from '@/shared/types/auth.types';
-
-const PRIORITY_OPTIONS: Array<{ value: ReceptionPriority; label: string; hint: string }> = [
-    { value: 'Khẩn cấp', label: 'Khẩn cấp', hint: 'Cần xử lý ngay' },
-    { value: 'Ưu tiên', label: 'Ưu tiên cao', hint: 'Chờ < 15 phút' },
-    { value: 'Người cao tuổi', label: 'Người cao tuổi', hint: 'Ưu tiên hàng đợi' },
-    { value: 'Thường', label: 'Thông thường', hint: 'Khám theo thứ tự' },
-];
 
 const DATE_OPTIONS = buildUpcomingDateOptions(7);
 const TIME_GROUPS = [
@@ -101,8 +94,6 @@ interface SymptomTriageStepProps {
     onDepartmentChange: (value: string) => void;
     slotId: string;
     onSlotChange: (value: string) => void;
-    priority: ReceptionPriority;
-    onPriorityChange: (value: ReceptionPriority) => void;
     slots: ReceptionSlot[];
     specialties: ReceptionSpecialty[];
     specialtyCatalog: BackendSpecialtyCatalogItem[];
@@ -112,6 +103,7 @@ interface SymptomTriageStepProps {
     onTriageSessionChange: (session: SymptomTriageSession) => void;
     inputClass: string;
     isLoadingMeta: boolean;
+    onChangeMode?: () => void;
 }
 
 function getDoctorKey(specialty: ReceptionSpecialty, index: number): string {
@@ -162,8 +154,6 @@ export function SymptomTriageStep({
     onDepartmentChange,
     slotId,
     onSlotChange,
-    priority,
-    onPriorityChange,
     slots,
     specialties,
     specialtyCatalog,
@@ -173,6 +163,7 @@ export function SymptomTriageStep({
     onTriageSessionChange,
     inputClass,
     isLoadingMeta,
+    onChangeMode,
 }: SymptomTriageStepProps) {
     const [isPending, startTransition] = useTransition();
     const [error, setError] = useState<string | null>(null);
@@ -181,7 +172,22 @@ export function SymptomTriageStep({
     const [selectedDate, setSelectedDate] = useState(getTodayDateString());
     const [dateScrollIndex, setDateScrollIndex] = useState(0);
     const [isLoadingDoctors, setIsLoadingDoctors] = useState(false);
+
+    const isSessionDirty = useMemo(() => {
+        return triageSession.is_analyzed || triageSession.questions_answered > 0 || triageSession.evidence.length > 0;
+    }, [triageSession]);
+
     const userPickedDepartmentRef = useRef(false);
+
+    function handleResetSession() {
+        onTriageSessionChange(EMPTY_TRIAGE_SESSION);
+        onSymptomsChange('');
+        onDepartmentChange('');
+        onSpecialtyChange('');
+        onSlotChange('');
+        onSlotsChange([]);
+        onSpecialtiesChange([]);
+    }
 
     const patientAge = useMemo(() => dobToAge(dob), [dob]);
     const canAnalyze =
@@ -262,7 +268,6 @@ export function SymptomTriageStep({
             onSlotChange('');
             applyAiSuggestedDepartment(result.session);
         }
-        if (result.session.is_emergency) onPriorityChange('Khẩn cấp');
     }
 
     useEffect(() => {
@@ -428,6 +433,31 @@ export function SymptomTriageStep({
 
     return (
         <div className="space-y-4">
+            {onChangeMode && (
+                <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[#E5E7EB]">
+                    <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-[#DCFCE7] flex items-center justify-center">
+                            <Brain className="w-5 h-5 text-[#16A34A]" />
+                        </div>
+                        <div>
+                            <h2 className="text-[16px] font-bold text-[#1F2937]">Gợi ý chuyên khoa từ AI (Triage)</h2>
+                            <p className="text-[12px] text-[#6B7280]">
+                                Nhập triệu chứng để AI chẩn đoán, hỏi đáp và tự động gợi ý khoa phù hợp
+                            </p>
+                        </div>
+                    </div>
+
+                    <button
+                        type="button"
+                        onClick={onChangeMode}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#E5E7EB] bg-white text-[12px] font-bold text-[#6B7280] hover:bg-[#F9FAFB] hover:text-[#1F2937] transition-colors"
+                    >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        Đổi hướng khám
+                    </button>
+                </div>
+            )}
+
             <div className="rounded-[14px] border border-[#EBEBEB] bg-white p-5 md:p-6 shadow-[0_1px_6px_rgba(0,0,0,0.04)]">
                 <div className="flex items-center gap-2 mb-4">
                     <ClipboardList className="w-4 h-4 text-[#8B7CF6]" strokeWidth={2.25} />
@@ -655,9 +685,6 @@ export function SymptomTriageStep({
                     {selectedCatalogSpecialty && (
                         <p className="mt-3 text-[11px] text-[#6B7280]">
                             Đã chọn: <strong>{selectedCatalogSpecialty.specialty_name}</strong>
-                            {selectedCatalogSpecialty.specialty_code && (
-                                <span className="text-[#9CA3AF]"> ({selectedCatalogSpecialty.specialty_code})</span>
-                            )}
                         </p>
                     )}
                     {recommendedLabel && triageSession.is_analyzed && (
@@ -1008,35 +1035,6 @@ export function SymptomTriageStep({
                     )}
                 </div>
             )}
-
-            <div className="rounded-[14px] border border-[#EBEBEB] bg-white p-5 shadow-[0_1px_6px_rgba(0,0,0,0.04)]">
-                <div className="flex items-center gap-2 mb-4">
-                    <AlertTriangle className="w-4 h-4 text-[#8B7CF6]" strokeWidth={2.25} />
-                    <h2 className="text-[15px] font-bold text-[#1F2937]">Mức độ ưu tiên</h2>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {PRIORITY_OPTIONS.map((option) => {
-                        const isSelected = priority === option.value;
-                        return (
-                            <button
-                                key={option.value}
-                                type="button"
-                                disabled={isPending}
-                                onClick={() => onPriorityChange(option.value)}
-                                className={cn(
-                                    'flex items-center justify-between gap-3 px-4 py-3 rounded-xl border text-left transition-colors',
-                                    isSelected
-                                        ? 'border-[#8B7CF6] bg-[#FAFAFF] ring-1 ring-[#8B7CF6]/20'
-                                        : 'border-[#F3F4F6] bg-white hover:border-[#E5E7EB]',
-                                )}
-                            >
-                                <span className="text-[13px] font-semibold text-[#374151]">{option.label}</span>
-                                <span className="text-[11px] text-[#9CA3AF] shrink-0">{option.hint}</span>
-                            </button>
-                        );
-                    })}
-                </div>
-            </div>
         </div>
     );
 }

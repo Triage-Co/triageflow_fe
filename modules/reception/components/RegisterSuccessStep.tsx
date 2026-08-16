@@ -63,19 +63,6 @@ export function RegisterSuccessStep({ result, onRegisterNew }: RegisterSuccessSt
                             Phiếu Đăng Ký Khám
                         </h3>
                     </div>
-                    {/* Priority Badge */}
-                    <span className={cn(
-                        "inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider",
-                        result.priority === 'Khẩn cấp' 
-                            ? 'bg-red-50 text-red-700 border border-red-100'
-                            : result.priority === 'Người cao tuổi'
-                            ? 'bg-blue-50 text-blue-700 border border-blue-100'
-                            : result.priority === 'Ưu tiên'
-                            ? 'bg-amber-50 text-amber-700 border border-amber-100'
-                            : 'bg-neutral-50 text-neutral-600 border border-neutral-200'
-                    )}>
-                        {result.priority}
-                    </span>
                 </div>
 
                 {/* Queue Number Panel */}
@@ -86,9 +73,6 @@ export function RegisterSuccessStep({ result, onRegisterNew }: RegisterSuccessSt
                     <div className="text-[52px] font-black text-[#8B7CF6] tracking-tight leading-none my-1">
                         {result.ticketNo}
                     </div>
-                    <span className="text-[11px] font-medium text-neutral-500 block mt-2">
-                        Bệnh viện Đa khoa Trung ương
-                    </span>
                 </div>
 
                 {/* Details Section */}
@@ -157,9 +141,6 @@ export function RegisterSuccessStep({ result, onRegisterNew }: RegisterSuccessSt
                             className="block"
                         />
                     </div>
-                    <p className="text-[10px] text-neutral-400 font-semibold tracking-wide uppercase mt-3 text-center">
-                        Quét QR để theo dõi & dẫn đường trong bệnh viện
-                    </p>
                 </div>
 
                 {/* Footer Notes */}

@@ -47,6 +47,12 @@ const findSymptomInDataset = (dataset: Record<string, any>, targetId: string) =>
     return null;
 };
 
+export interface QuestionHistoryItem {
+    question: InfermedicaQuestion;
+    evidenceSnapshot: InfermedicaEvidence[];
+    submittedAnswers?: Record<string, 'present' | 'absent' | 'unknown' | undefined>;
+}
+
 interface TriageStoreState {
     currentRegionSymptoms: SymptomItem[];
     isApiLoading: boolean;
@@ -60,6 +66,8 @@ interface TriageStoreState {
     interviewToken: string | null;
     currentQuestion: InfermedicaQuestion | null;
     recommendedSpecialists: InfermedicaRecommendedSpecialist[];
+    historyStack: QuestionHistoryItem[];
+    restoredAnswers: Record<string, 'present' | 'absent' | 'unknown' | undefined> | null;
 
     fetchAndMergeSymptoms: (regionId: string, dob?: string) => Promise<void>;
     toggleSymptom: (symptom: SymptomItem) => void;
@@ -69,8 +77,9 @@ interface TriageStoreState {
     setPainLevel: (level: number) => void;
     setHasEmergency: (emergency: boolean) => void;
     startDiagnosisFlow: () => Promise<void>;
-    // ĐỔI: Chuyển sang nhận một mảng danh sách câu trả lời cùng lúc
-    submitAnswersBatch: (answers: InfermedicaEvidence[]) => Promise<void>;
+    submitAnswersBatch: (answers: InfermedicaEvidence[], localAnswerMap?: Record<string, 'present' | 'absent' | 'unknown' | undefined>) => Promise<void>;
+    goToPreviousQuestion: () => boolean;
+    clearRestoredAnswers: () => void;
     clearTriage: () => void;
     resetTriageFlow: () => void;
 }
@@ -87,6 +96,8 @@ const initialState = {
     interviewToken: null,
     currentQuestion: null,
     recommendedSpecialists: [],
+    historyStack: [],
+    restoredAnswers: null,
 };
 
 export const useTriageStore = create<TriageStoreState>((set, get) => ({
@@ -98,6 +109,26 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
     resetTriageFlow: () => {
         get().clearTriage();
     },
+
+    goToPreviousQuestion: () => {
+        const history = get().historyStack;
+        if (history.length === 0) {
+            return false;
+        }
+        const newHistory = [...history];
+        const lastStep = newHistory.pop()!;
+
+        set({
+            historyStack: newHistory,
+            currentQuestion: lastStep.question,
+            accumulatedEvidence: lastStep.evidenceSnapshot,
+            restoredAnswers: lastStep.submittedAnswers || null,
+            recommendedSpecialists: [],
+        });
+        return true;
+    },
+
+    clearRestoredAnswers: () => set({ restoredAnswers: null }),
 
     fetchAndMergeSymptoms: async (regionId: string, dob?: string) => {
         const { useKioskStore } = await import('./kioskStore');
@@ -176,7 +207,7 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
         const kioskState = useKioskStore.getState();
         const authState = useAuthStore.getState();
 
-        set({ isApiLoading: true });
+        set({ isApiLoading: true, historyStack: [], restoredAnswers: null });
 
         const realCitizenId = authState.citizenId || authState.patientInfo?.idNumber;
 
@@ -244,9 +275,9 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
     },
 
     /**
-     * LƯỢT HỎI KẾ TIẾP: Nhận mảng evidence cộng dồn hàng loạt
+     * LƯỢT HỎI KẾ TIẾP: Nhận mảng evidence cộng dồn hàng loạt & lưu snapshot lịch sử
      */
-    submitAnswersBatch: async (answers) => {
+    submitAnswersBatch: async (answers, localAnswerMap) => {
         const { useKioskStore } = await import('./kioskStore');
         const { useAuthStore } = await import('./authStore');
 
@@ -256,8 +287,20 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
 
         if (!token) return;
 
-        set({ isApiLoading: true });
-        const updatedEvidence = [...get().accumulatedEvidence, ...answers];
+        // Lưu snapshot câu hỏi hiện tại và mảng evidence trước khi cộng dồn
+        const currentQ = get().currentQuestion;
+        const currentEvidence = get().accumulatedEvidence;
+        if (currentQ) {
+            const snapshot: QuestionHistoryItem = {
+                question: currentQ,
+                evidenceSnapshot: [...currentEvidence],
+                submittedAnswers: localAnswerMap
+            };
+            set({ historyStack: [...get().historyStack, snapshot] });
+        }
+
+        set({ isApiLoading: true, restoredAnswers: null });
+        const updatedEvidence = [...currentEvidence, ...answers];
         set({ accumulatedEvidence: updatedEvidence });
 
         const patientAge = calculateAgeFromDob(authState.patientInfo?.dob);

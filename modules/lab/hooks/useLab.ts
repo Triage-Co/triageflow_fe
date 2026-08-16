@@ -21,6 +21,7 @@ export function useLab() {
     const [isCallingNext, setIsCallingNext] = useState(false);
     const [isCompleting, setIsCompleting] = useState(false);
     const [isRecalling, setIsRecalling] = useState(false);
+    const [isCompletingDetail, setIsCompletingDetail] = useState<Record<string, boolean>>({});
 
     // Override Queue state
     const [overrideConfirmData, setOverrideConfirmData] = useState<OverrideConfirmData | null>(null);
@@ -123,18 +124,45 @@ export function useLab() {
         }
     }, [initialSearch]);
 
+
     // Merge API Queue Data with Local Interactions
     const mergedQueueLists = useMemo(() => {
-        const initialServing: QueuePatientItem[] = queueData?.serving ? [{
-            queue_id: queueData.serving.queue_id,
-            queue_number: queueData.serving.queue_number,
-            patient_name: queueData.serving.patient?.full_name || 'Bệnh nhân',
-            enqueued_at: queueData.serving.serving_started_at,
-            queue_type: queueData.serving.step?.step_name || 'Xét nghiệm phòng Lab',
-            patient: queueData.serving.patient,
-            step: queueData.serving.step,
-            serving_started_at: queueData.serving.serving_started_at,
-        }] : [];
+        const initialServing: QueuePatientItem[] = queueData?.serving ? (() => {
+            const serving = queueData.serving;
+            let activeStep = serving.step;
+
+            // Nếu dịch vụ hiện hành đã được hoàn thành (status === 'COMPLETED'),
+            // tự động chuyển bước khám hiển thị sang dịch vụ kế tiếp chưa hoàn thành.
+            if (activeStep && serving.service_order?.details) {
+                const currentDetail = serving.service_order.details.find(
+                    (d: any) => d.service_code === activeStep?.service_code
+                );
+                if (currentDetail?.status === 'COMPLETED') {
+                    const nextUncompletedDetail = serving.service_order.details.find(
+                        (d: any) => d.status !== 'COMPLETED'
+                    );
+                    if (nextUncompletedDetail) {
+                        activeStep = {
+                            ...activeStep,
+                            step_name: nextUncompletedDetail.service_name || nextUncompletedDetail.name || activeStep.step_name,
+                            service_code: nextUncompletedDetail.service_code || activeStep.service_code,
+                        };
+                    }
+                }
+            }
+
+            return [{
+                queue_id: serving.queue_id,
+                queue_number: serving.queue_number,
+                patient_name: serving.patient?.full_name || 'Bệnh nhân',
+                enqueued_at: serving.serving_started_at,
+                queue_type: activeStep?.step_name || 'Xét nghiệm phòng Lab',
+                patient: serving.patient,
+                step: activeStep,
+                serving_started_at: serving.serving_started_at,
+                service_order: serving.service_order,
+            }];
+        })() : [];
         const initialWaiting = queueData?.waiting ?? [];
         const initialMissing = queueData?.missing ?? [];
 
@@ -181,6 +209,19 @@ export function useLab() {
             completed: completedList.filter(filterFn)
         };
     }, [queueData, localOverrides, search]);
+
+    // Sync selectedPatient with latest queue data (to show updated service order detail status in real-time)
+    useEffect(() => {
+        if (!selectedPatient) return;
+        const targetId = selectedPatient.queue_id;
+        const latest = 
+            mergedQueueLists.waiting.find(p => p.queue_id === targetId) ||
+            mergedQueueLists.missing.find(p => p.queue_id === targetId) ||
+            mergedQueueLists.completed.find(p => p.queue_id === targetId);
+        if (latest && latest !== selectedPatient) {
+            setSelectedPatient(latest);
+        }
+    }, [mergedQueueLists, selectedPatient]);
 
     // Refresh Queue manually
     const handleRefresh = async () => {
@@ -246,6 +287,22 @@ export function useLab() {
             showToast(errMsg, 'error');
         } finally {
             setIsCompleting(false);
+        }
+    };
+
+    const handleCompleteOrderDetail = async (queueId: string, detailId: string) => {
+        if (!queueId || !detailId) return;
+        setIsCompletingDetail((prev) => ({ ...prev, [detailId]: true }));
+        try {
+            await labService.completeOrderDetail(queueId, detailId);
+            showToast('Đã hoàn thành dịch vụ chỉ định.', 'success');
+            await handleRefresh();
+        } catch (e: any) {
+            console.error('[useLab] Error completing order detail:', e);
+            const errMsg = e?.response?.data?.message || e?.message || 'Có lỗi xảy ra khi hoàn thành dịch vụ.';
+            showToast(errMsg, 'error');
+        } finally {
+            setIsCompletingDetail((prev) => ({ ...prev, [detailId]: false }));
         }
     };
 
@@ -328,6 +385,8 @@ export function useLab() {
         handleCallNext,
         isCompleting,
         handleCompleteQueue,
+        isCompletingDetail,
+        handleCompleteOrderDetail,
         isRecalling,
         handleRecallQueue,
         overrideConfirmData,
