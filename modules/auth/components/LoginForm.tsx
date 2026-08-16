@@ -60,16 +60,14 @@ export function LoginForm() {
             const profileRes = await authService.getProfile(token);
             if (profileRes && profileRes.data) {
                 profileData = profileRes.data;
-                if (profileRes.data.full_name) {
-                    displayFullName = profileRes.data.full_name;
-                } else if (profileRes.data.user_name) {
+                if (profileRes.data.user_name) {
                     displayFullName = profileRes.data.user_name;
                 }
                 if (profileRes.data.role) {
                     resolvedRole = profileRes.data.role;
                 }
-                if (profileRes.data.id) {
-                    userId = profileRes.data.id;
+                if (profileRes.data.account_id) {
+                    userId = profileRes.data.account_id;
                 }
             }
         } catch (err) {
@@ -82,7 +80,7 @@ export function LoginForm() {
                 email,
                 fullName: displayFullName,
                 role: resolvedRole,
-                avatar: localAvatar
+                avatar: profileData?.avatar || localAvatar
             },
             accessToken: token,
             refreshToken,

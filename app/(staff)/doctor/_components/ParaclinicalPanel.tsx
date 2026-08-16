@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Printer, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import type { LabOrder } from '@/modules/clinical/types/clinical.types';
 import { Badge } from '@/shared/components/ui/Badge';
 import { Button } from '@/shared/components/ui/Button';
@@ -36,10 +36,6 @@ export function ParaclinicalPanel({ orders }: ParaclinicalPanelProps) {
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" className="rounded-[14px] gap-1.5 h-9 text-xs">
-                            <Printer className="w-3.5 h-3.5" />
-                            In CĐ
-                        </Button>
                         <Button size="sm" className="rounded-[14px] gap-1.5 h-9 text-xs">
                             <Plus className="w-3.5 h-3.5" />
                             Thêm chỉ định

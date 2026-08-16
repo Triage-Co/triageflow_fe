@@ -61,25 +61,20 @@ export interface AuthUser {
 }
 
 export interface UserProfile {
-    id?: string;
     account_id?: string;
+    avatar?: string | null;
     user_name?: string;
-    full_name?: string;
     email: string;
-    dob?: string;
     role: string;
     gender: Gender;
-    citizen_id?: string;
+    phone?: string;
+    is_banned?: boolean;
     createdAt?: string;
     updatedAt?: string;
-    phone?: string;
-    avatar?: string | null;
 }
 
 export interface UpdateProfileRequest {
-    full_name?: string;
     user_name?: string;
-    dob?: string;
     gender?: Gender;
     phone?: string;
     avatar?: string | null;

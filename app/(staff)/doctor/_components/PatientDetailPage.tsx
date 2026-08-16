@@ -1,27 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import {
-    User,
-    Shield,
-    Circle,
-} from 'lucide-react';
+import { User, Shield, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Patient } from '@/modules/clinical/types/clinical.types';
+import { WorkflowDiagram } from './workflow/WorkflowDiagram';
 import { DoctorHeader } from './DoctorHeader';
-import { WorkflowDiagram } from './WorkflowDiagram';
 import { ClinicalProcessPanel } from './ClinicalProcessPanel';
-
-const MOCK_LAB_ORDERS = [
-    { id: 'lab-1', name: 'Tổng phân tích tế bào máu', group: 'Huyết học', status: 'Chờ thực hiện' as const },
-    { id: 'lab-2', name: 'X-quang ngực thẳng', group: 'Chẩn đoán hình ảnh', status: 'Chờ thực hiện' as const },
-    { id: 'lab-3', name: 'Siêu âm bụng', group: 'Siêu âm', status: 'Chờ thực hiện' as const },
-];
-
-const MOCK_DIAGNOSIS = {
-    code: 'J02.9',
-    description: 'Đau hố chậu phải',
-};
 
 type DetailTab = 'info' | 'process';
 
@@ -30,10 +15,12 @@ interface PatientDetailPageProps {
     clinicName?: string;
 }
 
-export function PatientDetailPage({
-    patient,
-    clinicName = 'PK. Nội tổng quát 1',
-}: PatientDetailPageProps) {
+function displayText(value?: string | null): string {
+    const text = (value || '').trim();
+    return text || '—';
+}
+
+export function PatientDetailPage({ patient, clinicName }: PatientDetailPageProps) {
     const [activeTab, setActiveTab] = useState<DetailTab>('process');
     const [flowRefreshKey, setFlowRefreshKey] = useState(0);
     const [flowSnapshot, setFlowSnapshot] = useState<Record<string, unknown> | null>(null);
@@ -42,6 +29,19 @@ export function PatientDetailPage({
         setFlowSnapshot(flow);
         setFlowRefreshKey((prev) => prev + 1);
     };
+
+    const record = patient.medicalRecord;
+    const heading = clinicName || patient.department || '';
+    const medicalHistory = (record?.medicalHistory?.length ? record.medicalHistory : patient.medicalHistory) || [];
+    const visitReason = record?.visitReason || patient.visitReason;
+    const clinicalProgression = record?.clinicalProgression || '';
+    const physicalExam = record?.physicalExam;
+    const examRows = [
+        { label: 'Họng', value: physicalExam?.throat },
+        { label: 'Phổi', value: physicalExam?.lungs },
+        { label: 'Tim', value: physicalExam?.heart },
+        { label: 'Bụng', value: physicalExam?.abdomen },
+    ].filter((row) => Boolean(row.value?.trim()));
 
     const tabToggle = (
         <div className="bg-white rounded-[24px] border border-neutral-100 p-1.5 flex gap-1">
@@ -70,14 +70,13 @@ export function PatientDetailPage({
         <div className="flex flex-col h-full">
             <DoctorHeader />
 
-            <div className="px-6 py-3.5 border-b border-neutral-100 bg-white shrink-0">
-                <h2 className="text-base font-bold text-neutral-800 tracking-tight">
-                    {clinicName}
-                </h2>
-            </div>
+            {heading ? (
+                <div className="px-6 py-3.5 border-b border-neutral-100 bg-white shrink-0">
+                    <h2 className="text-base font-bold text-neutral-800 tracking-tight">{heading}</h2>
+                </div>
+            ) : null}
 
             <div className="flex-1 overflow-hidden flex gap-6 px-6 py-6">
-                {/* ── LEFT SIDEBAR ─── */}
                 <div className="w-80 shrink-0 overflow-y-auto space-y-5">
                     {activeTab === 'info' && (
                         <div className="bg-white rounded-[24px] border border-neutral-100 shadow-[0_2px_12px_rgba(0,0,0,0.04)] p-5 flex items-start gap-4">
@@ -88,11 +87,15 @@ export function PatientDetailPage({
                                 <p className="font-bold text-neutral-900 text-base leading-snug">
                                     {patient.name} {patient.stt ? `(${patient.stt})` : ''}
                                 </p>
-                                <p className="text-xs text-neutral-400 font-medium mt-0.5">Mã BN: {patient.code}</p>
+                                <p className="text-xs text-neutral-400 font-medium mt-0.5">
+                                    Mã BN: {displayText(patient.code)}
+                                </p>
                                 <div className="mt-3 space-y-1.5">
                                     <div className="flex items-center justify-between text-xs">
                                         <span className="text-neutral-400">Giới tính / Tuổi</span>
-                                        <span className="font-semibold text-neutral-700">{patient.gender} • {patient.age}</span>
+                                        <span className="font-semibold text-neutral-700">
+                                            {patient.gender} • {patient.age}
+                                        </span>
                                     </div>
                                     <div className="flex items-center justify-between text-xs">
                                         <span className="text-neutral-400">Bảo hiểm</span>
@@ -107,7 +110,9 @@ export function PatientDetailPage({
                                     </div>
                                     <div className="flex items-center justify-between text-xs">
                                         <span className="text-neutral-400">Đối tượng</span>
-                                        <span className="font-semibold text-neutral-700">{patient.visitType}</span>
+                                        <span className="font-semibold text-neutral-700">
+                                            {displayText(patient.visitType)}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -126,7 +131,6 @@ export function PatientDetailPage({
                     )}
                 </div>
 
-                {/* ── RIGHT CONTENT ─── */}
                 <div className="flex-1 overflow-y-auto min-w-0">
                     {activeTab === 'info' && (
                         <div className="space-y-5">
@@ -134,19 +138,17 @@ export function PatientDetailPage({
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-3">
                                     Lý do khám
                                 </p>
-                                <p className="text-xs text-neutral-500 mb-2">Mô tả ngắn gọn trích chương chính</p>
                                 <div className="bg-neutral-50 rounded-[12px] border border-neutral-100 p-3 text-sm text-neutral-700 leading-relaxed min-h-[60px]">
-                                    {patient.visitReason}
+                                    {displayText(visitReason)}
                                 </div>
                             </div>
 
                             <div className="bg-white rounded-[20px] border border-neutral-100 p-5">
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-3">
-                                    Quá trình bệnh lý và diễn biến làm sáng
+                                    Quá trình bệnh lý và diễn biến lâm sàng
                                 </p>
-                                <p className="text-xs text-neutral-500 mb-2">Mô tả tổi chi tiết diễn biến bệnh lý</p>
                                 <div className="bg-neutral-50 rounded-[12px] border border-neutral-100 p-3 text-sm text-neutral-700 leading-relaxed min-h-[80px]">
-                                    Nhập quá trình bệnh lý...
+                                    {displayText(clinicalProgression)}
                                 </div>
                             </div>
 
@@ -154,33 +156,44 @@ export function PatientDetailPage({
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-3">
                                     Tiền sử bệnh
                                 </p>
-                                <div className="space-y-2">
-                                    {patient.medicalHistory.map((item) => (
-                                        <div key={item} className="flex items-start gap-2 text-sm text-neutral-700">
-                                            <Circle className="w-1.5 h-1.5 mt-1.5 shrink-0 fill-blue-400 text-blue-400" />
-                                            {item}
-                                        </div>
-                                    ))}
-                                </div>
+                                {medicalHistory.length > 0 ? (
+                                    <div className="space-y-2">
+                                        {medicalHistory.map((item) => (
+                                            <div
+                                                key={item}
+                                                className="flex items-start gap-2 text-sm text-neutral-700"
+                                            >
+                                                <Circle className="w-1.5 h-1.5 mt-1.5 shrink-0 fill-blue-400 text-blue-400" />
+                                                {item}
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-neutral-400">—</p>
+                                )}
                             </div>
 
                             <div className="bg-white rounded-[20px] border border-neutral-100 p-5">
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-3">
                                     Khám lâm sàng
                                 </p>
-                                <div className="grid grid-cols-2 gap-4">
-                                    {[
-                                        { label: 'Họng', value: 'Đỏ, có mủ' },
-                                        { label: 'Phổi', value: 'Rõ, không ran' },
-                                        { label: 'Tim', value: 'Đều, T1 T2 rõ' },
-                                        { label: 'Bụng', value: 'Mềm, không đau' },
-                                    ].map(({ label, value }) => (
-                                        <div key={label} className="bg-neutral-50 rounded-[12px] border border-neutral-100 p-3">
-                                            <p className="text-xs text-neutral-400 font-medium">{label}</p>
-                                            <p className="text-sm font-semibold text-neutral-700 mt-2">{value}</p>
-                                        </div>
-                                    ))}
-                                </div>
+                                {examRows.length > 0 ? (
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {examRows.map(({ label, value }) => (
+                                            <div
+                                                key={label}
+                                                className="bg-neutral-50 rounded-[12px] border border-neutral-100 p-3"
+                                            >
+                                                <p className="text-xs text-neutral-400 font-medium">{label}</p>
+                                                <p className="text-sm font-semibold text-neutral-700 mt-2">
+                                                    {value}
+                                                </p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-neutral-400">—</p>
+                                )}
                             </div>
                         </div>
                     )}
@@ -188,8 +201,7 @@ export function PatientDetailPage({
                     {activeTab === 'process' && (
                         <ClinicalProcessPanel
                             patient={patient}
-                            labOrders={MOCK_LAB_ORDERS}
-                            diagnosis={MOCK_DIAGNOSIS}
+                            labOrders={[]}
                             flowRefreshKey={flowRefreshKey}
                             flowSnapshot={flowSnapshot}
                             onFlowChanged={handleFlowChanged}

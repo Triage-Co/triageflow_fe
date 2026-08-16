@@ -1,19 +1,14 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Pill,
-    Plus,
     Trash2,
     Search,
     Loader2,
     CheckCircle2,
     AlertCircle,
-    FileText,
-    DollarSign,
-    QrCode,
-    Calendar,
-    Send
+    Send,
 } from 'lucide-react';
 import { Medicine, Prescription, CreatePrescriptionDetailDto } from '@/shared/types/prescription.types';
 import { medicineService } from '@/modules/ancillary/services/medicineService';
@@ -35,8 +30,7 @@ interface DoctorPrescriptionTabProps {
 
 export function DoctorPrescriptionTab({
     visitSessionId,
-    patientName,
-    onPrescriptionCreated
+    onPrescriptionCreated,
 }: DoctorPrescriptionTabProps) {
     const [selectedItems, setSelectedItems] = useState<SelectedPrescriptionItem[]>([]);
     const [diagnosisNote, setDiagnosisNote] = useState('Uống thuốc đúng giờ, tái khám sau 7 ngày');
@@ -96,7 +90,11 @@ export function DoctorPrescriptionTab({
         setSelectedItems((prev) => prev.filter((_, i) => i !== index));
     };
 
-    const handleUpdateItem = (index: number, field: keyof SelectedPrescriptionItem, value: any) => {
+    const handleUpdateItem = (
+        index: number,
+        field: keyof SelectedPrescriptionItem,
+        value: SelectedPrescriptionItem[keyof SelectedPrescriptionItem]
+    ) => {
         setSelectedItems((prev) => {
             const updated = [...prev];
             updated[index] = { ...updated[index], [field]: value };
@@ -133,8 +131,8 @@ export function DoctorPrescriptionTab({
 
             setCreatedPrescription(result);
             if (onPrescriptionCreated) onPrescriptionCreated(result);
-        } catch (err: any) {
-            setError(err?.message || 'Không thể tạo đơn thuốc');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Không thể tạo đơn thuốc');
         } finally {
             setSubmitting(false);
         }
