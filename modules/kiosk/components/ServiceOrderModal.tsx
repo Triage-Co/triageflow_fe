@@ -127,8 +127,6 @@ export const ServiceOrderModal: React.FC<ServiceOrderModalProps> = ({
             })
           ) : (
             <div className="py-20 text-center space-y-2">
-              <div className="text-4xl">🎉</div>
-              <p className="text-slate-800 font-black text-sm">Bạn đã thanh toán toàn bộ dịch vụ chỉ định</p>
               <p className="text-slate-400 text-xs font-semibold">Không tìm thấy yêu cầu thanh toán dịch vụ nào đang chờ.</p>
             </div>
           )}

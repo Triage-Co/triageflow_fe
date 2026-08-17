@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useBookingStore } from '../../store/bookingStore';
 import { DoctorItem, DoctorSlotItem } from '../../types/booking.types';
-import { Clock, Loader2, Award, ShieldCheck, User } from 'lucide-react';
+import { Clock, Loader2, Award, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export const DoctorSelectStep: React.FC = () => {
@@ -33,7 +33,6 @@ export const DoctorSelectStep: React.FC = () => {
   // Kiểm tra xem khung giờ có nằm trong quá khứ so với thời gian hiện tại hay không
   const isSlotInPast = (startTimeStr: string): boolean => {
     if (!startTimeStr) return false;
-    //return false;
     const now = new Date();
     const currentHours = now.getHours();
     const currentMinutes = now.getMinutes();
@@ -64,7 +63,7 @@ export const DoctorSelectStep: React.FC = () => {
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 flex-1 min-h-0 overflow-hidden">
       {/* Cột trái: Danh sách Bác sĩ thực tế */}
       <div className="lg:col-span-7 flex flex-col min-h-0 space-y-3 h-full overflow-hidden">
-        <h3 className="font-extrabold text-[#1E2939] text-base shrink-0">Danh sách Bác sĩ sẵn sàng</h3>
+        <h3 className="font-extrabold text-[#1E2939] text-base shrink-0">Danh sách Bác sĩ</h3>
 
         {isDoctorLoading && availableDoctors.length === 0 ? (
           <div className="flex-1 flex items-center justify-center p-12 bg-white rounded-3xl border border-neutral-100">
@@ -151,7 +150,7 @@ export const DoctorSelectStep: React.FC = () => {
       {/* Cột phải: Bác sĩ đã chọn & Khung giờ trống */}
       <div className="lg:col-span-5 bg-white rounded-[28px] sm:rounded-[36px] p-4 sm:p-6 shadow-sm border border-neutral-100 flex flex-col justify-between min-h-0 h-full overflow-hidden">
         <div className="flex-1 flex flex-col min-h-0 space-y-3 sm:space-y-4 overflow-hidden">
-          <h3 className="font-extrabold text-[#1E2939] text-sm sm:text-base shrink-0">Bác sĩ & Khung giờ khám chọn</h3>
+          <h3 className="font-extrabold text-[#1E2939] text-sm sm:text-base shrink-0">Khung giờ khám</h3>
 
           {selectedDoctorObj ? (
             <div className="flex-1 flex flex-col min-h-0 space-y-3 sm:space-y-4 overflow-hidden">

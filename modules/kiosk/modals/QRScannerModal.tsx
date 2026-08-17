@@ -4,14 +4,14 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useKioskStore } from '../store/kioskStore';
 import { useAuthStore } from '../store/authStore';
 import { parseCCCDQrCode } from '../utils/cccdParser';
-import { 
-  ArrowLeft, 
-  ShieldCheck, 
-  CreditCard, 
-  QrCode, 
-  Sparkles, 
-  Keyboard, 
-  Zap, 
+import {
+  ArrowLeft,
+  ShieldCheck,
+  CreditCard,
+  QrCode,
+  Sparkles,
+  Keyboard,
+  Zap,
   Lightbulb,
   CheckCircle2
 } from 'lucide-react';
@@ -201,12 +201,12 @@ export const QRScannerModal: React.FC = () => {
   };
 
   return (
-    <div 
+    <div
       onClick={handleContainerClick}
       className="fixed inset-0 z-50 bg-[#1E2939]/60 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in-0 duration-300 select-none"
     >
       <div className="bg-white w-full max-w-xl rounded-[36px] shadow-2xl overflow-hidden border border-neutral-100/50 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300">
-        
+
         {/* Modal Header */}
         <div className="px-8 py-5 border-b border-neutral-100 flex items-center justify-between bg-neutral-50/50">
           <button
@@ -216,7 +216,7 @@ export const QRScannerModal: React.FC = () => {
             <ArrowLeft className="w-5 h-5" />
             Quay lại
           </button>
-          
+
           <span className="text-xs font-extrabold uppercase tracking-widest text-[#155DFC] bg-blue-50 px-4 py-1.5 rounded-full border border-blue-100/50">
             {getTargetTitle()}
           </span>
@@ -224,10 +224,10 @@ export const QRScannerModal: React.FC = () => {
 
         {/* Modal Body */}
         <div className="p-8 flex flex-col items-center text-center space-y-6 overflow-y-auto">
-          
+
           {/* Animated Holographic Scanner Graphic Box */}
           <div className="relative w-full max-w-sm aspect-[16/10] rounded-3xl bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 p-6 flex flex-col items-center justify-center text-white shadow-2xl shadow-blue-500/10 border border-blue-500/30 overflow-hidden group">
-            
+
             {/* Background Ambient Glow & Waves */}
             <div className="absolute -top-12 -left-12 w-36 h-36 bg-blue-500/20 blur-2xl rounded-full pointer-events-none" />
             <div className="absolute -bottom-12 -right-12 w-36 h-36 bg-indigo-500/20 blur-2xl rounded-full pointer-events-none" />
@@ -261,15 +261,6 @@ export const QRScannerModal: React.FC = () => {
             <h3 className="text-2xl font-black text-[#1E2939] tracking-tight">
               Quét mã QR trên thẻ CCCD
             </h3>
-            <p className="text-xs sm:text-sm text-[#4A5565] font-medium leading-relaxed">
-              Hướng mã QR trên <strong className="text-[#155DFC]">thẻ CCCD gắn chip</strong> hoặc <strong className="text-[#155DFC]">ứng dụng VNeID</strong> vào máy quét cầm tay.
-            </p>
-          </div>
-
-          {/* Quick Tip Box */}
-          <div className="flex items-center gap-2.5 bg-blue-50/80 text-[#155DFC] border border-blue-100 px-4 py-3 rounded-2xl text-xs font-extrabold max-w-md text-left leading-snug shadow-2xs">
-            <Lightbulb className="w-5 h-5 text-[#155DFC] shrink-0" />
-            <span>Mẹo: Giữ thẻ cố định cách đầu đọc khoảng 10 - 15cm để máy nhận diện tức thì.</span>
           </div>
 
           {error && (
@@ -288,7 +279,7 @@ export const QRScannerModal: React.FC = () => {
               const val = e.target.value;
               setCccdInput(val);
               if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
-              
+
               // Nếu máy quét bắn chuỗi CCCD đầy đủ
               if (val.includes('|') && val.split('|').length >= 6) {
                 processCCCDSubmission(val);
@@ -314,7 +305,7 @@ export const QRScannerModal: React.FC = () => {
                 className="flex items-center gap-2 text-xs font-extrabold text-[#4A5565] hover:text-[#155DFC] transition-colors py-1 cursor-pointer"
               >
                 <Keyboard className="w-4 h-4" />
-                <span>Thẻ CCCD bị mờ? Bấm vào đây để nhập số bằng tay</span>
+                <span>Bấm vào đây để nhập số bằng tay</span>
               </button>
             ) : (
               <div className="w-full space-y-3 animate-in fade-in-50 duration-200 text-left">

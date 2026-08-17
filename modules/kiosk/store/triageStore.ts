@@ -10,7 +10,10 @@ import {
     InfermedicaQuestion,
     InfermedicaRecommendedSpecialist
 } from '../types/triage.types';
-import { deepseekTranslationService } from '../services/deepseekTranslationService';
+import { 
+    translateQuestionWithDeepSeek, 
+    translateSymptomLabelsWithDeepSeek 
+} from '@/modules/reception/services/deepseekTranslationService';
 import { calculateAgeFromDob } from '../utils/kioskHelpers';
 
 const compileGlobalStaticSymptomMap = (): Record<string, string> => {
@@ -189,7 +192,6 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
                 // Dịch tự động các triệu chứng mới chưa có trong từ điển tĩnh
                 let translationMap = new Map<string, string>();
                 if (needsTranslationItems.length > 0) {
-                    const { translateSymptomLabelsWithDeepSeek } = await import('@/modules/reception/services/deepseekTranslationService');
                     translationMap = await translateSymptomLabelsWithDeepSeek(needsTranslationItems);
                 }
 
@@ -230,20 +232,17 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
 
         set({ isApiLoading: true, historyStack: [], restoredAnswers: null });
 
-        const realCitizenId = authState.citizenId || authState.patientInfo?.idNumber;
-
-        if (!realCitizenId) {
-            console.error("Không tìm thấy thông tin định danh CCCD/CMND.");
-            set({ isApiLoading: false });
-            return;
-        }
-
         const initialEvidence: InfermedicaEvidence[] = get().selectedSymptoms.map(item => ({
             id: item.id,
             choice_id: 'present' as const
         }));
 
-        set({ accumulatedEvidence: initialEvidence });
+        const realCitizenId = authState.citizenId || authState.patientInfo?.idNumber;
+        if (!realCitizenId) {
+            console.error("Không tìm thấy thông tin định danh CCCD/CMND.");
+            set({ isApiLoading: false });
+            return;
+        }
 
         const patientAge = calculateAgeFromDob(authState.patientInfo?.dob);
 
@@ -279,7 +278,7 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
                 } else {
                     let finalQuestion = question;
                     try {
-                        finalQuestion = await deepseekTranslationService.translateQuestion(question);
+                        finalQuestion = await translateQuestionWithDeepSeek(question as any) as any;
                     } catch (err: any) {
                         console.error("DeepSeek Translation error:", err);
                         kioskState.showToast(`Dịch AI thất bại (${err.message || 'Lỗi hệ thống'}). Hiển thị tiếng Anh gốc.`, 'error');
@@ -364,7 +363,7 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
                 } else {
                     let finalQuestion = question;
                     try {
-                        finalQuestion = await deepseekTranslationService.translateQuestion(question);
+                        finalQuestion = await translateQuestionWithDeepSeek(question as any) as any;
                     } catch (err: any) {
                         console.error("DeepSeek Translation error:", err);
                         kioskState.showToast(`Dịch AI thất bại (${err.message || 'Lỗi hệ thống'}). Hiển thị tiếng Anh gốc.`, 'error');
