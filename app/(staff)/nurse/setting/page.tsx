@@ -1,12 +1,12 @@
 'use client';
 
 import { EMRWorkspaceLayout } from '@/shared/components/layout/EMRWorkspaceLayout';
-import { StaffProfileSettings } from '@/modules/settings/components/StaffProfileSettings';
+import StaffSettingsView from '@/modules/settings/components/StaffSettingsView';
 
 export default function NurseSettingsPage() {
     return (
-        <EMRWorkspaceLayout activeTabId="setting" activeTabName="Cài đặt">
-            <StaffProfileSettings />
+        <EMRWorkspaceLayout activeTabId="setting" activeTabName="Thông tin cá nhân">
+            <StaffSettingsView />
         </EMRWorkspaceLayout>
     );
 }
