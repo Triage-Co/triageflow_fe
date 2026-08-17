@@ -79,8 +79,12 @@ export function ClinicalProcessPanel({
                                 )}
                             </div>
                             <p className="text-xs text-neutral-500 mt-1">
-                                {patient.gender} · {patient.age} tuổi · Mã BN: {patient.code} ·{' '}
-                                {patient.visitType}
+                                {[
+                                    patient.gender,
+                                    patient.age != null ? `${patient.age} tuổi` : null,
+                                    patient.code ? `Mã BN: ${patient.code}` : null,
+                                    patient.visitType,
+                                ].filter(Boolean).join(' · ') || '—'}
                             </p>
                             <div className="mt-2">
                                 <Badge variant="info" size="sm" className="font-mono">

@@ -94,7 +94,10 @@ export function PatientDetailPage({ patient, clinicName }: PatientDetailPageProp
                                     <div className="flex items-center justify-between text-xs">
                                         <span className="text-neutral-400">Giới tính / Tuổi</span>
                                         <span className="font-semibold text-neutral-700">
-                                            {patient.gender} • {patient.age}
+                                            {[
+                                                patient.gender,
+                                                patient.age != null ? String(patient.age) : null,
+                                            ].filter(Boolean).join(' • ') || '—'}
                                         </span>
                                     </div>
                                     <div className="flex items-center justify-between text-xs">

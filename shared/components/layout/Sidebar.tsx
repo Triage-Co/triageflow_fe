@@ -110,7 +110,6 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
         { label: 'Ca trực', href: '/admin/shift', icon: CalendarDays },
         { label: 'Người dùng', href: '/admin/users', icon: Users },
         { label: 'Nhân viên', href: '/admin/staff', icon: UserCheck },
-        { label: 'Cài đặt', href: '/admin/settings', icon: Settings },
     ],
     default: [
         { label: 'Danh sách bệnh nhân', href: '/doctor/dashboard', icon: LayoutDashboard },

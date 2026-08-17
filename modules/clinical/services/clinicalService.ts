@@ -245,8 +245,8 @@ export interface BackendQueuePatient {
 }
 
 export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient {
-    const calculateAge = (dobString?: string) => {
-        if (!dobString) return 30;
+    const calculateAge = (dobString?: string): number | undefined => {
+        if (!dobString) return undefined;
         try {
             const birthDate = new Date(dobString);
             const today = new Date();
@@ -255,15 +255,65 @@ export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient 
             if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
                 age--;
             }
-            return isNaN(age) ? 30 : age;
+            return Number.isFinite(age) && age >= 0 ? age : undefined;
         } catch {
-            return 30;
+            return undefined;
         }
     };
 
-    const mapGender = (g?: string): 'Nam' | 'Nữ' => {
-        if (g === 'FEMALE') return 'Nữ';
-        return 'Nam';
+    const mapGender = (g?: string): 'Nam' | 'Nữ' | undefined => {
+        const raw = (g || '').trim().toUpperCase();
+        if (!raw) return undefined;
+        if (raw === 'FEMALE' || raw === 'NỮ' || raw === 'NU' || raw === 'F') return 'Nữ';
+        if (raw === 'MALE' || raw === 'NAM' || raw === 'M') return 'Nam';
+        return undefined;
+    };
+
+    const mapVisitType = (raw?: string): Patient['visitType'] | undefined => {
+        const value = (raw || '').trim();
+        if (!value) return undefined;
+        const upper = value.toUpperCase();
+        if (
+            value === 'Tái khám' ||
+            upper.includes('FOLLOW') ||
+            upper.includes('REVISIT') ||
+            upper.includes('TAI_KHAM') ||
+            upper.includes('TÁI')
+        ) {
+            return 'Tái khám';
+        }
+        if (
+            value === 'Cấp cứu' ||
+            upper.includes('EMERGENCY') ||
+            upper.includes('CAP_CUU') ||
+            upper.includes('CẤP CỨU')
+        ) {
+            return 'Cấp cứu';
+        }
+        if (
+            value === 'Khám mới' ||
+            upper.includes('NEW') ||
+            upper.includes('FIRST') ||
+            upper.includes('WALK_IN') ||
+            upper.includes('KHAM_MOI') ||
+            upper.includes('KHÁM MỚI')
+        ) {
+            return 'Khám mới';
+        }
+        return undefined;
+    };
+
+    const mapPriority = (raw?: string): Patient['priority'] | undefined => {
+        const value = (raw || '').trim();
+        if (!value) return undefined;
+        const upper = value.toUpperCase();
+        if (value === 'Bình thường' || upper === 'NORMAL' || upper === 'REGULAR') return 'Bình thường';
+        if (value === 'Ngồi xe lăn' || upper.includes('WHEEL')) return 'Ngồi xe lăn';
+        if (value === 'Khám sức khỏe' || upper.includes('CHECKUP') || upper.includes('HEALTH_CHECK')) {
+            return 'Khám sức khỏe';
+        }
+        if (value === 'Quay lại phòng khám' || upper.includes('RETURN')) return 'Quay lại phòng khám';
+        return undefined;
     };
 
     /**
@@ -375,8 +425,13 @@ export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient 
         age: calculateAge(patientObj.dob || patientObj.account?.dob),
         gender: mapGender(patientObj.gender || patientObj.account?.gender),
         code: patientObj.citizen_id || patientObj.account?.citizen_id || `BN-${patientObj.patient_id.slice(0, 8)}`,
-        priority: 'Bình thường',
-        time: booking?.slot?.start_time || '08:00',
+        priority: mapPriority(
+            pickString(patientRecord, ['priority', 'queue_priority']) ||
+            pickString(stepRecord, ['priority']) ||
+            pickString(flowRecord, ['priority']) ||
+            pickString(asRecord(item), ['priority'])
+        ),
+        time: booking?.slot?.start_time || undefined,
         status: mapStatus(item.status, item.step?.step_status),
         visitReason: visitReasonFromApi || 'Chưa có lý do khám từ hệ thống',
         allergies: splitList(allergyNotes),
@@ -391,7 +446,10 @@ export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient 
             hasInsurance: !!patientObj.medical_coverage_id,
             coverage: patientObj.medical_coverage_id ? patientObj.medical_coverage_id : 'Không có BHYT',
         },
-        visitType: 'Khám mới',
+        visitType: mapVisitType(
+            pickString(patientRecord, ['visit_type', 'visitType', 'encounter_type']) ||
+            pickString(asRecord(booking), ['visit_type', 'visitType', 'booking_type', 'encounter_type'])
+        ),
         flowId: item.step.flow.flow_id,
         bookingId: booking.booking_id,
         templateId,
