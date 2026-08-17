@@ -31,11 +31,11 @@ export interface Patient {
     id: string;
     stt: string;
     name: string;
-    age: number;
-    gender: Gender;
+    age?: number;
+    gender?: Gender;
     code: string;
-    priority: Priority;
-    time: string;
+    priority?: Priority;
+    time?: string;
     status: Status;
     // Extended info shown in the detail drawer
     visitReason: string;
@@ -44,7 +44,7 @@ export interface Patient {
     medicalHistory: string[];
     vitals: Vitals;
     insurance: { hasInsurance: boolean; coverage: string };
-    visitType: 'Tái khám' | 'Khám mới' | 'Cấp cứu';
+    visitType?: 'Tái khám' | 'Khám mới' | 'Cấp cứu';
     flowId?: string;
     bookingId?: string;
     templateId?: string;

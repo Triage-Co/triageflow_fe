@@ -338,3 +338,31 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Opt-in visible scrollbar (global rules above hide all scrollbars) */
+.show-scrollbar {
+  -ms-overflow-style: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #c4b5fd #f4f4f5;
+}
+
+.show-scrollbar::-webkit-scrollbar {
+  display: block !important;
+  width: 8px;
+  height: 8px;
+  background: transparent;
+}
+
+.show-scrollbar::-webkit-scrollbar-track {
+  background: #f4f4f5;
+  border-radius: 999px;
+}
+
+.show-scrollbar::-webkit-scrollbar-thumb {
+  background: #c4b5fd;
+  border-radius: 999px;
+}
+
+.show-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #a78bfa;
+}

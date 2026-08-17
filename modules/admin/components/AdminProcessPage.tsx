@@ -1,7 +1,7 @@
 'use client';
 /* eslint-disable react-hooks/set-state-in-effect */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
     Plus,
     Search,
@@ -158,6 +158,9 @@ export function AdminProcessPage() {
     const [formError, setFormError] = useState<string | null>(null);
     const [serviceOptions, setServiceOptions] = useState<ServiceOption[]>([]);
     const [isLoadingServices, setIsLoadingServices] = useState(false);
+    const formScrollRef = useRef<HTMLDivElement>(null);
+    const lastStepRef = useRef<HTMLDivElement>(null);
+    const shouldScrollToNewStep = useRef(false);
 
     useEffect(() => {
         if (accessToken) {
@@ -278,9 +281,26 @@ export function AdminProcessPage() {
     };
 
     const handleAddStep = () => {
-        const nextIdx = formSteps.length;
-        setFormSteps([...formSteps, createDefaultStep(nextIdx)]);
+        shouldScrollToNewStep.current = true;
+        setFormSteps([...formSteps, createDefaultStep(formSteps.length)]);
     };
+
+    useEffect(() => {
+        if (!shouldScrollToNewStep.current) return;
+        shouldScrollToNewStep.current = false;
+
+        const container = formScrollRef.current;
+        const stepEl = lastStepRef.current;
+        if (!container || !stepEl) return;
+
+        const top =
+            stepEl.getBoundingClientRect().top -
+            container.getBoundingClientRect().top +
+            container.scrollTop -
+            12;
+
+        container.scrollTo({ top, behavior: 'smooth' });
+    }, [formSteps.length]);
 
     const handleRemoveStep = (index: number) => {
         if (formSteps.length <= 1) {
@@ -618,7 +638,7 @@ export function AdminProcessPage() {
                         return (
                             <div
                                 key={templateId || templateName}
-                                className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs hover:shadow-md transition-all space-y-6"
+                                className="bg-white rounded-2xl border border-neutral-200/80 p-6 shadow-xs hover:shadow-md transition-all space-y-6 min-w-0 overflow-hidden"
                             >
                                 {/* Card Header */}
                                 <div className="flex items-start justify-between gap-4">
@@ -639,8 +659,8 @@ export function AdminProcessPage() {
                                 </div>
 
                                 {/* Flow Timeline Stepper (Matching Figma Design) */}
-                                <div className="py-2 overflow-x-auto scrollbar-thin scrollbar-thumb-neutral-200">
-                                    <div className="flex items-center min-w-max px-2 py-3">
+                                <div className="py-2 min-w-0 overflow-x-auto show-scrollbar">
+                                    <div className="flex items-center w-max min-w-full px-2 pt-3 pb-2">
                                         {steps && steps.length > 0 ? (
                                             steps.map((step, idx) => {
                                                 const sRecord = step as unknown as Record<string, unknown>;
@@ -732,10 +752,10 @@ export function AdminProcessPage() {
 
             {/* Create & Edit Modal */}
             {isFormModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 overflow-y-auto">
-                    <div className="bg-white rounded-3xl border border-neutral-200 shadow-2xl w-full max-w-3xl my-8 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+                    <div className="bg-white rounded-3xl border border-neutral-200 shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                         {/* Modal Header */}
-                        <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-100 bg-neutral-50/50">
+                        <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-100 bg-neutral-50/50 shrink-0">
                             <div>
                                 <h2 className="text-xl font-bold text-neutral-900">
                                     {editingTemplate ? 'Chỉnh sửa quy trình' : 'Tạo quy trình mới'}
@@ -753,7 +773,11 @@ export function AdminProcessPage() {
                         </div>
 
                         {/* Modal Body */}
-                        <form onSubmit={handleFormSubmit} className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+                        <form onSubmit={handleFormSubmit} className="flex flex-col min-h-0 flex-1 overflow-hidden">
+                            <div
+                                ref={formScrollRef}
+                                className="flex-1 min-h-0 overflow-y-auto show-scrollbar p-6 space-y-6"
+                            >
                             {formError && (
                                 <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-start gap-2">
                                     <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
@@ -818,6 +842,7 @@ export function AdminProcessPage() {
                                         return (
                                             <div
                                                 key={step.template_step_id || idx}
+                                                ref={idx === formSteps.length - 1 ? lastStepRef : undefined}
                                                 className="p-4 rounded-2xl border border-neutral-200 bg-white shadow-2xs space-y-4 relative group"
                                             >
                                                 <div className="flex items-center justify-between">
@@ -1035,9 +1060,10 @@ export function AdminProcessPage() {
                                     })}
                                 </div>
                             </div>
+                            </div>
 
                             {/* Submit buttons */}
-                            <div className="flex items-center justify-end gap-3 pt-4 border-t border-neutral-100">
+                            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-neutral-100 shrink-0 bg-white">
                                 <button
                                     type="button"
                                     disabled={formSubmitting}
