@@ -43,7 +43,6 @@ import type {
     ReceptionSlot,
     ReceptionSpecialty,
     RegistrationResult,
-    TransactionQrResponse,
 } from '@/modules/reception/types/reception.types';
 import {
     EMPTY_TRIAGE_SESSION,
@@ -244,7 +243,7 @@ export function ReceptionRegisterForm() {
     const [specialties, setSpecialties] = useState<ReceptionSpecialty[]>([]);
     const [specialtyCatalog, setSpecialtyCatalog] = useState<BackendSpecialtyCatalogItem[]>([]);
     const [existingAccount, setExistingAccount] = useState<ReceptionAccount | null>(null);
-    const [isLoadingMeta, setIsLoadingMeta] = useState(true);
+    const [isLoadingMeta, setIsLoadingMeta] = useState(false);
     const [scannerOpen, setScannerOpen] = useState(false);
     const [isLookingUp, setIsLookingUp] = useState(false);
     const [scanBanner, setScanBanner] = useState<string | null>(null);
@@ -297,27 +296,25 @@ export function ReceptionRegisterForm() {
         }
     }, []);
 
+    // Chỉ tải danh mục chuyên khoa khi người dùng chọn chế độ "Đăng ký theo chuyên khoa"
     useEffect(() => {
-        if (!accessToken) return;
+        if (!accessToken || bookingMode !== 'specialty') return;
+        if (specialtyCatalog.length > 0) return;
 
         const loadMeta = async () => {
             try {
                 setIsLoadingMeta(true);
                 const catalog = await receptionService.getSpecialtyCatalog(accessToken);
                 setSpecialtyCatalog(catalog);
-                setSpecialties([]);
-                setSlots([]);
             } catch {
                 setSpecialtyCatalog([]);
-                setSlots([]);
-                setSpecialties([]);
             } finally {
                 setIsLoadingMeta(false);
             }
         };
 
         loadMeta();
-    }, [accessToken]);
+    }, [accessToken, bookingMode, specialtyCatalog.length]);
 
     function update<K extends keyof FormState>(field: K, value: FormState[K]) {
         setForm((prev) => ({ ...prev, [field]: value }));
@@ -605,7 +602,15 @@ export function ReceptionRegisterForm() {
 
                 if (!bookingId) {
                     let bookingRes;
-                    if (bookingMode === 'package' && form.package_id) {
+                    if (form.payment_method === 'cash' && form.slot_id) {
+                        bookingRes = await receptionService.createBookingCash(
+                            {
+                                patient_id: patientId,
+                                slot_id: form.slot_id,
+                            },
+                            accessToken,
+                        );
+                    } else if (bookingMode === 'package' && form.package_id) {
                         bookingRes = await receptionService.createBookingWithPackage(
                             {
                                 patient_id: patientId,
@@ -717,7 +722,7 @@ export function ReceptionRegisterForm() {
                 }
 
                 let queueFields: { queueNumber?: string; queueId?: string } = {};
-                let ticketNo = 'A-001';
+                let ticketNo = '—';
 
                 // Với các phương thức khác (Tiền mặt, BHYT, Thẻ), cấp số thứ tự
                 try {

@@ -159,11 +159,11 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
             const response = await triageService.searchSymptoms(englishPhrase, patientAge);
 
             if (response && response.status === 'success' && Array.isArray(response.data)) {
-                const mergedList = [...get().currentRegionSymptoms];
-                let hasNewUpdates = false;
-
                 const currentGenderDataset = gender === 'female' ? femaleSymptomDataset : maleSymptomDataset;
                 const oppositeGenderDataset = gender === 'female' ? maleSymptomDataset : femaleSymptomDataset;
+
+                const candidateItems: { apiItem: any; matchedLocal: any }[] = [];
+                const needsTranslationItems: { id: string; label: string }[] = [];
 
                 response.data.forEach((apiItem) => {
                     if (!apiItem.id) return;
@@ -172,24 +172,45 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
                     const isInOppositeGender = findSymptomInDataset(oppositeGenderDataset, apiIdTarget);
                     if (isInOppositeGender) return;
 
-                    const isIdExisted = mergedList.some((localItem) => cleanId(localItem.id) === apiIdTarget);
+                    const isIdExisted = get().currentRegionSymptoms.some((localItem) => cleanId(localItem.id) === apiIdTarget);
 
                     if (!isIdExisted) {
                         const localSymptomInCurrentGender = findSymptomInDataset(currentGenderDataset, apiIdTarget);
                         const localSymptomInCommon = findSymptomInDataset(commonSymptomDataset, apiIdTarget);
                         const matchedLocal = localSymptomInCurrentGender || localSymptomInCommon;
 
-                        mergedList.push({
-                            id: apiItem.id,
-                            labelVn: matchedLocal ? matchedLocal.labelVn : apiItem.label,
-                            labelEn: matchedLocal ? matchedLocal.labelEn : apiItem.label,
-                            categoryNameVn: "Mở rộng từ Hệ thống"
-                        });
-                        hasNewUpdates = true;
+                        candidateItems.push({ apiItem, matchedLocal });
+                        if (!matchedLocal) {
+                            needsTranslationItems.push({ id: apiItem.id, label: apiItem.label });
+                        }
                     }
                 });
 
-                if (hasNewUpdates) {
+                // Dịch tự động các triệu chứng mới chưa có trong từ điển tĩnh
+                let translationMap = new Map<string, string>();
+                if (needsTranslationItems.length > 0) {
+                    const { translateSymptomLabelsWithDeepSeek } = await import('@/modules/reception/services/deepseekTranslationService');
+                    translationMap = await translateSymptomLabelsWithDeepSeek(needsTranslationItems);
+                }
+
+                if (candidateItems.length > 0) {
+                    const mergedList = [...get().currentRegionSymptoms];
+                    candidateItems.forEach(({ apiItem, matchedLocal }) => {
+                        const apiIdTarget = cleanId(apiItem.id);
+                        if (!mergedList.some((item) => cleanId(item.id) === apiIdTarget)) {
+                            const translatedVn = matchedLocal
+                                ? matchedLocal.labelVn
+                                : translationMap.get(apiItem.id) || apiItem.label;
+
+                            mergedList.push({
+                                id: apiItem.id,
+                                labelVn: translatedVn,
+                                labelEn: matchedLocal ? matchedLocal.labelEn : apiItem.label,
+                                categoryNameVn: "Mở rộng từ Hệ thống"
+                            });
+                        }
+                    });
+
                     set({ currentRegionSymptoms: mergedList });
                 }
             }

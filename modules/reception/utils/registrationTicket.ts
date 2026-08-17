@@ -1,5 +1,4 @@
 import type { RegistrationResult } from '@/modules/reception/types/reception.types';
-import { formatPhoneDisplay } from '@/modules/reception/utils/receptionSearch';
 
 function buildTicketHtml(result: RegistrationResult): string {
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(result.qrPayload)}`;
@@ -33,7 +32,7 @@ body{font-family:'Courier New',Courier,monospace,system-ui,sans-serif;padding:8p
 .footer-time{font-size:9px;margin-top:12px;font-weight:bold}
 </style></head><body>
 <div class="ticket-container">
-    <div class="centered hospital-name">BỆNH VIỆN ĐA KHOA TRUNG ƯƠNG</div>
+    <div class="centered hospital-name">BỆNH VIỆN</div>
     <div class="centered system-name">HỆ THỐNG QUẢN LÝ KHÁM BỆNH TRIAGEFLOW OPD</div>
     <div class="centered doc-title">--- PHIẾU ĐĂNG KÝ KHÁM ---</div>
     
@@ -49,7 +48,6 @@ body{font-family:'Courier New',Courier,monospace,system-ui,sans-serif;padding:8p
     <table class="info-table">
         <tr><td class="label">HỌ VÀ TÊN:</td><td class="value">${result.fullName.toUpperCase()}</td></tr>
         <tr><td class="label">CCCD/CMND:</td><td class="value">${result.citizenId}</td></tr>
-        <tr><td class="label">SỐ ĐIỆN THOẠI:</td><td class="value">${formatPhoneDisplay(result.phone)}</td></tr>
     </table>
     
     <div class="dashed-line"></div>
@@ -59,7 +57,6 @@ body{font-family:'Courier New',Courier,monospace,system-ui,sans-serif;padding:8p
         <tr><td class="label">BÁC SĨ:</td><td class="value">${result.doctorLabel}</td></tr>
         <tr><td class="label">PHÒNG KHÁM:</td><td class="value">${result.roomLabel}</td></tr>
         <tr><td class="label">NGÀY & GIỜ:</td><td class="value">${result.slotTimeLabel || '—'}</td></tr>
-        <tr><td class="label">THANH TOÁN:</td><td class="value">${result.paymentLabel}</td></tr>
     </table>
     
     <div class="dashed-line"></div>

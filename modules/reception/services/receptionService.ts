@@ -8,14 +8,11 @@ import { resolveApiError } from '@/shared/utils/apiError';
 import type {
     CreateBookingRecommendRequest,
     CreateBookingRequest,
-    CreateTransactionRequest,
     PatientSearchResult,
     ReceptionAccount,
     ReceptionFlow,
-    ReceptionPatientRecord,
     ReceptionSlot,
     ReceptionSpecialty,
-    TransactionQrResponse,
 } from '@/modules/reception/types/reception.types';
 import type { Gender } from '@/shared/types/auth.types';
 import {
@@ -24,15 +21,13 @@ import {
     extractBookingFlowFields,
     extractRealPatientId,
     mapDoctorSlotsResponse,
-    mapDoctorSpecialties,
     mapDoctorSpecialtyResponse,
     mapSpecialtyCatalogResponse,
     mapPatientRecordToAccount,
-    mapShiftResponse,
     normalizeBookingListResponse,
     normalizePatientListResponse,
 } from '@/modules/reception/utils/receptionMapper';
-import { searchPatientRecords, searchPatientRecordsFromBookings } from '@/modules/reception/utils/receptionSearch';
+import { searchPatientRecords } from '@/modules/reception/utils/receptionSearch';
 
 const CACHE_KEYS = {
     QUEUE_PATIENTS: 'triageflow_queue_patients_cache',
@@ -113,7 +108,7 @@ async function fetchPatientAccounts(
     };
 
     if (cached && Array.isArray(cached) && cached.length > 0) {
-        fetchFresh().catch(() => {});
+        fetchFresh().catch(() => { });
         return cached;
     }
 
@@ -138,90 +133,6 @@ async function resolvePatientIdByCitizenId(
     return patientId;
 }
 
-/** Đối chiếu CCCD / patient_id với GET /api/patient — chứng minh Search thấy nhưng /diagnoise vẫn P2003. */
-async function verifyPatientAgainstDb(
-    citizenId: string,
-    knownPatientId: string | null | undefined,
-    token: string,
-): Promise<{
-    citizen_id: string;
-    known_patient_id: string | null;
-    found_by_cccd: ReceptionAccount | null;
-    found_by_patient_id: ReceptionAccount | null;
-    get_by_id_ok: boolean;
-    get_by_id_error: string | null;
-    get_by_id_raw: unknown;
-    conclusion: string;
-}> {
-    const cleanId = citizenId.replace(/\D/g, '');
-    const accounts = await fetchPatientAccounts(token);
-    const foundByCccd =
-        accounts.find((a) => (a.citizen_id || '').replace(/\D/g, '') === cleanId) ?? null;
-    const known = knownPatientId?.trim() || null;
-    const foundByPatientId = known
-        ? accounts.find((a) => a.patient_id === known) ?? null
-        : null;
-
-    let getByIdOk = false;
-    let getByIdError: string | null = null;
-    let getByIdRaw: unknown = null;
-    if (known) {
-        try {
-            const res = await apiClient.get<unknown>(`/api/patient/${known}`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            getByIdRaw = res;
-            getByIdOk = !(res.status === 'error' || (typeof res.code === 'number' && res.code >= 400));
-            if (!getByIdOk) {
-                getByIdError = res.message || `code ${res.code}`;
-            }
-        } catch (err) {
-            getByIdError = err instanceof Error ? err.message : String(err);
-        }
-    }
-
-    const idsMatch =
-        !!foundByCccd?.patient_id &&
-        !!known &&
-        foundByCccd.patient_id === known;
-    const accountIdLooksLikePatientId =
-        !!known &&
-        !!foundByCccd?.account_id &&
-        foundByCccd.account_id === known;
-
-    let conclusion: string;
-    if (accountIdLooksLikePatientId) {
-        conclusion =
-            'Form đang giữ account_id chứ không phải patient_id. Search vẫn thấy CCCD (vì join Account) nhưng /diagnoise lưu patient_anwser bằng FK Patient → P2003.';
-    } else if (foundByCccd?.patient_id && (getByIdOk || idsMatch)) {
-        conclusion =
-            'GET /api/patient CÓ BN với CCCD này. Search đúng. Nếu /diagnoise vẫn P2003 → BE tra/gán patient_id sai khi lưu patient_anwser (bug backend).';
-    } else if (foundByCccd && !foundByCccd.patient_id) {
-        conclusion =
-            'Search thấy CCCD trên Account nhưng bản ghi không có patient_id (chưa có hồ sơ Patient) → P2003 là đúng kỳ vọng.';
-    } else if (!foundByCccd && known) {
-        conclusion =
-            'Có known patient_id trên form nhưng GET /api/patient không tìm thấy CCCD khớp — lệch dữ liệu form/DB.';
-    } else {
-        conclusion = 'GET /api/patient không thấy CCCD này — Search và form đang lệch nhau.';
-    }
-
-    return {
-        citizen_id: cleanId,
-        known_patient_id: known,
-        found_by_cccd: foundByCccd
-            ? {
-                  ...foundByCccd,
-              }
-            : null,
-        found_by_patient_id: foundByPatientId,
-        get_by_id_ok: getByIdOk,
-        get_by_id_error: getByIdError,
-        get_by_id_raw: getByIdRaw,
-        conclusion,
-    };
-}
-
 function extractPatientIdFromCreateResponse(res: ApiResponse<unknown>): string | null {
     const fromData = extractRealPatientId(res.data);
     if (fromData) return fromData;
@@ -242,8 +153,6 @@ function assertApiSuccess<T>(res: ApiResponse<T>, fallbackMessage: string): ApiR
 }
 
 export const receptionService = {
-    verifyPatientAgainstDb,
-
     async getQueueByDate(date: string, token: string): Promise<BackendQueuePatient[]> {
         const cacheKey = `${CACHE_KEYS.QUEUE_PATIENTS}_${date}`;
 
@@ -264,7 +173,7 @@ export const receptionService = {
 
         const cached = getLocalStorageCache<BackendQueuePatient[]>(cacheKey);
         if (cached && Array.isArray(cached) && cached.length > 0) {
-            fetchFreshData().catch(() => {});
+            fetchFreshData().catch(() => { });
             return cached;
         }
 
@@ -306,53 +215,12 @@ export const receptionService = {
             headers: { Authorization: `Bearer ${token}` },
         }),
 
-    getTransactions: (token: string) =>
-        apiClient.get<Record<string, unknown>[]>('/api/transaction', {
-            headers: { Authorization: `Bearer ${token}` },
-        }),
-
-    getPatients: (token: string) =>
-        apiClient.get<ReceptionPatientRecord[]>('/api/patient', {
-            headers: { Authorization: `Bearer ${token}` },
-        }),
-
-    getPatientById: (id: string, token: string) =>
-        apiClient.get<ReceptionPatientRecord>(`/api/patient/${id}`, {
-            headers: { Authorization: `Bearer ${token}` },
-        }),
-
-    async getSlots(token: string): Promise<ReceptionSlot[]> {
-        try {
-            const res = await apiClient.get<unknown>('/api/shift', {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            return mapShiftResponse(res.data);
-        } catch (err) {
-            if (err instanceof ApiError && err.statusCode === 404) return [];
-            throw err;
-        }
-    },
-
     async getSpecialtyCatalog(token: string) {
         try {
             const res = await apiClient.get<unknown>('/api/specialty', {
                 headers: { Authorization: `Bearer ${token}` },
             });
             return mapSpecialtyCatalogResponse(res.data ?? res);
-        } catch (err) {
-            if (err instanceof ApiError && err.statusCode === 404) return [];
-            throw err;
-        }
-    },
-
-    async getSpecialties(token: string): Promise<ReceptionSpecialty[]> {
-        try {
-            const headers = { Authorization: `Bearer ${token}` };
-            const [doctorRes, specialtyRes] = await Promise.all([
-                apiClient.get<unknown>('/api/doctor', { headers }),
-                apiClient.get<unknown>('/api/specialty', { headers }),
-            ]);
-            return mapDoctorSpecialties(doctorRes.data, specialtyRes.data);
         } catch (err) {
             if (err instanceof ApiError && err.statusCode === 404) return [];
             throw err;
@@ -395,6 +263,13 @@ export const receptionService = {
             headers: { Authorization: `Bearer ${token}` },
         });
         return assertApiSuccess(res, 'Không tạo được lịch khám.');
+    },
+
+    async createBookingCash(data: { patient_id: string; slot_id: string }, token: string) {
+        const res = await apiClient.post<Record<string, unknown>>('/api/booking/cash', data, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        return assertApiSuccess(res, 'Không tạo được lịch khám tiền mặt.');
     },
 
     async createBookingWithPackage(data: { patient_id: string; slot_id: string; package_id: string; return_url?: string; cancel_url?: string }, token: string) {
@@ -487,7 +362,23 @@ export const receptionService = {
             }
         }
 
-        // 1. Ưu tiên kiểm tra hàng đợi hôm nay (nếu BE/Webhook đã tự động tạo queue)
+        // 1. Kiểm tra chi tiết Step (nếu BE đã cấp queue cho step)
+        if (!fields.queueNumber && fields.stepId) {
+            try {
+                const stepData = await receptionService.getStepDetail(fields.stepId, token);
+                if (stepData?.queues && Array.isArray(stepData.queues) && stepData.queues.length > 0 && stepData.queues[0]?.queue_number) {
+                    fields = {
+                        ...fields,
+                        queueNumber: String(stepData.queues[0].queue_number),
+                        queueId: stepData.queues[0].queue_id,
+                    };
+                }
+            } catch {
+                // bỏ qua
+            }
+        }
+
+        // 2. Ưu tiên kiểm tra hàng đợi hôm nay (nếu BE/Webhook đã tự động tạo queue)
         if (!fields.queueNumber) {
             try {
                 const queueItems = await receptionService.getQueueByDate(getTodayDateString(), token);
@@ -527,25 +418,6 @@ export const receptionService = {
         return fields;
     },
 
-    async createTransaction(data: CreateTransactionRequest, token: string) {
-        const res = await apiClient.post<TransactionQrResponse>('/api/transaction', data, {
-            headers: { Authorization: `Bearer ${token}` },
-        });
-        return assertApiSuccess(res, 'Tạo link thanh toán không thành công.');
-    },
-
-    getTransactionById: (id: string, token: string) =>
-        apiClient.get<Record<string, unknown>>(`/api/transaction/${encodeURIComponent(id)}`, {
-            headers: { Authorization: `Bearer ${token}` },
-        }),
-
-    triggerTransactionWebhook: (payload?: unknown, token?: string) =>
-        apiClient.post<unknown>(
-            '/api/transaction/webhook',
-            payload ?? {},
-            token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
-        ),
-
     async findAccountByCitizenId(citizenId: string, token: string): Promise<ReceptionAccount | null> {
         const cleanId = citizenId.replace(/\D/g, '');
         if (!cleanId) return null;
@@ -557,20 +429,6 @@ export const receptionService = {
                     return dbId === cleanId;
                 }
             ) ?? null
-        );
-    },
-
-    async searchAccounts(query: string, token: string): Promise<ReceptionAccount[]> {
-        const accounts = await fetchPatientAccounts(token);
-        const q = query.trim().toLowerCase();
-        if (!q) return accounts;
-
-        return accounts.filter(
-            (a) =>
-                a.citizen_id.includes(q) ||
-                a.full_name.toLowerCase().includes(q) ||
-                a.email.toLowerCase().includes(q) ||
-                (a.phone?.includes(q) ?? false),
         );
     },
 
@@ -587,7 +445,7 @@ export const receptionService = {
         };
 
         if (cached && Array.isArray(cached) && cached.length > 0) {
-            fetchFresh().catch(() => {});
+            fetchFresh().catch(() => { });
             return cached;
         }
 
@@ -775,6 +633,60 @@ export const receptionService = {
         } catch (err) {
             console.error('[receptionService] getPatientActiveFlows error:', err);
             return [];
+        }
+    },
+
+    async getStepDetail(stepId: string, token: string): Promise<any> {
+        try {
+            const res = await apiClient.get<any>(
+                `/api/step/${encodeURIComponent(stepId)}`,
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                },
+            );
+            return (res as any)?.data || res;
+        } catch (err) {
+            console.error('[receptionService] getStepDetail error:', err);
+            return null;
+        }
+    },
+
+    async getPendingServiceOrders(patientId: string, token: string): Promise<any[]> {
+        try {
+            const res = await apiClient.get<any>(
+                `/api/service-order/pending/${encodeURIComponent(patientId)}`,
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                },
+            );
+            const data = (res as any)?.data || res;
+            if (Array.isArray(data)) return data;
+            if (data && Array.isArray(data.data)) return data.data;
+            return [];
+        } catch (err) {
+            console.error('[receptionService] getPendingServiceOrders error:', err);
+            return [];
+        }
+    },
+
+    async payCashServiceOrder(
+        serviceOrderId: string,
+        token: string,
+    ): Promise<any> {
+        try {
+            const res = await apiClient.post<any>(
+                '/api/transaction/cash',
+                {
+                    service_order_id: serviceOrderId,
+                },
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                },
+            );
+            return res?.data || res;
+        } catch (err) {
+            console.error('[receptionService] payCashServiceOrder error:', err);
+            throw err;
         }
     },
 
