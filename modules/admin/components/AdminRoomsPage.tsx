@@ -19,7 +19,10 @@ import { cn } from '@/lib/utils';
 import { useRoomStore } from '../store/roomStore';
 import { useAuthStore } from '@/modules/auth/store/authStore';
 import type { HospitalRoom, Specialty } from '../types/room.types';
+import { ROOM_TYPE_OPTIONS } from '../types/process.types';
 import { getCompactPages } from '../utils/pagination';
+
+const DEFAULT_ROOM_TYPE = 'CLINICAL_ROOM';
 
 /* ─── Specialty Helpers ─────────────────────────────────────────────────────── */
 
@@ -72,6 +75,7 @@ export function AdminRoomsPage() {
     const [createError, setCreateError] = useState<string | null>(null);
     const [createForm, setCreateForm] = useState({
         room_name: '',
+        room_type: DEFAULT_ROOM_TYPE,
         specialty_id: '',
         custom_specialty_id: '',
     });
@@ -82,6 +86,7 @@ export function AdminRoomsPage() {
     const [editError, setEditError] = useState<string | null>(null);
     const [editForm, setEditForm] = useState({
         room_name: '',
+        room_type: DEFAULT_ROOM_TYPE,
         specialty_id: '',
         custom_specialty_id: '',
     });
@@ -103,6 +108,7 @@ export function AdminRoomsPage() {
     const openEditModal = (room: HospitalRoom) => {
         setEditForm({
             room_name: room.room_name,
+            room_type: room.room_type || DEFAULT_ROOM_TYPE,
             specialty_id: room.specialty_id,
             custom_specialty_id: '',
         });
@@ -130,9 +136,21 @@ export function AdminRoomsPage() {
         setIsCreating(true);
         setCreateError(null);
         try {
-            await createRoom({ room_name: createForm.room_name, specialty_id: specId }, accessToken || '');
+            await createRoom(
+                {
+                    room_name: createForm.room_name,
+                    room_type: createForm.room_type,
+                    specialty_id: specId,
+                },
+                accessToken || ''
+            );
             setIsCreateModalOpen(false);
-            setCreateForm({ room_name: '', specialty_id: specialties[0]?.specialty_id || '', custom_specialty_id: '' });
+            setCreateForm({
+                room_name: '',
+                room_type: DEFAULT_ROOM_TYPE,
+                specialty_id: specialties[0]?.specialty_id || '',
+                custom_specialty_id: '',
+            });
             // Refetch to sync updated relationship from database
             if (accessToken) {
                 await fetchRooms(accessToken);
@@ -159,7 +177,15 @@ export function AdminRoomsPage() {
         setIsUpdating(true);
         setEditError(null);
         try {
-            await updateRoom(editingRoom.room_id, { room_name: editForm.room_name, specialty_id: specId }, accessToken || '');
+            await updateRoom(
+                editingRoom.room_id,
+                {
+                    room_name: editForm.room_name,
+                    room_type: editForm.room_type,
+                    specialty_id: specId,
+                },
+                accessToken || ''
+            );
             setEditingRoom(null);
             // Refetch to sync updated relationship from database
             if (accessToken) {
@@ -232,6 +258,7 @@ export function AdminRoomsPage() {
                                     setIsCreateModalOpen(true);
                                     setCreateForm({
                                         room_name: '',
+                                        room_type: DEFAULT_ROOM_TYPE,
                                         specialty_id: specialties[0]?.specialty_id || '',
                                         custom_specialty_id: '',
                                     });
@@ -475,6 +502,20 @@ export function AdminRoomsPage() {
                             />
                         </div>
                         <div className="space-y-1.5">
+                            <label className="text-[11px] font-bold text-neutral-500 uppercase">Loại phòng *</label>
+                            <select
+                                value={createForm.room_type}
+                                onChange={(e) => setCreateForm(prev => ({ ...prev, room_type: e.target.value }))}
+                                className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
+                            >
+                                {ROOM_TYPE_OPTIONS.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>
+                                        {opt.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="space-y-1.5">
                             <label className="text-[11px] font-bold text-neutral-500 uppercase">Chuyên khoa phụ trách *</label>
                             <select
                                 value={createForm.specialty_id}
@@ -553,6 +594,20 @@ export function AdminRoomsPage() {
                                 onChange={(e) => setEditForm(prev => ({ ...prev, room_name: e.target.value }))}
                                 className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none font-semibold text-[#2D2D2D] bg-[#F8F9FA]/50"
                             />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-[11px] font-bold text-neutral-500 uppercase">Loại phòng *</label>
+                            <select
+                                value={editForm.room_type}
+                                onChange={(e) => setEditForm(prev => ({ ...prev, room_type: e.target.value }))}
+                                className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
+                            >
+                                {ROOM_TYPE_OPTIONS.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>
+                                        {opt.label}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-[11px] font-bold text-neutral-500 uppercase">Chuyên khoa phụ trách *</label>

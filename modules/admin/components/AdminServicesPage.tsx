@@ -61,7 +61,6 @@ export function AdminServicesPage() {
 
     const [filterServiceType, setFilterServiceType] = useState<string>('');
     const [filterRoomType, setFilterRoomType] = useState<string>('');
-    const [showInactive, setShowInactive] = useState(false);
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editing, setEditing] = useState<CatalogService | null>(null);
@@ -88,7 +87,7 @@ export function AdminServicesPage() {
             const params: QueryServiceParams = { limit: 500 };
             if (filterServiceType) params.service_type = filterServiceType;
             if (filterRoomType) params.room_type = filterRoomType;
-            if (!showInactive) params.is_active = true;
+            params.is_active = true;
             if (searchQuery.trim()) params.search = searchQuery.trim();
             const res = await serviceCatalogService.getServices(accessToken, params);
             setServices(extractServiceList(res?.data));
@@ -97,7 +96,7 @@ export function AdminServicesPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [accessToken, filterServiceType, filterRoomType, showInactive, searchQuery]);
+    }, [accessToken, filterServiceType, filterRoomType, searchQuery]);
 
     useEffect(() => {
         void loadServices();
@@ -116,9 +115,9 @@ export function AdminServicesPage() {
         }
         if (filterServiceType) list = list.filter((s) => s.service_type === filterServiceType);
         if (filterRoomType) list = list.filter((s) => s.room_type === filterRoomType);
-        if (!showInactive) list = list.filter((s) => s.is_active !== false);
+        list = list.filter((s) => s.is_active !== false);
         return list;
-    }, [services, searchQuery, filterServiceType, filterRoomType, showInactive]);
+    }, [services, searchQuery, filterServiceType, filterRoomType]);
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
     const safePage = Math.min(currentPage, totalPages);
@@ -306,19 +305,6 @@ export function AdminServicesPage() {
                                         </option>
                                     ))}
                                 </select>
-
-                                <label className="flex items-center gap-2 text-sm font-semibold text-neutral-600 cursor-pointer select-none px-1">
-                                    <input
-                                        type="checkbox"
-                                        checked={showInactive}
-                                        onChange={(e) => {
-                                            setShowInactive(e.target.checked);
-                                            setCurrentPage(1);
-                                        }}
-                                        className="accent-[#8B7CF6]"
-                                    />
-                                    Hiện đã tắt
-                                </label>
                             </div>
 
                             {error && (
