@@ -13,6 +13,7 @@ import type { FlowNode, ServiceOption, SpecialtyOption } from '@/modules/clinica
 import {
     formatFlowStepLabel,
     formatStepStatusVi,
+    isPaymentFlowNode,
     shouldHideLiveFlowStep,
 } from '@/modules/clinical/workflow/stepIdentity';
 
@@ -95,6 +96,14 @@ export function CustomizeFlowDialog({
                                         String(step.step_type || '').toUpperCase() === 'PAYMENT',
                                 });
 
+                            const isPayment =
+                                unlabeledPaymentStepIds.has(stepId) ||
+                                isPaymentFlowNode({
+                                    label: stepName,
+                                    stepType: String(step.step_type || ''),
+                                    roomType: String(step.room_type || ''),
+                                });
+
                             return (
                                 <button
                                     key={stepId}
@@ -106,33 +115,41 @@ export function CustomizeFlowDialog({
                                         <p className="font-bold text-neutral-800 text-sm">
                                             {stepName}
                                         </p>
-                                        <div className="flex gap-4 text-xs text-neutral-400 mt-1 font-medium flex-wrap">
-                                            <span>
-                                                Phòng:{' '}
-                                                <strong className="text-neutral-600 font-semibold">
-                                                    {roomName || 'Chưa phân công'}
-                                                </strong>
-                                            </span>
-                                            <span>
-                                                Chuyên khoa:{' '}
-                                                <strong className="text-neutral-600 font-semibold">
-                                                    {specialtyName || 'Chưa phân khoa'}
-                                                </strong>
-                                            </span>
-                                            <span>
-                                                Bác sĩ trực:{' '}
-                                                <strong className="text-[#5B4ED6] font-semibold">
-                                                    {dynamicSteps.find((n) => n.id === stepId)
-                                                        ?.staffName || 'Chưa có bác sĩ'}
-                                                </strong>
-                                            </span>
-                                            <span>
-                                                Trạng thái:{' '}
-                                                <strong className="text-neutral-600 font-semibold">
-                                                    {formatStepStatusVi(stepStatus)}
-                                                </strong>
-                                            </span>
-                                        </div>
+                                        {isPayment ? (
+                                            <div className="flex gap-4 text-xs text-neutral-400 mt-1 font-medium">
+                                                <span>
+                                                    Thanh toán
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <div className="flex gap-4 text-xs text-neutral-400 mt-1 font-medium flex-wrap">
+                                                <span>
+                                                    Phòng:{' '}
+                                                    <strong className="text-neutral-600 font-semibold">
+                                                        {roomName || 'Chưa phân công'}
+                                                    </strong>
+                                                </span>
+                                                <span>
+                                                    Chuyên khoa:{' '}
+                                                    <strong className="text-neutral-600 font-semibold">
+                                                        {specialtyName || 'Chưa phân khoa'}
+                                                    </strong>
+                                                </span>
+                                                <span>
+                                                    Bác sĩ trực:{' '}
+                                                    <strong className="text-[#5B4ED6] font-semibold">
+                                                        {dynamicSteps.find((n) => n.id === stepId)
+                                                            ?.staffName || 'Chưa có bác sĩ'}
+                                                    </strong>
+                                                </span>
+                                                <span>
+                                                    Trạng thái:{' '}
+                                                    <strong className="text-neutral-600 font-semibold">
+                                                        {formatStepStatusVi(stepStatus)}
+                                                    </strong>
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
                                     <ChevronRight className="w-4 h-4 text-neutral-300 shrink-0" />
                                 </button>

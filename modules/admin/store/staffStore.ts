@@ -1,10 +1,9 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import type { Staff, CreateStaffDto, UpdateStaffDto } from '../types/staff.types';
+import type { Staff, CreateStaffDto, UpdateStaffDto, StaffAccount } from '../types/staff.types';
+import type { BanDuration } from '../types/admin.types';
 import { staffService } from '../services/staffService';
-
 import { adminService } from '../services/adminService';
-import type { StaffAccount } from '../types/staff.types';
 
 function normalizeRoleKey(role?: string): string {
     if (!role) return '';
@@ -22,6 +21,8 @@ export interface StaffActions {
     createStaff: (data: CreateStaffDto, token: string) => Promise<void>;
     updateStaff: (id: string, data: UpdateStaffDto, token: string) => Promise<void>;
     deleteStaff: (id: string, token: string) => Promise<void>;
+    banStaff: (accountId: string, duration: BanDuration, token: string) => Promise<void>;
+    unbanStaff: (accountId: string, token: string) => Promise<void>;
     clearError: () => void;
 }
 
@@ -146,6 +147,26 @@ export const useStaffStore = create<StaffStore>()(
                     }, false, 'deleteStaff/failure');
                     throw err;
                 }
+            },
+
+            banStaff: async (accountId: string, duration: BanDuration, token: string) => {
+                await adminService.banAccount(accountId, duration, token);
+                const updatedStaffs = get().staffs.map((s) =>
+                    s.staff_id === accountId
+                        ? { ...s, account: { ...s.account, is_banned: true } }
+                        : s
+                );
+                set({ staffs: updatedStaffs }, false, 'banStaff/success');
+            },
+
+            unbanStaff: async (accountId: string, token: string) => {
+                await adminService.unbanAccount(accountId, token);
+                const updatedStaffs = get().staffs.map((s) =>
+                    s.staff_id === accountId
+                        ? { ...s, account: { ...s.account, is_banned: false } }
+                        : s
+                );
+                set({ staffs: updatedStaffs }, false, 'unbanStaff/success');
             },
 
             clearError: () => set({ error: null }, false, 'clearError'),

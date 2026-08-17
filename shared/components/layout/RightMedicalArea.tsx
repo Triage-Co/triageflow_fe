@@ -897,10 +897,13 @@ export function RightMedicalArea({
                         )}
                     </div>
                     <p className="text-[11px] text-[#9C9C9C] mt-0.5 truncate">
-                        {patient.gender} · {patient.age} tuổi · CCCD: {patient.code} · {patient.visitType}
-                        {patient.shortDiagnosis && (
-                            <span className="text-[#555] ml-2">· {patient.shortDiagnosis}</span>
-                        )}
+                        {[
+                            patient.gender,
+                            patient.age != null ? `${patient.age} tuổi` : null,
+                            patient.code ? `CCCD: ${patient.code}` : null,
+                            patient.visitType,
+                            patient.shortDiagnosis,
+                        ].filter(Boolean).join(' · ') || '—'}
                     </p>
                 </div>
 

@@ -26,7 +26,10 @@ import { usePatientTabsStore } from '@/modules/clinical/store/clinicalStore';
 const ROWS_PER_PAGE = 7;
 
 // ── Priority Badge component ──────────────────────────────────────────────
-function PriorityBadge({ priority }: { priority: Priority }) {
+function PriorityBadge({ priority }: { priority?: Priority }) {
+    if (!priority) {
+        return <span className="text-neutral-300 text-sm">—</span>;
+    }
     return (
         <span className="inline-flex items-center bg-[#F3F3F3] text-[#7B7B7B] text-[12px] font-semibold px-3 py-1 rounded-full border border-neutral-200/30">
             {priority}
@@ -235,7 +238,11 @@ export function PatientTable({ patients, onSelectPatient }: PatientTableProps) {
                                     <TableCell className="py-4">
                                         <p className="font-semibold text-neutral-800 text-sm">{patient.name}</p>
                                         <p className="text-xs text-neutral-400 mt-0.5">
-                                            {patient.age} tuổi • {patient.gender} • {patient.code}
+                                            {[
+                                                patient.age != null ? `${patient.age} tuổi` : null,
+                                                patient.gender,
+                                                patient.code,
+                                            ].filter(Boolean).join(' • ') || '—'}
                                         </p>
                                     </TableCell>
 
@@ -248,7 +255,7 @@ export function PatientTable({ patients, onSelectPatient }: PatientTableProps) {
                                     <TableCell className="py-4">
                                         <span className="flex items-center gap-1.5 text-neutral-600 text-sm font-medium">
                                             <Clock className="w-3.5 h-3.5 text-neutral-400" />
-                                            {patient.time}
+                                            {patient.time || '—'}
                                         </span>
                                     </TableCell>
 

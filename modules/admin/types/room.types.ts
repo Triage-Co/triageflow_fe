@@ -14,10 +14,12 @@ export interface HospitalRoom {
 
 export interface CreateRoomDto {
     room_name: string;
+    room_type: string;
     specialty_id: string;
 }
 
 export interface UpdateRoomDto {
     room_name?: string;
+    room_type?: string;
     specialty_id?: string;
 }
