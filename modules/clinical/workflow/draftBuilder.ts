@@ -19,6 +19,59 @@ export function getTemplateName(tpl?: ProcessTemplate | Record<string, unknown> 
     );
 }
 
+const SERVICE_CONTEXT_KEYWORD_MAP: Record<string, string[]> = {
+    RECEPTION: ['KHAM', 'DANG_KY', 'TIEP_DON'],
+    TRIAGE_AREA: ['KHAM_CAP_CUU', 'TRIAGE'],
+    CLINICAL_ROOM: ['KHAM_CHUYEN_KHOA', 'KHAM'],
+    PROCEDURE_ROOM: ['NOI_SOI', 'THU_THUAT', 'DIEU_TRI'],
+    LABORATORY: ['XET_NGHIEM'],
+    IMAGING_ROOM: ['X_QUANG', 'SIEU_AM', 'CT', 'MRI'],
+    FUNCTIONAL_EXPLORATION: ['THAM_DO', 'FUNCTIONAL'],
+    PHARMACY: ['THUOC', 'PHARMACY'],
+    CASHIER: ['THANH_TOAN', 'VIEN_PHI'],
+};
+
+/**
+ * Filters/reorders services so the ones matching the room/specialty context
+ * (by room_type keyword map + tokens from room/specialty name) come first.
+ * Falls back to the full candidate list when nothing matches, so the picker
+ * never ends up empty for specialties without keyword coverage.
+ */
+export function filterServiceOptionsByContext(
+    input: {
+        roomType?: string;
+        roomName?: string;
+        specialtyName?: string;
+    },
+    services: ServiceOption[]
+): ServiceOption[] {
+    const source = services.filter((service) => service.is_active !== false);
+    const candidates = source.length > 0 ? source : services;
+    if (!candidates.length) return candidates;
+
+    const roomType = (input.roomType || '').toUpperCase();
+    const roomName = (input.roomName || '').toUpperCase();
+    const specialtyName = (input.specialtyName || '').toUpperCase();
+
+    const explicitKeywords = SERVICE_CONTEXT_KEYWORD_MAP[roomType] || [];
+    const inferredKeywords = [roomName, specialtyName]
+        .filter(Boolean)
+        .flatMap((value) => value.split(/\s+/g))
+        .filter((token) => token.length > 2);
+    const keywords = [...explicitKeywords, ...inferredKeywords];
+    if (!keywords.length) return candidates;
+
+    const matches = candidates.filter((service) =>
+        keywords.some(
+            (keyword) =>
+                service.service_code.toUpperCase().includes(keyword) ||
+                service.service_name.toUpperCase().includes(keyword)
+        )
+    );
+
+    return matches.length > 0 ? matches : candidates;
+}
+
 export function pickServiceCodeByContext(
     input: {
         roomType?: string;
@@ -27,42 +80,8 @@ export function pickServiceCodeByContext(
     },
     services: ServiceOption[]
 ): string {
-    const source = services.filter((service) => service.is_active !== false);
-    const candidates = source.length > 0 ? source : services;
-    if (!candidates.length) return '';
-
-    const roomType = (input.roomType || '').toUpperCase();
-    const roomName = (input.roomName || '').toUpperCase();
-    const specialtyName = (input.specialtyName || '').toUpperCase();
-
-    const keywordMap: Record<string, string[]> = {
-        RECEPTION: ['KHAM', 'DANG_KY', 'TIEP_DON'],
-        TRIAGE_AREA: ['KHAM_CAP_CUU', 'TRIAGE'],
-        CLINICAL_ROOM: ['KHAM_CHUYEN_KHOA', 'KHAM'],
-        PROCEDURE_ROOM: ['NOI_SOI', 'THU_THUAT', 'DIEU_TRI'],
-        LABORATORY: ['XET_NGHIEM'],
-        IMAGING_ROOM: ['X_QUANG', 'SIEU_AM', 'CT', 'MRI'],
-        FUNCTIONAL_EXPLORATION: ['THAM_DO', 'FUNCTIONAL'],
-        PHARMACY: ['THUOC', 'PHARMACY'],
-        CASHIER: ['THANH_TOAN', 'VIEN_PHI'],
-    };
-
-    const explicitKeywords = keywordMap[roomType] || [];
-    const inferredKeywords = [roomName, specialtyName]
-        .filter(Boolean)
-        .flatMap((value) => value.split(/\s+/g))
-        .filter((token) => token.length > 2);
-    const keywords = [...explicitKeywords, ...inferredKeywords];
-
-    const matched = candidates.find((service) =>
-        keywords.some(
-            (keyword) =>
-                service.service_code.toUpperCase().includes(keyword) ||
-                service.service_name.toUpperCase().includes(keyword)
-        )
-    );
-
-    return matched?.service_code || candidates[0].service_code;
+    const candidates = filterServiceOptionsByContext(input, services);
+    return candidates[0]?.service_code || '';
 }
 
 export function buildDraftFromTemplateStep(

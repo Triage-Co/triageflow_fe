@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Search,
-    Plus,
+    UserPlus,
     Loader2,
     AlertCircle,
     X,
@@ -12,30 +12,36 @@ import {
     UserCheck,
     Pencil,
     Trash2,
-    AlertTriangle,
     Eye,
-    Mail,
-    Phone,
+    Stethoscope,
+    Shield,
+    FlaskConical,
+    Pill,
+    ShieldCheck,
+    CreditCard,
+    Clock,
+    ShieldOff,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStaffStore } from '../store/staffStore';
 import { useRoomStore } from '../store/roomStore';
 import { useAuthStore } from '@/modules/auth/store/authStore';
 import type { Staff, CreateStaffDto, UpdateStaffDto } from '../types/staff.types';
+import type { BanDuration } from '../types/admin.types';
 import { getCompactPages } from '../utils/pagination';
 
-/* ─── Role Badges Configuration ───────────────────────────────────────────── */
+/* ─── Role Badges Configuration ────────────────────────────────────────────── */
 
-const ROLE_CONFIG: Record<string, { label: string; bg: string; text: string; border: string }> = {
-    DOCTOR: { label: 'Bác sĩ', bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-100' },
-    NURSE: { label: 'Điều dưỡng', bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-100' },
-    RECEPTIONIST: { label: 'Lễ tân', bg: 'bg-purple-50', text: 'text-purple-600', border: 'border-purple-100' },
-    LAB_STAFF: { label: 'Kỹ thuật viên XN', bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-100' },
-    LAB_TECHNICIAN: { label: 'Kỹ thuật viên XN', bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-100' },
-    PHARMACY_STAFF: { label: 'Dược sĩ', bg: 'bg-pink-50', text: 'text-pink-600', border: 'border-pink-100' },
-    PHARMACIST: { label: 'Dược sĩ', bg: 'bg-pink-50', text: 'text-pink-600', border: 'border-pink-100' },
-    CASHIER: { label: 'Thu ngân', bg: 'bg-cyan-50', text: 'text-cyan-600', border: 'border-cyan-100' },
-    ADMIN: { label: 'Quản trị viên', bg: 'bg-rose-50', text: 'text-rose-600', border: 'border-rose-100' },
+const ROLE_CONFIG: Record<string, { label: string; color: string; bg: string; border: string; icon: React.ElementType }> = {
+    DOCTOR: { label: 'Bác sĩ', color: 'text-[#1E78FF]', bg: 'bg-[#E8F1FF]', border: 'border-[#D0E2FF]', icon: Stethoscope },
+    NURSE: { label: 'Y tá / Điều dưỡng', color: 'text-[#8B7CF6]', bg: 'bg-[#F5F2FF]', border: 'border-[#E0DCFB]', icon: Shield },
+    RECEPTIONIST: { label: 'Lễ tân', color: 'text-[#00ACC1]', bg: 'bg-[#E0F7FA]', border: 'border-[#B2EBF2]', icon: UserCheck },
+    LAB_STAFF: { label: 'Kỹ thuật viên XN', color: 'text-[#D81B60]', bg: 'bg-[#FCE4EC]', border: 'border-[#F8BBD0]', icon: FlaskConical },
+    LAB_TECHNICIAN: { label: 'Kỹ thuật viên XN', color: 'text-[#D81B60]', bg: 'bg-[#FCE4EC]', border: 'border-[#F8BBD0]', icon: FlaskConical },
+    PHARMACY_STAFF: { label: 'Dược sĩ', color: 'text-[#43A047]', bg: 'bg-[#E8F5E9]', border: 'border-[#C8E6C9]', icon: Pill },
+    PHARMACIST: { label: 'Dược sĩ', color: 'text-[#43A047]', bg: 'bg-[#E8F5E9]', border: 'border-[#C8E6C9]', icon: Pill },
+    CASHIER: { label: 'Thu ngân', color: 'text-[#FB8C00]', bg: 'bg-[#FFF3E0]', border: 'border-[#FFE0B2]', icon: CreditCard },
+    ADMIN: { label: 'Quản trị', color: 'text-[#E53935]', bg: 'bg-[#FFEBEE]', border: 'border-[#FFCDD2]', icon: ShieldCheck },
 };
 
 /** Thứ tự hiển thị theo role (không gồm USER/bệnh nhân). */
@@ -46,7 +52,16 @@ const ROLE_SORT_ORDER = [
     'PHARMACIST',
     'NURSE',
     'RECEPTIONIST',
+    'CASHIER',
 ] as const;
+
+const displayGender = (genderVal?: string) => {
+    if (!genderVal) return '—';
+    const g = genderVal.toUpperCase();
+    if (g === 'MALE') return 'Nam';
+    if (g === 'FEMALE') return 'Nữ';
+    return 'Khác';
+};
 
 const normalizeStaffRole = (role?: string) => {
     const raw = (role || '').toUpperCase().replace(/^ROLE_/, '');
@@ -66,9 +81,18 @@ const getStaffDisplayName = (staff: {
 }) => (staff.full_name || staff.account?.user_name || staff.account?.email || '').trim();
 
 const getRoleBadge = (role: string) => {
-    const config = ROLE_CONFIG[role.toUpperCase()] || { label: role, bg: 'bg-neutral-50', text: 'text-neutral-600', border: 'border-neutral-100' };
+    const normalized = normalizeStaffRole(role);
+    const config = ROLE_CONFIG[normalized] || {
+        label: role || '—',
+        color: 'text-neutral-600',
+        bg: 'bg-neutral-50',
+        border: 'border-neutral-100',
+        icon: UserCheck,
+    };
+    const RoleIcon = config.icon;
     return (
-        <span className={cn('inline-flex items-center text-[10px] font-bold px-2.5 py-0.5 rounded-full border', config.bg, config.text, config.border)}>
+        <span className={cn('inline-flex items-center gap-1.5 text-[10px] font-bold px-3 py-1 rounded-full border', config.color, config.bg, config.border)}>
+            <RoleIcon className="w-3 h-3" />
             {config.label}
         </span>
     );
@@ -86,13 +110,15 @@ export function AdminStaffPage() {
         fetchStaffs,
         createStaff,
         updateStaff,
-        deleteStaff,
+        banStaff,
+        unbanStaff,
         clearError,
     } = useStaffStore();
     const { specialties, fetchSpecialties } = useRoomStore();
 
     const [searchQuery, setSearchQuery] = useState('');
     const [roleFilter, setRoleFilter] = useState('ALL');
+    const [statusFilter, setStatusFilter] = useState('ALL');
 
     // Pagination states
     const [currentPage, setCurrentPage] = useState(1);
@@ -132,10 +158,22 @@ export function AdminStaffPage() {
         specialty_id: '',
     });
 
-    // Delete Confirm states
-    const [deletingStaff, setDeletingStaff] = useState<Staff | null>(null);
-    const [isDeleting, setIsDeleting] = useState(false);
-    const [deleteError, setDeleteError] = useState<string | null>(null);
+    // Ban Modal states
+    const [banTargetStaff, setBanTargetStaff] = useState<Staff | null>(null);
+    const [banMinutes, setBanMinutes] = useState<string>('150');
+    const [banPreset, setBanPreset] = useState<string>('CUSTOM');
+    const [isBanning, setIsBanning] = useState(false);
+    const [banError, setBanError] = useState<string | null>(null);
+    const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+
+    const BAN_PRESETS = [
+        { label: '30 phút', value: '30' },
+        { label: '1 giờ', value: '60' },
+        { label: '3 giờ', value: '180' },
+        { label: '1 ngày', value: '1440' },
+        { label: '7 ngày', value: '10080' },
+        { label: '30 ngày', value: '43200' },
+    ];
 
     useEffect(() => {
         if (accessToken) {
@@ -147,6 +185,7 @@ export function AdminStaffPage() {
     /* ── Helpers ─────────────────────────────────────────────── */
 
     const openEditModal = (staff: Staff) => {
+        if (normalizeStaffRole(staff.account?.role) === 'ADMIN') return;
         setEditForm({
             user_name: staff.account.user_name || '',
             password: '',
@@ -163,9 +202,17 @@ export function AdminStaffPage() {
         setEditingStaff(staff);
     };
 
-    const openDeleteModal = (staff: Staff) => {
-        setDeleteError(null);
-        setDeletingStaff(staff);
+    const openBanModal = (staff: Staff) => {
+        if (normalizeStaffRole(staff.account?.role) === 'ADMIN') return;
+        setBanTargetStaff(staff);
+        setBanPreset('150');
+        setBanMinutes('150');
+        setBanError(null);
+    };
+
+    const closeBanModal = () => {
+        setBanTargetStaff(null);
+        setBanError(null);
     };
 
     /* ── Handlers ────────────────────────────────────────────── */
@@ -237,6 +284,7 @@ export function AdminStaffPage() {
 
     const handleUpdateStaff = async () => {
         if (!editingStaff) return;
+        if (normalizeStaffRole(editingStaff.account?.role) === 'ADMIN') return;
 
         if (!editForm.user_name.trim() ||
             !editForm.full_name.trim() ||
@@ -293,23 +341,45 @@ export function AdminStaffPage() {
         }
     };
 
-    const handleDeleteStaff = async () => {
-        if (!deletingStaff) return;
+    const handleBanStaff = async () => {
+        if (!banTargetStaff || !accessToken) return;
+        if (normalizeStaffRole(banTargetStaff.account?.role) === 'ADMIN') return;
 
-        setIsDeleting(true);
-        setDeleteError(null);
+        const totalMinutes = Number(banMinutes.trim());
+        if (!Number.isFinite(totalMinutes) || totalMinutes <= 0) {
+            setBanError('Thời gian khóa phải là số phút lớn hơn 0.');
+            return;
+        }
+
+        const normalizedMinutes = Math.floor(totalMinutes);
+        const duration: BanDuration = {
+            hours: Math.floor(normalizedMinutes / 60),
+            minutes: normalizedMinutes % 60,
+        };
+
+        setIsBanning(true);
+        setBanError(null);
         try {
-            await deleteStaff(deletingStaff.staff_id, accessToken || '');
-            setDeletingStaff(null);
-            const newTotal = filteredStaffs.length - 1;
-            const newTotalPages = Math.ceil(newTotal / ITEMS_PER_PAGE);
-            if (currentPage > newTotalPages && newTotalPages > 0) {
-                setCurrentPage(newTotalPages);
-            }
+            await banStaff(banTargetStaff.staff_id, duration, accessToken);
+            closeBanModal();
         } catch (err) {
-            setDeleteError(err instanceof Error ? err.message : 'Xóa nhân viên thất bại.');
+            setBanError(err instanceof Error ? err.message : 'Khóa tài khoản thất bại.');
         } finally {
-            setIsDeleting(false);
+            setIsBanning(false);
+        }
+    };
+
+    const handleUnbanStaff = async (staff: Staff) => {
+        if (!accessToken) return;
+        if (normalizeStaffRole(staff.account?.role) === 'ADMIN') return;
+
+        setActionLoadingId(staff.staff_id);
+        try {
+            await unbanStaff(staff.staff_id, accessToken);
+        } catch (err) {
+            setBanError(err instanceof Error ? err.message : 'Mở khóa tài khoản thất bại.');
+        } finally {
+            setActionLoadingId(null);
         }
     };
 
@@ -332,7 +402,15 @@ export function AdminStaffPage() {
 
         const filterRole = normalizeStaffRole(roleFilter);
         const matchesRole = roleFilter === 'ALL' || staffRole === filterRole;
-        return matchesSearch && matchesRole;
+
+        let matchesStatus = true;
+        if (statusFilter === 'ACTIVE') {
+            matchesStatus = !staff.account?.is_banned;
+        } else if (statusFilter === 'BANNED') {
+            matchesStatus = Boolean(staff.account?.is_banned);
+        }
+
+        return matchesSearch && matchesRole && matchesStatus;
     });
 
     const sortedStaffs = filteredStaffs.toSorted((a, b) => {
@@ -382,7 +460,7 @@ export function AdminStaffPage() {
                                 }}
                                 className="flex items-center gap-2 px-4 py-2.5 bg-[#8B7CF6] hover:bg-[#7a6ae5] text-white text-[13px] font-bold rounded-xl transition-all shadow-sm cursor-pointer"
                             >
-                                <Plus className="w-4 h-4" />
+                                <UserPlus className="w-4 h-4" />
                                 Thêm nhân viên
                             </button>
                         </div>
@@ -400,11 +478,11 @@ export function AdminStaffPage() {
                             </div>
                         )}
 
-                        {/* ── Filter Panel ── */}
+                        {/* ── Sắp xếp / Filter Panel ── */}
                         <div className="bg-[#F8F9FA] rounded-2xl p-5 border border-[#EBEBEB] mb-6">
                             <div className="flex items-center gap-2 mb-4 text-[#2D2D2D]">
                                 <Filter className="w-4 h-4 text-[#8B7CF6]" />
-                                <span className="text-sm font-bold">Bộ lọc nhân viên</span>
+                                <span className="text-sm font-bold">Sắp xếp</span>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-1">
@@ -412,31 +490,43 @@ export function AdminStaffPage() {
                                     <select
                                         value={roleFilter}
                                         onChange={(e) => { setRoleFilter(e.target.value); setCurrentPage(1); }}
-                                        className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
+                                        className="w-full text-xs text-[#2D2D2D] border border-neutral-200 rounded-xl px-3 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold"
                                     >
-                                        <option value="ALL">Tất cả vai trò</option>
-                                        <option value="ADMIN">Quản trị viên</option>
+                                        <option value="ALL">Tất cả</option>
+                                        <option value="ADMIN">Quản trị</option>
                                         <option value="DOCTOR">Bác sĩ</option>
-                                        <option value="LAB_TECHNICIAN">Kỹ thuật viên Xét nghiệm</option>
+                                        <option value="LAB_TECHNICIAN">Kỹ thuật viên XN</option>
                                         <option value="PHARMACIST">Dược sĩ</option>
-                                        <option value="NURSE">Điều dưỡng</option>
+                                        <option value="NURSE">Y tá / Điều dưỡng</option>
                                         <option value="RECEPTIONIST">Lễ tân</option>
+                                        <option value="CASHIER">Thu ngân</option>
                                     </select>
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-[11px] font-bold text-neutral-400 uppercase">Tìm kiếm</label>
-                                    <div className="flex items-center gap-2 bg-white rounded-xl px-3.5 py-2 border border-neutral-200 text-xs">
-                                        <Search className="w-4 h-4 shrink-0 text-[#ADADAD]" />
-                                        <input
-                                            type="text"
-                                            placeholder="Tìm kiếm theo họ tên, email, tên tài khoản..."
-                                            value={searchQuery}
-                                            onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                                            className="bg-transparent flex-1 outline-none text-[#2D2D2D] placeholder-[#ADADAD] font-semibold"
-                                        />
-                                    </div>
+                                    <label className="text-[11px] font-bold text-neutral-400 uppercase">Trạng thái</label>
+                                    <select
+                                        value={statusFilter}
+                                        onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+                                        className="w-full text-xs text-[#2D2D2D] border border-neutral-200 rounded-xl px-3 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold"
+                                    >
+                                        <option value="ALL">Tất cả</option>
+                                        <option value="ACTIVE">Hoạt động</option>
+                                        <option value="BANNED">Đã khóa</option>
+                                    </select>
                                 </div>
                             </div>
+                        </div>
+
+                        {/* ── Search Bar ── */}
+                        <div className="flex items-center gap-2 bg-[#F5F5F8] rounded-xl px-3.5 py-2.5 text-[12px] text-[#ADADAD] w-full sm:w-80 mb-6 border border-neutral-200/20">
+                            <Search className="w-4 h-4 shrink-0 text-[#ADADAD]" />
+                            <input
+                                type="text"
+                                placeholder="Tìm theo tên hoặc email..."
+                                value={searchQuery}
+                                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                                className="bg-transparent flex-1 outline-none text-[#2D2D2D] placeholder-[#ADADAD] font-medium"
+                            />
                         </div>
 
                         {/* ── Table Content ── */}
@@ -450,73 +540,95 @@ export function AdminStaffPage() {
                                 <table className="w-full text-left">
                                     <thead>
                                         <tr className="bg-neutral-50/80 border-b border-[#EBEBEB]">
-                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider w-[80px]">STT</th>
-                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Họ và tên</th>
-                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Tên tài khoản</th>
+                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Họ và Tên</th>
+                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Giới tính</th>
                                             <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Vai trò</th>
-                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Số điện thoại / Email</th>
-                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider text-right w-[150px]">Thao tác</th>
+                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Trạng thái</th>
+                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider text-right">Hành động</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-neutral-100">
-                                        {paginatedStaffs.map((staff, index) => (
-                                            <tr key={staff.staff_id || index} className="hover:bg-neutral-50/50 transition-colors group">
-                                                <td className="px-5 py-4 text-[13px] font-semibold text-[#7B7B7B]">
-                                                    {(currentPage - 1) * ITEMS_PER_PAGE + index + 1}
-                                                </td>
-                                                <td className="px-5 py-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-9 h-9 rounded-xl bg-[#F5F2FF] border border-[#E0DCFB] flex items-center justify-center shrink-0 overflow-hidden">
-                                                            <UserCheck className="w-4 h-4 text-[#8B7CF6]" />
+                                        {paginatedStaffs.map((staff, index) => {
+                                            const displayName = getStaffDisplayName(staff) || '—';
+                                            const nameInitials = displayName.split(' ').slice(-2).map((n) => n.charAt(0)).join('').toUpperCase() || '?';
+                                            const isBanned = Boolean(staff.account?.is_banned);
+                                            const isAdmin = normalizeStaffRole(staff.account?.role) === 'ADMIN';
+                                            return (
+                                                <tr key={staff.staff_id || index} className="hover:bg-neutral-50/50 transition-colors">
+                                                    <td className="px-5 py-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-9 h-9 rounded-full bg-brand-50 border-2 border-brand-100 flex items-center justify-center text-brand-500 font-bold text-[12px] shrink-0">
+                                                                {nameInitials}
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-[13px] font-bold text-[#2D2D2D] block">{displayName}</span>
+                                                                <span className="text-[11px] text-[#7B7B7B] font-medium block">{staff.account?.email || '—'}</span>
+                                                            </div>
                                                         </div>
-                                                        <span className="text-[13px] font-bold text-[#2D2D2D]">{staff.full_name}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-5 py-4 text-[13px] text-[#7B7B7B] font-mono">
-                                                    {staff.account?.user_name || 'N/A'}
-                                                </td>
-                                                <td className="px-5 py-4">
-                                                    {getRoleBadge(staff.account?.role || '')}
-                                                </td>
-                                                <td className="px-5 py-4">
-                                                    <div className="space-y-0.5">
-                                                        <div className="flex items-center gap-1.5 text-[12px] font-semibold text-[#2D2D2D]">
-                                                            <Phone className="w-3.5 h-3.5 text-neutral-400" />
-                                                            {staff.account?.phone || 'N/A'}
+                                                    </td>
+                                                    <td className="px-5 py-4 text-[12px] text-[#2D2D2D] font-bold">
+                                                        {displayGender(staff.account?.gender)}
+                                                    </td>
+                                                    <td className="px-5 py-4">
+                                                        {getRoleBadge(staff.account?.role || '')}
+                                                    </td>
+                                                    <td className="px-5 py-4">
+                                                        <span className={cn(
+                                                            'inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-md',
+                                                            !isBanned ? 'bg-[#E8F9EE] text-[#10B981]' : 'bg-[#FFEBEE] text-[#E53935]'
+                                                        )}>
+                                                            {!isBanned ? 'Active' : 'Banned'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-5 py-4">
+                                                        <div className="flex items-center justify-end gap-2 text-neutral-400">
+                                                            <button
+                                                                onClick={() => router.push(`/admin/staff/${staff.staff_id}`)}
+                                                                title="Xem chi tiết nhân viên"
+                                                                className="p-1 hover:text-[#8B7CF6] transition-colors cursor-pointer"
+                                                            >
+                                                                <Eye className="w-3.5 h-3.5" />
+                                                            </button>
+                                                            {isAdmin ? (
+                                                                <span className="text-[11px] text-neutral-300 font-semibold select-none">Mặc định</span>
+                                                            ) : (
+                                                                <>
+                                                                    <button
+                                                                        onClick={() => openEditModal(staff)}
+                                                                        title="Chỉnh sửa nhân viên"
+                                                                        className="p-1 hover:text-[#8B7CF6] transition-colors cursor-pointer"
+                                                                    >
+                                                                        <Pencil className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                    {isBanned ? (
+                                                                        <button
+                                                                            onClick={() => handleUnbanStaff(staff)}
+                                                                            disabled={actionLoadingId === staff.staff_id}
+                                                                            className="p-1 text-emerald-600 hover:text-emerald-700 disabled:opacity-50 cursor-pointer"
+                                                                            title="Mở khóa tài khoản"
+                                                                        >
+                                                                            {actionLoadingId === staff.staff_id ? (
+                                                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                                            ) : (
+                                                                                <Trash2 className="w-3.5 h-3.5 text-emerald-600" />
+                                                                            )}
+                                                                        </button>
+                                                                    ) : (
+                                                                        <button
+                                                                            onClick={() => openBanModal(staff)}
+                                                                            className="p-1 text-red-500 hover:text-red-600 cursor-pointer"
+                                                                            title="Khóa tài khoản"
+                                                                        >
+                                                                            <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                                                                        </button>
+                                                                    )}
+                                                                </>
+                                                            )}
                                                         </div>
-                                                        <div className="flex items-center gap-1.5 text-[11px] text-[#7B7B7B] font-medium">
-                                                            <Mail className="w-3.5 h-3.5 text-neutral-400" />
-                                                            {staff.account?.email || 'N/A'}
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-5 py-4">
-                                                    <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <button
-                                                            onClick={() => router.push(`/admin/staff/${staff.staff_id}`)}
-                                                            title="Xem chi tiết nhân viên"
-                                                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-400 hover:text-[#8B7CF6] hover:border-[#8B7CF6]/30 hover:bg-[#F5F2FF] transition cursor-pointer"
-                                                        >
-                                                            <Eye className="w-3.5 h-3.5" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => openEditModal(staff)}
-                                                            title="Chỉnh sửa nhân viên"
-                                                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-400 hover:text-[#8B7CF6] hover:border-[#8B7CF6]/30 hover:bg-[#F5F2FF] transition cursor-pointer"
-                                                        >
-                                                            <Pencil className="w-3.5 h-3.5" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => openDeleteModal(staff)}
-                                                            title="Xóa nhân viên"
-                                                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition cursor-pointer"
-                                                        >
-                                                            <Trash2 className="w-3.5 h-3.5" />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             )}
@@ -579,13 +691,13 @@ export function AdminStaffPage() {
             {/* ════════════════════════════════════════════════════════ */}
             {/* ── Backdrops ────────────────────────────────────────── */}
             {/* ════════════════════════════════════════════════════════ */}
-            {(isCreateModalOpen || !!editingStaff || !!deletingStaff) && (
+            {(isCreateModalOpen || !!editingStaff || !!banTargetStaff) && (
                 <div
                     className="fixed inset-0 bg-neutral-900/40 backdrop-blur-[2px] z-50"
                     onClick={() => {
                         setIsCreateModalOpen(false);
                         setEditingStaff(null);
-                        setDeletingStaff(null);
+                        closeBanModal();
                     }}
                 />
             )}
@@ -667,7 +779,6 @@ export function AdminStaffPage() {
                                 <option value="LAB_TECHNICIAN">Kỹ thuật viên Xét nghiệm</option>
                                 <option value="PHARMACIST">Dược sĩ</option>
                                 <option value="CASHIER">Thu ngân</option>
-                                <option value="ADMIN">Quản trị viên</option>
                             </select>
                         </div>
 
@@ -836,7 +947,6 @@ export function AdminStaffPage() {
                                 <option value="LAB_TECHNICIAN">Kỹ thuật viên Xét nghiệm</option>
                                 <option value="PHARMACIST">Dược sĩ</option>
                                 <option value="CASHIER">Thu ngân</option>
-                                <option value="ADMIN">Quản trị viên</option>
                             </select>
                         </div>
 
@@ -926,46 +1036,88 @@ export function AdminStaffPage() {
             )}
 
             {/* ════════════════════════════════════════════════════════ */}
-            {/* ── Dialog: Xác nhận xóa ─────────────────────────────── */}
+            {/* ── Modal: Khóa tài khoản ────────────────────────────── */}
             {/* ════════════════════════════════════════════════════════ */}
-            {deletingStaff && (
-                <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] bg-white rounded-3xl shadow-2xl p-6 z-[60] flex flex-col gap-4">
-                    <div className="flex items-start gap-4">
-                        <div className="w-11 h-11 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center shrink-0">
-                            <AlertTriangle className="w-5 h-5 text-red-500" />
+            {!!banTargetStaff && (
+                <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[460px] bg-white rounded-3xl shadow-2xl p-6 z-[60] flex flex-col gap-5">
+                    <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-11 h-11 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center shrink-0">
+                                <ShieldOff className="w-5 h-5 text-red-500" />
+                            </div>
+                            <div>
+                                <h2 className="text-[16px] font-bold text-[#2D2D2D]">Khóa tài khoản</h2>
+                                <p className="text-[11px] text-[#ADADAD] font-medium mt-0.5">Chọn thời hạn khóa bên dưới</p>
+                            </div>
                         </div>
-                        <div className="flex-1">
-                            <h2 className="text-[16px] font-bold text-[#2D2D2D]">Xác nhận xóa nhân viên</h2>
-                            <p className="text-[13px] text-[#7B7B7B] mt-1 leading-relaxed">
-                                Bạn có chắc chắn muốn xóa nhân viên{' '}
-                                <span className="font-bold text-[#2D2D2D]">{deletingStaff.full_name}</span> ra khỏi hệ thống?
-                                Hành động này sẽ vô hiệu hóa hoàn toàn tài khoản của nhân viên đó.
-                            </p>
+                        <button onClick={closeBanModal} className="text-neutral-400 hover:text-neutral-600 cursor-pointer mt-0.5">
+                            <X className="w-4.5 h-4.5" />
+                        </button>
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <p className="text-[11px] font-bold text-neutral-400 uppercase">Chọn nhanh</p>
+                        <div className="grid grid-cols-3 gap-2">
+                            {BAN_PRESETS.map((p) => (
+                                <button
+                                    key={p.value}
+                                    onClick={() => { setBanPreset(p.value); setBanMinutes(p.value); }}
+                                    className={cn(
+                                        'py-2 rounded-xl border text-[12px] font-bold transition cursor-pointer',
+                                        banPreset === p.value
+                                            ? 'bg-red-500 border-red-500 text-white shadow-sm'
+                                            : 'bg-white border-neutral-200 text-neutral-600 hover:border-red-200 hover:text-red-500 hover:bg-red-50'
+                                    )}
+                                >
+                                    {p.label}
+                                </button>
+                            ))}
                         </div>
                     </div>
 
-                    {deleteError && (
+                    <div className="space-y-1.5">
+                        <p className="text-[11px] font-bold text-neutral-400 uppercase">Hoặc nhập số phút tùy chỉnh</p>
+                        <div className="flex items-center gap-2 bg-[#F8F9FA] rounded-xl px-3.5 py-2.5 border border-neutral-200 focus-within:border-red-300 transition">
+                            <Clock className="w-4 h-4 text-neutral-400 shrink-0" />
+                            <input
+                                type="number"
+                                min={1}
+                                placeholder="Ví dụ: 150"
+                                value={banMinutes}
+                                onChange={(e) => { setBanMinutes(e.target.value); setBanPreset('CUSTOM'); }}
+                                className="bg-transparent flex-1 outline-none text-[13px] font-bold text-[#2D2D2D] placeholder-neutral-300"
+                            />
+                            <span className="text-[11px] font-bold text-neutral-400">phút</span>
+                        </div>
+                        {banMinutes && Number(banMinutes) > 0 && (
+                            <p className="text-[11px] text-[#8B7CF6] font-semibold pl-1">
+                                ≈ {Math.floor(Number(banMinutes) / 60) > 0 ? `${Math.floor(Number(banMinutes) / 60)} giờ ` : ''}{Number(banMinutes) % 60 > 0 ? `${Number(banMinutes) % 60} phút` : ''}
+                            </p>
+                        )}
+                    </div>
+
+                    {banError && (
                         <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 p-3">
                             <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                            <span className="text-[12px] text-red-700 font-semibold">{deleteError}</span>
+                            <span className="text-[12px] text-red-700 font-semibold">{banError}</span>
                         </div>
                     )}
 
-                    <div className="flex gap-3">
+                    <div className="flex gap-3 pt-1 border-t border-neutral-100">
                         <button
-                            onClick={() => setDeletingStaff(null)}
-                            disabled={isDeleting}
+                            onClick={closeBanModal}
+                            disabled={isBanning}
                             className="flex-1 py-2.5 border border-neutral-200 hover:bg-neutral-50 rounded-xl text-xs font-bold text-neutral-500 transition cursor-pointer"
                         >
                             Hủy
                         </button>
                         <button
-                            onClick={handleDeleteStaff}
-                            disabled={isDeleting}
-                            className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer flex items-center justify-center gap-1.5"
+                            onClick={handleBanStaff}
+                            disabled={isBanning || !banMinutes}
+                            className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
                         >
-                            {isDeleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                            Xóa nhân viên
+                            {isBanning && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                            Xác nhận khóa
                         </button>
                     </div>
                 </div>

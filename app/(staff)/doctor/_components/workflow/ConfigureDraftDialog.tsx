@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { Loader2, Plus, UserCheck } from 'lucide-react';
 import type { HospitalRoom } from '@/modules/admin/types/room.types';
 import {
@@ -10,6 +11,8 @@ import {
 } from '@/shared/components/ui/Dialog';
 import type { DraftStep, ServiceOption, SpecialtyOption } from '@/modules/clinical/workflow/types';
 import { isDraftPaymentStep } from '@/modules/clinical/workflow/stepIdentity';
+import { filterServiceOptionsByContext } from '@/modules/clinical/workflow/draftBuilder';
+import { getRoomTypeValue } from '@/modules/clinical/workflow/flowPickers';
 
 interface ConfigureDraftDialogProps {
     open: boolean;
@@ -55,6 +58,25 @@ export function ConfigureDraftDialog({
     onCommit,
 }: ConfigureDraftDialogProps) {
     const serviceDrafts = draftSteps.filter((s) => !isDraftPaymentStep(s));
+
+    const specialtyNameById = useMemo(
+        () => new Map(specialties.map((s) => [s.id, s.name])),
+        [specialties]
+    );
+
+    /** Chỉ hiện các dịch vụ khớp với chuyên khoa/phòng đã chọn (theo room_type + tên), fallback về toàn bộ danh sách nếu không khớp. */
+    const getServiceOptionsForContext = (specialtyId: string, roomId: string): ServiceOption[] => {
+        if (!specialtyId) return serviceOptions;
+        const room = getRoomsBySpecialty(specialtyId).find((r) => r.room_id === roomId);
+        return filterServiceOptionsByContext(
+            {
+                roomType: getRoomTypeValue(room),
+                roomName: room?.room_name,
+                specialtyName: specialtyNameById.get(specialtyId),
+            },
+            serviceOptions
+        );
+    };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -140,7 +162,7 @@ export function ConfigureDraftDialog({
                                             }}
                                             className="w-full text-xs font-bold p-2.5 rounded-xl border border-neutral-200 bg-white focus:border-[#8B7CF6] focus:outline-none"
                                         >
-                                            {serviceOptions.map((service) => (
+                                            {getServiceOptionsForContext(step.specialty_id, step.room_id).map((service) => (
                                                 <option
                                                     key={service.service_id || service.service_code}
                                                     value={service.service_code}
@@ -227,7 +249,7 @@ export function ConfigureDraftDialog({
                                     disabled={isLoadingServices || serviceOptions.length === 0}
                                     className="w-full text-xs font-bold p-2.5 rounded-xl border border-neutral-200 bg-white disabled:bg-neutral-50 disabled:text-neutral-400"
                                 >
-                                    {serviceOptions.map((service) => (
+                                    {getServiceOptionsForContext(selectedSpecialtyId, selectedRoomId).map((service) => (
                                         <option
                                             key={service.service_id || service.service_code}
                                             value={service.service_code}

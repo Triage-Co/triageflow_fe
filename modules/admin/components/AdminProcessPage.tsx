@@ -153,7 +153,6 @@ export function AdminProcessPage() {
     // Form inputs
     const [formName, setFormName] = useState('');
     const [formSteps, setFormSteps] = useState<TemplateStep[]>([]);
-    const [formActive, setFormActive] = useState(true);
     const [formSubmitting, setFormSubmitting] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
     const [serviceOptions, setServiceOptions] = useState<ServiceOption[]>([]);
@@ -239,7 +238,6 @@ export function AdminProcessPage() {
                 sub_steps: [],
             },
         ]);
-        setFormActive(true);
         setFormError(null);
         setIsFormModalOpen(true);
     };
@@ -271,11 +269,6 @@ export function AdminProcessPage() {
                 })
                 : [createDefaultStep(0)]
         );
-        const isActive =
-            typeof template.is_active === 'boolean'
-                ? template.is_active
-                : template.status === 'ACTIVE' || template.status === true;
-        setFormActive(isActive);
         setFormError(null);
         setIsFormModalOpen(true);
     };
@@ -778,288 +771,267 @@ export function AdminProcessPage() {
                                 ref={formScrollRef}
                                 className="flex-1 min-h-0 overflow-y-auto show-scrollbar p-6 space-y-6"
                             >
-                            {formError && (
-                                <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-start gap-2">
-                                    <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                                    <span>{formError}</span>
-                                </div>
-                            )}
+                                {formError && (
+                                    <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-start gap-2">
+                                        <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                                        <span>{formError}</span>
+                                    </div>
+                                )}
 
-                            {/* Process Name Input */}
-                            <div className="space-y-1.5">
-                                <label className="block text-sm font-semibold text-neutral-800">
-                                    Tên quy trình <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                    type="text"
-                                    required
-                                    placeholder="Ví dụ: Quy trình khám Ngoại thần kinh"
-                                    value={formName}
-                                    onChange={(e) => setFormName(e.target.value)}
-                                    className="w-full px-4 py-2.5 rounded-xl border border-neutral-300 bg-white text-sm text-neutral-900 placeholder-neutral-400 outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
-                                />
-                            </div>
-
-                            {/* Active Status Switch */}
-                            <div className="flex items-center justify-between p-4 rounded-xl bg-neutral-50 border border-neutral-200">
-                                <div>
-                                    <span className="text-sm font-semibold text-neutral-800 block">
-                                        Trạng thái hoạt động
-                                    </span>
-                                    <span className="text-xs text-neutral-500">
-                                        Quy trình đang hoạt động có thể gán tự động cho bệnh nhân mới.
-                                    </span>
-                                </div>
-                                <label className="relative inline-flex items-center cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={formActive}
-                                        onChange={(e) => setFormActive(e.target.checked)}
-                                        className="sr-only peer"
-                                    />
-                                    <div className="w-11 h-6 bg-neutral-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
-                                </label>
-                            </div>
-
-                            {/* Dynamic Steps List */}
-                            <div className="space-y-4 pt-2">
-                                <div className="flex items-center justify-between">
-                                    <label className="text-sm font-semibold text-neutral-800">
-                                        Các bước thực hiện ({formSteps.length} bước)
+                                {/* Process Name Input */}
+                                <div className="space-y-1.5">
+                                    <label className="block text-sm font-semibold text-neutral-800">
+                                        Tên quy trình <span className="text-red-500">*</span>
                                     </label>
-                                    <button
-                                        type="button"
-                                        onClick={handleAddStep}
-                                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-600 hover:text-purple-700 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-lg transition cursor-pointer"
-                                    >
-                                        <Plus className="w-3.5 h-3.5" />
-                                        <span>Thêm bước</span>
-                                    </button>
+                                    <input
+                                        type="text"
+                                        required
+                                        placeholder="Ví dụ: Quy trình khám Ngoại thần kinh"
+                                        value={formName}
+                                        onChange={(e) => setFormName(e.target.value)}
+                                        className="w-full px-4 py-2.5 rounded-xl border border-neutral-300 bg-white text-sm text-neutral-900 placeholder-neutral-400 outline-none transition focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                                    />
                                 </div>
 
-                                <div className="space-y-4">
-                                    {formSteps.map((step, idx) => {
-                                        return (
-                                            <div
-                                                key={step.template_step_id || idx}
-                                                ref={idx === formSteps.length - 1 ? lastStepRef : undefined}
-                                                className="p-4 rounded-2xl border border-neutral-200 bg-white shadow-2xs space-y-4 relative group"
-                                            >
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="w-6 h-6 rounded-full bg-purple-600 text-white text-xs font-bold flex items-center justify-center">
-                                                            {idx + 1}
-                                                        </span>
-                                                        <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-                                                            Mã bước: {step.template_step_id}
-                                                        </span>
-                                                    </div>
+                                {/* Dynamic Steps List */}
+                                <div className="space-y-4 pt-2">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-sm font-semibold text-neutral-800">
+                                            Các bước thực hiện ({formSteps.length} bước)
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={handleAddStep}
+                                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-600 hover:text-purple-700 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-lg transition cursor-pointer"
+                                        >
+                                            <Plus className="w-3.5 h-3.5" />
+                                            <span>Thêm bước</span>
+                                        </button>
+                                    </div>
 
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleRemoveStep(idx)}
-                                                        title="Xóa bước này"
-                                                        className="p-1.5 rounded-lg text-neutral-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                    {/* Step Name */}
-                                                    <div className="space-y-1">
-                                                        <label className="block text-xs font-medium text-neutral-600">
-                                                            Tên bước <span className="text-red-500">*</span>
-                                                        </label>
-                                                        <input
-                                                            type="text"
-                                                            required
-                                                            placeholder="e.g. Khám lâm sàng"
-                                                            value={step.step_name}
-                                                            onChange={(e) =>
-                                                                handleStepChange(idx, 'step_name', e.target.value)
-                                                            }
-                                                            className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm text-neutral-900 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
-                                                        />
-                                                    </div>
-
-                                                    {/* Step Type — matches TemplateStepDto.step_type enum */}
-                                                    <div className="space-y-1">
-                                                        <label className="block text-xs font-medium text-neutral-600">
-                                                            Loại bước (step_type) <span className="text-red-500">*</span>
-                                                        </label>
-                                                        <select
-                                                            value={normalizeStepType(step.step_type, step.room_type)}
-                                                            onChange={(e) =>
-                                                                handleStepChange(idx, 'step_type', e.target.value)
-                                                            }
-                                                            className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm text-neutral-900 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 bg-white"
-                                                        >
-                                                            {STEP_TYPE_OPTIONS.map((opt) => (
-                                                                <option key={opt.value} value={opt.value}>
-                                                                    {opt.label}
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-
-                                                    {/* Room Type */}
-                                                    <div className="space-y-1">
-                                                        <label className="block text-xs font-medium text-neutral-600">
-                                                            Loại phòng khám / dịch vụ
-                                                        </label>
-                                                        <select
-                                                            value={step.room_type}
-                                                            onChange={(e) => handleRoomTypeChange(idx, e.target.value)}
-                                                            className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm text-neutral-900 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 bg-white"
-                                                        >
-                                                            {ROOM_TYPE_OPTIONS.map((opt) => (
-                                                                <option key={opt.value} value={opt.value}>
-                                                                    {opt.label}
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-
-                                                    {/* Service / specialty */}
-                                                    <div className="space-y-1">
-                                                        <label className="block text-xs font-medium text-neutral-600">
-                                                            Chuyên khoa <span className="text-red-500">*</span>
-                                                        </label>
-                                                        <select
-                                                            value={step.service_code || NO_SERVICE_CODE}
-                                                            onChange={(e) =>
-                                                                handleStepChange(idx, 'service_code', e.target.value)
-                                                            }
-                                                            className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm text-neutral-900 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 bg-white"
-                                                        >
-                                                            <option value={NO_SERVICE_CODE}>Không cần</option>
-
-                                                            {isLoadingServices && (
-                                                                <option value="" disabled>
-                                                                    Đang tải danh sách dịch vụ...
-                                                                </option>
-                                                            )}
-
-                                                            {serviceOptions.map((service) => (
-                                                                <option
-                                                                    key={service.service_id || service.service_code}
-                                                                    value={service.service_code}
-                                                                >
-                                                                    {service.service_name}
-                                                                </option>
-                                                            ))}
-
-                                                            {step.service_code &&
-                                                                step.service_code !== NO_SERVICE_CODE &&
-                                                                !serviceOptions.some(
-                                                                    (service) =>
-                                                                        service.service_code === step.service_code
-                                                                ) && (
-                                                                    <option value={step.service_code}>
-                                                                        {step.service_code} (không có trong danh mục)
-                                                                    </option>
-                                                                )}
-                                                        </select>
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex flex-col gap-3 pt-2 border-t border-neutral-100">
-                                                    {/* Requires Payment checkbox */}
-                                                    <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-neutral-700">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={step.requires_payment}
-                                                            onChange={(e) =>
-                                                                handleStepChange(
-                                                                    idx,
-                                                                    'requires_payment',
-                                                                    e.target.checked
-                                                                )
-                                                            }
-                                                            className="h-4 w-4 rounded border-neutral-300 text-purple-600 focus:ring-purple-500 accent-purple-600"
-                                                        />
-                                                        <span>Yêu cầu hoàn tất thanh toán trước khi vào bước</span>
-                                                    </label>
-
-                                                    {/* Depends On — editable only for ADMIN */}
-                                                    <div className="space-y-2">
-                                                        <div className="flex items-center justify-between gap-2">
-                                                            <span className="text-xs font-medium text-neutral-600">
-                                                                Phụ thuộc (depends_on)
+                                    <div className="space-y-4">
+                                        {formSteps.map((step, idx) => {
+                                            return (
+                                                <div
+                                                    key={step.template_step_id || idx}
+                                                    ref={idx === formSteps.length - 1 ? lastStepRef : undefined}
+                                                    className="p-4 rounded-2xl border border-neutral-200 bg-white shadow-2xs space-y-4 relative group"
+                                                >
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="w-6 h-6 rounded-full bg-purple-600 text-white text-xs font-bold flex items-center justify-center">
+                                                                {idx + 1}
                                                             </span>
-                                                            {!canEditDependsOn && (
-                                                                <span className="text-[10px] text-neutral-400">
-                                                                    Chỉ ADMIN được chỉnh sửa
-                                                                </span>
-                                                            )}
+                                                            <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                                                                Mã bước: {step.template_step_id}
+                                                            </span>
                                                         </div>
 
-                                                        {canEditDependsOn ? (
-                                                            formSteps.filter((s) => s.template_step_id !== step.template_step_id).length === 0 ? (
-                                                                <p className="text-[11px] text-neutral-400 italic">
-                                                                    Chưa có bước khác để phụ thuộc.
-                                                                </p>
-                                                            ) : (
-                                                                <div className="flex flex-wrap gap-2">
-                                                                    {formSteps
-                                                                        .filter((s) => s.template_step_id !== step.template_step_id)
-                                                                        .map((candidate, candidateIdx) => {
-                                                                            const candidateId =
-                                                                                candidate.template_step_id ||
-                                                                                candidate.template_id ||
-                                                                                `step_${candidateIdx + 1}`;
-                                                                            const checked = step.depends_on.includes(
-                                                                                candidateId
-                                                                            );
-                                                                            return (
-                                                                                <label
-                                                                                    key={candidateId}
-                                                                                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] cursor-pointer select-none transition ${checked
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRemoveStep(idx)}
+                                                            title="Xóa bước này"
+                                                            className="p-1.5 rounded-lg text-neutral-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        {/* Step Name */}
+                                                        <div className="space-y-1">
+                                                            <label className="block text-xs font-medium text-neutral-600">
+                                                                Tên bước <span className="text-red-500">*</span>
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                required
+                                                                placeholder="e.g. Khám lâm sàng"
+                                                                value={step.step_name}
+                                                                onChange={(e) =>
+                                                                    handleStepChange(idx, 'step_name', e.target.value)
+                                                                }
+                                                                className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm text-neutral-900 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                                                            />
+                                                        </div>
+
+                                                        {/* Step Type — matches TemplateStepDto.step_type enum */}
+                                                        <div className="space-y-1">
+                                                            <label className="block text-xs font-medium text-neutral-600">
+                                                                Loại bước (step_type) <span className="text-red-500">*</span>
+                                                            </label>
+                                                            <select
+                                                                value={normalizeStepType(step.step_type, step.room_type)}
+                                                                onChange={(e) =>
+                                                                    handleStepChange(idx, 'step_type', e.target.value)
+                                                                }
+                                                                className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm text-neutral-900 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 bg-white"
+                                                            >
+                                                                {STEP_TYPE_OPTIONS.map((opt) => (
+                                                                    <option key={opt.value} value={opt.value}>
+                                                                        {opt.label}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+
+                                                        {/* Room Type */}
+                                                        <div className="space-y-1">
+                                                            <label className="block text-xs font-medium text-neutral-600">
+                                                                Loại phòng khám / dịch vụ
+                                                            </label>
+                                                            <select
+                                                                value={step.room_type}
+                                                                onChange={(e) => handleRoomTypeChange(idx, e.target.value)}
+                                                                className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm text-neutral-900 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 bg-white"
+                                                            >
+                                                                {ROOM_TYPE_OPTIONS.map((opt) => (
+                                                                    <option key={opt.value} value={opt.value}>
+                                                                        {opt.label}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+
+                                                        {/* Service / specialty */}
+                                                        <div className="space-y-1">
+                                                            <label className="block text-xs font-medium text-neutral-600">
+                                                                Chuyên khoa <span className="text-red-500">*</span>
+                                                            </label>
+                                                            <select
+                                                                value={step.service_code || NO_SERVICE_CODE}
+                                                                onChange={(e) =>
+                                                                    handleStepChange(idx, 'service_code', e.target.value)
+                                                                }
+                                                                className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm text-neutral-900 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 bg-white"
+                                                            >
+                                                                <option value={NO_SERVICE_CODE}>Không cần</option>
+
+                                                                {isLoadingServices && (
+                                                                    <option value="" disabled>
+                                                                        Đang tải danh sách dịch vụ...
+                                                                    </option>
+                                                                )}
+
+                                                                {serviceOptions.map((service) => (
+                                                                    <option
+                                                                        key={service.service_id || service.service_code}
+                                                                        value={service.service_code}
+                                                                    >
+                                                                        {service.service_name}
+                                                                    </option>
+                                                                ))}
+
+                                                                {step.service_code &&
+                                                                    step.service_code !== NO_SERVICE_CODE &&
+                                                                    !serviceOptions.some(
+                                                                        (service) =>
+                                                                            service.service_code === step.service_code
+                                                                    ) && (
+                                                                        <option value={step.service_code}>
+                                                                            {step.service_code} (không có trong danh mục)
+                                                                        </option>
+                                                                    )}
+                                                            </select>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex flex-col gap-3 pt-2 border-t border-neutral-100">
+                                                        {/* Requires Payment checkbox */}
+                                                        <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-neutral-700">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={step.requires_payment}
+                                                                onChange={(e) =>
+                                                                    handleStepChange(
+                                                                        idx,
+                                                                        'requires_payment',
+                                                                        e.target.checked
+                                                                    )
+                                                                }
+                                                                className="h-4 w-4 rounded border-neutral-300 text-purple-600 focus:ring-purple-500 accent-purple-600"
+                                                            />
+                                                            <span>Yêu cầu hoàn tất thanh toán trước khi vào bước</span>
+                                                        </label>
+
+                                                        {/* Depends On — editable only for ADMIN */}
+                                                        <div className="space-y-2">
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <span className="text-xs font-medium text-neutral-600">
+                                                                    Phụ thuộc (depends_on)
+                                                                </span>
+                                                                {!canEditDependsOn && (
+                                                                    <span className="text-[10px] text-neutral-400">
+                                                                        Chỉ ADMIN được chỉnh sửa
+                                                                    </span>
+                                                                )}
+                                                            </div>
+
+                                                            {canEditDependsOn ? (
+                                                                formSteps.filter((s) => s.template_step_id !== step.template_step_id).length === 0 ? (
+                                                                    <p className="text-[11px] text-neutral-400 italic">
+                                                                        Chưa có bước khác để phụ thuộc.
+                                                                    </p>
+                                                                ) : (
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        {formSteps
+                                                                            .filter((s) => s.template_step_id !== step.template_step_id)
+                                                                            .map((candidate, candidateIdx) => {
+                                                                                const candidateId =
+                                                                                    candidate.template_step_id ||
+                                                                                    candidate.template_id ||
+                                                                                    `step_${candidateIdx + 1}`;
+                                                                                const checked = step.depends_on.includes(
+                                                                                    candidateId
+                                                                                );
+                                                                                return (
+                                                                                    <label
+                                                                                        key={candidateId}
+                                                                                        className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] cursor-pointer select-none transition ${checked
                                                                                             ? 'bg-purple-50 border-purple-200 text-purple-700'
                                                                                             : 'bg-neutral-50 border-neutral-200 text-neutral-600 hover:bg-neutral-100'
-                                                                                        }`}
-                                                                                >
-                                                                                    <input
-                                                                                        type="checkbox"
-                                                                                        checked={checked}
-                                                                                        onChange={(e) =>
-                                                                                            handleDependsOnToggle(
-                                                                                                idx,
-                                                                                                candidateId,
-                                                                                                e.target.checked
-                                                                                            )
-                                                                                        }
-                                                                                        className="h-3.5 w-3.5 rounded border-neutral-300 text-purple-600 accent-purple-600"
-                                                                                    />
-                                                                                    <span className="font-semibold">
-                                                                                        {candidateId}
-                                                                                    </span>
-                                                                                    <span className="text-neutral-400 truncate max-w-[140px]">
-                                                                                        {candidate.step_name || 'Chưa đặt tên'}
-                                                                                    </span>
-                                                                                </label>
-                                                                            );
-                                                                        })}
+                                                                                            }`}
+                                                                                    >
+                                                                                        <input
+                                                                                            type="checkbox"
+                                                                                            checked={checked}
+                                                                                            onChange={(e) =>
+                                                                                                handleDependsOnToggle(
+                                                                                                    idx,
+                                                                                                    candidateId,
+                                                                                                    e.target.checked
+                                                                                                )
+                                                                                            }
+                                                                                            className="h-3.5 w-3.5 rounded border-neutral-300 text-purple-600 accent-purple-600"
+                                                                                        />
+                                                                                        <span className="font-semibold">
+                                                                                            {candidateId}
+                                                                                        </span>
+                                                                                        <span className="text-neutral-400 truncate max-w-[140px]">
+                                                                                            {candidate.step_name || 'Chưa đặt tên'}
+                                                                                        </span>
+                                                                                    </label>
+                                                                                );
+                                                                            })}
+                                                                    </div>
+                                                                )
+                                                            ) : (
+                                                                <div className="text-[11px] text-neutral-500 flex items-center gap-1 bg-neutral-50 px-2.5 py-1.5 rounded-md border border-neutral-200 w-fit">
+                                                                    <span>Phụ thuộc:</span>
+                                                                    <span className="font-semibold text-purple-700">
+                                                                        {step.depends_on.length > 0
+                                                                            ? step.depends_on.join(', ')
+                                                                            : 'Không có'}
+                                                                    </span>
                                                                 </div>
-                                                            )
-                                                        ) : (
-                                                            <div className="text-[11px] text-neutral-500 flex items-center gap-1 bg-neutral-50 px-2.5 py-1.5 rounded-md border border-neutral-200 w-fit">
-                                                                <span>Phụ thuộc:</span>
-                                                                <span className="font-semibold text-purple-700">
-                                                                    {step.depends_on.length > 0
-                                                                        ? step.depends_on.join(', ')
-                                                                        : 'Không có'}
-                                                                </span>
-                                                            </div>
-                                                        )}
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        );
-                                    })}
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-                            </div>
                             </div>
 
                             {/* Submit buttons */}
