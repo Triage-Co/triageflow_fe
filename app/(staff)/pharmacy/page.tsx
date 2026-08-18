@@ -32,7 +32,7 @@ export default function PharmacyPage() {
 
     return (
         <EMRWorkspaceLayout activeTabId="pharmacy" activeTabName="Quản Lý Nhà Thuốc & Cấp Phát">
-            <div className="flex-1 flex flex-col h-full overflow-hidden bg-neutral-100 dark:bg-neutral-950 p-4">
+            <div className="flex-1 flex flex-col h-full overflow-hidden p-4">
                 {/* Main Content Body: 2-column layout */}
                 <div className="flex-1 overflow-hidden">
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-full">

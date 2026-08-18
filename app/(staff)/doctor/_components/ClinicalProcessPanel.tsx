@@ -3,8 +3,6 @@
 import { useState } from 'react';
 import {
     User,
-    Search,
-    Settings,
     Stethoscope,
     Microscope,
     ClipboardList,
@@ -13,7 +11,6 @@ import {
 } from 'lucide-react';
 import type { Patient, ClinicalStage, LabOrder } from '@/modules/clinical/types/clinical.types';
 import { Badge } from '@/shared/components/ui/Badge';
-import { Input } from '@/shared/components/ui/Input';
 import { cn } from '@/lib/utils';
 import { ParaclinicalOrdersTab } from '@/modules/clinical/components/ParaclinicalOrdersTab';
 import { EmrPrescriptionTab } from '@/modules/clinical/components/EmrPrescriptionTab';
@@ -92,24 +89,6 @@ export function ClinicalProcessPanel({
                                 </Badge>
                             </div>
                         </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                        <div className="w-52 hidden sm:block">
-                            <Input
-                                variant="pill"
-                                placeholder="Tìm trong hồ sơ..."
-                                startIcon={<Search className="w-4 h-4" />}
-                                className="h-10 text-xs"
-                            />
-                        </div>
-                        <button
-                            type="button"
-                            className="w-10 h-10 rounded-[14px] border border-neutral-200 bg-white flex items-center justify-center text-neutral-400 hover:text-neutral-600 hover:border-neutral-300 transition-colors"
-                            aria-label="Cài đặt"
-                        >
-                            <Settings className="w-4 h-4" />
-                        </button>
                     </div>
                 </div>
             </div>

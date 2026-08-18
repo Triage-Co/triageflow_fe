@@ -14,6 +14,8 @@ import type {
 import type { EditorHit } from './map/mapEditorLayers';
 import type { LngLat } from '@/modules/admin/utils/mapEditorGeometry';
 
+import type { HeatmapRoom } from '@/modules/admin/hooks/useQueueHeatmap';
+
 export interface PendingAddNode {
   tempId: string;
   coords: [number, number];
@@ -61,6 +63,9 @@ interface FloorMapProps {
   onEditorPointerDown?: (e: EditorPointerEvent) => void;
   onEditorPointerMove?: (e: EditorPointerEvent) => void;
   onEditorPointerUp?: (e: EditorPointerEvent) => void;
+  onHoverRoom?: (roomId: string | null) => void;
+  heatmapEnabled?: boolean;
+  heatmapRooms?: HeatmapRoom[];
 }
 
 export const FloorMap: React.FC<FloorMapProps> = ({
@@ -72,6 +77,7 @@ export const FloorMap: React.FC<FloorMapProps> = ({
   targetRoomId,
   routePath,
   onSelectRoom,
+  onHoverRoom,
   showNodes,
   showWalkable,
   debugSteps,
@@ -98,6 +104,8 @@ export const FloorMap: React.FC<FloorMapProps> = ({
   onEditorPointerDown,
   onEditorPointerMove,
   onEditorPointerUp,
+  heatmapEnabled,
+  heatmapRooms,
 }) => {
   const { data, rawMap, loading, error } = useBuildingMap(floorNumber, refreshKey);
   const highlightedRoomId = useNavigationStore((s) => s.highlightedRoomId);
@@ -168,6 +176,9 @@ export const FloorMap: React.FC<FloorMapProps> = ({
       onEditorPointerDown={onEditorPointerDown}
       onEditorPointerMove={onEditorPointerMove}
       onEditorPointerUp={onEditorPointerUp}
+      onHoverRoom={onHoverRoom}
+      heatmapEnabled={heatmapEnabled}
+      heatmapRooms={heatmapRooms}
     />
   );
 };

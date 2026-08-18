@@ -1,14 +1,9 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import type { Staff, CreateStaffDto, UpdateStaffDto, StaffAccount } from '../types/staff.types';
+import type { Staff, CreateStaffDto, UpdateStaffDto, QueryStaffParams } from '../types/staff.types';
 import type { BanDuration } from '../types/admin.types';
 import { staffService } from '../services/staffService';
 import { adminService } from '../services/adminService';
-
-function normalizeRoleKey(role?: string): string {
-    if (!role) return '';
-    return role.trim().toUpperCase().replace(/^ROLE_/, '');
-}
 
 export interface StaffState {
     staffs: Staff[];
@@ -17,7 +12,7 @@ export interface StaffState {
 }
 
 export interface StaffActions {
-    fetchStaffs: (token: string, options?: { mergeAccounts?: boolean }) => Promise<void>;
+    fetchStaffs: (token: string, params?: QueryStaffParams) => Promise<void>;
     createStaff: (data: CreateStaffDto, token: string) => Promise<void>;
     updateStaff: (id: string, data: UpdateStaffDto, token: string) => Promise<void>;
     deleteStaff: (id: string, token: string) => Promise<void>;
@@ -39,61 +34,12 @@ export const useStaffStore = create<StaffStore>()(
         (set, get) => ({
             ...initialState,
 
-            fetchStaffs: async (token: string, options?: { mergeAccounts?: boolean }) => {
+            fetchStaffs: async (token: string, params: QueryStaffParams = {}) => {
                 set({ isLoading: true, error: null }, false, 'fetchStaffs/pending');
                 try {
-                    const res = await staffService.getStaffs(token);
+                    const res = await staffService.getStaffs(token, params);
                     const officialStaffs = Array.isArray(res?.data) ? res.data : [];
-
-                    let mergedStaffs = [...officialStaffs];
-
-                    // /api/account chỉ ADMIN — không gọi khi doctor/role khác (tránh 403 log)
-                    if (options?.mergeAccounts) {
-                        try {
-                            const accRes = await adminService.getAccounts(token);
-                            const accounts = Array.isArray(accRes?.data) ? accRes.data : [];
-
-                            const existingEmails = new Set(
-                                officialStaffs
-                                    .map((s) => s.account?.email?.toLowerCase())
-                                    .filter(Boolean)
-                            );
-
-                            const STAFF_ROLES = new Set(['DOCTOR', 'NURSE', 'RECEPTIONIST', 'LAB_STAFF', 'LAB_TECHNICIAN', 'PHARMACY_STAFF', 'PHARMACIST', 'CASHIER', 'ADMIN']);
-
-                            const extraStaffs: Staff[] = accounts
-                                .filter((acc) => {
-                                    const r = normalizeRoleKey(acc.role);
-                                    return STAFF_ROLES.has(r) && acc.email && !existingEmails.has(acc.email.toLowerCase());
-                                })
-                                .map((acc) => {
-                                    const normRole = (normalizeRoleKey(acc.role) || 'NURSE') as StaffAccount['role'];
-                                    const name = acc.profile?.user_name || acc.user_name || acc.email.split('@')[0];
-                                    return {
-                                        staff_id: acc.id || acc.account_id || `acc-${acc.email}`,
-                                        full_name: name,
-                                        license_number: null,
-                                        experience_years: null,
-                                        specialty_id: null,
-                                        account: {
-                                            avatar: null,
-                                            user_name: name,
-                                            email: acc.email,
-                                            role: normRole,
-                                            gender: ((acc.gender || acc.profile?.gender || 'MALE').toUpperCase()) as StaffAccount['gender'],
-                                            phone: acc.profile?.phone || '',
-                                            is_banned: acc.isBanned || false,
-                                        },
-                                    };
-                                });
-
-                            mergedStaffs = [...officialStaffs, ...extraStaffs];
-                        } catch {
-                            // Fallback to officialStaffs if getAccounts fails
-                        }
-                    }
-
-                    set({ staffs: mergedStaffs, isLoading: false }, false, 'fetchStaffs/success');
+                    set({ staffs: officialStaffs, isLoading: false }, false, 'fetchStaffs/success');
                 } catch (err) {
                     set({
                         error: err instanceof Error ? err.message : 'Không thể tải danh sách nhân viên.',

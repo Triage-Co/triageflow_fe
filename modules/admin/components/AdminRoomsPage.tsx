@@ -67,7 +67,7 @@ export function AdminRoomsPage() {
 
     // Pagination states
     const [currentPage, setCurrentPage] = useState(1);
-    const ITEMS_PER_PAGE = 10;
+    const ITEMS_PER_PAGE = 7;
 
     // Create Modal states
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -283,19 +283,33 @@ export function AdminRoomsPage() {
                             </div>
                         )}
 
-                        {/* ── Filter Panel ── */}
-                        <div className="bg-[#F8F9FA] rounded-2xl p-5 border border-[#EBEBEB] mb-6">
-                            <div className="flex items-center gap-2 mb-4 text-[#2D2D2D]">
-                                <Filter className="w-4 h-4 text-[#8B7CF6]" />
-                                <span className="text-sm font-bold">Bộ lọc phòng</span>
+                        {/* ── Toolbar: Search & Filters ── */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                            {/* Search Bar */}
+                            <div className="flex items-center gap-2.5 bg-[#F5F5F8] rounded-xl px-3.5 py-2.5 text-[12.5px] w-full sm:w-80 border border-neutral-200/60 shadow-xs focus-within:border-[#8B7CF6] focus-within:bg-white transition-all">
+                                <Search className="w-4 h-4 shrink-0 text-[#9CA3AF]" />
+                                <input
+                                    type="text"
+                                    placeholder="Tìm theo tên phòng hoặc mã ID..."
+                                    value={searchQuery}
+                                    onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                                    className="bg-transparent flex-1 outline-none text-[#1F2937] placeholder-[#9CA3AF] font-medium"
+                                />
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-[11px] font-bold text-neutral-400 uppercase">Chuyên khoa</label>
+
+                            {/* Inline Filters */}
+                            <div className="flex flex-wrap items-center gap-2.5">
+                                <div className={cn(
+                                    "flex items-center gap-2 bg-[#F5F5F8] border rounded-xl px-3.5 py-2 text-[12.5px] transition-all shadow-xs",
+                                    specialtyFilter !== 'ALL'
+                                        ? "border-[#8B7CF6] bg-[#8B7CF6]/5"
+                                        : "border-neutral-200/60 hover:border-neutral-300 focus-within:border-[#8B7CF6] focus-within:bg-white"
+                                )}>
+                                    <span className="text-[11.5px] font-bold text-neutral-400 uppercase tracking-wider shrink-0">Chuyên khoa:</span>
                                     <select
                                         value={specialtyFilter}
                                         onChange={(e) => { setSpecialtyFilter(e.target.value); setCurrentPage(1); }}
-                                        className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
+                                        className="bg-transparent font-bold text-[#2D2D2D] outline-none cursor-pointer max-w-[200px] truncate pr-1"
                                     >
                                         <option value="ALL">Tất cả chuyên khoa</option>
                                         {specialties.map((sp) => (
@@ -305,19 +319,19 @@ export function AdminRoomsPage() {
                                         ))}
                                     </select>
                                 </div>
-                                <div className="space-y-1">
-                                    <label className="text-[11px] font-bold text-neutral-400 uppercase">Tìm kiếm phòng</label>
-                                    <div className="flex items-center gap-2 bg-white rounded-xl px-3.5 py-2 border border-neutral-200 text-xs">
-                                        <Search className="w-4 h-4 shrink-0 text-[#ADADAD]" />
-                                        <input
-                                            type="text"
-                                            placeholder="Nhập tên phòng hoặc Room ID..."
-                                            value={searchQuery}
-                                            onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                                            className="bg-transparent flex-1 outline-none text-[#2D2D2D] placeholder-[#ADADAD] font-semibold"
-                                        />
-                                    </div>
-                                </div>
+
+                                {(specialtyFilter !== 'ALL' || searchQuery) && (
+                                    <button
+                                        onClick={() => {
+                                            setSpecialtyFilter('ALL');
+                                            setSearchQuery('');
+                                            setCurrentPage(1);
+                                        }}
+                                        className="text-[11.5px] font-bold text-[#8B7CF6] hover:underline cursor-pointer px-2 py-1"
+                                    >
+                                        Xoá lọc
+                                    </button>
+                                )}
                             </div>
                         </div>
 
@@ -336,7 +350,7 @@ export function AdminRoomsPage() {
                                             <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Tên phòng</th>
                                             <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Tên chuyên khoa</th>
                                             <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Mã chuyên khoa</th>
-                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider text-right w-[150px]">Thao tác</th>
+                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider text-right w-[120px]">Thao tác</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-neutral-100">
@@ -348,19 +362,14 @@ export function AdminRoomsPage() {
                                                 <td className="px-5 py-4">
                                                     <div
                                                         onClick={() => router.push(`/admin/rooms/${room.room_id}`)}
-                                                        className="flex items-center gap-3 cursor-pointer group/room"
+                                                        className="flex items-center gap-2.5 cursor-pointer group/room"
                                                     >
-                                                        <div className="w-9 h-9 rounded-xl bg-[#F5F2FF] border border-[#E0DCFB] flex items-center justify-center shrink-0 group-hover/room:bg-[#8B7CF6] transition-colors">
+                                                        <div className="w-8 h-8 rounded-xl bg-[#F5F2FF] border border-[#E0DCFB] flex items-center justify-center shrink-0 group-hover/room:bg-[#8B7CF6] transition-colors">
                                                             <Home className="w-4 h-4 text-[#8B7CF6] group-hover/room:text-white transition-colors" />
                                                         </div>
-                                                        <div>
-                                                            <span className="text-[13px] font-bold text-[#2D2D2D] group-hover/room:text-[#8B7CF6] transition-colors block">
-                                                                {room.room_name}
-                                                            </span>
-                                                            <span className="text-[10px] text-[#8B7CF6] font-semibold opacity-0 group-hover/room:opacity-100 transition-opacity">
-                                                                Xem chi tiết & Ca trực →
-                                                            </span>
-                                                        </div>
+                                                        <span className="text-[13px] font-bold text-[#2D2D2D] group-hover/room:text-[#8B7CF6] transition-colors">
+                                                            {room.room_name}
+                                                        </span>
                                                     </div>
                                                 </td>
                                                 <td className="px-5 py-4">
@@ -372,25 +381,25 @@ export function AdminRoomsPage() {
                                                     {getSpecialtyCode(room, specialties)}
                                                 </td>
                                                 <td className="px-5 py-4">
-                                                    <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <div className="flex items-center justify-end gap-2 text-neutral-400">
                                                         <button
                                                             onClick={() => router.push(`/admin/rooms/${room.room_id}`)}
                                                             title="Xem chi tiết phòng"
-                                                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-400 hover:text-[#8B7CF6] hover:border-[#8B7CF6]/30 hover:bg-[#F5F2FF] transition cursor-pointer"
+                                                            className="p-1 hover:text-[#8B7CF6] transition-colors cursor-pointer"
                                                         >
                                                             <Eye className="w-3.5 h-3.5" />
                                                         </button>
                                                         <button
                                                             onClick={() => openEditModal(room)}
                                                             title="Chỉnh sửa phòng"
-                                                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-400 hover:text-[#8B7CF6] hover:border-[#8B7CF6]/30 hover:bg-[#F5F2FF] transition cursor-pointer"
+                                                            className="p-1 hover:text-[#8B7CF6] transition-colors cursor-pointer"
                                                         >
                                                             <Pencil className="w-3.5 h-3.5" />
                                                         </button>
                                                         <button
                                                             onClick={() => openDeleteModal(room)}
                                                             title="Xóa phòng"
-                                                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition cursor-pointer"
+                                                            className="p-1 text-red-500 hover:text-red-700 transition-colors cursor-pointer"
                                                         >
                                                             <Trash2 className="w-3.5 h-3.5" />
                                                         </button>
@@ -409,51 +418,52 @@ export function AdminRoomsPage() {
                             )}
                         </div>
 
-                        {/* ── Pagination Controls ── */}
-                        {filteredRooms.length > 0 && (
-                            <div className="mt-5 flex items-center justify-between border-t border-neutral-100 pt-4">
-                                <p className="text-[12px] text-[#ADADAD] font-bold">
-                                    Hiển thị {Math.min(filteredRooms.length, (currentPage - 1) * ITEMS_PER_PAGE + 1)} - {Math.min(filteredRooms.length, currentPage * ITEMS_PER_PAGE)} trong số {filteredRooms.length} phòng
-                                </p>
-                                {totalPages > 1 && (
-                                    <div className="flex items-center gap-1">
-                                        <button
-                                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                                            disabled={currentPage === 1}
-                                            className="px-3 py-1.5 text-xs font-bold border border-[#EBEBEB] rounded-lg bg-white text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6] disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
-                                        >
-                                            Trước
-                                        </button>
-                                        {getCompactPages(currentPage, totalPages).map((page, idx) => (
-                                            page === 'ellipsis' ? (
-                                                <span key={`ellipsis-${idx}`} className="px-1 text-sm font-bold text-[#ADADAD] select-none">...</span>
-                                            ) : (
-                                                <button
-                                                    key={page}
-                                                    onClick={() => setCurrentPage(page)}
-                                                    className={cn(
-                                                        'w-8 h-8 flex items-center justify-center text-xs font-bold rounded-lg border transition cursor-pointer',
-                                                        currentPage === page
-                                                            ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white'
-                                                            : 'bg-white border-[#EBEBEB] text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6]'
-                                                    )}
-                                                >
-                                                    {page}
-                                                </button>
-                                            )
-                                        ))}
-                                        <button
-                                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                                            disabled={currentPage === totalPages}
-                                            className="px-3 py-1.5 text-xs font-bold border border-[#EBEBEB] rounded-lg bg-white text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6] disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
-                                        >
-                                            Sau
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        )}
                     </div>
+
+                    {/* ── Fixed Bottom Pagination Controls ── */}
+                    {filteredRooms.length > 0 && (
+                        <div className="px-6 py-4 border-t border-neutral-100 bg-white flex items-center justify-between shrink-0">
+                            <p className="text-[12px] text-[#ADADAD] font-bold">
+                                Hiển thị {Math.min(filteredRooms.length, (currentPage - 1) * ITEMS_PER_PAGE + 1)} - {Math.min(filteredRooms.length, currentPage * ITEMS_PER_PAGE)} trong số {filteredRooms.length} phòng
+                            </p>
+                            {totalPages > 1 && (
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                        disabled={currentPage === 1}
+                                        className="px-3 py-1.5 text-xs font-bold border border-[#EBEBEB] rounded-lg bg-white text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6] disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+                                    >
+                                        Trước
+                                    </button>
+                                    {getCompactPages(currentPage, totalPages).map((page, idx) => (
+                                        page === 'ellipsis' ? (
+                                            <span key={`ellipsis-${idx}`} className="px-1 text-sm font-bold text-[#ADADAD] select-none">...</span>
+                                        ) : (
+                                            <button
+                                                key={page}
+                                                onClick={() => setCurrentPage(page)}
+                                                className={cn(
+                                                    'w-8 h-8 flex items-center justify-center text-xs font-bold rounded-lg border transition cursor-pointer',
+                                                    currentPage === page
+                                                        ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white'
+                                                        : 'bg-white border-[#EBEBEB] text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6]'
+                                                )}
+                                            >
+                                                {page}
+                                            </button>
+                                        )
+                                    ))}
+                                    <button
+                                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                        disabled={currentPage === totalPages}
+                                        className="px-3 py-1.5 text-xs font-bold border border-[#EBEBEB] rounded-lg bg-white text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6] disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+                                    >
+                                        Sau
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
 

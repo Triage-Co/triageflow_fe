@@ -22,6 +22,8 @@ import {
   Save,
   Waypoints,
   Flame,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -95,6 +97,7 @@ export function AdminMapPage() {
   const [editTab, setEditTab] = useState<EditTab>('geometry');
   const [heatmapEnabled, setHeatmapEnabled] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [watchPanelCollapsed, setWatchPanelCollapsed] = useState(false);
   const [startRoomId, setStartRoomId] = useState<string>('');
   const [targetRoomId, setTargetRoomId] = useState<string>('');
   const [pickStep, setPickStep] = useState<'start' | 'target'>('start');
@@ -244,11 +247,6 @@ export function AdminMapPage() {
 
   const heatmap = useQueueHeatmap(heatmapEnabled && mode === 'watch', accessToken);
 
-  const sortedHeatmapRooms = useMemo(
-    () => [...heatmap.rooms].sort((a, b) => b.waiting_count - a.waiting_count),
-    [heatmap.rooms]
-  );
-
   useEffect(() => {
     if (!isFullscreen) return;
     const prev = document.body.style.overflow;
@@ -328,7 +326,7 @@ export function AdminMapPage() {
       if (nodeEditMode || geometryActive) return;
       setInspectedRoomId(roomId);
 
-      if (mode !== 'watch') return;
+      if (mode !== 'watch' || heatmapEnabled) return;
 
       clearRoute();
 
@@ -351,6 +349,15 @@ export function AdminMapPage() {
       nodeEditMode,
       geometryActive,
     ],
+  );
+
+  const handleHoverRoom = useCallback(
+    (roomId: string | null) => {
+      if (heatmapEnabled && mode === 'watch' && roomId) {
+        setInspectedRoomId(roomId);
+      }
+    },
+    [heatmapEnabled, mode],
   );
 
   const handlePlaceNode = useCallback((coords: [number, number]) => {
@@ -754,10 +761,11 @@ export function AdminMapPage() {
     <FloorMap
       floorNumber={1}
       refreshKey={mapRefreshKey}
-      startRoomId={mode === 'watch' ? startRoomId || null : null}
-      targetRoomId={mode === 'watch' ? targetRoomId || null : null}
-      routePath={mode === 'watch' ? routeResult?.path ?? null : null}
+      startRoomId={mode === 'watch' && !heatmapEnabled ? startRoomId || null : null}
+      targetRoomId={mode === 'watch' && !heatmapEnabled ? targetRoomId || null : null}
+      routePath={mode === 'watch' && !heatmapEnabled ? routeResult?.path ?? null : null}
       onSelectRoom={handleSelectRoom}
+      onHoverRoom={handleHoverRoom}
       showNodes={(mode === 'edit' && editTab === 'nodes' && showNodes) || nodeEditMode}
       showWalkable={
         (mode === 'edit' && editTab === 'nodes' && showWalkable) ||
@@ -815,6 +823,8 @@ export function AdminMapPage() {
       onEditorPointerDown={handleEditorPointerDown}
       onEditorPointerMove={handleEditorPointerMove}
       onEditorPointerUp={handleEditorPointerUp}
+      heatmapEnabled={mode === 'watch' && heatmapEnabled}
+      heatmapRooms={heatmap.rooms}
     />
   );
 
@@ -838,25 +848,22 @@ export function AdminMapPage() {
           <Eye className="w-3.5 h-3.5" />
           Watch
         </button>
-        <button
-          type="button"
-          onClick={() => setMode('edit')}
-          className={cn(
-            'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-bold transition-colors cursor-pointer',
-            mode === 'edit'
-              ? 'bg-white text-[#2D2D2D] shadow-sm'
-              : 'text-[#7B7B7B] hover:text-[#2D2D2D]',
-          )}
-        >
-          <Pencil className="w-3.5 h-3.5" />
-          Edit
-        </button>
       </div>
 
       {mode === 'watch' && (
         <button
           type="button"
-          onClick={() => setHeatmapEnabled((v) => !v)}
+          onClick={() => {
+            setHeatmapEnabled((v) => {
+              const next = !v;
+              if (next) {
+                clearRoute();
+                setStartRoomId('');
+                setTargetRoomId('');
+              }
+              return next;
+            });
+          }}
           className={cn(
             'flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-colors cursor-pointer whitespace-nowrap',
             heatmapEnabled
@@ -925,21 +932,50 @@ export function AdminMapPage() {
     </div>
   );
 
-  const watchPanel = (
-    <div className="flex flex-col gap-2 p-3 rounded-xl border border-[#EBEBEB] bg-white/95 backdrop-blur-md shadow-sm">
+  const watchPanel = watchPanelCollapsed ? (
+    <div className="w-[260px] flex items-center justify-between p-2 rounded-xl border border-[#EBEBEB] bg-white/95 backdrop-blur-md shadow-sm">
       <div className="flex items-center gap-2 min-w-0">
-        <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#155DFC] flex items-center justify-center shrink-0">
-          <Route className="w-3.5 h-3.5" />
+        <div className="w-6 h-6 rounded-lg bg-blue-50 text-[#155DFC] flex items-center justify-center shrink-0">
+          <Route className="w-3 h-3" />
         </div>
-        <div className="min-w-0">
-          <p className="text-[11px] font-extrabold text-[#2D2D2D] truncate">
-            Dẫn đường
-          </p>
-          <p className="text-[9px] font-semibold text-[#9C9C9C] truncate">
-            Click phòng hoặc chọn
-            {pickStep === 'start' ? ' · điểm đi' : ' · điểm đến'}
-          </p>
+        <p className="text-[11px] font-extrabold text-[#2D2D2D] truncate">
+          Dẫn đường
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={() => setWatchPanelCollapsed(false)}
+        className="p-1 rounded-md text-[#7B7B7B] hover:text-[#2D2D2D] hover:bg-[#F8F8FB] cursor-pointer"
+        title="Mở rộng dẫn đường"
+      >
+        <ChevronDown className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  ) : (
+    <div className="w-[260px] flex flex-col gap-2 p-3 rounded-xl border border-[#EBEBEB] bg-white/95 backdrop-blur-md shadow-sm">
+      <div className="flex items-center justify-between gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#155DFC] flex items-center justify-center shrink-0">
+            <Route className="w-3.5 h-3.5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-extrabold text-[#2D2D2D] truncate">
+              Dẫn đường
+            </p>
+            <p className="text-[9px] font-semibold text-[#9C9C9C] truncate">
+              Click phòng hoặc chọn
+              {pickStep === 'start' ? ' · điểm đi' : ' · điểm đến'}
+            </p>
+          </div>
         </div>
+        <button
+          type="button"
+          onClick={() => setWatchPanelCollapsed(true)}
+          className="p-1 rounded-md text-[#7B7B7B] hover:text-[#2D2D2D] hover:bg-[#F8F8FB] cursor-pointer shrink-0"
+          title="Thu gọn dẫn đường"
+        >
+          <ChevronUp className="w-3.5 h-3.5" />
+        </button>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -1264,126 +1300,154 @@ export function AdminMapPage() {
 
   const sidePanel =
     mode === 'watch'
-      ? watchPanel
+      ? heatmapEnabled
+        ? null
+        : watchPanel
       : editTab === 'geometry' && !nodeEditMode
         ? geometryPanel
         : nodesPanel;
 
+  const inspectedHeatmapRoom = useMemo(() => {
+    if (!inspectedRoom || !heatmap.rooms.length) return null;
+    return (
+      heatmap.roomsByPhysicalId.get(inspectedRoom.id) ||
+      heatmap.roomsByPhysicalId.get(inspectedRoom.roomCode) ||
+      heatmap.roomsByRoomId.get(inspectedRoom.id) ||
+      heatmap.roomsByRoomId.get(inspectedRoom.roomCode) ||
+      heatmap.rooms.find(
+        (r) =>
+          r.room_name.toLowerCase() === inspectedRoom.roomLabel.toLowerCase() ||
+          r.room_name.toLowerCase() === inspectedRoom.roomCode.toLowerCase(),
+      ) ||
+      null
+    );
+  }, [inspectedRoom, heatmap.rooms, heatmap.roomsByPhysicalId, heatmap.roomsByRoomId]);
+
   const roomInfoPopup = inspectedRoom && !nodeEditMode && !geometryActive && (
-    <div className="absolute top-4 right-4 z-20 pointer-events-auto w-[220px]">
-      <div className="rounded-xl border border-[#EBEBEB] bg-white/95 backdrop-blur-md shadow-md p-3">
-        <div className="flex items-start gap-2">
-          <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#155DFC] flex items-center justify-center shrink-0 mt-0.5">
-            <DoorOpen className="w-3.5 h-3.5" />
+    <div className="absolute top-4 right-4 z-20 pointer-events-auto w-[250px]">
+      <div className="rounded-2xl border border-[#EBEBEB] bg-white/95 backdrop-blur-md shadow-lg p-3.5">
+        <div className="flex items-start gap-2.5">
+          <div
+            className={cn(
+              'w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5',
+              heatmapEnabled
+                ? 'bg-red-50 text-red-500'
+                : 'bg-blue-50 text-[#155DFC]',
+            )}
+          >
+            {heatmapEnabled ? (
+              <Flame className="w-4 h-4" />
+            ) : (
+              <DoorOpen className="w-4 h-4" />
+            )}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-extrabold text-[#2D2D2D] leading-snug break-words">
+            <p className="text-[12px] font-extrabold text-[#2D2D2D] leading-snug break-words">
               {inspectedRoom.roomLabel}
             </p>
-            <p className="text-[10px] font-bold text-[#155DFC] mt-0.5">
-              {inspectedRoom.roomCode}
+            <p className="text-[10.5px] font-bold text-[#7B7B7B] mt-0.5">
+              Mã phòng: <span className="text-[#155DFC]">{inspectedRoom.roomCode}</span>
             </p>
           </div>
           <button
             type="button"
             onClick={() => setInspectedRoomId(null)}
-            className="shrink-0 p-0.5 rounded-md text-[#9C9C9C] hover:text-[#2D2D2D] hover:bg-[#F8F8FB] cursor-pointer"
+            className="shrink-0 p-1 rounded-md text-[#9C9C9C] hover:text-[#2D2D2D] hover:bg-[#F8F8FB] cursor-pointer"
             aria-label="Đóng"
           >
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        <div className="mt-2 pt-2 border-t border-[#F0F0F0] space-y-1">
-          {inspectedAreaLabel && (
-            <div className="flex justify-between gap-2 text-[10px]">
-              <span className="font-semibold text-[#9C9C9C]">Khu vực</span>
-              <span className="font-bold text-[#2D2D2D] text-right truncate">
-                {inspectedAreaLabel}
-              </span>
-            </div>
-          )}
-          {typeof inspectedRoom.heightMeters === 'number' && (
-            <div className="flex justify-between gap-2 text-[10px]">
-              <span className="font-semibold text-[#9C9C9C]">Chiều cao</span>
-              <span className="font-bold text-[#2D2D2D]">
-                {inspectedRoom.heightMeters} m
-              </span>
-            </div>
-          )}
-          <div className="flex justify-between gap-2 text-[10px]">
-            <span className="font-semibold text-[#9C9C9C]">POI</span>
-            <span className="font-bold text-[#2D2D2D]">
-              {inspectedRoom.pois?.length ?? 0}
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+        {heatmapEnabled ? (
+          <div className="mt-3 pt-2.5 border-t border-[#F0F0F0] space-y-2">
+            {inspectedHeatmapRoom ? (
+              <>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold text-[#7B7B7B] uppercase tracking-wider">
+                    Mức độ tải
+                  </span>
+                  <span
+                    className={cn(
+                      'text-[10px] font-extrabold px-2 py-0.5 rounded-full border',
+                      CONGESTION_STYLES[inspectedHeatmapRoom.congestion_level]?.badge ||
+                        'bg-neutral-100 text-neutral-600',
+                    )}
+                  >
+                    {CONGESTION_STYLES[inspectedHeatmapRoom.congestion_level]?.label ||
+                      inspectedHeatmapRoom.congestion_level}
+                  </span>
+                </div>
 
-  const heatmapPanel = heatmapEnabled && mode === 'watch' && (
-    <div className="absolute bottom-4 right-4 z-20 pointer-events-auto w-[260px]">
-      <div className="rounded-xl border border-[#EBEBEB] bg-white/95 backdrop-blur-md shadow-md p-3 flex flex-col gap-2">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-red-50 text-red-500 flex items-center justify-center shrink-0">
-              <Flame className="w-3.5 h-3.5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[11px] font-extrabold text-[#2D2D2D] truncate">Mật độ hàng chờ</p>
-              {heatmap.generatedAt && (
-                <p className="text-[9px] font-semibold text-[#9C9C9C] truncate">
-                  Cập nhật {new Date(heatmap.generatedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                <div className="grid grid-cols-2 gap-1.5 pt-1">
+                  <div className="bg-[#F8F8FB] rounded-xl p-2 text-center border border-neutral-100">
+                    <p className="text-[9px] font-bold text-[#9C9C9C] uppercase">Đang chờ</p>
+                    <p className="text-[14px] font-extrabold text-rose-600 mt-0.5">
+                      {inspectedHeatmapRoom.waiting_count}{' '}
+                      <span className="text-[10px] font-bold text-neutral-400">người</span>
+                    </p>
+                  </div>
+
+                  <div className="bg-[#F8F8FB] rounded-xl p-2 text-center border border-neutral-100">
+                    <p className="text-[9px] font-bold text-[#9C9C9C] uppercase">Chờ ước tính</p>
+                    <p className="text-[14px] font-extrabold text-[#2D2D2D] mt-0.5">
+                      {inspectedHeatmapRoom.eta_full_queue_minutes}{' '}
+                      <span className="text-[10px] font-bold text-neutral-400">phút</span>
+                    </p>
+                  </div>
+                </div>
+
+                {typeof inspectedHeatmapRoom.serving_count === 'number' && (
+                  <div className="flex justify-between items-center text-[10.5px] pt-1 px-1">
+                    <span className="font-semibold text-[#7B7B7B]">Đang khám / xử lý:</span>
+                    <span className="font-bold text-[#2D2D2D]">
+                      {inspectedHeatmapRoom.serving_count} người
+                    </span>
+                  </div>
+                )}
+                {typeof inspectedHeatmapRoom.completed_today === 'number' && (
+                  <div className="flex justify-between items-center text-[10.5px] px-1">
+                    <span className="font-semibold text-[#7B7B7B]">Đã khám xong hôm nay:</span>
+                    <span className="font-bold text-emerald-600">
+                      {inspectedHeatmapRoom.completed_today} ca
+                    </span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="py-2 text-center">
+                <p className="text-[11px] text-[#9C9C9C] font-semibold">
+                  Chưa có dữ liệu hàng chờ cho phòng này.
                 </p>
-              )}
-            </div>
+              </div>
+            )}
           </div>
-          {heatmap.isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-[#8B7CF6] shrink-0" />}
-        </div>
-
-        <div className="flex items-center gap-3">
-          {(Object.keys(CONGESTION_STYLES) as (keyof typeof CONGESTION_STYLES)[]).map((lvl) => (
-            <div key={lvl} className="flex items-center gap-1">
-              <span className={cn('w-2 h-2 rounded-full', CONGESTION_STYLES[lvl].dot)} />
-              <span className="text-[9px] font-bold text-[#7B7B7B]">{CONGESTION_STYLES[lvl].label}</span>
-            </div>
-          ))}
-        </div>
-
-        {heatmap.error && (
-          <p className="text-[10px] font-semibold text-rose-600 bg-rose-50 rounded-lg px-2 py-1.5">{heatmap.error}</p>
-        )}
-
-        <div className="max-h-[32vh] overflow-y-auto space-y-1.5 pr-0.5">
-          {!heatmap.isLoading && !heatmap.error && sortedHeatmapRooms.length === 0 && (
-            <p className="text-[10px] text-[#9C9C9C] font-semibold">Chưa có dữ liệu hàng chờ hôm nay.</p>
-          )}
-          {sortedHeatmapRooms.map((room) => {
-            const style = CONGESTION_STYLES[room.congestion_level];
-            return (
-              <div
-                key={room.room_id}
-                className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg bg-[#F8F8FB]"
-              >
-                <span className="text-[10px] font-bold text-[#2D2D2D] truncate flex-1" title={room.room_name}>
-                  {room.room_name}
-                </span>
-                <span className="text-[9px] font-bold text-[#7B7B7B] shrink-0 whitespace-nowrap">
-                  {room.waiting_count} chờ · {room.eta_full_queue_minutes}p
-                </span>
-                <span
-                  className={cn(
-                    'text-[9px] font-extrabold px-1.5 py-0.5 rounded-full border shrink-0',
-                    style?.badge || 'bg-neutral-50 text-neutral-500 border-neutral-200',
-                  )}
-                >
-                  {style?.label || room.congestion_level}
+        ) : (
+          <div className="mt-2.5 pt-2.5 border-t border-[#F0F0F0] space-y-1.5">
+            {inspectedAreaLabel && (
+              <div className="flex justify-between gap-2 text-[10.5px]">
+                <span className="font-semibold text-[#9C9C9C]">Khu vực</span>
+                <span className="font-bold text-[#2D2D2D] text-right truncate">
+                  {inspectedAreaLabel}
                 </span>
               </div>
-            );
-          })}
-        </div>
+            )}
+            {typeof inspectedRoom.heightMeters === 'number' && (
+              <div className="flex justify-between gap-2 text-[10.5px]">
+                <span className="font-semibold text-[#9C9C9C]">Chiều cao</span>
+                <span className="font-bold text-[#2D2D2D]">
+                  {inspectedRoom.heightMeters} m
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between gap-2 text-[10.5px]">
+              <span className="font-semibold text-[#9C9C9C]">POI</span>
+              <span className="font-bold text-[#2D2D2D]">
+                {inspectedRoom.pois?.length ?? 0}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1477,14 +1541,13 @@ export function AdminMapPage() {
             {editTabBar}
           </div>
 
-          <div className="w-0 min-w-full max-h-[55vh] overflow-y-auto overflow-x-hidden">
+          <div className="w-fit max-w-[calc(100vw-32px)] max-h-[55vh] overflow-y-auto overflow-x-hidden">
             {sidePanel}
           </div>
         </div>
       </div>
 
       {roomInfoPopup}
-      {heatmapPanel}
       {saveFab}
     </div>
   );

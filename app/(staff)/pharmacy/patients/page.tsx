@@ -7,6 +7,10 @@ import { Prescription, PrescriptionStatusEnum } from '@/shared/types/prescriptio
 import { pharmacyService } from '@/modules/ancillary/services/pharmacyService';
 
 export default function PharmacyPatientsPage() {
+    const [selectedDate, setSelectedDate] = useState<string>(() => {
+        const today = new Date();
+        return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    });
     const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
     const [loading, setLoading] = useState(true);
     const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -14,10 +18,12 @@ export default function PharmacyPatientsPage() {
     const [toastMessage, setToastMessage] = useState<string | null>(null);
     const [statusFilter, setStatusFilter] = useState<PrescriptionStatusEnum | 'ALL'>('ALL');
 
-    const fetchPatientsList = async () => {
+    const fetchPatientsList = async (dateToFetch = selectedDate) => {
         setLoading(true);
         try {
-            const list = await pharmacyService.getPrescriptions();
+            const list = await pharmacyService.getPrescriptions({
+                date: dateToFetch || undefined
+            });
             setPrescriptions(list);
         } catch (err) {
             console.error('[PharmacyPatientsPage] Failed to fetch list:', err);
@@ -27,8 +33,8 @@ export default function PharmacyPatientsPage() {
     };
 
     useEffect(() => {
-        fetchPatientsList();
-    }, []);
+        fetchPatientsList(selectedDate);
+    }, [selectedDate]);
 
     const showToast = (msg: string) => {
         setToastMessage(msg);
@@ -133,14 +139,27 @@ export default function PharmacyPatientsPage() {
                         </p>
                     </div>
 
-                    <button
-                        onClick={fetchPatientsList}
-                        disabled={loading}
-                        className="px-4 py-2 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 text-neutral-700 dark:text-neutral-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 self-start sm:self-auto cursor-pointer"
-                    >
-                        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                        <span>Làm mới danh sách</span>
-                    </button>
+                    <div className="flex items-center gap-2 self-start sm:self-auto">
+                        <input
+                            type="date"
+                            value={selectedDate}
+                            onChange={(e) => {
+                                const newDate = e.target.value;
+                                setSelectedDate(newDate);
+                                fetchPatientsList(newDate);
+                            }}
+                            className="px-3 py-2 bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl text-xs font-semibold text-neutral-700 dark:text-neutral-300 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-2xs"
+                            title="Lọc theo ngày"
+                        />
+                        <button
+                            onClick={() => fetchPatientsList(selectedDate)}
+                            disabled={loading}
+                            className="px-4 py-2 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 text-neutral-700 dark:text-neutral-300 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer"
+                        >
+                            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                            <span>Làm mới danh sách</span>
+                        </button>
+                    </div>
                 </div>
 
                 {/* Search Bar & Status Filters */}

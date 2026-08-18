@@ -107,7 +107,7 @@ export function AdminRoomDetailPage() {
             if (rooms.length === 0) fetchRooms(accessToken);
             if (specialties.length === 0) fetchSpecialties(accessToken);
             if (shifts.length === 0) fetchShifts(accessToken);
-            if (staffs.length === 0) fetchStaffs(accessToken, { mergeAccounts: true });
+            if (staffs.length === 0) fetchStaffs(accessToken);
         }
     }, [accessToken, rooms.length, specialties.length, shifts.length, staffs.length, fetchRooms, fetchSpecialties, fetchShifts, fetchStaffs]);
 
