@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
     User,
     Lock,
@@ -14,15 +14,42 @@ import {
     RotateCcw,
     AlertCircle,
     KeyRound,
+    Calendar,
+    Clock,
+    MapPin,
+    Shield,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
-import { Gender } from '@/shared/types/auth.types';
+import type { Gender } from '@/shared/types/auth.types';
 import { uploadImageToCloudinary } from '@/shared/services/cloudinaryService';
 import { authService } from '@/modules/auth/services/authService';
-import { labService } from '../services/labService';
-import { ShiftInfo } from '../types/lab.types';
+import { labService } from '@/modules/lab/services/labService';
+import type { ShiftInfo } from '@/modules/lab/types/lab.types';
 
-export default function LabSettingsView() {
+const ROLE_LABELS: Record<string, string> = {
+    RECEPTIONIST: 'Nhân viên Lễ tân',
+    DOCTOR: 'Bác sĩ',
+    NURSE: 'Điều dưỡng / Y tá',
+    ADMIN: 'Quản trị viên',
+    LAB_STAFF: 'Kỹ thuật viên Xét nghiệm',
+    LAB_TECHNICIAN: 'Kỹ thuật viên Xét nghiệm',
+    PHARMACY_STAFF: 'Dược sĩ',
+    PHARMACIST: 'Dược sĩ',
+    PHARMACY: 'Dược sĩ',
+    CASHIER: 'Nhân viên Thu ngân',
+    USER: 'Bệnh nhân',
+};
+
+export function getRoleDisplayName(role?: string): string {
+    if (!role) return 'Nhân viên Y tế';
+    const key = role.trim().toUpperCase().replace(/^ROLE_/, '');
+    if (key === 'DOCTOR' && typeof window !== 'undefined' && localStorage.getItem('tfopd_active_room_type') === 'PROCEDURE_ROOM') {
+        return 'Bác sĩ Thủ thuật';
+    }
+    return ROLE_LABELS[key] || role;
+}
+
+export default function StaffSettingsView() {
     const { profile, fetchProfile, updateProfile, accessToken, error } = useAuthStore();
 
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -32,7 +59,7 @@ export default function LabSettingsView() {
     const [isLoadingShifts, setIsLoadingShifts] = useState(false);
 
     // Định dạng ngày hiện tại YYYY-MM-DD
-    const todayStr = React.useMemo(() => {
+    const todayStr = useMemo(() => {
         const d = new Date();
         const year = d.getFullYear();
         const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -53,7 +80,6 @@ export default function LabSettingsView() {
 
     // ── Đổi mật khẩu state ──
     const [showChangePassword, setShowChangePassword] = useState(false);
-    // step: 'send_otp' | 'verify' | 'success'
     const [pwStep, setPwStep] = useState<'send_otp' | 'verify' | 'success'>('send_otp');
     const [otp, setOtp] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -68,7 +94,7 @@ export default function LabSettingsView() {
     useEffect(() => {
         if (accessToken) {
             fetchProfile(accessToken).catch((err) => {
-                console.error('Failed to fetch profile:', err);
+                console.error('[StaffSettingsView] Failed to fetch profile:', err);
             });
         }
     }, [accessToken, fetchProfile]);
@@ -76,15 +102,24 @@ export default function LabSettingsView() {
     useEffect(() => {
         if (accessToken) {
             setIsLoadingShifts(true);
-            labService.getMyShifts(todayStr)
+            labService
+                .getMyShifts(todayStr)
                 .then((shifts) => {
-                    const labShift = shifts.find(s => s.room?.room_type === 'LABORATORY' || s.room?.room_type === 'PROCEDURE_ROOM') || shifts[0];
-                    if (labShift) {
-                        setActiveShift(labShift);
+                    if (Array.isArray(shifts) && shifts.length > 0) {
+                        const shift =
+                            shifts.find(
+                                (s) =>
+                                    s.room?.room_type === 'LABORATORY' ||
+                                    s.room?.room_type === 'PROCEDURE_ROOM' ||
+                                    s.room?.room_type === 'EXAMINATION_ROOM',
+                            ) || shifts[0];
+                        if (shift) {
+                            setActiveShift(shift);
+                        }
                     }
                 })
                 .catch((err) => {
-                    console.error('Failed to fetch shifts:', err);
+                    console.error('[StaffSettingsView] Failed to fetch shifts:', err);
                 })
                 .finally(() => {
                     setIsLoadingShifts(false);
@@ -117,8 +152,8 @@ export default function LabSettingsView() {
             const url = await uploadImageToCloudinary(file);
             setAvatar(url);
         } catch (err) {
-            console.error('Failed to upload image:', err);
-            setErrorMessage('Tải ảnh lên thất bại, vui lòng thử lại.');
+            console.error('[StaffSettingsView] Failed to upload image:', err);
+            setErrorMessage('Tải ảnh đại diện lên thất bại, vui lòng thử lại.');
         } finally {
             setIsUploading(false);
         }
@@ -130,17 +165,20 @@ export default function LabSettingsView() {
         setIsSaving(true);
         setErrorMessage(null);
         try {
-            await updateProfile({
-                user_name: userName,
-                gender,
-                phone,
-                avatar
-            }, accessToken);
+            await updateProfile(
+                {
+                    user_name: userName,
+                    gender,
+                    phone,
+                    avatar,
+                },
+                accessToken,
+            );
 
             setSaveToast(true);
             setTimeout(() => setSaveToast(false), 3500);
         } catch (err) {
-            console.error('Failed to update profile:', err);
+            console.error('[StaffSettingsView] Failed to update profile:', err);
             setErrorMessage(error || 'Có lỗi xảy ra khi lưu thông tin.');
         } finally {
             setIsSaving(false);
@@ -151,7 +189,6 @@ export default function LabSettingsView() {
 
     const handleToggleChangePassword = () => {
         setShowChangePassword((v) => !v);
-        // reset form khi mở lại
         setPwStep('send_otp');
         setOtp('');
         setNewPassword('');
@@ -226,6 +263,8 @@ export default function LabSettingsView() {
         }
     };
 
+    const roleName = getRoleDisplayName(profile?.role);
+
     return (
         <div className="flex-1 flex flex-col overflow-y-auto bg-white rounded-tl-4xl rounded-bl-4xl p-6 md:p-10 relative">
             <div className="max-w-4xl w-full mx-auto space-y-8 pb-20">
@@ -238,19 +277,20 @@ export default function LabSettingsView() {
                 )}
 
                 {/* ── Header ── */}
-                <div className="flex justify-between items-start">
+                <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                     <div>
                         <h1 className="text-2xl lg:text-3xl font-extrabold text-slate-800 tracking-tight">
                             Thông tin cá nhân
                         </h1>
                         <p className="text-xs lg:text-sm text-slate-400 font-medium mt-1">
-                            Xem và chỉnh sửa thông tin tài khoản của bạn
+                            Xem và chỉnh sửa thông tin cá nhân, ca làm việc
                         </p>
                     </div>
                     {profile?.role && (
-                        <div className="flex flex-col items-end gap-1.5 text-right shrink-0">
-                            <span className="px-3 py-1.5 bg-[#8B7CF6]/10 text-[#8B7CF6] rounded-full text-[11px] font-bold tracking-wide">
-                                {profile.role === 'LAB_TECHNICIAN' || (profile.role === 'DOCTOR' && typeof window !== 'undefined' && localStorage.getItem('tfopd_active_room_type') === 'PROCEDURE_ROOM') ? 'Kỹ thuật viên Xét nghiệm' : 'Nhân viên Xét nghiệm'}
+                        <div className="flex flex-col sm:items-end gap-1.5 sm:text-right shrink-0">
+                            <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#8B7CF6]/10 text-[#8B7CF6] border border-[#8B7CF6]/20 rounded-full text-[11.5px] font-bold tracking-wide">
+                                <Shield className="w-3.5 h-3.5" />
+                                {roleName}
                             </span>
                             {isLoadingShifts ? (
                                 <div className="space-y-1 mt-1 flex flex-col items-end">
@@ -258,18 +298,20 @@ export default function LabSettingsView() {
                                     <div className="h-2.5 w-24 bg-slate-100 animate-pulse rounded" />
                                 </div>
                             ) : activeShift ? (
-                                <div className="mt-1 text-right">
-                                    <p className="text-[11.5px] font-extrabold text-slate-700">
-                                        Ca trực: {activeShift.room?.room_name || 'Phòng xét nghiệm'}
+                                <div className="mt-1 sm:text-right bg-[#FAF9FF] border border-[#8B7CF6]/10 p-2.5 rounded-xl">
+                                    <p className="text-[11.5px] font-extrabold text-slate-700 flex items-center sm:justify-end gap-1.5">
+                                        <MapPin className="w-3 h-3 text-[#8B7CF6]" />
+                                        Ca trực: {activeShift.room?.room_name || 'Phòng làm việc'}
                                     </p>
-                                    <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                                        Giờ trực: {activeShift.start_time} - {activeShift.end_time} • Ngày: {activeShift.date}
+                                    <p className="text-[10.5px] text-slate-500 font-semibold mt-0.5 flex items-center sm:justify-end gap-1.5">
+                                        <Clock className="w-3 h-3 text-[#8B7CF6]" />
+                                        {activeShift.start_time} – {activeShift.end_time} • Ngày {activeShift.date}
                                     </p>
                                 </div>
                             ) : (
-                                <div className="mt-1 text-right">
-                                    <p className="text-[11.5px] font-extrabold text-rose-500">
-                                        Không có ca trực hôm nay
+                                <div className="mt-1 sm:text-right">
+                                    <p className="text-[11px] font-semibold text-slate-400">
+                                        Không có ca trực được xếp hôm nay
                                     </p>
                                 </div>
                             )}
@@ -278,8 +320,9 @@ export default function LabSettingsView() {
                 </div>
 
                 {errorMessage && (
-                    <div className="bg-red-55 border border-red-200 text-red-705 rounded-[14px] p-4 text-xs font-bold">
-                        {errorMessage}
+                    <div className="bg-red-50 border border-red-200 text-red-700 rounded-[14px] p-4 text-xs font-bold flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                        <span>{errorMessage}</span>
                     </div>
                 )}
 
@@ -296,7 +339,7 @@ export default function LabSettingsView() {
                             {avatar ? (
                                 <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
                             ) : (
-                                <User className="w-10 h-10 text-slate-350" />
+                                <User className="w-10 h-10 text-slate-300" />
                             )}
                             {isUploading && (
                                 <div className="absolute inset-0 bg-black/45 flex items-center justify-center">
@@ -335,36 +378,28 @@ export default function LabSettingsView() {
                     {/* 2x2 Input Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                         <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-600">Tên người dùng</label>
+                            <label className="text-xs font-bold text-slate-600">Họ và tên</label>
                             <input
                                 type="text"
                                 value={userName}
                                 onChange={(e) => setUserName(e.target.value)}
                                 className="w-full bg-slate-50 border border-slate-200 rounded-[14px] px-4 py-3 text-xs font-bold text-slate-800 focus:outline-none focus:border-[#8B7CF6] focus:bg-white transition"
+                                placeholder="Nhập họ và tên..."
                             />
                         </div>
 
                         <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-600">Vai trò</label>
+                            <label className="text-xs font-bold text-slate-600">Vai trò chức danh</label>
                             <input
                                 type="text"
-                                value={
-                                    profile?.role === 'LAB_TECHNICIAN' ||
-                                    (profile?.role === 'DOCTOR' &&
-                                        typeof window !== 'undefined' &&
-                                        localStorage.getItem('tfopd_active_room_type') === 'PROCEDURE_ROOM')
-                                        ? 'Kỹ thuật viên Xét nghiệm'
-                                        : profile?.role === 'LAB_STAFF'
-                                            ? 'Nhân viên Xét nghiệm'
-                                            : profile?.role || '—'
-                                }
+                                value={roleName}
                                 readOnly
                                 className="w-full bg-slate-100 border border-slate-200 rounded-[14px] px-4 py-3 text-xs font-semibold text-slate-500 cursor-not-allowed outline-none"
                             />
                         </div>
 
                         <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-600">Email</label>
+                            <label className="text-xs font-bold text-slate-600">Email tài khoản</label>
                             <input
                                 type="email"
                                 value={profile?.email || ''}
@@ -380,6 +415,7 @@ export default function LabSettingsView() {
                                 value={phone}
                                 onChange={(e) => setPhone(e.target.value)}
                                 className="w-full bg-slate-50 border border-slate-200 rounded-[14px] px-4 py-3 text-xs font-bold text-slate-800 focus:outline-none focus:border-[#8B7CF6] focus:bg-white transition"
+                                placeholder="Nhập số điện thoại..."
                             />
                         </div>
 
@@ -398,11 +434,11 @@ export default function LabSettingsView() {
                     </div>
                 </div>
 
-                {/* ── Section 2: 🔒 Bảo mật ── */}
+                {/* ── Section 2: 🔒 Bảo mật & Đổi mật khẩu ── */}
                 <div className="bg-white rounded-[24px] border border-slate-200/80 p-6 md:p-8 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.03)] space-y-4">
                     <div className="flex items-center gap-2 mb-2">
                         <Lock className="w-5 h-5 text-[#8B7CF6]" />
-                        <h3 className="font-bold text-slate-800 text-base">Bảo mật</h3>
+                        <h3 className="font-bold text-slate-800 text-base">Bảo mật tài khoản</h3>
                     </div>
 
                     {/* Toggle button */}
@@ -414,7 +450,7 @@ export default function LabSettingsView() {
                         <div className="flex items-center gap-2.5">
                             <KeyRound className="w-4 h-4 text-[#8B7CF6]" />
                             <span className="text-xs font-bold text-slate-700 group-hover:text-[#8B7CF6] transition">
-                                Đổi mật khẩu
+                                Đổi mật khẩu qua mã xác thực Email OTP
                             </span>
                         </div>
                         <ChevronDown
@@ -425,7 +461,6 @@ export default function LabSettingsView() {
                     {/* Inline change password panel */}
                     {showChangePassword && (
                         <div className="rounded-[18px] border border-slate-200/80 bg-slate-50/50 p-5 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-
                             {/* ── SUCCESS ── */}
                             {pwStep === 'success' && (
                                 <div className="flex flex-col items-center gap-3 py-4 text-center">
@@ -437,7 +472,7 @@ export default function LabSettingsView() {
                                     <button
                                         type="button"
                                         onClick={handleToggleChangePassword}
-                                        className="mt-1 text-xs font-bold text-[#8B7CF6] hover:underline"
+                                        className="mt-1 text-xs font-bold text-[#8B7CF6] hover:underline cursor-pointer"
                                     >
                                         Đóng
                                     </button>
@@ -464,7 +499,7 @@ export default function LabSettingsView() {
                                         type="button"
                                         onClick={handleSendOtp}
                                         disabled={pwLoading}
-                                        className="flex items-center justify-center gap-2 w-full py-2.5 rounded-[12px] bg-[#8B7CF6] hover:bg-[#7C6CF5] text-white text-xs font-bold transition disabled:opacity-60 cursor-pointer"
+                                        className="flex items-center justify-center gap-2 w-full py-2.5 rounded-[12px] bg-[#8B7CF6] hover:bg-[#7C6CF5] text-white text-xs font-bold transition disabled:opacity-60 cursor-pointer shadow-xs"
                                     >
                                         {pwLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                                         {pwLoading ? 'Đang gửi mã OTP...' : 'Gửi mã OTP xác thực'}
@@ -529,7 +564,7 @@ export default function LabSettingsView() {
                                                 type="button"
                                                 tabIndex={-1}
                                                 onClick={() => setShowNewPw((v) => !v)}
-                                                className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400 hover:text-slate-600"
+                                                className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400 hover:text-slate-600 cursor-pointer"
                                             >
                                                 {showNewPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                             </button>
@@ -552,7 +587,7 @@ export default function LabSettingsView() {
                                                 type="button"
                                                 tabIndex={-1}
                                                 onClick={() => setShowConfirmPw((v) => !v)}
-                                                className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400 hover:text-slate-600"
+                                                className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-400 hover:text-slate-600 cursor-pointer"
                                             >
                                                 {showConfirmPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                             </button>
@@ -564,7 +599,7 @@ export default function LabSettingsView() {
                                         <button
                                             type="submit"
                                             disabled={pwLoading || otp.length !== 8 || !newPassword || !confirmNewPassword}
-                                            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-[12px] bg-[#8B7CF6] hover:bg-[#7C6CF5] text-white text-xs font-bold transition disabled:opacity-60 cursor-pointer"
+                                            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-[12px] bg-[#8B7CF6] hover:bg-[#7C6CF5] text-white text-xs font-bold transition disabled:opacity-60 cursor-pointer shadow-xs"
                                         >
                                             {pwLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                                             {pwLoading ? 'Đang cập nhật...' : 'Xác nhận đổi mật khẩu'}
@@ -577,12 +612,13 @@ export default function LabSettingsView() {
                                             type="button"
                                             onClick={handleResendOtp}
                                             disabled={pwResending || pwLoading}
-                                            className="inline-flex items-center gap-1 text-xs font-bold text-[#8B7CF6] hover:underline disabled:opacity-50 transition"
+                                            className="inline-flex items-center gap-1 text-xs font-bold text-[#8B7CF6] hover:underline disabled:opacity-50 transition cursor-pointer"
                                         >
-                                            {pwResending
-                                                ? <Loader2 className="w-3 h-3 animate-spin" />
-                                                : <RotateCcw className="w-3 h-3" />
-                                            }
+                                            {pwResending ? (
+                                                <Loader2 className="w-3 h-3 animate-spin" />
+                                            ) : (
+                                                <RotateCcw className="w-3 h-3" />
+                                            )}
                                             Gửi lại mã OTP
                                         </button>
                                     </div>

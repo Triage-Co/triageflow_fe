@@ -1,14 +1,7 @@
 import { create } from 'zustand';
-import { TicketData, PaymentBill, PaymentMethod, RouteStepItem } from '../types/kiosk.types';
-import { BookingPaymentData } from '../types/booking.types';
-import { PendingPaymentStep, ServiceOrder, TransactionQrResult } from '../types/flow.types';
-
 import { TicketSlice, createTicketSlice } from './ticketSlice';
 import { BillPaymentSlice, createBillPaymentSlice } from './billPaymentSlice';
 import { ServiceOrderSlice, createServiceOrderSlice } from './serviceOrderSlice';
-import { useKioskStore } from './kioskStore';
-import { useAuthStore } from './authStore';
-import { flowService } from '../services/flowService';
 
 export interface FlowStoreState extends TicketSlice, BillPaymentSlice, ServiceOrderSlice {
   resetFlow: () => void;

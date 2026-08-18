@@ -4,25 +4,6 @@ import {
     CreatePrescriptionDto,
     PrescriptionStatusEnum
 } from '@/shared/types/prescription.types';
-import { MOCK_MEDICINES } from './medicineService';
-
-// Default patient names mapped by code if API returns missing patient names
-const CODE_PATIENT_MAP: Record<string, { name: string; code: string }> = {
-    'RX-20260731-0010': { name: 'Nguyễn Văn Đức', code: 'BN-0010' },
-    'RX-20260731-0009': { name: 'Phạm Thu Hà', code: 'BN-0009' },
-    'RX-20260731-0008': { name: 'Trần Quốc Bảo', code: 'BN-0008' },
-    'RX-20260731-0007': { name: 'Lê Hoàng Yến', code: 'BN-0007' },
-    'RX-20260731-0006': { name: 'Vũ Đăng Khoa', code: 'BN-0006' },
-    'RX-20260731-0005': { name: 'Đặng Minh Châu', code: 'BN-0005' },
-    'RX-20260731-0004': { name: 'Ngô Khánh Linh', code: 'BN-0004' },
-    'RX-20260731-0003': { name: 'Bùi Hoàng Nam', code: 'BN-0003' },
-    'RX-20260731-0002': { name: 'Đỗ Phương Thảo', code: 'BN-0002' },
-    'RX-20260731-0001': { name: 'Nguyễn Thanh Tùng', code: 'BN-0001' },
-    'RX-20260730-8842': { name: 'Nguyễn Thị Hoa', code: 'BN-08842' },
-    'RX-20260730-9104': { name: 'Lê Văn Tuấn', code: 'BN-09104' },
-    'RX-20260730-7452': { name: 'Trần Thị Mai', code: 'BN-07452' },
-    'RX-20260730-3321': { name: 'Hoàng Minh Trí', code: 'BN-03321' },
-};
 
 const STATUS_OVERRIDE_KEY = 'triageflow_prescription_status_overrides';
 
@@ -53,10 +34,11 @@ export function saveStatusOverride(idOrCode: string, status: PrescriptionStatusE
     }
 }
 
-function normalizePrescription(item: any): Prescription {
+export function normalizePrescription(item: any): Prescription {
+    if (!item) return {} as Prescription;
+
     const rxCode = item.prescription_code || item.code || '';
     const rxId = item.prescription_id || item.id || '';
-    const mapFallback = CODE_PATIENT_MAP[rxCode] || { name: item.patient_name || 'Bệnh nhân', code: item.patient_code || 'BN-OPD' };
 
     // Apply status overrides if present in localStorage
     const overrides = getStatusOverrides();
@@ -75,359 +57,76 @@ function normalizePrescription(item: any): Prescription {
         item.patient?.full_name ||
         item.serviceOrder?.patient?.full_name ||
         item.patient_name ||
-        mapFallback.name;
+        '';
 
     const patientCode =
         item.visitSession?.patient?.patient_code ||
         item.patient?.patient_code ||
         item.patient_code ||
-        mapFallback.code;
+        '';
 
     const doctorName =
         item.doctor?.full_name ||
         item.prescribed_by_name ||
-        'BS. Nguyễn Thế Hiển';
+        item.prescribed_by ||
+        '';
 
-    let details =
+    const rawDetails =
         (Array.isArray(item.prescriptionDetails) && item.prescriptionDetails.length > 0) ? item.prescriptionDetails
         : (Array.isArray(item.details) && item.details.length > 0) ? item.details
         : (Array.isArray(item.prescription_details) && item.prescription_details.length > 0) ? item.prescription_details
         : (Array.isArray(item.items) && item.items.length > 0) ? item.items
         : [];
 
-    if (details.length === 0) {
-        details = [
-            {
-                prescription_detail_id: `dt-${rxCode || Date.now()}-1`,
-                medicine_id: 'med-1',
-                quantity: 14,
-                dosage_instruction: 'Sáng 1 viên, tối 1 viên sau ăn 30 phút',
-                unit_price: 15000,
-                sub_total: 210000,
-                medicine: {
-                    medicine_name: 'Amoxicillin 500mg',
-                    active_ingredient: 'Amoxicillin Trihydrate',
-                    unit: 'Viên',
-                    unit_price: 15000
-                }
-            },
-            {
-                prescription_detail_id: `dt-${rxCode || Date.now()}-2`,
-                medicine_id: 'med-2',
-                quantity: 10,
-                dosage_instruction: 'Uống 1 viên khi sốt trên 38.5°C hoặc đau nhẹ',
-                unit_price: 18000,
-                sub_total: 180000,
-                medicine: {
-                    medicine_name: 'Paracetamol Extra 500mg',
-                    active_ingredient: 'Paracetamol + Caffeine',
-                    unit: 'Viên',
-                    unit_price: 18000
-                }
-            }
-        ];
-    }
+    const details = rawDetails.map((d: any, idx: number) => ({
+        prescription_detail_id: d.prescription_detail_id || d.id || `detail-${idx}`,
+        medicine_id: d.medicine_id || d.medicine?.medicine_id || '',
+        quantity: d.quantity || 0,
+        dosage_instruction: d.dosage_instruction || d.usage || '',
+        note: d.note || '',
+        unit_price: d.unit_price || d.medicine?.unit_price || 0,
+        sub_total: d.sub_total || ((d.quantity || 0) * (d.unit_price || d.medicine?.unit_price || 0)),
+        medicine: d.medicine || {
+            medicine_id: d.medicine_id || '',
+            medicine_name: d.medicine_name || d.name || 'Thuốc kê đơn',
+            active_ingredient: d.active_ingredient || '',
+            unit: d.unit || 'Viên',
+            unit_price: d.unit_price || 0
+        }
+    }));
+
+    const calculatedTotal = details.reduce((sum: number, d: any) => sum + (d.sub_total || 0), 0);
 
     return {
         ...item,
-        prescription_id: item.prescription_id || item.id || `rx-${rxCode || Date.now()}`,
-        prescription_code: rxCode || `RX-${Date.now()}`,
-        // Compat: SO may be nested or omitted on some list payloads
+        prescription_id: rxId,
+        prescription_code: rxCode,
         service_order_id:
             item.service_order_id ||
             item.serviceOrder?.service_order_id ||
             item.service_order?.service_order_id ||
             '',
+        visit_session_id: item.visit_session_id || item.visitSession?.visit_session_id || '',
+        prescribed_by: item.prescribed_by || '',
         patient_name: patientName,
         patient_code: patientCode,
         prescribed_by_name: doctorName,
+        diagnosis_note: item.diagnosis_note || '',
         status: effectiveStatus,
-        total_amount: item.total_amount || details.reduce((sum: number, d: any) => sum + (d.sub_total || 0), 0) || 390000,
+        total_amount: item.total_amount !== undefined && item.total_amount !== null ? item.total_amount : calculatedTotal,
         prescriptionDetails: details
     };
 }
 
-export const MOCK_PRESCRIPTIONS: Prescription[] = [
-    {
-        prescription_id: 'rx-10',
-        prescription_code: 'RX-20260731-0010',
-        qr_code: '{"code":"RX-20260731-0010","total_amount":60000}',
-        service_order_id: 'so-10',
-        visit_session_id: 'sess-10',
-        prescribed_by: 'doc-1',
-        prescribed_by_name: 'BS. Nguyễn Thế Hiển',
-        patient_name: 'Nguyễn Văn Đức',
-        patient_code: 'BN-0010',
-        diagnosis_note: 'Viêm xoang mũi cấp. Tái khám sau 5 ngày.',
-        total_amount: 60000,
-        status: 'CANCELLED',
-        created_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-        updated_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-        prescriptionDetails: [
-            {
-                prescription_detail_id: 'dt-10-1',
-                medicine_id: 'med-1',
-                quantity: 12,
-                dosage_instruction: 'Sáng 1 viên, tối 1 viên sau ăn',
-                unit_price: 5000,
-                sub_total: 60000,
-                medicine: MOCK_MEDICINES[0]
-            }
-        ]
-    },
-    {
-        prescription_id: 'rx-9',
-        prescription_code: 'RX-20260731-0009',
-        qr_code: '{"code":"RX-20260731-0009","total_amount":75000}',
-        service_order_id: 'so-9',
-        visit_session_id: 'sess-9',
-        prescribed_by: 'doc-1',
-        prescribed_by_name: 'BS. Nguyễn Thế Hiển',
-        patient_name: 'Phạm Thu Hà',
-        patient_code: 'BN-0009',
-        diagnosis_note: 'Cảm cúm nhẹ, nghẹt mũi.',
-        total_amount: 75000,
-        status: 'EXPIRED',
-        created_at: new Date(Date.now() - 25 * 3600 * 1000).toISOString(),
-        updated_at: new Date(Date.now() - 25 * 3600 * 1000).toISOString(),
-        prescriptionDetails: [
-            {
-                prescription_detail_id: 'dt-9-1',
-                medicine_id: 'med-1',
-                quantity: 15,
-                dosage_instruction: 'Sáng 1 viên, tối 1 viên sau ăn',
-                unit_price: 5000,
-                sub_total: 75000,
-                medicine: MOCK_MEDICINES[0]
-            }
-        ]
-    },
-    {
-        prescription_id: 'rx-8',
-        prescription_code: 'RX-20260731-0008',
-        qr_code: '{"code":"RX-20260731-0008","total_amount":151000}',
-        service_order_id: 'so-8',
-        visit_session_id: 'sess-8',
-        prescribed_by: 'doc-2',
-        prescribed_by_name: 'BS. Trần Văn Nam',
-        patient_name: 'Trần Quốc Bảo',
-        patient_code: 'BN-0008',
-        diagnosis_note: 'Trào ngược dạ dày thực quản nhẹ.',
-        total_amount: 151000,
-        status: 'DISPENSED',
-        created_at: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
-        updated_at: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
-        prescriptionDetails: [
-            {
-                prescription_detail_id: 'dt-8-1',
-                medicine_id: 'med-2',
-                quantity: 7,
-                dosage_instruction: 'Sáng 1 viên trước ăn 30 phút',
-                unit_price: 18500,
-                sub_total: 129500,
-                medicine: MOCK_MEDICINES[1]
-            }
-        ]
-    },
-    {
-        prescription_id: 'rx-7',
-        prescription_code: 'RX-20260731-0007',
-        qr_code: '{"code":"RX-20260731-0007","total_amount":95000}',
-        service_order_id: 'so-7',
-        visit_session_id: 'sess-7',
-        prescribed_by: 'doc-1',
-        prescribed_by_name: 'BS. Nguyễn Thế Hiển',
-        patient_name: 'Lê Hoàng Yến',
-        patient_code: 'BN-0007',
-        diagnosis_note: 'Viêm họng mạn tính.',
-        total_amount: 95000,
-        status: 'PREPARED',
-        created_at: new Date(Date.now() - 18 * 60 * 1000).toISOString(),
-        updated_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-        prescriptionDetails: [
-            {
-                prescription_detail_id: 'dt-7-1',
-                medicine_id: 'med-3',
-                quantity: 10,
-                dosage_instruction: 'Uống 1 gói sau ăn',
-                unit_price: 9500,
-                sub_total: 95000,
-                medicine: MOCK_MEDICINES[2]
-            }
-        ]
-    },
-    {
-        prescription_id: 'rx-6',
-        prescription_code: 'RX-20260731-0006',
-        qr_code: '{"code":"RX-20260731-0006","total_amount":291000}',
-        service_order_id: 'so-6',
-        visit_session_id: 'sess-6',
-        prescribed_by: 'doc-2',
-        prescribed_by_name: 'BS. Trần Văn Nam',
-        patient_name: 'Vũ Đăng Khoa',
-        patient_code: 'BN-0006',
-        diagnosis_note: 'Viêm dạ dày hp dương tính.',
-        total_amount: 291000,
-        status: 'PROCESSING',
-        created_at: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
-        updated_at: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
-        prescriptionDetails: [
-            {
-                prescription_detail_id: 'dt-6-1',
-                medicine_id: 'med-2',
-                quantity: 14,
-                dosage_instruction: 'Sáng 1 viên trước ăn 30 phút',
-                unit_price: 18500,
-                sub_total: 259000,
-                medicine: MOCK_MEDICINES[1]
-            }
-        ]
-    },
-    {
-        prescription_id: 'rx-5',
-        prescription_code: 'RX-20260731-0005',
-        qr_code: '{"code":"RX-20260731-0005","total_amount":110000}',
-        service_order_id: 'so-5',
-        visit_session_id: 'sess-5',
-        prescribed_by: 'doc-1',
-        prescribed_by_name: 'BS. Nguyễn Thế Hiển',
-        patient_name: 'Đặng Minh Châu',
-        patient_code: 'BN-0005',
-        diagnosis_note: 'Viêm mũi dị ứng thời tiết & Mề đay cấp. Tránh tiếp xúc bụi bẩn.',
-        total_amount: 110000,
-        status: 'PENDING',
-        created_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-        updated_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-        prescriptionDetails: [
-            {
-                prescription_detail_id: 'dt-5-1',
-                medicine_id: 'med-1',
-                quantity: 10,
-                dosage_instruction: 'Sáng 1 viên sau ăn',
-                unit_price: 8000,
-                sub_total: 80000,
-                medicine: MOCK_MEDICINES[0]
-            },
-            {
-                prescription_detail_id: 'dt-5-2',
-                medicine_id: 'med-3',
-                quantity: 20,
-                dosage_instruction: 'Trưa 1 viên sau ăn',
-                unit_price: 1500,
-                sub_total: 30000,
-                medicine: MOCK_MEDICINES[2]
-            }
-        ]
-    },
-    {
-        prescription_id: 'rx-4',
-        prescription_code: 'RX-20260731-0004',
-        qr_code: '{"code":"RX-20260731-0004","total_amount":225000}',
-        service_order_id: 'so-4',
-        visit_session_id: 'sess-4',
-        prescribed_by: 'doc-3',
-        prescribed_by_name: 'BS. Phạm Mỹ Linh',
-        patient_name: 'Ngô Khánh Linh',
-        patient_code: 'BN-0004',
-        diagnosis_note: 'Rối loạn tiêu hóa.',
-        total_amount: 225000,
-        status: 'DISPENSED',
-        created_at: new Date(Date.now() - 50 * 60 * 1000).toISOString(),
-        updated_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-        prescriptionDetails: [
-            {
-                prescription_detail_id: 'dt-4-1',
-                medicine_id: 'med-3',
-                quantity: 15,
-                dosage_instruction: 'Uống 1 gói sau ăn',
-                unit_price: 15000,
-                sub_total: 225000,
-                medicine: MOCK_MEDICINES[2]
-            }
-        ]
-    },
-    {
-        prescription_id: 'rx-3',
-        prescription_code: 'RX-20260731-0003',
-        qr_code: '{"code":"RX-20260731-0003","total_amount":675000}',
-        service_order_id: 'so-3',
-        visit_session_id: 'sess-3',
-        prescribed_by: 'doc-1',
-        prescribed_by_name: 'BS. Nguyễn Thế Hiển',
-        patient_name: 'Bùi Hoàng Nam',
-        patient_code: 'BN-0003',
-        diagnosis_note: 'Viêm Amidan cấp tính.',
-        total_amount: 675000,
-        status: 'PREPARED',
-        created_at: new Date(Date.now() - 35 * 60 * 1000).toISOString(),
-        updated_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-        prescriptionDetails: [
-            {
-                prescription_detail_id: 'dt-3-1',
-                medicine_id: 'med-6',
-                quantity: 20,
-                dosage_instruction: 'Sáng 1 viên, tối 1 viên sau ăn',
-                unit_price: 24000,
-                sub_total: 480000,
-                medicine: MOCK_MEDICINES[5]
-            }
-        ]
-    },
-    {
-        prescription_id: 'rx-2',
-        prescription_code: 'RX-20260731-0002',
-        qr_code: '{"code":"RX-20260731-0002","total_amount":587000}',
-        service_order_id: 'so-2',
-        visit_session_id: 'sess-2',
-        prescribed_by: 'doc-2',
-        prescribed_by_name: 'BS. Trần Văn Nam',
-        patient_name: 'Đỗ Phương Thảo',
-        patient_code: 'BN-0002',
-        diagnosis_note: 'Đau dạ dày co thắt.',
-        total_amount: 587000,
-        status: 'PROCESSING',
-        created_at: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-        updated_at: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
-        prescriptionDetails: [
-            {
-                prescription_detail_id: 'dt-2-1',
-                medicine_id: 'med-2',
-                quantity: 20,
-                dosage_instruction: 'Sáng 1 viên trước ăn 30 phút',
-                unit_price: 18500,
-                sub_total: 370000,
-                medicine: MOCK_MEDICINES[1]
-            }
-        ]
-    },
-    {
-        prescription_id: 'rx-1',
-        prescription_code: 'RX-20260731-0001',
-        qr_code: '{"code":"RX-20260731-0001","total_amount":282500}',
-        service_order_id: 'so-1',
-        visit_session_id: 'sess-1',
-        prescribed_by: 'doc-1',
-        prescribed_by_name: 'BS. Nguyễn Thế Hiển',
-        patient_name: 'Nguyễn Thanh Tùng',
-        patient_code: 'BN-0001',
-        diagnosis_note: 'Viêm phế quản cấp. Uống nhiều nước ấm, tái khám sau 5 ngày.',
-        total_amount: 282500,
-        status: 'PENDING',
-        created_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-        updated_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-        prescriptionDetails: [
-            {
-                prescription_detail_id: 'dt-1-1',
-                medicine_id: 'med-6',
-                quantity: 10,
-                dosage_instruction: 'Sáng 1 viên, tối 1 viên sau ăn',
-                unit_price: 18000,
-                sub_total: 180000,
-                medicine: MOCK_MEDICINES[5]
-            }
-        ]
-    }
-];
+export interface GetPrescriptionsParams {
+    patient_id?: string;
+    visit_session_id?: string;
+    status?: PrescriptionStatusEnum;
+    date?: string; // YYYY-MM-DD
+    page?: number;
+    limit?: number;
+    search?: string;
+}
 
 export const pharmacyService = {
     /**
@@ -435,48 +134,9 @@ export const pharmacyService = {
      * POST /api/prescription
      */
     async createPrescription(data: CreatePrescriptionDto): Promise<Prescription> {
-        try {
-            const res = await apiClient.post<any>('/api/prescription', data, { suppressLogError: true });
-            return normalizePrescription(res.data || res);
-        } catch (error) {
-            console.warn('[pharmacyService] API create prescription failed, fallback to mock state:', error);
-            const code = `RX-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
-            const details = data.details.map((d, i) => {
-                const med = MOCK_MEDICINES.find((m) => m.medicine_id === d.medicine_id) || MOCK_MEDICINES[0];
-                return {
-                    prescription_detail_id: `dt-${Date.now()}-${i}`,
-                    medicine_id: d.medicine_id,
-                    quantity: d.quantity,
-                    dosage_instruction: d.dosage_instruction,
-                    note: d.note,
-                    unit_price: med.unit_price,
-                    sub_total: med.unit_price * d.quantity,
-                    medicine: med
-                };
-            });
-            const total = details.reduce((sum, d) => sum + d.sub_total, 0);
-
-            const newRx: Prescription = normalizePrescription({
-                prescription_id: `rx-${Date.now()}`,
-                prescription_code: code,
-                qr_code: JSON.stringify({ code, visit_session_id: data.visit_session_id, total_amount: total }),
-                service_order_id: `so-${Date.now()}`,
-                visit_session_id: data.visit_session_id,
-                prescribed_by: 'doc-1',
-                prescribed_by_name: 'BS. Nguyễn Thế Hiển',
-                patient_name: 'Nguyễn Thị Hoa',
-                patient_code: 'BN-08842',
-                diagnosis_note: data.diagnosis_note,
-                total_amount: total,
-                status: 'PENDING',
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-                prescriptionDetails: details
-            });
-
-            MOCK_PRESCRIPTIONS.unshift(newRx);
-            return newRx;
-        }
+        const res = await apiClient.post<any>('/api/prescription', data);
+        const resData = res?.data || res;
+        return normalizePrescription(resData);
     },
 
     /**
@@ -484,47 +144,30 @@ export const pharmacyService = {
      * GET /api/prescription/scan/:code
      */
     async scanPrescription(code: string): Promise<Prescription> {
-        const clean = code.trim().toLowerCase();
-
-        // 1. Thử gọi API backend
-        try {
-            const cleanCode = encodeURIComponent(code.trim());
-            const res = await apiClient.get<any>(`/api/prescription/scan/${cleanCode}`, { suppressLogError: true });
-            const data: any = res;
-            if (data?.data || data?.prescription_id) {
-                return normalizePrescription(data.data || data);
-            }
-        } catch (error) {
-            console.warn('[pharmacyService] API scan failed, searching local list:', error);
+        const cleanCode = encodeURIComponent(code.trim());
+        const res = await apiClient.get<any>(`/api/prescription/scan/${cleanCode}`);
+        const data = res?.data || res;
+        if (!data || (!data.prescription_id && !data.prescription_code && !data.id && !data.code)) {
+            throw new Error(`Không tìm thấy thông tin đơn thuốc với mã: ${code}`);
         }
-
-        // 2. Tìm kiếm trong MOCK_PRESCRIPTIONS
-        let found = MOCK_PRESCRIPTIONS.find(
-            (p) => p.prescription_code?.toLowerCase() === clean || p.prescription_id?.toLowerCase() === clean
-        );
-
-        if (!found) {
-            found = normalizePrescription({
-                prescription_id: code,
-                prescription_code: code.startsWith('RX-') ? code : `RX-${code}`,
-                status: 'PENDING'
-            });
-            MOCK_PRESCRIPTIONS.unshift(found);
-        }
-
-        return normalizePrescription(found);
+        return normalizePrescription(data);
     },
 
     /**
      * Lấy danh sách đơn thuốc (dành cho Nhà thuốc / Quản lý queue)
      * GET /api/prescription
      */
-    async getPrescriptions(params?: { status?: PrescriptionStatusEnum; search?: string }): Promise<Prescription[]> {
+    async getPrescriptions(params?: GetPrescriptionsParams): Promise<Prescription[]> {
         let rawList: any[] = [];
 
         try {
             const queryParams = new URLSearchParams();
+            if (params?.patient_id) queryParams.append('patient_id', params.patient_id);
+            if (params?.visit_session_id) queryParams.append('visit_session_id', params.visit_session_id);
             if (params?.status) queryParams.append('status', params.status);
+            if (params?.date) queryParams.append('date', params.date);
+            if (params?.page) queryParams.append('page', String(params.page));
+            if (params?.limit) queryParams.append('limit', String(params.limit));
             if (params?.search) queryParams.append('search', params.search);
             const queryString = queryParams.toString();
 
@@ -534,19 +177,13 @@ export const pharmacyService = {
             else if (Array.isArray(responseData?.data)) rawList = responseData.data;
             else if (responseData?.data?.items && Array.isArray(responseData.data.items)) rawList = responseData.data.items;
         } catch (error) {
-            console.warn('[pharmacyService] Failed to fetch prescriptions from API, returning mock data:', error);
-        }
-
-        if (rawList.length === 0) {
-            rawList = [...MOCK_PRESCRIPTIONS];
+            console.error('[pharmacyService] Failed to fetch prescriptions:', error);
+            return [];
         }
 
         let result = rawList.map(normalizePrescription);
 
-        // Apply filters
-        if (params?.status) {
-            result = result.filter((p) => p.status === params.status);
-        }
+        // Client-side search fallback if search was also provided
         if (params?.search) {
             const s = params.search.toLowerCase();
             result = result.filter(
@@ -565,46 +202,12 @@ export const pharmacyService = {
      * PATCH /api/prescription/:id/pay
      */
     async payPrescriptionOffline(prescriptionId: string): Promise<Prescription> {
-        saveStatusOverride(prescriptionId, 'PROCESSING');
-
-        try {
-            const res = await apiClient.patch<any>(`/api/prescription/${prescriptionId}/pay`, {}, { suppressLogError: true });
-            const data: any = res;
-            if (data?.data || data?.prescription_id) {
-                const norm = normalizePrescription(data.data || data);
-                if (norm.prescription_code) saveStatusOverride(norm.prescription_code, 'PROCESSING');
-                return norm;
-            }
-        } catch (error) {
-            console.warn('[pharmacyService] API pay failed, updating local mock state:', error);
-        }
-
-        const clean = prescriptionId.trim().toLowerCase();
-        let item = MOCK_PRESCRIPTIONS.find(
-            (p) =>
-                p.prescription_id?.toLowerCase() === clean ||
-                p.prescription_code?.toLowerCase() === clean ||
-                p.prescription_code?.toLowerCase().includes(clean) ||
-                p.patient_name?.toLowerCase().includes(clean)
-        );
-
-        if (!item) {
-            item = normalizePrescription({
-                prescription_id: prescriptionId,
-                prescription_code: prescriptionId.startsWith('RX-') ? prescriptionId : `RX-${prescriptionId}`,
-                status: 'PROCESSING',
-                updated_at: new Date().toISOString()
-            });
-            MOCK_PRESCRIPTIONS.unshift(item);
-        } else {
-            item.status = 'PROCESSING';
-            item.updated_at = new Date().toISOString();
-        }
-
-        if (item.prescription_code) saveStatusOverride(item.prescription_code, 'PROCESSING');
-        if (item.prescription_id) saveStatusOverride(item.prescription_id, 'PROCESSING');
-
-        return normalizePrescription(item);
+        const res = await apiClient.patch<any>(`/api/prescription/${prescriptionId}/pay`, {});
+        const data: any = res?.data || res;
+        const norm = normalizePrescription(data);
+        if (norm.prescription_code) saveStatusOverride(norm.prescription_code, 'PROCESSING');
+        if (norm.prescription_id) saveStatusOverride(norm.prescription_id, 'PROCESSING');
+        return norm;
     },
 
     /**
@@ -612,40 +215,12 @@ export const pharmacyService = {
      * PATCH /api/prescription/:id/prepare
      */
     async preparePrescription(prescriptionId: string): Promise<Prescription> {
-        saveStatusOverride(prescriptionId, 'PREPARED');
-
-        try {
-            const res = await apiClient.patch<any>(`/api/prescription/${prescriptionId}/prepare`, {}, { suppressLogError: true });
-            const data: any = res;
-            if (data?.data || data?.prescription_id) {
-                const norm = normalizePrescription(data.data || data);
-                if (norm.prescription_code) saveStatusOverride(norm.prescription_code, 'PREPARED');
-                return norm;
-            }
-        } catch (error) {
-            console.warn('[pharmacyService] API prepare failed, updating local mock state:', error);
-        }
-
-        let item = MOCK_PRESCRIPTIONS.find(
-            (p) => p.prescription_id === prescriptionId || p.prescription_code === prescriptionId
-        );
-        if (!item) {
-            item = normalizePrescription({
-                prescription_id: prescriptionId,
-                prescription_code: prescriptionId.startsWith('RX-') ? prescriptionId : `RX-${prescriptionId}`,
-                status: 'PREPARED',
-                updated_at: new Date().toISOString()
-            });
-            MOCK_PRESCRIPTIONS.unshift(item);
-        } else {
-            item.status = 'PREPARED';
-            item.updated_at = new Date().toISOString();
-        }
-
-        if (item.prescription_code) saveStatusOverride(item.prescription_code, 'PREPARED');
-        if (item.prescription_id) saveStatusOverride(item.prescription_id, 'PREPARED');
-
-        return normalizePrescription(item);
+        const res = await apiClient.patch<any>(`/api/prescription/${prescriptionId}/prepare`, {});
+        const data: any = res?.data || res;
+        const norm = normalizePrescription(data);
+        if (norm.prescription_code) saveStatusOverride(norm.prescription_code, 'PREPARED');
+        if (norm.prescription_id) saveStatusOverride(norm.prescription_id, 'PREPARED');
+        return norm;
     },
 
     /**
@@ -653,40 +228,12 @@ export const pharmacyService = {
      * PATCH /api/prescription/:id/dispense
      */
     async dispensePrescription(prescriptionId: string): Promise<Prescription> {
-        saveStatusOverride(prescriptionId, 'DISPENSED');
-
-        try {
-            const res = await apiClient.patch<any>(`/api/prescription/${prescriptionId}/dispense`, {}, { suppressLogError: true });
-            const data: any = res;
-            if (data?.data || data?.prescription_id) {
-                const norm = normalizePrescription(data.data || data);
-                if (norm.prescription_code) saveStatusOverride(norm.prescription_code, 'DISPENSED');
-                return norm;
-            }
-        } catch (error) {
-            console.warn('[pharmacyService] API dispense failed, updating local mock state:', error);
-        }
-
-        let item = MOCK_PRESCRIPTIONS.find(
-            (p) => p.prescription_id === prescriptionId || p.prescription_code === prescriptionId
-        );
-        if (!item) {
-            item = normalizePrescription({
-                prescription_id: prescriptionId,
-                prescription_code: prescriptionId.startsWith('RX-') ? prescriptionId : `RX-${prescriptionId}`,
-                status: 'DISPENSED',
-                updated_at: new Date().toISOString()
-            });
-            MOCK_PRESCRIPTIONS.unshift(item);
-        } else {
-            item.status = 'DISPENSED';
-            item.updated_at = new Date().toISOString();
-        }
-
-        if (item.prescription_code) saveStatusOverride(item.prescription_code, 'DISPENSED');
-        if (item.prescription_id) saveStatusOverride(item.prescription_id, 'DISPENSED');
-
-        return normalizePrescription(item);
+        const res = await apiClient.patch<any>(`/api/prescription/${prescriptionId}/dispense`, {});
+        const data: any = res?.data || res;
+        const norm = normalizePrescription(data);
+        if (norm.prescription_code) saveStatusOverride(norm.prescription_code, 'DISPENSED');
+        if (norm.prescription_id) saveStatusOverride(norm.prescription_id, 'DISPENSED');
+        return norm;
     },
 
     /**
@@ -694,30 +241,8 @@ export const pharmacyService = {
      * PATCH /api/prescription/:id/status
      */
     async updatePrescriptionStatus(prescriptionId: string, status: PrescriptionStatusEnum): Promise<Prescription> {
-        try {
-            const res = await apiClient.patch<any>(`/api/prescription/${prescriptionId}/status`, { status }, { suppressLogError: true });
-            const data: any = res;
-            if (data?.data || data?.prescription_id) return normalizePrescription(data.data || data);
-        } catch (error) {
-            console.warn('[pharmacyService] API update status failed, updating local mock state:', error);
-        }
-
-        let item = MOCK_PRESCRIPTIONS.find(
-            (p) => p.prescription_id === prescriptionId || p.prescription_code === prescriptionId
-        );
-        if (!item) {
-            item = normalizePrescription({
-                prescription_id: prescriptionId,
-                prescription_code: prescriptionId.startsWith('RX-') ? prescriptionId : `RX-${prescriptionId}`,
-                status: status,
-                updated_at: new Date().toISOString()
-            });
-            MOCK_PRESCRIPTIONS.unshift(item);
-            return item;
-        }
-
-        item.status = status;
-        item.updated_at = new Date().toISOString();
-        return normalizePrescription(item);
+        const res = await apiClient.patch<any>(`/api/prescription/${prescriptionId}/status`, { status });
+        const data: any = res?.data || res;
+        return normalizePrescription(data);
     }
 };

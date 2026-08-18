@@ -32,9 +32,7 @@ export interface CreateStaffDto {
 
 export interface UpdateStaffDto {
     user_name?: string;
-    password?: string;
     full_name?: string;
-    email?: string;
     role?: string;
     gender?: string;
     phone?: string;
@@ -42,3 +40,12 @@ export interface UpdateStaffDto {
     experience_years?: number;
     specialty_id?: string;
 }
+
+export interface QueryStaffParams {
+    page?: number;
+    limit?: number;
+    is_active?: boolean;
+    search?: string;
+    role?: string;
+}
+

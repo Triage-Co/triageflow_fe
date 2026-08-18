@@ -12,6 +12,7 @@ export interface PatientFlowStepInfo {
     doctorName?: string;
     queueNumber?: string;
     paymentStatus?: string;
+    slotTimeLabel?: string;
 }
 
 export interface PatientActiveFlowItem {
@@ -120,10 +121,225 @@ export function mapFlowStatus(status?: string): { label: string; badgeClass: str
     }
 }
 
+export function formatRealTimeRange(
+    startTime?: string,
+    endTime?: string,
+    date?: string,
+    fallbackTimestamp?: string,
+): string {
+    const s = (startTime || '').trim().slice(0, 5);
+    const e = (endTime || '').trim().slice(0, 5);
+
+    let timeText = '';
+    if (s && e) {
+        timeText = `${s} – ${e}`;
+    } else if (s) {
+        timeText = s;
+    } else if (fallbackTimestamp) {
+        try {
+            const d = new Date(fallbackTimestamp);
+            if (!isNaN(d.getTime())) {
+                const hh = String(d.getHours()).padStart(2, '0');
+                const mm = String(d.getMinutes()).padStart(2, '0');
+                timeText = `${hh}:${mm}`;
+            }
+        } catch {
+            // ignore
+        }
+    }
+
+    if (!timeText) {
+        const now = new Date();
+        timeText = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    }
+
+    let dateText = '';
+    if (date) {
+        try {
+            const d = new Date(date);
+            if (!isNaN(d.getTime())) {
+                const dd = String(d.getDate()).padStart(2, '0');
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const yyyy = d.getFullYear();
+                dateText = `${dd}/${mm}/${yyyy}`;
+            }
+        } catch {
+            const cleanDate = date.slice(0, 10);
+            const [y, m, d] = cleanDate.split('-');
+            if (d && m && y) {
+                dateText = `${d}/${m}/${y}`;
+            }
+        }
+    }
+
+    if (!dateText) {
+        const now = new Date();
+        const dd = String(now.getDate()).padStart(2, '0');
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const yyyy = now.getFullYear();
+        dateText = `${dd}/${mm}/${yyyy}`;
+    }
+
+    return `${dateText}, ${timeText}`;
+}
+
+export const sortStepsTopologically = (steps: any[]): any[] => {
+    if (!Array.isArray(steps) || steps.length === 0) return [];
+
+    const isPaymentStep = (step: any): boolean => {
+        const name = (step.step_name || step.name || '').toLowerCase();
+        const isPayName = name.includes('thanh toán') || name.includes('thanh toan');
+        const isPayType = (step.step_type || step.type || '').toUpperCase() === 'PAYMENT';
+        const isPendingPay = step.payment_status === 'PENDING';
+        return isPayName || isPayType || isPendingPay;
+    };
+
+    const getCreatedTime = (step: any): number => {
+        const dateStr = step.created_at || step.create_at || step.updated_at;
+        if (!dateStr) return 0;
+        return new Date(dateStr).getTime();
+    };
+
+    // Xây dựng inDegree và đồ thị quan hệ phụ thuộc depends_on
+    const inDegree = new Map<string, number>();
+    const graph = new Map<string, string[]>();
+
+    for (const step of steps) {
+        const id = step.step_id || step.id;
+        if (id) {
+            inDegree.set(id, 0);
+            graph.set(id, []);
+        }
+    }
+
+    for (const step of steps) {
+        const id = step.step_id || step.id;
+        if (!id) continue;
+
+        const deps = step.depends_on || [];
+        for (const depId of deps) {
+            if (inDegree.has(depId)) {
+                graph.get(depId)!.push(id);
+                inDegree.set(id, inDegree.get(id)! + 1);
+            }
+        }
+    }
+
+    // Nhóm theo service_order_id
+    const orderGroups = new Map<string, any[]>();
+    for (const step of steps) {
+        const serviceOrderId = step.service_order_id;
+        if (serviceOrderId) {
+            if (!orderGroups.has(serviceOrderId)) {
+                orderGroups.set(serviceOrderId, []);
+            }
+            orderGroups.get(serviceOrderId)!.push(step);
+        }
+    }
+
+    for (const [, groupSteps] of orderGroups.entries()) {
+        groupSteps.sort((a, b) => getCreatedTime(a) - getCreatedTime(b));
+    }
+
+    const sorted: any[] = [];
+    const sortedIds = new Set<string>();
+
+    const processNeighbors = (step: any, q: any[]) => {
+        const id = step.step_id || step.id;
+        if (!id) return;
+        const neighbors = graph.get(id) || [];
+        for (const neighborId of neighbors) {
+            const currentDeg = inDegree.get(neighborId);
+            if (currentDeg !== undefined) {
+                const newDeg = currentDeg - 1;
+                inDegree.set(neighborId, newDeg);
+                if (newDeg === 0) {
+                    const neighborStep = steps.find((s) => (s.step_id || s.id) === neighborId);
+                    if (neighborStep) {
+                        q.push(neighborStep);
+                    }
+                }
+            }
+        }
+    };
+
+    const sortQueue = (arr: any[]) => {
+        return arr.sort((a, b) => {
+            const payA = isPaymentStep(a) ? 1 : 0;
+            const payB = isPaymentStep(b) ? 1 : 0;
+            if (payA !== payB) return payB - payA;
+
+            const tA = getCreatedTime(a);
+            const tB = getCreatedTime(b);
+            if (tA !== tB) return tA - tB;
+            return 0;
+        });
+    };
+
+    const startNodes = steps.filter((step) => {
+        const id = step.step_id || step.id;
+        return !id || inDegree.get(id) === 0;
+    });
+
+    const queue = [...startNodes];
+    sortQueue(queue);
+
+    while (queue.length > 0) {
+        const current = queue.shift()!;
+        const currentId = current.step_id || current.id;
+
+        if (currentId && sortedIds.has(currentId)) {
+            continue;
+        }
+
+        sorted.push(current);
+        if (currentId) {
+            sortedIds.add(currentId);
+        }
+
+        processNeighbors(current, queue);
+
+        if (isPaymentStep(current) && current.service_order_id) {
+            const siblings = orderGroups.get(current.service_order_id) || [];
+            const testSiblings = siblings.filter((s) => !isPaymentStep(s));
+
+            for (const sibling of testSiblings) {
+                const siblingId = sibling.step_id || sibling.id;
+                if (siblingId && !sortedIds.has(siblingId)) {
+                    sorted.push(sibling);
+                    sortedIds.add(siblingId);
+                    processNeighbors(sibling, queue);
+                }
+            }
+        }
+
+        sortQueue(queue);
+    }
+
+    for (const step of steps) {
+        const id = step.step_id || step.id;
+        if (id && !sortedIds.has(id)) {
+            sorted.push(step);
+            sortedIds.add(id);
+        } else if (!id && !sorted.includes(step)) {
+            sorted.push(step);
+        }
+    }
+
+    return sorted;
+};
+
 export function mapActiveFlowsList(rawFlows: unknown[]): PatientActiveFlowItem[] {
     if (!Array.isArray(rawFlows)) return [];
 
-    return rawFlows.map((flowObj) => {
+    // Sắp xếp các flow theo thời gian tạo mới nhất lên đầu
+    const sortedRawFlows = [...rawFlows].sort((a: any, b: any) => {
+        const tA = new Date(a?.created_at || a?.create_at || 0).getTime();
+        const tB = new Date(b?.created_at || b?.create_at || 0).getTime();
+        return tB - tA;
+    });
+
+    return sortedRawFlows.map((flowObj) => {
         const flow = (flowObj || {}) as Record<string, unknown>;
         const flowId = String(flow.flow_id || flow.id || '');
         const booking = (flow.booking || {}) as Record<string, unknown>;
@@ -136,8 +352,8 @@ export function mapActiveFlowsList(rawFlows: unknown[]): PatientActiveFlowItem[]
         const specialtyObj = (room.specialty || {}) as Record<string, unknown>;
         const doctorObj = (shift.doctor || booking.doctor || {}) as Record<string, unknown>;
 
-        // Steps & queues
-        const rawSteps = Array.isArray(flow.steps) ? flow.steps : [];
+        // Sắp xếp Topological chuẩn Kiosk cho toàn bộ các bước trong flow
+        const rawSteps = sortStepsTopologically(Array.isArray(flow.steps) ? flow.steps : []);
         const steps: PatientFlowStepInfo[] = rawSteps.map((st: any) => {
             const stRoom = st.room_info || st.room || {};
             const stStaff = st.staff_info || st.staff || {};
@@ -207,20 +423,19 @@ export function mapActiveFlowsList(rawFlows: unknown[]): PatientActiveFlowItem[]
         const startTime = slot.start_time ? String(slot.start_time).slice(0, 5) : '';
         const endTime = slot.end_time ? String(slot.end_time).slice(0, 5) : '';
         const shiftDate = shift.date ? String(shift.date).slice(0, 10) : '';
-        let slotTimeLabel = startTime && endTime ? `${startTime} – ${endTime}` : (startTime || 'Trong ngày');
-        if (shiftDate) {
-            const [y, m, d] = shiftDate.split('-');
-            if (d && m && y) {
-                slotTimeLabel = `${d}/${m}/${y}, ${slotTimeLabel}`;
-            }
-        }
+        const slotTimeLabel = formatRealTimeRange(
+            startTime,
+            endTime,
+            shiftDate,
+            flow.created_at ? String(flow.created_at) : undefined,
+        );
 
         const flowStatus = String(flow.status || 'WAITING_EXAMINATION');
         const { label: statusLabel, badgeClass: statusBadgeClass } = mapFlowStatus(flowStatus);
 
         return {
             flowId,
-            bookingId,
+            bookingId: bookingId || undefined,
             ticketNo,
             queueNumber,
             specialty,
@@ -230,11 +445,50 @@ export function mapActiveFlowsList(rawFlows: unknown[]): PatientActiveFlowItem[]
             flowStatus,
             statusLabel,
             statusBadgeClass,
-            createdAt: String(flow.create_at || flow.created_at || ''),
+            createdAt: flow.created_at ? String(flow.created_at) : undefined,
             steps,
             raw: flow,
         };
     });
+}
+
+export function mapStepDetailToInfo(detail: any): PatientFlowStepInfo | null {
+    if (!detail || typeof detail !== 'object') return null;
+    const stepId = String(detail.step_id || detail.id || '');
+    const stepStatus = String(detail.step_status || detail.status || 'PENDING');
+    const { label: statusLabel, badgeClass: statusBadgeClass } = mapStepStatus(stepStatus);
+    const queues = Array.isArray(detail.queues) ? detail.queues : [];
+    const qNum = queues[0]?.queue_number || detail.queue_number;
+
+    const staffName = detail.staff?.full_name || detail.staff_info?.full_name || detail.staff?.name || '';
+    const slotObj = detail.flow?.booking?.slot || {};
+    const shiftObj = slotObj.shift || {};
+    const roomObj = shiftObj.room || detail.room_info || detail.room || {};
+    const roomName = roomObj.room_name || roomObj.name || '';
+
+    const startTime = slotObj.start_time ? String(slotObj.start_time).slice(0, 5) : '';
+    const endTime = slotObj.end_time ? String(slotObj.end_time).slice(0, 5) : '';
+    const shiftDate = shiftObj.date ? String(shiftObj.date).slice(0, 10) : '';
+    const slotTimeLabel = formatRealTimeRange(
+        startTime,
+        endTime,
+        shiftDate,
+        detail.created_at || queues[0]?.enqueued_at,
+    );
+
+    return {
+        stepId,
+        stepName: detail.step_name || 'Bước khám',
+        stepStatus,
+        statusLabel,
+        statusBadgeClass,
+        stepType: detail.step_type,
+        roomName,
+        doctorName: staffName,
+        queueNumber: qNum ? String(qNum) : undefined,
+        paymentStatus: detail.payment_status,
+        slotTimeLabel,
+    };
 }
 
 export function flowItemToRegistrationResult(

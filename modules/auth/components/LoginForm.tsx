@@ -7,6 +7,8 @@ import { Eye, EyeOff, Cross, AlertCircle, Loader2 } from 'lucide-react';
 import { authService } from '@/modules/auth/services/authService';
 import { useAuthStore } from '@/store/authStore';
 import { labService } from '@/modules/lab/services/labService';
+import { isValidEmail } from '@/shared/utils/validators';
+import { cn } from '@/lib/utils';
 
 function getPostLoginPath(role: string) {
     const normalizedRole = role.trim().toUpperCase().replace(/^ROLE_/, '');
@@ -42,9 +44,50 @@ export function LoginForm() {
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [touched, setTouched] = useState<{ email?: boolean; password?: boolean }>({});
+    const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
     const [showPassword, setShowPassword] = useState(false);
     const [rememberMe, setRememberMe] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    function validateLoginField(name: 'email' | 'password', value: string): string | null {
+        if (name === 'email') {
+            if (!value.trim()) return 'Vui lòng nhập email.';
+            if (!isValidEmail(value)) return 'Định dạng email không hợp lệ (Ví dụ: doctor@hospital.vn).';
+            return null;
+        }
+        if (name === 'password') {
+            if (!value) return 'Vui lòng nhập mật khẩu.';
+            if (value.length < 6) return 'Mật khẩu phải có độ dài tối thiểu 6 ký tự.';
+            return null;
+        }
+        return null;
+    }
+
+    function handleEmailChange(val: string) {
+        setEmail(val);
+        setError(null);
+        if (touched.email) {
+            const err = validateLoginField('email', val);
+            setFieldErrors((prev) => ({ ...prev, email: err || undefined }));
+        }
+    }
+
+    function handlePasswordChange(val: string) {
+        setPassword(val);
+        setError(null);
+        if (touched.password) {
+            const err = validateLoginField('password', val);
+            setFieldErrors((prev) => ({ ...prev, password: err || undefined }));
+        }
+    }
+
+    function handleBlur(name: 'email' | 'password') {
+        setTouched((prev) => ({ ...prev, [name]: true }));
+        const val = name === 'email' ? email : password;
+        const err = validateLoginField(name, val);
+        setFieldErrors((prev) => ({ ...prev, [name]: err || undefined }));
+    }
 
     /** Persist login data into the auth store and return resolved role */
     async function completeLogin(token: string, refreshToken: string, username: string, role: string) {
@@ -94,12 +137,23 @@ export function LoginForm() {
         e.preventDefault();
         setError(null);
 
-        const trimmedEmail = email.trim();
-        const trimmedPassword = password.trim();
-        if (!trimmedEmail || !trimmedPassword) {
-            setError('Vui lòng nhập email và mật khẩu.');
+        setTouched({ email: true, password: true });
+
+        const emailErr = validateLoginField('email', email);
+        const passErr = validateLoginField('password', password);
+
+        setFieldErrors({
+            email: emailErr || undefined,
+            password: passErr || undefined,
+        });
+
+        if (emailErr || passErr) {
+            setError(emailErr || passErr || 'Vui lòng kiểm tra lại thông tin đăng nhập.');
             return;
         }
+
+        const trimmedEmail = email.trim();
+        const trimmedPassword = password.trim();
 
         startTransition(async () => {
             try {
@@ -135,7 +189,7 @@ export function LoginForm() {
                 
                 router.push(redirectPath);
             } catch (err) {
-                setError(err instanceof Error ? err.message : 'Đăng nhập thất bại. Vui lòng thử lại.');
+                setError(err instanceof Error ? err.message : 'Đăng nhập thất bại. Vui lòng kiểm tra lại tài khoản hoặc mật khẩu.');
             }
         });
     }
@@ -161,8 +215,8 @@ export function LoginForm() {
                 </div>
             )}
 
-            <form onSubmit={handleSubmit} method="post" className="space-y-5" noValidate>
-                <div className="space-y-1.5">
+            <form onSubmit={handleSubmit} method="post" className="space-y-4" noValidate>
+                <div className="space-y-1">
                     <label htmlFor="email" className="block text-sm font-medium text-neutral-700">
                         Email
                     </label>
@@ -174,14 +228,25 @@ export function LoginForm() {
                         required
                         placeholder="doctor@hospital.vn"
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        onInput={(e) => setEmail((e.target as HTMLInputElement).value)}
+                        onChange={(e) => handleEmailChange(e.target.value)}
+                        onBlur={() => handleBlur('email')}
                         disabled={isPending}
-                        className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-3 text-base sm:text-sm sm:py-2.5 text-neutral-900 placeholder-neutral-400 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
+                        className={cn(
+                            'block w-full rounded-lg border bg-white px-3.5 py-2.5 text-sm text-neutral-900 placeholder-neutral-400 shadow-sm outline-none transition disabled:opacity-50',
+                            touched.email && fieldErrors.email
+                                ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-500/20'
+                                : 'border-neutral-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20',
+                        )}
                     />
+                    {touched.email && fieldErrors.email && (
+                        <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
+                            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                            {fieldErrors.email}
+                        </p>
+                    )}
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                     <label htmlFor="password" className="block text-sm font-medium text-neutral-700">
                         Mật khẩu
                     </label>
@@ -192,12 +257,17 @@ export function LoginForm() {
                             type={showPassword ? 'text' : 'password'}
                             autoComplete="current-password"
                             required
-                            placeholder="..."
+                            placeholder="Nhập mật khẩu..."
                             value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            onInput={(e) => setPassword((e.target as HTMLInputElement).value)}
+                            onChange={(e) => handlePasswordChange(e.target.value)}
+                            onBlur={() => handleBlur('password')}
                             disabled={isPending}
-                            className="block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-3 pr-12 text-base sm:text-sm sm:py-2.5 text-neutral-900 placeholder-neutral-400 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50"
+                            className={cn(
+                                'block w-full rounded-lg border bg-white px-3.5 py-2.5 pr-12 text-sm text-neutral-900 placeholder-neutral-400 shadow-sm outline-none transition disabled:opacity-50',
+                                touched.password && fieldErrors.password
+                                    ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-500/20'
+                                    : 'border-neutral-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20',
+                            )}
                         />
                         <button
                             type="button"
@@ -208,9 +278,15 @@ export function LoginForm() {
                             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
                     </div>
+                    {touched.password && fieldErrors.password && (
+                        <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
+                            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                            {fieldErrors.password}
+                        </p>
+                    )}
                 </div>
 
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between pt-1">
                     <label className="flex cursor-pointer items-center gap-2 text-sm text-neutral-600 select-none">
                         <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)}
                             className="h-4 w-4 rounded border-neutral-300 accent-brand-500" />
@@ -224,7 +300,7 @@ export function LoginForm() {
                 <button
                     type="submit"
                     disabled={isPending}
-                    className="mt-1 flex w-full min-h-12 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-3 text-base sm:text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 active:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 touch-manipulation cursor-pointer relative z-10"
+                    className="mt-2 flex w-full min-h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600 active:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 touch-manipulation cursor-pointer relative z-10"
                 >
                     {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                     {isPending ? 'Đang đăng nhập...' : 'Đăng nhập'}

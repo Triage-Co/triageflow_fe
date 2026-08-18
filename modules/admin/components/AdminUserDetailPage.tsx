@@ -27,7 +27,7 @@ const ROLE_CONFIG: Record<string, { label: string; icon: React.ElementType }> = 
     LAB_TECHNICIAN: { label: 'Kỹ thuật viên XN', icon: FlaskConical },
     PHARMACIST: { label: 'Dược sĩ', icon: Pill },
     ADMIN: { label: 'Quản trị', icon: ShieldCheck },
-    USER: { label: 'Bệnh nhân', icon: UserIcon },
+    USER: { label: 'Người dùng', icon: UserIcon },
 };
 
 const formatDate = (dateStr: string) => {

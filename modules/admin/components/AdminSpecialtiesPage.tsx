@@ -21,12 +21,11 @@ import { getCompactPages } from '../utils/pagination';
 import { getErrorMessage } from '../utils/errorMessage';
 import { SoftDisableConfirmDialog } from './SoftDisableConfirmDialog';
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 7;
 
 const EMPTY_FORM: CreateSpecialtyDto = {
     specialty_code: '',
     specialty_name: '',
-    description: '',
 };
 
 export function AdminSpecialtiesPage() {
@@ -36,7 +35,7 @@ export function AdminSpecialtiesPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [showInactive, setShowInactive] = useState(false);
+    const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
     const [currentPage, setCurrentPage] = useState(1);
 
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -71,13 +70,15 @@ export function AdminSpecialtiesPage() {
     const filtered = useMemo(() => {
         const q = searchQuery.trim().toLowerCase();
         return specialties.filter((sp) => {
-            if (!showInactive && sp.is_active === false) return false;
+            const active = sp.is_active !== false;
+            if (statusFilter === 'ACTIVE' && !active) return false;
+            if (statusFilter === 'INACTIVE' && active) return false;
             if (!q) return true;
             const code = (sp.specialty_code || '').toLowerCase();
             const name = (sp.specialty_name || '').toLowerCase();
             return code.includes(q) || name.includes(q);
         });
-    }, [specialties, searchQuery, showInactive]);
+    }, [specialties, searchQuery, statusFilter]);
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
     const safePage = Math.min(currentPage, totalPages);
@@ -98,7 +99,6 @@ export function AdminSpecialtiesPage() {
         setForm({
             specialty_code: sp.specialty_code || '',
             specialty_name: sp.specialty_name || '',
-            description: sp.description || '',
         });
         setFormError(null);
         setIsModalOpen(true);
@@ -123,12 +123,12 @@ export function AdminSpecialtiesPage() {
             if (editing) {
                 await specialtyService.updateSpecialty(
                     editing.specialty_id,
-                    { specialty_code: code, specialty_name: name, description: form.description?.trim() || undefined },
+                    { specialty_code: code, specialty_name: name },
                     accessToken
                 );
             } else {
                 await specialtyService.createSpecialty(
-                    { specialty_code: code, specialty_name: name, description: form.description?.trim() || undefined },
+                    { specialty_code: code, specialty_name: name },
                     accessToken
                 );
             }
@@ -164,201 +164,231 @@ export function AdminSpecialtiesPage() {
             setIsToggling(false);
         }
     };
-
     return (
         <div className="flex-1 flex flex-col overflow-hidden relative">
             <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-[#EEEDFC] via-[#F9ECF2] to-[#E6E9FC] pt-6 pb-5">
                 <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-tl-[16px] rounded-bl-[48px] shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
                     <div className="flex-1 min-h-0 overflow-y-auto p-6">
-                        <div className="max-w-6xl mx-auto space-y-5">
-                            <div className="flex items-start justify-between gap-4 flex-wrap">
-                                <div>
-                                    <h1 className="text-xl font-bold text-neutral-900">Quản lý chuyên khoa</h1>
-                                    <p className="text-[13px] text-[#7B7B7B] font-medium mt-1">
-                                        Danh mục chuyên khoa dùng cho phòng khám, nhân sự và quy tắc hàng chờ.
-                                    </p>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={openCreate}
-                                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-sm font-bold cursor-pointer"
-                                >
-                                    <Plus className="w-4 h-4" />
-                                    Thêm chuyên khoa
-                                </button>
+                        {/* ── Title + Actions ── */}
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
+                            <div>
+                                <h1 className="text-[22px] font-bold text-[#2D2D2D] tracking-tight">
+                                    Quản lý chuyên khoa
+                                </h1>
+                                <p className="text-[13px] text-[#7B7B7B] font-medium mt-1">
+                                    Danh mục chuyên khoa dùng cho phòng khám
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={openCreate}
+                                className="flex items-center gap-2 px-4 py-2.5 bg-[#8B7CF6] hover:bg-[#7a6ae5] text-white text-[13px] font-bold rounded-xl transition-all shadow-sm cursor-pointer"
+                            >
+                                <Plus className="w-4 h-4" />
+                                Thêm chuyên khoa
+                            </button>
+                        </div>
+
+                        {/* ── Toolbar: Search & Filters ── */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                            {/* Search Bar */}
+                            <div className="flex items-center gap-2.5 bg-[#F5F5F8] rounded-xl px-3.5 py-2.5 text-[12.5px] w-full sm:w-80 border border-neutral-200/60 shadow-xs focus-within:border-[#8B7CF6] focus-within:bg-white transition-all">
+                                <Search className="w-4 h-4 shrink-0 text-[#9CA3AF]" />
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => {
+                                        setSearchQuery(e.target.value);
+                                        setCurrentPage(1);
+                                    }}
+                                    placeholder="Tìm theo mã hoặc tên chuyên khoa..."
+                                    className="bg-transparent flex-1 outline-none text-[#1F2937] placeholder-[#9CA3AF] font-medium"
+                                />
                             </div>
 
-                            <div className="flex items-center gap-3 flex-wrap">
-                                <div className="flex items-center gap-2 bg-white border border-neutral-200 rounded-xl px-3 py-2 max-w-md flex-1 min-w-[220px]">
-                                    <Search className="w-4 h-4 text-neutral-400" />
-                                    <input
-                                        value={searchQuery}
+                            {/* Inline Filters */}
+                            <div className="flex flex-wrap items-center gap-2.5">
+                                <div className={cn(
+                                    "flex items-center gap-2 bg-[#F5F5F8] border rounded-xl px-3.5 py-2 text-[12.5px] transition-all shadow-xs",
+                                    statusFilter !== 'ALL'
+                                        ? "border-[#8B7CF6] bg-[#8B7CF6]/5"
+                                        : "border-neutral-200/60 hover:border-neutral-300 focus-within:border-[#8B7CF6] focus-within:bg-white"
+                                )}>
+                                    <span className="text-[11.5px] font-bold text-neutral-400 uppercase tracking-wider shrink-0">Trạng thái:</span>
+                                    <select
+                                        value={statusFilter}
                                         onChange={(e) => {
-                                            setSearchQuery(e.target.value);
+                                            setStatusFilter(e.target.value as 'ALL' | 'ACTIVE' | 'INACTIVE');
                                             setCurrentPage(1);
                                         }}
-                                        placeholder="Tìm theo mã hoặc tên chuyên khoa..."
-                                        className="flex-1 text-sm outline-none bg-transparent"
-                                    />
+                                        className="bg-transparent font-bold text-[#2D2D2D] outline-none cursor-pointer pr-1"
+                                    >
+                                        <option value="ALL">Tất cả</option>
+                                        <option value="ACTIVE">Đang hoạt động</option>
+                                        <option value="INACTIVE">Ngừng hoạt động</option>
+                                    </select>
                                 </div>
-                                <label className="inline-flex items-center gap-2 text-xs font-bold text-neutral-600 select-none cursor-pointer bg-white border border-neutral-200 rounded-xl px-3 py-2.5">
-                                    <input
-                                        type="checkbox"
-                                        checked={showInactive}
-                                        onChange={(e) => {
-                                            setShowInactive(e.target.checked);
+
+                                {(statusFilter !== 'ALL' || searchQuery) && (
+                                    <button
+                                        onClick={() => {
+                                            setStatusFilter('ALL');
+                                            setSearchQuery('');
                                             setCurrentPage(1);
                                         }}
-                                    />
-                                    Hiện đã tắt
-                                </label>
-                            </div>
-
-                            {error && (
-                                <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-700 whitespace-pre-line">
-                                    <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                                    <span>{error}</span>
-                                </div>
-                            )}
-
-                            <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
-                                {isLoading ? (
-                                    <div className="p-12 flex flex-col items-center gap-2 text-neutral-500">
-                                        <Loader2 className="w-6 h-6 animate-spin text-brand-500" />
-                                        <span className="text-sm font-medium">Đang tải...</span>
-                                    </div>
-                                ) : filtered.length === 0 ? (
-                                    <div className="p-12 text-center text-sm text-neutral-500">Chưa có chuyên khoa nào.</div>
-                                ) : (
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-sm">
-                                            <thead className="bg-neutral-50 border-b border-neutral-200 text-left text-xs font-bold text-neutral-500 uppercase tracking-wide">
-                                                <tr>
-                                                    <th className="px-4 py-3">Mã</th>
-                                                    <th className="px-4 py-3">Tên chuyên khoa</th>
-                                                    <th className="px-4 py-3">Mô tả</th>
-                                                    <th className="px-4 py-3">Trạng thái</th>
-                                                    <th className="px-4 py-3 text-right">Thao tác</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-neutral-100">
-                                                {paginated.map((sp) => {
-                                                    const active = sp.is_active !== false;
-                                                    return (
-                                                        <tr key={sp.specialty_id} className="hover:bg-neutral-50/80">
-                                                            <td className="px-4 py-3 font-mono text-xs text-neutral-600">
-                                                                {sp.specialty_code}
-                                                            </td>
-                                                            <td className="px-4 py-3">
-                                                                <div className="flex items-center gap-2">
-                                                                    <div className="w-7 h-7 rounded-lg bg-[#F5F2FF] border border-[#E0DCFB] flex items-center justify-center text-[#8B7CF6] shrink-0">
-                                                                        <Stethoscope className="w-3.5 h-3.5" />
-                                                                    </div>
-                                                                    <span className="font-semibold text-neutral-800">{sp.specialty_name}</span>
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-4 py-3 text-neutral-500 max-w-[280px] truncate">
-                                                                {sp.description || '—'}
-                                                            </td>
-                                                            <td className="px-4 py-3">
-                                                                <span
-                                                                    className={cn(
-                                                                        'text-[10px] font-bold px-2 py-0.5 rounded-full border',
-                                                                        active
-                                                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                                                            : 'bg-neutral-50 text-neutral-500 border-neutral-200'
-                                                                    )}
-                                                                >
-                                                                    {active ? 'Đang hoạt động' : 'Ngừng'}
-                                                                </span>
-                                                            </td>
-                                                            <td className="px-4 py-3">
-                                                                <div className="flex justify-end gap-1">
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => openEdit(sp)}
-                                                                        className="p-2 rounded-lg text-neutral-400 hover:text-brand-500 hover:bg-neutral-50 cursor-pointer"
-                                                                        title="Sửa"
-                                                                    >
-                                                                        <Pencil className="w-4 h-4" />
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => {
-                                                                            setToggleError(null);
-                                                                            setTogglingTarget(sp);
-                                                                        }}
-                                                                        className={cn(
-                                                                            'p-2 rounded-lg hover:bg-neutral-50 cursor-pointer',
-                                                                            active ? 'text-neutral-400 hover:text-red-500' : 'text-neutral-400 hover:text-emerald-600'
-                                                                        )}
-                                                                        title={active ? 'Vô hiệu hóa' : 'Kích hoạt'}
-                                                                    >
-                                                                        {active ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4" />}
-                                                                    </button>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                        className="text-[11.5px] font-bold text-[#8B7CF6] hover:underline cursor-pointer px-2 py-1"
+                                    >
+                                        Xoá lọc
+                                    </button>
                                 )}
                             </div>
+                        </div>
 
-                            {filtered.length > 0 && (
-                                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-neutral-100 pt-4">
-                                    <p className="text-[12px] text-[#ADADAD] font-bold">
-                                        Hiển thị {Math.min(filtered.length, (safePage - 1) * ITEMS_PER_PAGE + 1)}
-                                        {' - '}
-                                        {Math.min(filtered.length, safePage * ITEMS_PER_PAGE)} trong số {filtered.length} chuyên khoa
-                                    </p>
-                                    {totalPages > 1 && (
-                                        <div className="flex items-center gap-1">
+                        {error && (
+                            <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-700 whitespace-pre-line mb-6">
+                                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                                <span>{error}</span>
+                            </div>
+                        )}
+
+                        {/* ── Table Content ── */}
+                        <div className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden shadow-sm">
+                            {isLoading ? (
+                                <div className="flex flex-col items-center justify-center py-20 gap-3">
+                                    <Loader2 className="w-8 h-8 animate-spin text-[#8B7CF6]" />
+                                    <span className="text-[13px] text-[#7B7B7B] font-bold">Đang tải danh sách chuyên khoa...</span>
+                                </div>
+                            ) : filtered.length === 0 ? (
+                                <div className="flex items-center justify-center py-16">
+                                    <p className="text-[13px] text-[#ADADAD] font-medium">Không tìm thấy chuyên khoa phù hợp.</p>
+                                </div>
+                            ) : (
+                                <table className="w-full text-left">
+                                    <thead>
+                                        <tr className="bg-neutral-50/80 border-b border-[#EBEBEB]">
+                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider w-[64px]">STT</th>
+                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider w-[150px]">Mã</th>
+                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Tên chuyên khoa</th>
+                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider w-[140px]">Trạng thái</th>
+                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider text-right w-[100px]">Thao tác</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-neutral-100">
+                                        {paginated.map((sp, index) => {
+                                            const active = sp.is_active !== false;
+                                            return (
+                                                <tr key={sp.specialty_id} className="hover:bg-neutral-50/50 transition-colors group">
+                                                    <td className="px-5 py-4 text-[13px] font-semibold text-[#7B7B7B]">
+                                                        {(safePage - 1) * ITEMS_PER_PAGE + index + 1}
+                                                    </td>
+                                                    <td className="px-5 py-4 font-mono text-[12px] text-[#7B7B7B]">
+                                                        {sp.specialty_code}
+                                                    </td>
+                                                    <td className="px-5 py-4">
+                                                        <div className="flex items-center gap-2.5">
+                                                            <div className="w-8 h-8 rounded-xl bg-[#F5F2FF] border border-[#E0DCFB] flex items-center justify-center text-[#8B7CF6] shrink-0">
+                                                                <Stethoscope className="w-4 h-4" />
+                                                            </div>
+                                                            <span className="text-[13px] font-bold text-[#2D2D2D]">{sp.specialty_name}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-5 py-4 whitespace-nowrap">
+                                                        <span
+                                                            className={cn(
+                                                                'text-[10px] font-bold px-3 py-1 rounded-full border whitespace-nowrap inline-flex items-center',
+                                                                active
+                                                                    ? 'bg-[#E8F9EE] text-[#10B981] border-[#C6F6D5]'
+                                                                    : 'bg-[#FFEBEE] text-[#E53935] border-[#FFCDD2]'
+                                                            )}
+                                                        >
+                                                            {active ? 'Đang hoạt động' : 'Ngừng hoạt động'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-5 py-4">
+                                                        <div className="flex items-center justify-end gap-2 text-neutral-400">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openEdit(sp)}
+                                                                className="p-1 hover:text-[#8B7CF6] transition-colors cursor-pointer"
+                                                                title="Chỉnh sửa chuyên khoa"
+                                                            >
+                                                                <Pencil className="w-3.5 h-3.5" />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setToggleError(null);
+                                                                    setTogglingTarget(sp);
+                                                                }}
+                                                                className={cn(
+                                                                    'p-1 transition-colors cursor-pointer',
+                                                                    active ? 'hover:text-red-600' : 'hover:text-emerald-600'
+                                                                )}
+                                                                title={active ? 'Vô hiệu hóa' : 'Kích hoạt'}
+                                                            >
+                                                                {active ? <PowerOff className="w-3.5 h-3.5" /> : <Power className="w-3.5 h-3.5" />}
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+
+                    </div>
+
+                    {/* ── Fixed Bottom Pagination Controls ── */}
+                    {filtered.length > 0 && (
+                        <div className="px-6 py-4 border-t border-neutral-100 bg-white flex items-center justify-between shrink-0">
+                            <p className="text-[12px] text-[#ADADAD] font-bold">
+                                Hiển thị {Math.min(filtered.length, (safePage - 1) * ITEMS_PER_PAGE + 1)} - {Math.min(filtered.length, safePage * ITEMS_PER_PAGE)} trong số {filtered.length} chuyên khoa
+                            </p>
+                            {totalPages > 1 && (
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                                        disabled={safePage === 1}
+                                        className="px-3 py-1.5 text-xs font-bold border border-[#EBEBEB] rounded-lg bg-white text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6] disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+                                    >
+                                        Trước
+                                    </button>
+                                    {getCompactPages(safePage, totalPages).map((page, idx) =>
+                                        page === 'ellipsis' ? (
+                                            <span key={`ellipsis-${idx}`} className="px-1 text-sm font-bold text-[#ADADAD] select-none">
+                                                ...
+                                            </span>
+                                        ) : (
                                             <button
                                                 type="button"
-                                                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                                                disabled={safePage === 1}
-                                                className="px-3 py-1.5 text-xs font-bold border border-[#EBEBEB] rounded-lg bg-white text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6] disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+                                                key={page}
+                                                onClick={() => setCurrentPage(page)}
+                                                className={cn(
+                                                    'w-8 h-8 flex items-center justify-center text-xs font-bold rounded-lg border transition cursor-pointer',
+                                                    safePage === page
+                                                        ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white'
+                                                        : 'bg-white border-[#EBEBEB] text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6]'
+                                                )}
                                             >
-                                                Trước
+                                                {page}
                                             </button>
-                                            {getCompactPages(safePage, totalPages).map((page, idx) =>
-                                                page === 'ellipsis' ? (
-                                                    <span key={`ellipsis-${idx}`} className="px-1 text-sm font-bold text-[#ADADAD] select-none">
-                                                        ...
-                                                    </span>
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        key={page}
-                                                        onClick={() => setCurrentPage(page)}
-                                                        className={cn(
-                                                            'w-8 h-8 flex items-center justify-center text-xs font-bold rounded-lg border transition cursor-pointer',
-                                                            safePage === page
-                                                                ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white'
-                                                                : 'bg-white border-[#EBEBEB] text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6]'
-                                                        )}
-                                                    >
-                                                        {page}
-                                                    </button>
-                                                )
-                                            )}
-                                            <button
-                                                type="button"
-                                                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                                                disabled={safePage === totalPages}
-                                                className="px-3 py-1.5 text-xs font-bold border border-[#EBEBEB] rounded-lg bg-white text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6] disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
-                                            >
-                                                Sau
-                                            </button>
-                                        </div>
+                                        )
                                     )}
+                                    <button
+                                        type="button"
+                                        onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                                        disabled={safePage === totalPages}
+                                        className="px-3 py-1.5 text-xs font-bold border border-[#EBEBEB] rounded-lg bg-white text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6] disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+                                    >
+                                        Sau
+                                    </button>
                                 </div>
                             )}
                         </div>
-                    </div>
+                    )}
                 </div>
             </div>
 
@@ -401,18 +431,6 @@ export function AdminSpecialtiesPage() {
                                     placeholder="VD: Nội tổng quát"
                                 />
                             </div>
-                            <div>
-                                <label className="text-xs font-bold text-neutral-500 uppercase block mb-1">
-                                    Mô tả
-                                </label>
-                                <textarea
-                                    value={form.description || ''}
-                                    onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                                    rows={3}
-                                    className="w-full border border-neutral-200 rounded-xl px-3 py-2.5 text-sm font-medium resize-none"
-                                    placeholder="Mô tả ngắn về chuyên khoa..."
-                                />
-                            </div>
                         </div>
                         <div className="px-5 py-4 border-t border-neutral-100 flex gap-2 justify-end">
                             <button
@@ -426,7 +444,7 @@ export function AdminSpecialtiesPage() {
                                 type="button"
                                 onClick={() => void handleSave()}
                                 disabled={isSaving}
-                                className="px-4 py-2 rounded-xl bg-brand-500 text-white text-sm font-bold disabled:opacity-50 inline-flex items-center gap-2 cursor-pointer"
+                                className="px-4 py-2 rounded-xl bg-[#8B7CF6] hover:bg-[#7a6ae5] text-white text-sm font-bold disabled:opacity-50 inline-flex items-center gap-2 cursor-pointer transition-all"
                             >
                                 {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                                 Lưu

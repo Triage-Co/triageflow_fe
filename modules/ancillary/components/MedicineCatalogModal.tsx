@@ -277,7 +277,27 @@ export function MedicineCatalogModal({
                     </div>
                 ) : (
                     /* CREATE FORM */
-                    <form onSubmit={handleCreateSubmit} className="space-y-5 max-w-3xl">
+                    <form
+                        onSubmit={handleCreateSubmit}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                const target = e.target as HTMLElement;
+                                if (!target || target.tagName.toLowerCase() === 'textarea' || target.tagName.toLowerCase() === 'button') return;
+                                e.preventDefault();
+                                const container = e.currentTarget;
+                                const focusable = Array.from(
+                                    container.querySelectorAll<HTMLElement>(
+                                        'input:not([disabled]):not([type="hidden"]):not([type="checkbox"]), select:not([disabled]), textarea:not([disabled])'
+                                    )
+                                );
+                                const index = focusable.indexOf(target);
+                                if (index > -1 && index + 1 < focusable.length) {
+                                    focusable[index + 1].focus();
+                                }
+                            }
+                        }}
+                        className="space-y-5 max-w-3xl"
+                    >
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                             <div>
                                 <label className="block text-xs font-bold text-neutral-700 dark:text-neutral-300 mb-1.5">

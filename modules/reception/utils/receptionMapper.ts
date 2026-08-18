@@ -1,16 +1,13 @@
 import type { BackendQueuePatient } from '@/modules/clinical/services/clinicalService';
 import type {
     BackendSpecialtyCatalogItem,
-    HighPriorityPatient,
     QueuePatient,
-    RecentActivity,
     ReceptionAccount,
     ReceptionPatientDetail,
     ReceptionPatientRecord,
     ReceptionPriority,
     ReceptionSlot,
     ReceptionSpecialty,
-    ReceptionStat,
     ReceptionStatus,
 } from '@/modules/reception/types/reception.types';
 
@@ -540,43 +537,6 @@ export function mapBackendToQueuePatient(item: BackendQueuePatient): QueuePatien
         bookingId: item.step.flow.booking.booking_id,
         accountId: item.step.flow.booking.patient.patient_id,
     };
-}
-
-export function extractHighPriorityPatients(patients: QueuePatient[]): HighPriorityPatient[] {
-    return patients
-        .filter((p) => p.priority === 'Khẩn cấp' || p.priority === 'Ưu tiên')
-        .slice(0, 5)
-        .map((p) => ({ id: p.id, name: p.name, ticketNo: p.ticketNo, specialty: p.specialty, priority: p.priority }));
-}
-
-export function buildRecentActivities(patients: QueuePatient[]): RecentActivity[] {
-    return patients.slice(0, 5).map((p, i) => ({
-        id: String(i + 1),
-        time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        title: 'Đăng ký mới',
-        ticketNo: p.ticketNo,
-        patientName: p.name,
-        type: p.priority === 'Khẩn cấp' ? 'emergency' : 'register',
-    }));
-}
-
-export function buildReceptionStats(patients: QueuePatient[], bookingCount?: number): ReceptionStat[] {
-    const waiting = patients.filter((p) => p.status === 'Chờ khám').length;
-    const payment = patients.filter((p) => p.status === 'Chờ TT').length;
-    const emergency = patients.filter((p) => p.priority === 'Khẩn cấp').length;
-    const avgWait = patients.length ? Math.round(patients.reduce((s, p) => s + p.waitMinutes, 0) / patients.length) : 0;
-    const totalRegistered = bookingCount && bookingCount > patients.length ? bookingCount : patients.length;
-
-    return [
-        { value: waiting, label: 'Đang chờ khám', icon: 'waiting', iconBg: 'bg-[#E8F2FF]', iconColor: 'text-[#3B82F6]' },
-        { value: totalRegistered, label: 'Đăng ký hôm nay', icon: 'registered', iconBg: 'bg-[#E2F7EB]', iconColor: 'text-[#10B981]' },
-        { value: Math.max(patients.length > 0 ? 1 : 0, Math.ceil(patients.length / 8)), label: 'Hàng đợi đang hoạt động', icon: 'queues', iconBg: 'bg-[#E2F7EB]', iconColor: 'text-[#10B981]' },
-        { value: payment, label: 'Chờ thanh toán', icon: 'payment', iconBg: 'bg-[#FFF4E5]', iconColor: 'text-[#F59E0B]' },
-        { value: emergency, label: 'Ca khẩn cấp', icon: 'emergency', iconBg: 'bg-[#FEE2E2]', iconColor: 'text-[#EF4444]' },
-        { value: `${avgWait || 0} phút`, label: 'Thời gian chờ TB', icon: 'avgTime', iconBg: 'bg-[#F3E8FF]', iconColor: 'text-[#8B7CF6]' },
-        { value: Math.round(patients.length * 0.35), label: 'Vãng lai (walk-in)', icon: 'walkin', iconBg: 'bg-[#E8F2FF]', iconColor: 'text-[#3B82F6]' },
-        { value: 0, label: 'Vé cấp lại', icon: 'reissue', iconBg: 'bg-[#F3F4F6]', iconColor: 'text-[#6B7280]' },
-    ];
 }
 
 export function getTodayDateString(): string {

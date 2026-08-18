@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { RegistrationResult } from '@/modules/reception/types/reception.types';
-import { formatPhoneDisplay } from '@/modules/reception/utils/receptionSearch';
 import {
     downloadRegistrationTicketPdf,
     getQrImageUrl,
@@ -91,10 +90,6 @@ export function RegisterSuccessStep({ result, onRegisterNew }: RegisterSuccessSt
                                 <span className="text-neutral-500 font-medium">CCCD/CMND</span>
                                 <span className="font-semibold text-neutral-800 font-mono">{result.citizenId}</span>
                             </div>
-                            <div className="flex justify-between items-center py-0.5 border-t border-neutral-200/50 pt-2.5">
-                                <span className="text-neutral-500 font-medium">Số điện thoại</span>
-                                <span className="font-semibold text-neutral-800 font-mono">{formatPhoneDisplay(result.phone)}</span>
-                            </div>
                         </div>
                     </div>
 
@@ -119,12 +114,6 @@ export function RegisterSuccessStep({ result, onRegisterNew }: RegisterSuccessSt
                             <div className="flex justify-between items-center py-0.5 border-t border-neutral-200/50 pt-2.5">
                                 <span className="text-neutral-500 font-medium">Ngày & Giờ khám</span>
                                 <span className="font-bold text-neutral-800">{result.slotTimeLabel || '—'}</span>
-                            </div>
-                            <div className="flex justify-between items-center py-0.5 border-t border-neutral-200/50 pt-2.5">
-                                <span className="text-neutral-500 font-medium">Trạng thái thanh toán</span>
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-[#ECFDF5] text-[#10B981] border border-[#A7F3D0]">
-                                    {result.paymentLabel}
-                                </span>
                             </div>
                         </div>
                     </div>

@@ -179,7 +179,7 @@ export const SpecialtySelectView: React.FC = () => {
       {/* Main Grid View */}
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {isFetchingSpecialties ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 flex-1 min-h-0 overflow-y-auto pr-1">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 flex-1 min-h-0 overflow-y-auto pr-1 content-start auto-rows-max">
             {Array.from({ length: 18 }).map((_, idx) => (
               <div
                 key={idx}
@@ -204,12 +204,12 @@ export const SpecialtySelectView: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 overflow-y-auto flex-1 min-h-0 pr-1">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 overflow-y-auto flex-1 min-h-0 pr-1 content-start auto-rows-max">
             {filteredSpecialties.map((item) => (
               <button
                 key={item.specialty_id}
                 onClick={() => handleSelectSpecialty(item)}
-                className="group bg-white/90 hover:bg-gradient-to-br hover:from-white hover:to-blue-50/80 backdrop-blur-md rounded-3xl p-4 sm:p-5 border border-neutral-100/80 hover:border-blue-200 shadow-sm hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-200 flex flex-col items-center text-center justify-center space-y-2.5 cursor-pointer active:scale-95"
+                className="group aspect-square w-full bg-white/90 hover:bg-gradient-to-br hover:from-white hover:to-blue-50/80 backdrop-blur-md rounded-3xl p-3 sm:p-4 border border-neutral-100/80 hover:border-blue-200 shadow-sm hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-200 flex flex-col items-center text-center justify-center space-y-2 cursor-pointer active:scale-95"
               >
                 <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-neutral-50 group-hover:bg-white flex items-center justify-center shadow-inner transition-colors duration-200 shrink-0">
                   {getSpecialtyIcon(item.specialty_name)}

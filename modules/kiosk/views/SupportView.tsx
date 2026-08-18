@@ -11,7 +11,7 @@ export const SupportView: React.FC = () => {
       <div className="bg-white rounded-[32px] p-6 sm:p-8 shadow-xl border border-neutral-100 space-y-5 sm:space-y-6 w-full my-auto">
         <div className="flex items-center gap-3 border-b border-neutral-100 pb-4">
           <HelpCircle className="w-6 h-6 text-[#155DFC]" />
-          <h2 className="text-lg sm:text-xl font-extrabold text-[#1E2939]">Thông tin trợ giúp & Hướng dẫn sử dụng Kiosk</h2>
+          <h2 className="text-lg sm:text-xl font-extrabold text-[#1E2939]">Thông tin trợ giúp </h2>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:gap-6">

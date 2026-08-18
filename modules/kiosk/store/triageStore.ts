@@ -10,7 +10,10 @@ import {
     InfermedicaQuestion,
     InfermedicaRecommendedSpecialist
 } from '../types/triage.types';
-import { deepseekTranslationService } from '../services/deepseekTranslationService';
+import { 
+    translateQuestionWithDeepSeek, 
+    translateSymptomLabelsWithDeepSeek 
+} from '@/modules/reception/services/deepseekTranslationService';
 import { calculateAgeFromDob } from '../utils/kioskHelpers';
 
 const compileGlobalStaticSymptomMap = (): Record<string, string> => {
@@ -159,11 +162,11 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
             const response = await triageService.searchSymptoms(englishPhrase, patientAge);
 
             if (response && response.status === 'success' && Array.isArray(response.data)) {
-                const mergedList = [...get().currentRegionSymptoms];
-                let hasNewUpdates = false;
-
                 const currentGenderDataset = gender === 'female' ? femaleSymptomDataset : maleSymptomDataset;
                 const oppositeGenderDataset = gender === 'female' ? maleSymptomDataset : femaleSymptomDataset;
+
+                const candidateItems: { apiItem: any; matchedLocal: any }[] = [];
+                const needsTranslationItems: { id: string; label: string }[] = [];
 
                 response.data.forEach((apiItem) => {
                     if (!apiItem.id) return;
@@ -172,24 +175,44 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
                     const isInOppositeGender = findSymptomInDataset(oppositeGenderDataset, apiIdTarget);
                     if (isInOppositeGender) return;
 
-                    const isIdExisted = mergedList.some((localItem) => cleanId(localItem.id) === apiIdTarget);
+                    const isIdExisted = get().currentRegionSymptoms.some((localItem) => cleanId(localItem.id) === apiIdTarget);
 
                     if (!isIdExisted) {
                         const localSymptomInCurrentGender = findSymptomInDataset(currentGenderDataset, apiIdTarget);
                         const localSymptomInCommon = findSymptomInDataset(commonSymptomDataset, apiIdTarget);
                         const matchedLocal = localSymptomInCurrentGender || localSymptomInCommon;
 
-                        mergedList.push({
-                            id: apiItem.id,
-                            labelVn: matchedLocal ? matchedLocal.labelVn : apiItem.label,
-                            labelEn: matchedLocal ? matchedLocal.labelEn : apiItem.label,
-                            categoryNameVn: "Mở rộng từ Hệ thống"
-                        });
-                        hasNewUpdates = true;
+                        candidateItems.push({ apiItem, matchedLocal });
+                        if (!matchedLocal) {
+                            needsTranslationItems.push({ id: apiItem.id, label: apiItem.label });
+                        }
                     }
                 });
 
-                if (hasNewUpdates) {
+                // Dịch tự động các triệu chứng mới chưa có trong từ điển tĩnh
+                let translationMap = new Map<string, string>();
+                if (needsTranslationItems.length > 0) {
+                    translationMap = await translateSymptomLabelsWithDeepSeek(needsTranslationItems);
+                }
+
+                if (candidateItems.length > 0) {
+                    const mergedList = [...get().currentRegionSymptoms];
+                    candidateItems.forEach(({ apiItem, matchedLocal }) => {
+                        const apiIdTarget = cleanId(apiItem.id);
+                        if (!mergedList.some((item) => cleanId(item.id) === apiIdTarget)) {
+                            const translatedVn = matchedLocal
+                                ? matchedLocal.labelVn
+                                : translationMap.get(apiItem.id) || apiItem.label;
+
+                            mergedList.push({
+                                id: apiItem.id,
+                                labelVn: translatedVn,
+                                labelEn: matchedLocal ? matchedLocal.labelEn : apiItem.label,
+                                categoryNameVn: "Mở rộng từ Hệ thống"
+                            });
+                        }
+                    });
+
                     set({ currentRegionSymptoms: mergedList });
                 }
             }
@@ -209,20 +232,17 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
 
         set({ isApiLoading: true, historyStack: [], restoredAnswers: null });
 
-        const realCitizenId = authState.citizenId || authState.patientInfo?.idNumber;
-
-        if (!realCitizenId) {
-            console.error("Không tìm thấy thông tin định danh CCCD/CMND.");
-            set({ isApiLoading: false });
-            return;
-        }
-
         const initialEvidence: InfermedicaEvidence[] = get().selectedSymptoms.map(item => ({
             id: item.id,
             choice_id: 'present' as const
         }));
 
-        set({ accumulatedEvidence: initialEvidence });
+        const realCitizenId = authState.citizenId || authState.patientInfo?.idNumber;
+        if (!realCitizenId) {
+            console.error("Không tìm thấy thông tin định danh CCCD/CMND.");
+            set({ isApiLoading: false });
+            return;
+        }
 
         const patientAge = calculateAgeFromDob(authState.patientInfo?.dob);
 
@@ -258,7 +278,7 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
                 } else {
                     let finalQuestion = question;
                     try {
-                        finalQuestion = await deepseekTranslationService.translateQuestion(question);
+                        finalQuestion = await translateQuestionWithDeepSeek(question as any) as any;
                     } catch (err: any) {
                         console.error("DeepSeek Translation error:", err);
                         kioskState.showToast(`Dịch AI thất bại (${err.message || 'Lỗi hệ thống'}). Hiển thị tiếng Anh gốc.`, 'error');
@@ -343,7 +363,7 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
                 } else {
                     let finalQuestion = question;
                     try {
-                        finalQuestion = await deepseekTranslationService.translateQuestion(question);
+                        finalQuestion = await translateQuestionWithDeepSeek(question as any) as any;
                     } catch (err: any) {
                         console.error("DeepSeek Translation error:", err);
                         kioskState.showToast(`Dịch AI thất bại (${err.message || 'Lỗi hệ thống'}). Hiển thị tiếng Anh gốc.`, 'error');

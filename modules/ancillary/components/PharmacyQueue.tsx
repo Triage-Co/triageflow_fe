@@ -29,6 +29,10 @@ export function PharmacyQueue({
     selectedPrescriptionId,
     refreshKey = 0
 }: PharmacyQueueProps) {
+    const [selectedDate, setSelectedDate] = useState<string>(() => {
+        const today = new Date();
+        return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    });
     const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeStatus, setActiveStatus] = useState<PrescriptionStatusEnum | 'ALL'>('ALL');
@@ -37,12 +41,14 @@ export function PharmacyQueue({
     const [scanning, setScanning] = useState(false);
     const [scanError, setScanError] = useState<string | null>(null);
 
-    const fetchQueue = async (isSilent = false) => {
+    const fetchQueue = async (isSilent = false, dateToFetch = selectedDate) => {
         if (!isSilent) {
             setLoading(true);
         }
         try {
-            const list = await pharmacyService.getPrescriptions();
+            const list = await pharmacyService.getPrescriptions({
+                date: dateToFetch || undefined
+            });
             const validList = list.filter((p) => p.status !== 'CANCELLED' && p.status !== 'EXPIRED');
             setPrescriptions(validList);
         } catch (err) {
@@ -55,25 +61,20 @@ export function PharmacyQueue({
     };
 
     useEffect(() => {
-        fetchQueue(prescriptions.length > 0);
-
-        const timer = setInterval(() => {
-            fetchQueue(true);
-        }, 3000);
+        fetchQueue(prescriptions.length > 0, selectedDate);
 
         const handlePaidSync = () => {
-            fetchQueue(true);
+            fetchQueue(true, selectedDate);
         };
 
         window.addEventListener('storage', handlePaidSync);
         window.addEventListener('triageflow_prescription_paid', handlePaidSync);
 
         return () => {
-            clearInterval(timer);
             window.removeEventListener('storage', handlePaidSync);
             window.removeEventListener('triageflow_prescription_paid', handlePaidSync);
         };
-    }, [refreshKey]);
+    }, [refreshKey, selectedDate]);
 
     const handleScanSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -100,7 +101,12 @@ export function PharmacyQueue({
                 fetchQueue(true);
             }
         } catch (err: any) {
-            setScanError(err?.message || 'Không tìm thấy đơn thuốc tương ứng mã này');
+            const msg =
+                err?.response?.data?.detail ||
+                err?.response?.data?.message ||
+                err?.message ||
+                'Không tìm thấy đơn thuốc tương ứng mã này';
+            setScanError(msg);
         } finally {
             setScanning(false);
         }
@@ -174,7 +180,7 @@ export function PharmacyQueue({
         <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-3xl p-5 shadow-sm flex flex-col h-full">
             {/* Header & QR Scan Input */}
             <div className="space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                     <div>
                         <h3 className="text-base font-bold text-neutral-900 dark:text-white flex items-center gap-2">
                             <Pill className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
@@ -185,14 +191,27 @@ export function PharmacyQueue({
                         </p>
                     </div>
 
-                    <button
-                        onClick={() => fetchQueue(false)}
-                        disabled={loading}
-                        className="p-2 text-neutral-400 hover:text-neutral-600 dark:hover:text-white rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
-                        title="Làm mới hàng đợi"
-                    >
-                        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                        <input
+                            type="date"
+                            value={selectedDate}
+                            onChange={(e) => {
+                                const newDate = e.target.value;
+                                setSelectedDate(newDate);
+                                fetchQueue(false, newDate);
+                            }}
+                            className="px-2 py-1.5 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl text-xs font-semibold text-neutral-700 dark:text-neutral-300 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                            title="Lọc theo ngày"
+                        />
+                        <button
+                            onClick={() => fetchQueue(false)}
+                            disabled={loading}
+                            className="p-2 text-neutral-400 hover:text-neutral-600 dark:hover:text-white rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                            title="Làm mới hàng đợi"
+                        >
+                            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                        </button>
+                    </div>
                 </div>
 
                 {/* QR Scanner Form */}

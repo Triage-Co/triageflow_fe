@@ -41,13 +41,13 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
     DOCTOR: [
         { label: 'Danh sách bệnh nhân', href: '/doctor', icon: LayoutDashboard },
         { label: 'Thông báo', href: '/doctor/notification', icon: Bell },
-        { label: 'Cài đặt', href: '/doctor/setting', icon: Settings },
+        { label: 'Thông tin cá nhân', href: '/doctor/setting', icon: User },
     ],
     NURSE: [
         { label: 'Danh sách bệnh nhân', href: '/nurse/dashboard', icon: LayoutDashboard },
         { label: 'Tiếp nhận', href: '/reception', icon: UserCheck },
         { label: 'Thông báo', href: '/nurse/notification', icon: Bell },
-        { label: 'Cài đặt', href: '/nurse/setting', icon: Settings },
+        { label: 'Thông tin cá nhân', href: '/nurse/setting', icon: User },
     ],
     RECEPTIONIST: [
         { label: 'Tiếp nhận bệnh nhân', href: '/reception', icon: UserPlus },
@@ -69,33 +69,33 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
         { label: 'Quản lý & Cấp phát đơn', href: '/pharmacy', icon: Pill },
         { label: 'Danh mục dược phẩm', href: '/pharmacy/medicines', icon: Package },
         { label: 'Thông báo', href: '/notifications', icon: Bell },
-        { label: 'Cài đặt', href: '/settings', icon: Settings },
+        { label: 'Thông tin cá nhân', href: '/settings', icon: User },
     ],
     PHARMACIST: [
         { label: 'Tiếp nhận đơn tại quầy', href: '/pharmacy/checkin', icon: QrCode },
         { label: 'Quản lý & Cấp phát đơn', href: '/pharmacy', icon: Pill },
         { label: 'Danh mục dược phẩm', href: '/pharmacy/medicines', icon: Package },
         { label: 'Thông báo', href: '/notifications', icon: Bell },
-        { label: 'Cài đặt', href: '/settings', icon: Settings },
+        { label: 'Thông tin cá nhân', href: '/settings', icon: User },
     ],
     PHARMACY: [
         { label: 'Tiếp nhận đơn tại quầy', href: '/pharmacy/checkin', icon: QrCode },
         { label: 'Quản lý & Cấp phát đơn', href: '/pharmacy', icon: Pill },
         { label: 'Danh mục dược phẩm', href: '/pharmacy/medicines', icon: Package },
         { label: 'Thông báo', href: '/notifications', icon: Bell },
-        { label: 'Cài đặt', href: '/settings', icon: Settings },
+        { label: 'Thông tin cá nhân', href: '/settings', icon: User },
     ],
     CASHIER: [
         { label: 'Thanh toán', href: '/cashier', icon: CreditCard },
         { label: 'Thông báo', href: '/notifications', icon: Bell },
-        { label: 'Cài đặt', href: '/settings', icon: Settings },
+        { label: 'Thông tin cá nhân', href: '/settings', icon: User },
     ],
     USER: [
         { label: 'Hàng chờ', href: '/queue', icon: LayoutDashboard },
         { label: 'Điều hướng', href: '/navigation', icon: Map },
         { label: 'Thanh toán', href: '/payment', icon: CreditCard },
         { label: 'Kết quả', href: '/results', icon: FlaskConical },
-        { label: 'Cài đặt', href: '/settings', icon: Settings },
+        { label: 'Thông tin cá nhân', href: '/settings', icon: User },
     ],
     ADMIN: [
         { label: 'Tổng quan', href: '/admin/dashboard', icon: LayoutDashboard },
@@ -114,7 +114,7 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
     default: [
         { label: 'Danh sách bệnh nhân', href: '/doctor/dashboard', icon: LayoutDashboard },
         { label: 'Thông báo', href: '/notifications', icon: Bell },
-        { label: 'Cài đặt', href: '/settings', icon: Settings },
+        { label: 'Thông tin cá nhân', href: '/settings', icon: User },
     ],
 };
 

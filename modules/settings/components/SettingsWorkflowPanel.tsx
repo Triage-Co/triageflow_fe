@@ -1,8 +1,10 @@
 'use client';
 
-import { StaffProfileSettings } from './StaffProfileSettings';
+import StaffSettingsView from './StaffSettingsView';
 
-/** Shared staff settings for doctor / reception / pharmacy / cashier. */
+/** Unified staff settings panel for all roles (Doctor, Reception, Lab, Pharmacy, Cashier, Nurse, Admin). */
 export function SettingsWorkflowPanel() {
-    return <StaffProfileSettings />;
+    return <StaffSettingsView />;
 }
+
+export default SettingsWorkflowPanel;

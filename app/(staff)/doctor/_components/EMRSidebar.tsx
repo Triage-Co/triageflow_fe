@@ -1,6 +1,6 @@
 'use client';
 
-import { LayoutDashboard, Users, CalendarDays, Bell, Settings, Activity } from 'lucide-react';
+import { LayoutDashboard, Users, CalendarDays, Bell, User, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface EMRSidebarProps {
@@ -10,7 +10,7 @@ interface EMRSidebarProps {
 const NAV_ITEMS = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { id: 'notifications', icon: Bell, label: 'Thông báo' },
-    { id: 'settings', icon: Settings, label: 'Cài đặt' },
+    { id: 'settings', icon: User, label: 'Thông tin cá nhân' },
 ];
 
 export function EMRSidebar({ activeItem = 'patients' }: EMRSidebarProps) {
