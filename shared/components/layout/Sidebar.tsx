@@ -30,6 +30,7 @@ import {
 import { cn } from '@/lib/utils';
 import { authService } from '@/shared/services/authService';
 import { useAuthStore } from '@/store/authStore';
+import { PROCEDURE_ROOM_TYPES } from '@/modules/clinical/utils/staffShift';
 
 interface NavItem {
     label: string;
@@ -167,8 +168,9 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
-            const hasProcShift = localStorage.getItem('tfopd_active_room_type') === 'PROCEDURE_ROOM';
-            if (roleKey === 'DOCTOR' && hasProcShift) {
+            const storedRoomType = localStorage.getItem('tfopd_active_room_type') || '';
+            const isParaclinicalShift = PROCEDURE_ROOM_TYPES.has(storedRoomType.toUpperCase());
+            if ((roleKey === 'DOCTOR' || roleKey === 'NURSE') && isParaclinicalShift) {
                 setActiveRoleKey('LAB_TECHNICIAN');
             } else {
                 setActiveRoleKey(roleKey);
