@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useKioskStore } from '../store/kioskStore';
 import { useBookingStore } from '../store/bookingStore';
+import { useVirtualKeyboardStore } from '../store/virtualKeyboardStore';
 import { SpecialtyItem } from '../types/booking.types';
+import { removeVietnameseTones } from '../utils/kioskHelpers';
 import {
   ArrowLeft,
   Search,
+  Keyboard,
   Stethoscope,
   Heart,
   Eye,
@@ -115,6 +118,18 @@ export const SpecialtySelectView: React.FC = () => {
   const isFetchingSpecialties = useBookingStore((state) => state.isFetchingSpecialties);
   const fetchSpecialties = useBookingStore((state) => state.fetchSpecialties);
   const fetchDoctorsAndSlots = useBookingStore((state) => state.fetchDoctorsAndSlots);
+  const openKeyboard = useVirtualKeyboardStore((state) => state.openKeyboard);
+
+  const handleOpenVirtualKeyboard = () => {
+    openKeyboard({
+      inputId: 'specialty-search',
+      title: 'Tìm kiếm chuyên khoa',
+      initialValue: searchQuery,
+      placeholder: 'Nhập tên chuyên khoa (VD: Mắt, Tim mạch, Nhi...)',
+      onChange: (val) => setSearchQuery(val),
+      onSubmit: (val) => setSearchQuery(val),
+    });
+  };
 
   useEffect(() => {
     if (specialties.length === 0) {
@@ -122,9 +137,14 @@ export const SpecialtySelectView: React.FC = () => {
     }
   }, [fetchSpecialties, specialties.length]);
 
-  const filteredSpecialties = specialties.filter((s) =>
-    s.specialty_name.toLowerCase().includes(searchQuery.toLowerCase().trim())
-  );
+  const normalizedSearchQuery = removeVietnameseTones(searchQuery);
+
+  const filteredSpecialties = specialties.filter((s) => {
+    if (!normalizedSearchQuery) return true;
+    const nameNoTones = removeVietnameseTones(s.specialty_name);
+    const codeNoTones = removeVietnameseTones(s.specialty_code || '');
+    return nameNoTones.includes(normalizedSearchQuery) || codeNoTones.includes(normalizedSearchQuery);
+  });
 
   const handleSelectSpecialty = (item: SpecialtyItem) => {
     setSelectedSpecialtyItem(item);
@@ -163,27 +183,36 @@ export const SpecialtySelectView: React.FC = () => {
           </div>
         </div>
 
-        {/* Search Bar */}
+        {/* Search Bar with Virtual Keyboard Integration */}
         <div className="relative w-full sm:w-80 shrink-0">
-          <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" />
+          <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
           <input
             type="text"
             value={searchQuery}
+            onClick={handleOpenVirtualKeyboard}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Tìm kiếm chuyên khoa..."
-            className="w-full pl-11 pr-4 py-2.5 sm:py-3 bg-white/90 backdrop-blur-md border border-neutral-200 rounded-2xl text-xs sm:text-sm font-bold text-[#1E2939] placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#155DFC] shadow-sm transition-all"
+            className="w-full pl-11 pr-11 py-2.5 sm:py-3 bg-white/90 backdrop-blur-md border border-neutral-200 rounded-2xl text-xs sm:text-sm font-bold text-[#1E2939] placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#155DFC] shadow-sm transition-all cursor-pointer"
           />
+          <button
+            type="button"
+            onClick={handleOpenVirtualKeyboard}
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-xl bg-blue-50 text-[#155DFC] hover:bg-blue-100 transition-colors cursor-pointer"
+            title="Mở bàn phím ảo"
+          >
+            <Keyboard className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 
-      {/* Main Grid View */}
+      {/* Main Grid View - 6 Columns Grid with 2x Height Cards */}
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {isFetchingSpecialties ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 flex-1 min-h-0 overflow-y-auto pr-1 content-start auto-rows-max">
-            {Array.from({ length: 18 }).map((_, idx) => (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3 flex-1 min-h-0 overflow-y-auto pr-1 content-start">
+            {Array.from({ length: 30 }).map((_, idx) => (
               <div
                 key={idx}
-                className="aspect-square bg-white/60 rounded-3xl animate-pulse border border-neutral-100"
+                className="h-[108px] sm:h-[118px] bg-white/60 rounded-3xl animate-pulse border border-neutral-100"
               />
             ))}
           </div>
@@ -204,18 +233,18 @@ export const SpecialtySelectView: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 overflow-y-auto flex-1 min-h-0 pr-1 content-start auto-rows-max">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3 overflow-y-auto flex-1 min-h-0 pr-1 content-start">
             {filteredSpecialties.map((item) => (
               <button
                 key={item.specialty_id}
                 onClick={() => handleSelectSpecialty(item)}
-                className="group aspect-square w-full bg-white/90 hover:bg-gradient-to-br hover:from-white hover:to-blue-50/80 backdrop-blur-md rounded-3xl p-3 sm:p-4 border border-neutral-100/80 hover:border-blue-200 shadow-sm hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-200 flex flex-col items-center text-center justify-center space-y-2 cursor-pointer active:scale-95"
+                className="group w-full h-[108px] sm:h-[118px] bg-white/95 hover:bg-gradient-to-b hover:from-white hover:to-blue-50/90 backdrop-blur-md rounded-3xl p-2.5 sm:p-3 border border-neutral-200/80 hover:border-blue-300 shadow-xs hover:shadow-lg hover:shadow-blue-500/10 transition-all duration-200 flex flex-col items-center justify-center text-center space-y-1.5 cursor-pointer active:scale-95 overflow-hidden shrink-0"
               >
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-neutral-50 group-hover:bg-white flex items-center justify-center shadow-inner transition-colors duration-200 shrink-0">
-                  {getSpecialtyIcon(item.specialty_name)}
+                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-blue-50/80 group-hover:bg-white flex items-center justify-center shadow-xs transition-colors duration-200 shrink-0">
+                  {getSpecialtyIcon(item.specialty_name, "w-5 h-5 sm:w-6 sm:h-6")}
                 </div>
-                <div className="space-y-0.5">
-                  <h4 className="text-xs sm:text-sm lg:text-base font-black text-[#1E2939] group-hover:text-[#155DFC] transition-colors line-clamp-2 leading-snug">
+                <div className="w-full px-0.5">
+                  <h4 className="text-xs sm:text-[13px] font-black text-[#1E2939] group-hover:text-[#155DFC] transition-colors leading-tight line-clamp-2">
                     {item.specialty_name}
                   </h4>
                 </div>

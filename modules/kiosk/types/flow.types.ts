@@ -6,7 +6,7 @@ export interface RouteStepItem {
   location?: string;
   queueNo?: string;
   estimatedWait?: string;
-  status: 'completed' | 'in_progress' | 'waiting' | 'pending';
+  status: 'completed' | 'in_progress' | 'waiting' | 'pending' | 'declined';
   stepId?: string;
   rawStep?: any;
 }

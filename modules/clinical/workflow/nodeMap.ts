@@ -113,6 +113,10 @@ export function mapStepStatusToNodeStatus(
     const name = stepName || '';
     const isPaymentLike = isPaymentStepName(name) || isExamPaymentStepName(name);
 
+    if (st === 'DECLINED') {
+        return 'declined';
+    }
+
     if (isPaymentLike && isPaidPaymentStatus(paymentStatus)) {
         return 'completed';
     }
@@ -143,6 +147,11 @@ export function nodeStyles(status: WorkflowStepStatus) {
             return {
                 ring: 'bg-[#2563EB] shadow-[0_0_0_4px_rgba(37,99,235,0.25)] border-transparent text-white',
                 line: 'bg-[#2563EB]',
+            };
+        case 'declined':
+            return {
+                ring: 'bg-[#E11D48] shadow-[0_0_0_4px_rgba(225,29,72,0.2)] border-transparent text-white',
+                line: 'bg-[#E11D48]',
             };
         case 'pending':
         default:

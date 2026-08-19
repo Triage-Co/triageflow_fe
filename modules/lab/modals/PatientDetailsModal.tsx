@@ -10,7 +10,8 @@ import {
     AlertCircle,
     CheckCircle2,
     Activity,
-    Star
+    Star,
+    UserX
 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 import { cn } from '@/lib/utils';
@@ -23,6 +24,7 @@ interface PatientDetailsModalProps {
     selectedPatient: QueuePatientItem | null;
     onCompleteOrderDetail?: (queueId: string, detailId: string) => Promise<void>;
     isCompletingDetail?: Record<string, boolean>;
+    onRefuseQueue?: (patient: { queue_id: string; patient_name: string; queue_number: string }) => void;
 }
 
 const STATUS_MAP = {
@@ -37,7 +39,8 @@ export default function PatientDetailsModal({
     onClose,
     selectedPatient,
     onCompleteOrderDetail,
-    isCompletingDetail
+    isCompletingDetail,
+    onRefuseQueue
 }: PatientDetailsModalProps) {
     if (!isOpen || !selectedPatient) return null;
 
@@ -295,11 +298,29 @@ export default function PatientDetailsModal({
                 </div>
 
                 {/* Modal Footer */}
-                <div className="px-6 py-4.5 border-t border-neutral-100 bg-neutral-50/50 flex justify-end">
+                <div className="px-6 py-4.5 border-t border-neutral-100 bg-neutral-50/50 flex items-center justify-between">
+                    <div>
+                        {patientStatus === 'SERVING' && onRefuseQueue && (
+                            <Button
+                                type="button"
+                                onClick={() => {
+                                    onClose();
+                                    onRefuseQueue({
+                                        queue_id: selectedPatient.queue_id,
+                                        patient_name: selectedPatient.patient_name,
+                                        queue_number: selectedPatient.queue_number,
+                                    });
+                                }}
+                                className="rounded-xl font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-4 text-xs shadow-3xs cursor-pointer"
+                            >
+                                Từ chối phục vụ
+                            </Button>
+                        )}
+                    </div>
                     <Button
                         onClick={onClose}
                         variant="outline"
-                        className="rounded-xl font-bold bg-white text-neutral-500 border-neutral-200 hover:bg-neutral-100 px-6"
+                        className="rounded-xl font-bold bg-white text-neutral-500 border-neutral-200 hover:bg-neutral-100 px-6 cursor-pointer"
                     >
                         Đóng
                     </Button>

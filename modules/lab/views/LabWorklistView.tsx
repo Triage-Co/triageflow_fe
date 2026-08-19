@@ -13,7 +13,8 @@ import {
     Clock,
     User,
     Compass,
-    Volume2
+    Volume2,
+    UserX
 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 import { cn } from '@/lib/utils';
@@ -30,6 +31,7 @@ import { useLab } from '../hooks/useLab';
 import { QUEUE_TYPE_MAP } from '@/modules/kiosk/utils/flowHelpers';
 import PatientDetailsModal from '../modals/PatientDetailsModal';
 import OverrideConfirmModal from '../modals/OverrideConfirmModal';
+import RefuseConfirmModal from '../modals/RefuseConfirmModal';
 
 export default function LabWorklistView() {
     const [dragOverIndex, setDragOverIndex] = React.useState<number | null>(null);
@@ -62,6 +64,11 @@ export default function LabWorklistView() {
         isOverriding,
         handleOpenOverrideConfirm,
         handleConfirmOverride,
+        refuseConfirmData,
+        setRefuseConfirmData,
+        isRefusing,
+        handleOpenRefuseConfirm,
+        handleConfirmRefuse,
     } = useLab();
 
     if (!mounted || !accessToken) {
@@ -347,14 +354,24 @@ export default function LabWorklistView() {
                                                     <TableCell className="text-right pr-8 py-3.5">
                                                         <div className="flex items-center justify-end gap-2">
                                                             {patient.localStatus === 'SERVING' && (
-                                                                <Button
-                                                                    onClick={() => handleCompleteQueue(patient.queue_id)}
-                                                                    disabled={isCompleting}
-                                                                    isLoading={isCompleting}
-                                                                    className="h-8 px-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11.5px] font-extrabold shadow-xs shrink-0 cursor-pointer gap-1.5 border-0"
-                                                                >
-                                                                    Hoàn thành
-                                                                </Button>
+                                                                <>
+                                                                    <Button
+                                                                        type="button"
+                                                                        onClick={() => handleOpenRefuseConfirm(patient)}
+                                                                        disabled={isRefusing}
+                                                                        className="h-8 px-3.5 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-[11.5px] font-extrabold shadow-3xs shrink-0 cursor-pointer"
+                                                                    >
+                                                                        Từ chối
+                                                                    </Button>
+                                                                    <Button
+                                                                        onClick={() => handleCompleteQueue(patient.queue_id)}
+                                                                        disabled={isCompleting}
+                                                                        isLoading={isCompleting}
+                                                                        className="h-8 px-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11.5px] font-extrabold shadow-xs shrink-0 cursor-pointer gap-1.5 border-0"
+                                                                    >
+                                                                        Hoàn thành
+                                                                    </Button>
+                                                                </>
                                                             )}
                                                             {activeListTab === 'missing' && (
                                                                 <Button
@@ -393,6 +410,7 @@ export default function LabWorklistView() {
                 selectedPatient={selectedPatient}
                 onCompleteOrderDetail={handleCompleteOrderDetail}
                 isCompletingDetail={isCompletingDetail}
+                onRefuseQueue={handleOpenRefuseConfirm}
             />
 
             <OverrideConfirmModal
@@ -401,6 +419,14 @@ export default function LabWorklistView() {
                 data={overrideConfirmData}
                 onConfirm={handleConfirmOverride}
                 isLoading={isOverriding}
+            />
+
+            <RefuseConfirmModal
+                isOpen={refuseConfirmData !== null}
+                onClose={() => setRefuseConfirmData(null)}
+                data={refuseConfirmData}
+                onConfirm={handleConfirmRefuse}
+                isLoading={isRefusing}
             />
         </EMRWorkspaceLayout>
     );

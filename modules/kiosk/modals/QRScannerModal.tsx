@@ -16,6 +16,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { NumericKeypad } from '../components/NumericKeypad';
 import { useFlowStore } from '../store/flowStore';
 
 export const QRScannerModal: React.FC = () => {
@@ -135,10 +136,10 @@ export const QRScannerModal: React.FC = () => {
       return;
     }
 
-    // TRƯỜNG HỢP 2: Số CCCD 9 - 12 chữ số thuần (nhập tay)
+    // TRƯỜNG HỢP 2: Số CCCD 12 chữ số (nhập tay)
     const cleanId = text.replace(/\D/g, '');
-    if (cleanId.length < 9 || cleanId.length > 12) {
-      setError('Số CCCD / CMND phải gồm 9 đến 12 chữ số');
+    if (cleanId.length !== 12) {
+      setError('Số CCCD phải gồm đúng 12 chữ số');
       isProcessingRef.current = false;
       return;
     }
@@ -223,119 +224,166 @@ export const QRScannerModal: React.FC = () => {
         </div>
 
         {/* Modal Body */}
-        <div className="p-8 flex flex-col items-center text-center space-y-6 overflow-y-auto">
+        <div className="p-6 sm:p-8 flex flex-col items-center text-center space-y-5 overflow-y-auto max-h-[80vh]">
 
-          {/* Animated Holographic Scanner Graphic Box */}
-          <div className="relative w-full max-w-sm aspect-[16/10] rounded-3xl bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 p-6 flex flex-col items-center justify-center text-white shadow-2xl shadow-blue-500/10 border border-blue-500/30 overflow-hidden group">
+          {!showManualInput ? (
+            <>
+              {/* Animated Holographic Scanner Graphic Box */}
+              <div className="relative w-full max-w-sm aspect-[16/10] rounded-3xl bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 p-6 flex flex-col items-center justify-center text-white shadow-2xl shadow-blue-500/10 border border-blue-500/30 overflow-hidden group">
 
-            {/* Background Ambient Glow & Waves */}
-            <div className="absolute -top-12 -left-12 w-36 h-36 bg-blue-500/20 blur-2xl rounded-full pointer-events-none" />
-            <div className="absolute -bottom-12 -right-12 w-36 h-36 bg-indigo-500/20 blur-2xl rounded-full pointer-events-none" />
+                {/* Background Ambient Glow & Waves */}
+                <div className="absolute -top-12 -left-12 w-36 h-36 bg-blue-500/20 blur-2xl rounded-full pointer-events-none" />
+                <div className="absolute -bottom-12 -right-12 w-36 h-36 bg-indigo-500/20 blur-2xl rounded-full pointer-events-none" />
 
-            {/* Glowing Scan Laser Line Animation */}
-            <div className="absolute top-0 left-0 right-0 h-1 bg-emerald-400 shadow-[0_0_16px_#34D399] animate-bounce duration-1000 z-20 pointer-events-none" />
+                {/* Glowing Scan Laser Line Animation */}
+                <div className="absolute top-0 left-0 right-0 h-1 bg-emerald-400 shadow-[0_0_16px_#34D399] animate-bounce duration-1000 z-20 pointer-events-none" />
 
-            {/* Illustrated CCCD Card */}
-            <div className="relative z-10 w-44 h-28 rounded-2xl bg-white/10 backdrop-blur-md border border-white/25 p-3 flex flex-col justify-between shadow-xl transform transition-transform group-hover:scale-105 duration-300">
-              <div className="flex items-center justify-between">
-                <div className="w-6 h-5 rounded-md bg-amber-400/80 border border-amber-300 flex items-center justify-center shadow-xs">
-                  <div className="w-3 h-3 rounded-xs border border-amber-600/50" />
+                {/* Illustrated CCCD Card */}
+                <div className="relative z-10 w-44 h-28 rounded-2xl bg-white/10 backdrop-blur-md border border-white/25 p-3 flex flex-col justify-between shadow-xl transform transition-transform group-hover:scale-105 duration-300">
+                  <div className="flex items-center justify-between">
+                    <div className="w-6 h-5 rounded-md bg-amber-400/80 border border-amber-300 flex items-center justify-center shadow-xs">
+                      <div className="w-3 h-3 rounded-xs border border-amber-600/50" />
+                    </div>
+                    <QrCode className="w-7 h-7 text-emerald-400 animate-pulse" />
+                  </div>
+                  <div className="space-y-1 text-left">
+                    <div className="w-20 h-2 rounded bg-white/40" />
+                    <div className="w-28 h-1.5 rounded bg-white/20" />
+                  </div>
                 </div>
-                <QrCode className="w-7 h-7 text-emerald-400 animate-pulse" />
-              </div>
-              <div className="space-y-1 text-left">
-                <div className="w-20 h-2 rounded bg-white/40" />
-                <div className="w-28 h-1.5 rounded bg-white/20" />
-              </div>
-            </div>
 
-            {/* Ready Radar Badge */}
-            <div className="absolute bottom-3 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/40 backdrop-blur-md border border-white/15 text-[11px] font-bold text-emerald-300 z-10 shadow-xs">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-              <span>Máy quét đã sẵn sàng (Đang chờ thẻ)</span>
-            </div>
-          </div>
+                {/* Ready Radar Badge */}
+                <div className="absolute bottom-3 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/40 backdrop-blur-md border border-white/15 text-[11px] font-bold text-emerald-300 z-10 shadow-xs">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  <span>Máy quét đã sẵn sàng (Đang chờ thẻ)</span>
+                </div>
+              </div>
 
-          {/* User Instructions */}
-          <div className="space-y-1.5 max-w-md">
-            <h3 className="text-2xl font-black text-[#1E2939] tracking-tight">
-              Quét mã QR trên thẻ CCCD
-            </h3>
-          </div>
+              {/* User Instructions */}
+              <div className="space-y-1 max-w-md">
+                <h3 className="text-xl sm:text-2xl font-black text-[#1E2939] tracking-tight">
+                  Quét mã QR trên thẻ CCCD
+                </h3>
+                <p className="text-xs text-neutral-400 font-semibold">
+                  Đặt mã QR trên thẻ CCCD của bạn trước đầu đọc để hệ thống nhận diện
+                </p>
+              </div>
+
+              {/* Manual Input Toggle Button */}
+              <div className="w-full max-w-md pt-2 border-t border-neutral-100 flex flex-col items-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowManualInput(true);
+                    setError('');
+                  }}
+                  className="flex items-center gap-2 text-xs sm:text-sm font-extrabold text-[#155DFC] hover:text-blue-700 bg-blue-50/70 hover:bg-blue-100/70 px-5 py-2.5 rounded-full transition-all cursor-pointer shadow-xs active:scale-95"
+                >
+                  <Keyboard className="w-4 h-4" />
+                  <span>Chạm để nhập số CCCD bằng bàn phím</span>
+                </button>
+              </div>
+            </>
+          ) : (
+            /* MANUAL INPUT MODE WITH NUMERIC KEYPAD */
+            <div className="w-full max-w-md space-y-4 animate-in fade-in-50 duration-200">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase tracking-wider text-neutral-500">
+                  Bàn phím số cảm ứng
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowManualInput(false);
+                    setError('');
+                  }}
+                  className="text-xs font-bold text-[#155DFC] hover:underline cursor-pointer flex items-center gap-1"
+                >
+                  <QrCode className="w-3.5 h-3.5" /> Dùng máy quét mã
+                </button>
+              </div>
+
+              {/* Digits Display Box */}
+              <div className="bg-neutral-50 border-2 border-blue-200 rounded-2xl p-3.5 text-center shadow-inner space-y-1">
+                <span className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider block">
+                  Số CCCD / CMND ({cccdInput.length}/12)
+                </span>
+                <div className="text-2xl sm:text-3xl font-black font-mono tracking-widest text-[#155DFC] min-h-[36px] flex items-center justify-center">
+                  {cccdInput ? (
+                    cccdInput
+                  ) : (
+                    <span className="text-neutral-300 font-normal text-lg tracking-normal">
+                      Chạm phím số bên dưới để nhập...
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Touch Numeric Keypad */}
+              <NumericKeypad
+                onKeyPress={(num) => {
+                  if (cccdInput.length < 12) {
+                    setCccdInput((prev) => prev + num);
+                    setError('');
+                  }
+                }}
+                onDelete={() => {
+                  setCccdInput((prev) => prev.slice(0, -1));
+                }}
+                onClear={() => {
+                  setCccdInput('');
+                  setError('');
+                }}
+                onSubmit={handleManualSubmit}
+                submitLabel="Xác nhận CCCD"
+                isSubmitDisabled={cccdInput.length !== 12}
+                isLoading={isLoading}
+              />
+            </div>
+          )}
 
           {error && (
-            <div className="flex items-center gap-2 bg-rose-50 text-rose-700 border border-rose-200 px-4 py-2.5 rounded-2xl text-xs font-bold max-w-md">
+            <div className="flex items-center gap-2 bg-rose-50 text-rose-700 border border-rose-200 px-4 py-2.5 rounded-2xl text-xs font-bold max-w-md animate-in fade-in duration-200">
               <ShieldCheck className="w-4 h-4 text-rose-500 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
-          {/* Invisible Auto-Focus Input for Barcode Scanners */}
+          {/* Invisible Auto-Focus Input for Barcode Scanners & PC Keyboard */}
           <input
             ref={inputRef}
             type="text"
             value={cccdInput}
             onChange={(e) => {
               const val = e.target.value;
-              setCccdInput(val);
               if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
 
-              // Nếu máy quét bắn chuỗi CCCD đầy đủ
-              if (val.includes('|') && val.split('|').length >= 6) {
-                processCCCDSubmission(val);
+              // Nếu là dữ liệu từ máy quét mã QR CCCD (chứa dấu phân cách '|')
+              if (val.includes('|')) {
+                setCccdInput(val);
+                if (val.split('|').length >= 6) {
+                  processCCCDSubmission(val);
+                }
+                return;
               }
+
+              // Nếu nhập từ bàn phím PC: Chỉ giữ lại chữ số (0-9) và tối đa 12 số
+              const digitsOnly = val.replace(/\D/g, '').slice(0, 12);
+              setCccdInput(digitsOnly);
+              if (error) setError('');
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
-                handleManualSubmit();
+                if (cccdInput.length === 12) {
+                  handleManualSubmit();
+                }
               }
             }}
             className="opacity-0 absolute -z-10 pointer-events-none"
             tabIndex={-1}
             autoFocus
           />
-
-          {/* Manual Input Toggle Button */}
-          <div className="w-full max-w-md pt-2 border-t border-neutral-100 flex flex-col items-center space-y-3">
-            {!showManualInput ? (
-              <button
-                type="button"
-                onClick={() => setShowManualInput(true)}
-                className="flex items-center gap-2 text-xs font-extrabold text-[#4A5565] hover:text-[#155DFC] transition-colors py-1 cursor-pointer"
-              >
-                <Keyboard className="w-4 h-4" />
-                <span>Bấm vào đây để nhập số bằng tay</span>
-              </button>
-            ) : (
-              <div className="w-full space-y-3 animate-in fade-in-50 duration-200 text-left">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-neutral-500 uppercase block">
-                    Nhập thủ công 12 số CCCD / CMND:
-                  </label>
-                  <input
-                    type="text"
-                    value={cccdInput}
-                    onChange={(e) => setCccdInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleManualSubmit()}
-                    placeholder="Ví dụ: 07920100xxxx"
-                    maxLength={12}
-                    className="w-full px-4 py-2.5 border border-neutral-200 rounded-xl font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[#155DFC] focus:border-[#155DFC]"
-                  />
-                </div>
-
-                <PrimaryButton
-                  onClick={handleManualSubmit}
-                  isLoading={isLoading}
-                  className="w-full text-sm"
-                >
-                  <ShieldCheck className="w-4 h-4" />
-                  {isLoading ? 'Đang xác thực...' : 'Xác nhận nhập tay'}
-                </PrimaryButton>
-              </div>
-            )}
-          </div>
-
         </div>
       </div>
     </div>

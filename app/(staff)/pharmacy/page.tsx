@@ -11,19 +11,7 @@ export default function PharmacyPage() {
     const [selectedPrescription, setSelectedPrescription] = useState<Prescription | null>(null);
     const [refreshQueueKey, setRefreshQueueKey] = useState(0);
 
-    const { user, setUser } = useAuthStore();
 
-    // Automatically ensure user state is PHARMACIST role when visiting pharmacy page
-    useEffect(() => {
-        if (!user || (user.role !== 'PHARMACIST' && user.role !== 'PHARMACY_STAFF' && user.role !== 'ADMIN')) {
-            setUser({
-                id: user?.id || 'pharmacist-demo-id',
-                email: user?.email || 'pharmacist@triageflow.me',
-                fullName: user?.fullName || 'Dược sĩ Nguyễn Văn A (Nhà thuốc)',
-                role: 'PHARMACIST'
-            });
-        }
-    }, [user, setUser]);
 
     const handlePrescriptionStatusChange = (updated: Prescription) => {
         setSelectedPrescription(updated);
