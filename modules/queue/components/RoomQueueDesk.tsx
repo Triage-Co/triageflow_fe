@@ -74,7 +74,7 @@ export function RoomQueueDesk({
                                 isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-neutral-400'
                             )}
                         />
-                        {isConnected ? 'Realtime' : 'Polling'}
+                        {isConnected ? 'Thời gian thực' : 'Polling'}
                     </span>
                     <Button
                         variant="outline"
@@ -124,12 +124,12 @@ export function RoomQueueDesk({
                     }
                     onRefuseServiceOrder={() => void refuseServiceOrder().catch(() => undefined)}
                     onCompleteStep={() => void completeStep().catch(() => undefined)}
-                    onRefuseStep={() => void refuseStep().catch(() => undefined)}
                     onMiss={() => void missServing().catch(() => undefined)}
                 />
                 <RoomWaitingList
                     waiting={queue?.waiting ?? []}
                     missing={queue?.missing ?? []}
+                    finished={queue?.finished ?? []}
                     isActing={isActing}
                     onCallByStep={(stepId) => void callNext(stepId).catch(() => undefined)}
                     onMiss={(qid) => void missQueue(qid).catch(() => undefined)}

@@ -172,10 +172,17 @@ export function SymptomTriageStep({
     const [selectedDate, setSelectedDate] = useState(getTodayDateString());
     const [dateScrollIndex, setDateScrollIndex] = useState(0);
     const [isLoadingDoctors, setIsLoadingDoctors] = useState(false);
+    const [bookingPreference, setBookingPreference] = useState<'auto' | 'manual'>('auto');
 
     const isSessionDirty = useMemo(() => {
         return triageSession.is_analyzed || triageSession.questions_answered > 0 || triageSession.evidence.length > 0;
     }, [triageSession]);
+
+    useEffect(() => {
+        if (triageSession.is_analyzed && triageSession.best_slot_id && bookingPreference === 'auto') {
+            onSlotChange(triageSession.best_slot_id);
+        }
+    }, [triageSession.is_analyzed, triageSession.best_slot_id, bookingPreference, onSlotChange]);
 
     const userPickedDepartmentRef = useRef(false);
 
@@ -598,439 +605,441 @@ export function SymptomTriageStep({
             )}
 
             {triageSession.is_analyzed && !pendingQuestion && (
-                <div className="rounded-[16px] border border-[#86EFAC] bg-gradient-to-br from-[#ECFDF5] via-[#F0FDF4] to-[#DCFCE7] p-5 shadow-[0_2px_14px_rgba(22,163,74,0.12)]">
-                    <div className="flex items-start gap-3 mb-4">
-                        <div className="w-9 h-9 rounded-xl bg-[#16A34A] flex items-center justify-center shrink-0">
-                            <CheckCircle2 className="w-5 h-5 text-white" strokeWidth={2.25} />
+                <div className="space-y-4">
+                    <div className="rounded-[16px] border border-[#86EFAC] bg-gradient-to-br from-[#ECFDF5] via-[#F0FDF4] to-[#DCFCE7] p-5 shadow-[0_2px_14px_rgba(22,163,74,0.12)]">
+                        <div className="flex items-start gap-3 mb-4">
+                            <div className="w-9 h-9 rounded-xl bg-[#16A34A] flex items-center justify-center shrink-0">
+                                <CheckCircle2 className="w-5 h-5 text-white" strokeWidth={2.25} />
+                            </div>
+                            <div className="min-w-0">
+                                <h2 className="text-[15px] font-bold text-[#14532D]">Kết quả AI chẩn đoán</h2>
+                                <p className="text-[12px] text-[#3F6212] mt-0.5">
+                                    Đã hoàn tất phỏng vấn. Hệ thống đề xuất chuyên khoa phù hợp nhất bên dưới.
+                                </p>
+                            </div>
                         </div>
-                        <div className="min-w-0">
-                            <h2 className="text-[15px] font-bold text-[#14532D]">Kết quả AI chẩn đoán</h2>
-                            <p className="text-[12px] text-[#3F6212] mt-0.5">
-                                Đã hoàn tất phỏng vấn. Bạn vẫn có thể chọn chuyên khoa thủ công bên dưới.
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-4">
+                            <div className="rounded-xl border border-[#BBF7D0] bg-white/90 px-3.5 py-3">
+                                <p className="text-[10px] font-bold uppercase tracking-wide text-[#65A30D]">Mức độ</p>
+                                <p className="mt-1 text-[13px] font-bold text-[#14532D]">
+                                    {triageSession.triage_label || triageSession.triage_level || '—'}
+                                </p>
+                            </div>
+                            <div className="rounded-xl border border-[#BBF7D0] bg-white/90 px-3.5 py-3">
+                                <p className="text-[10px] font-bold uppercase tracking-wide text-[#65A30D]">Khoa gợi ý</p>
+                                <p className="mt-1 text-[13px] font-bold text-[#14532D]">
+                                    {recommendedLabel || triageSession.recommended_department_label || '—'}
+                                </p>
+                            </div>
+                        </div>
+
+                        {triageSession.is_emergency && (
+                            <div className="mb-3 flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3.5 py-3 text-[12px] text-[#B91C1C]">
+                                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                                AI phát hiện dấu hiệu cần ưu tiên / cấp cứu. Kiểm tra lại mức ưu tiên bên dưới.
+                            </div>
+                        )}
+
+                        {triageSession.routing_note && (
+                            <p className="text-[12px] text-[#3F6212] bg-white/70 border border-[#BBF7D0] rounded-xl px-3.5 py-2.5">
+                                {triageSession.routing_note}
                             </p>
-                        </div>
+                        )}
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-4">
-                        <div className="rounded-xl border border-[#BBF7D0] bg-white/90 px-3.5 py-3">
-                            <p className="text-[10px] font-bold uppercase tracking-wide text-[#65A30D]">Mức độ</p>
-                            <p className="mt-1 text-[13px] font-bold text-[#14532D]">
-                                {triageSession.triage_label || triageSession.triage_level || '—'}
-                            </p>
+                    {/* 2 Lựa chọn Đặt khám tương tự Kiosk */}
+                    <div className="rounded-[16px] border border-[#EBEBEB] bg-white p-5 shadow-[0_1px_6px_rgba(0,0,0,0.04)]">
+                        <div className="flex items-center gap-2 mb-3">
+                            <Sparkles className="w-4 h-4 text-[#8B7CF6]" />
+                            <h3 className="text-[15px] font-bold text-[#1F2937]">Phương thức đặt phòng khám</h3>
                         </div>
-                        <div className="rounded-xl border border-[#BBF7D0] bg-white/90 px-3.5 py-3">
-                            <p className="text-[10px] font-bold uppercase tracking-wide text-[#65A30D]">Khoa gợi ý</p>
-                            <p className="mt-1 text-[13px] font-bold text-[#14532D]">
-                                {recommendedLabel || triageSession.recommended_department_label || '—'}
-                            </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setBookingPreference('auto');
+                                    if (triageSession.best_slot_id) {
+                                        onSlotChange(triageSession.best_slot_id);
+                                    }
+                                }}
+                                className={cn(
+                                    'p-4 rounded-2xl border text-left transition-all relative overflow-hidden flex flex-col justify-between cursor-pointer',
+                                    bookingPreference === 'auto'
+                                        ? 'bg-gradient-to-br from-emerald-600 to-teal-700 text-white border-transparent shadow-[0_4px_16px_rgba(5,150,105,0.25)] ring-2 ring-emerald-400'
+                                        : 'bg-[#F9FAFB] border-[#E5E7EB] text-[#374151] hover:border-[#86EFAC] hover:bg-[#F0FDF4]'
+                                )}
+                            >
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className={cn(
+                                        'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold',
+                                        bookingPreference === 'auto' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
+                                    )}>
+                                        <Sparkles className="w-3.5 h-3.5" />
+                                        Loại 1 · Đề xuất nhanh
+                                    </span>
+                                    {bookingPreference === 'auto' && (
+                                        <div className="w-6 h-6 rounded-full bg-white text-emerald-700 flex items-center justify-center">
+                                            <Check className="w-4 h-4 stroke-[3]" />
+                                        </div>
+                                    )}
+                                </div>
+                                <div>
+                                    <h4 className={cn('text-[15px] font-bold', bookingPreference === 'auto' ? 'text-white' : 'text-neutral-900')}>
+                                        🚀 Xếp phòng tự động
+                                    </h4>
+                                    <p className={cn('text-[12px] font-medium mt-1 leading-relaxed', bookingPreference === 'auto' ? 'text-emerald-100' : 'text-neutral-500')}>
+                                        Hệ thống tự động xếp Bác sĩ trực & Khung giờ sớm nhất còn trống của khoa <strong>{recommendedLabel || 'chuyên khoa'}</strong>
+                                    </p>
+                                </div>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setBookingPreference('manual');
+                                    if (bookingPreference === 'auto' && triageSession.best_slot_id === slotId) {
+                                        onSlotChange('');
+                                    }
+                                }}
+                                className={cn(
+                                    'p-4 rounded-2xl border text-left transition-all relative overflow-hidden flex flex-col justify-between cursor-pointer',
+                                    bookingPreference === 'manual'
+                                        ? 'bg-gradient-to-br from-[#8B7CF6] to-[#6D28D9] text-white border-transparent shadow-[0_4px_16px_rgba(139,124,246,0.25)] ring-2 ring-[#8B7CF6]'
+                                        : 'bg-[#F9FAFB] border-[#E5E7EB] text-[#374151] hover:border-[#C4B5FD] hover:bg-[#F5F3FF]'
+                                )}
+                            >
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className={cn(
+                                        'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold',
+                                        bookingPreference === 'manual' ? 'bg-white/20 text-white' : 'bg-[#EDE9FE] text-[#6D28D9]'
+                                    )}>
+                                        <User className="w-3.5 h-3.5" />
+                                        Loại 2 · Tùy chỉnh
+                                    </span>
+                                    {bookingPreference === 'manual' && (
+                                        <div className="w-6 h-6 rounded-full bg-white text-[#6D28D9] flex items-center justify-center">
+                                            <Check className="w-4 h-4 stroke-[3]" />
+                                        </div>
+                                    )}
+                                </div>
+                                <div>
+                                    <h4 className={cn('text-[15px] font-bold', bookingPreference === 'manual' ? 'text-white' : 'text-neutral-900')}>
+                                        👨‍⚕️ Tự chọn Bác sĩ & Khung giờ
+                                    </h4>
+                                    <p className={cn('text-[12px] font-medium mt-1 leading-relaxed', bookingPreference === 'manual' ? 'text-purple-100' : 'text-neutral-500')}>
+                                        Chủ động chọn Bác sĩ, Ngày khám và Khung giờ cụ thể theo nhu cầu của bệnh nhân
+                                    </p>
+                                </div>
+                            </button>
                         </div>
                     </div>
-
-                    {triageSession.is_emergency && (
-                        <div className="mb-3 flex items-start gap-2 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3.5 py-3 text-[12px] text-[#B91C1C]">
-                            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                            AI phát hiện dấu hiệu cần ưu tiên / cấp cứu. Kiểm tra lại mức ưu tiên bên dưới.
-                        </div>
-                    )}
-
-                    {triageSession.routing_note && (
-                        <p className="text-[12px] text-[#3F6212] bg-white/70 border border-[#BBF7D0] rounded-xl px-3.5 py-2.5">
-                            {triageSession.routing_note}
-                        </p>
-                    )}
                 </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div className="rounded-[14px] border border-[#EBEBEB] bg-white p-5 shadow-[0_1px_6px_rgba(0,0,0,0.04)]">
-                    <div className="flex items-center gap-2 mb-4">
-                        <Stethoscope className="w-4 h-4 text-[#8B7CF6]" strokeWidth={2.25} />
-                        <h2 className="text-[15px] font-bold text-[#1F2937]">Chọn chuyên khoa</h2>
-                    </div>
-                    <p className="mb-3 text-[11px] text-[#6B7280]">
-                        Chọn chuyên khoa để hệ thống chỉ hiển thị bác sĩ phụ trách khoa đó.
-                    </p>
-                    {isLoadingMeta && specialtyCatalog.length === 0 ? (
-                        <div className="flex flex-wrap gap-2">
-                            {Array.from({ length: 8 }).map((_, i) => (
-                                <div key={i} className="h-9 w-24 rounded-xl bg-[#F3F4F6] animate-pulse" />
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="flex flex-wrap gap-2 max-h-[220px] overflow-y-auto pr-1">
-                            {specialtyCatalog.map((item) => {
-                                const isSelected = departmentId === item.specialty_id;
-                                const isAiReference = aiReferenceSpecialtyId === item.specialty_id;
-                                return (
-                                    <button
-                                        key={item.specialty_id}
-                                        type="button"
-                                        disabled={isPending || isLoadingDoctors}
-                                        onClick={() => handleDepartmentSelect(item.specialty_id)}
-                                        className={cn(
-                                            'px-3.5 py-2 rounded-xl text-[12px] font-semibold transition-colors',
-                                            isSelected
-                                                ? 'bg-[#8B7CF6] text-white shadow-[0_2px_8px_rgba(139,124,246,0.25)]'
-                                                : isAiReference
-                                                    ? 'bg-[#FAFAFF] text-[#5B21B6] border border-dashed border-[#C4B5FD]'
-                                                    : 'bg-[#F9FAFB] text-[#374151] border border-[#E5E7EB] hover:border-[#C4B5FD] hover:bg-[#F5F3FF]',
-                                        )}
-                                    >
-                                        {item.specialty_name}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    )}
-                    {selectedCatalogSpecialty && (
-                        <p className="mt-3 text-[11px] text-[#6B7280]">
-                            Đã chọn: <strong>{selectedCatalogSpecialty.specialty_name}</strong>
-                        </p>
-                    )}
-                    {recommendedLabel && triageSession.is_analyzed && (
-                        <div className="mt-4 rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] px-3.5 py-3 flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                                <Sparkles className="w-4 h-4 text-[#16A34A] shrink-0" />
-                                <p className="text-[12px] text-[#166534]">
-                                    AI gợi ý khoa: <strong className="text-[#14532D]">{recommendedLabel}</strong>
-                                    {' — '}có thể chọn khác nếu cần.
-                                </p>
-                            </div>
-                            {aiReferenceSpecialtyId && departmentId !== aiReferenceSpecialtyId && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        userPickedDepartmentRef.current = false;
-                                        applyAiSuggestedDepartment(triageSession);
-                                    }}
-                                    className="px-2.5 py-1 text-[11px] font-bold text-[#15803D] bg-white border border-[#86EFAC] rounded-lg hover:bg-[#DCFCE7] shadow-sm transition shrink-0"
-                                >
-                                    Chọn khoa AI gợi ý
-                                </button>
-                            )}
-                        </div>
-                    )}
-                </div>
-
-                <div className="rounded-[16px] border border-[#EBEBEB] bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.04)]">
-                    <div className="flex items-center justify-between gap-3 mb-4">
-                        <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-lg bg-[#F5F3FF] flex items-center justify-center">
-                                <User className="w-4 h-4 text-[#8B7CF6]" strokeWidth={2.25} />
-                            </div>
-                            <div>
-                                <h2 className="text-[15px] font-bold text-[#1F2937]">
-                                    Chọn bác sĩ <span className="text-[#EF4444]">*</span>
-                                </h2>
-                                <p className="text-[11px] text-[#9CA3AF] mt-0.5">Chọn bác sĩ phù hợp với chuyên khoa</p>
-                            </div>
-                        </div>
-                        {showDoctors && (
-                            <span className="text-[11px] font-semibold text-[#8B7CF6] bg-[#F5F3FF] px-2.5 py-1 rounded-full">
-                                {isLoadingDoctors ? 'Đang tải...' : `${filteredDoctors.length} bác sĩ`}
-                            </span>
-                        )}
-                    </div>
-                    {isLoadingMeta || isLoadingDoctors ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {Array.from({ length: 4 }).map((_, i) => (
-                                <div key={i} className="h-[88px] rounded-2xl bg-[#F3F4F6] animate-pulse" />
-                            ))}
-                        </div>
-                    ) : showDoctors ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[360px] overflow-y-auto pr-1">
-                            {filteredDoctors.map((doctor, index) => {
-                                const key = getDoctorKey(doctor, index);
-                                const isSelected = specialtyId === key;
-                                const name = getDoctorName(doctor);
-                                const degree = getDoctorDegree(doctor);
-                                return (
-                                    <button
-                                        key={key}
-                                        type="button"
-                                        disabled={isPending}
-                                        onClick={() => handleDoctorSelect(key)}
-                                        className={cn(
-                                            'flex items-start gap-3 p-3.5 rounded-2xl border text-left transition-all',
-                                            isSelected
-                                                ? 'border-[#8B7CF6] bg-gradient-to-br from-[#FAFAFF] to-[#F5F3FF] shadow-[0_4px_16px_rgba(139,124,246,0.18)] ring-1 ring-[#8B7CF6]/25'
-                                                : 'border-[#F3F4F6] bg-[#FAFAFA] hover:border-[#DDD6FE] hover:bg-white',
-                                        )}
-                                    >
-                                        <div
-                                            role="img"
-                                            aria-label={`Ảnh ${name}`}
-                                            className="w-14 h-14 rounded-2xl shrink-0 bg-cover bg-center border border-[#EDE9FE]"
-                                            style={{
-                                                backgroundImage: `url("${doctor.avatar_url || DEFAULT_DOCTOR_AVATAR}"), url("${DEFAULT_DOCTOR_AVATAR}")`,
-                                            }}
-                                        />
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-[10px] font-bold uppercase tracking-wide text-[#8B7CF6] truncate">
-                                                {degree}
-                                            </p>
-                                            <p className="text-[13px] font-bold text-[#1F2937] truncate mt-0.5">{name}</p>
-                                            <p className="text-[11px] text-[#6B7280] truncate mt-0.5">
-                                                {doctor.specialty_name ?? 'Bác sĩ điều trị'}
-                                            </p>
-                                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5">
-                                                {doctor.rating !== undefined && (
-                                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#B45309]">
-                                                        <Star className="w-3 h-3 fill-[#FBBF24] text-[#F59E0B]" />
-                                                        {doctor.rating.toFixed(1)}
-                                                        {doctor.review_count !== undefined && (
-                                                            <span className="font-medium text-[#9CA3AF]">
-                                                                ({doctor.review_count})
-                                                            </span>
-                                                        )}
-                                                    </span>
-                                                )}
-                                                {doctor.experience_years !== undefined && (
-                                                    <span className="text-[10px] font-medium text-[#6B7280]">
-                                                        {doctor.experience_years} năm KN
-                                                    </span>
-                                                )}
-                                                {doctor.license_number && (
-                                                    <span className="text-[10px] text-[#9CA3AF]">
-                                                        CCHN {doctor.license_number}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-                                        {isSelected && (
-                                            <div className="w-6 h-6 rounded-full bg-[#8B7CF6] flex items-center justify-center shrink-0">
-                                                <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
-                                            </div>
-                                        )}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    ) : (
-                        <p className="text-[12px] text-[#9CA3AF] py-4 text-center">
-                            {!departmentId
-                                ? 'Chọn chuyên khoa trước để xem danh sách bác sĩ.'
-                                : isLoadingDoctors
-                                    ? 'Đang tải bác sĩ theo chuyên khoa...'
-                                    : 'Chưa có bác sĩ trực cho chuyên khoa này hôm nay.'}
-                        </p>
-                    )}
-                </div>
-            </div>
-
-            {specialtyId && (
-                <div className="rounded-[16px] border border-[#EBEBEB] bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.04)]">
-                    <div className="flex items-center gap-2 mb-5">
-                        <div className="w-8 h-8 rounded-lg bg-[#F5F3FF] flex items-center justify-center">
-                            <CalendarDays className="w-4 h-4 text-[#8B7CF6]" strokeWidth={2.25} />
+            {triageSession.is_analyzed && bookingPreference === 'auto' && (
+                <div className="rounded-[16px] border border-[#BBF7D0] bg-[#F0FDF4] p-5 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-[#16A34A] text-white flex items-center justify-center font-bold shrink-0">
+                            <CheckCircle2 className="w-6 h-6" />
                         </div>
                         <div>
-                            <h2 className="text-[15px] font-bold text-[#1F2937]">
-                                Chọn ngày & giờ khám <span className="text-[#EF4444]">*</span>
-                            </h2>
-                            <p className="text-[11px] text-[#9CA3AF] mt-0.5">{getDoctorName(selectedDoctor ?? {})}</p>
+                            <p className="text-[14px] font-bold text-[#14532D]">
+                                Đã kích hoạt Xếp phòng tự động cho khoa {recommendedLabel}
+                            </p>
+                            <p className="text-[12px] text-[#166534] mt-0.5">
+                                Bấm nút <strong>Tiếp theo</strong> bên dưới để xác nhận và chọn phương thức thanh toán (Tiền mặt hoặc Quét mã QR).
+                            </p>
                         </div>
                     </div>
+                </div>
+            )}
 
-                    <div className="flex items-center gap-2 mb-5">
-                        <button
-                            type="button"
-                            disabled={dateScrollIndex <= 0 || isPending}
-                            onClick={() => setDateScrollIndex((i) => Math.max(0, i - 1))}
-                            className="w-8 h-8 rounded-full border border-[#E5E7EB] flex items-center justify-center disabled:opacity-30 shrink-0"
-                        >
-                            <ChevronLeft className="w-4 h-4" />
-                        </button>
-                        <div className="flex-1 grid grid-cols-5 gap-2">
-                            {visibleDates.map((date) => {
-                                const isSelected = selectedDate === date.value;
-                                return (
-                                    <button
-                                        key={date.value}
-                                        type="button"
-                                        disabled={isPending}
-                                        onClick={() => {
-                                            setSelectedDate(date.value);
-                                            onSlotChange('');
-                                        }}
-                                        className={cn(
-                                            'flex flex-col items-center justify-center py-2.5 px-1 rounded-xl border transition-all min-h-[72px]',
-                                            isSelected
-                                                ? 'border-[#8B7CF6] bg-[#8B7CF6] text-white shadow-[0_4px_12px_rgba(139,124,246,0.35)]'
-                                                : 'border-[#F3F4F6] bg-[#FAFAFA] text-[#374151] hover:border-[#DDD6FE] hover:bg-[#F5F3FF]',
-                                        )}
-                                    >
-                                        <span
-                                            className={cn(
-                                                'text-[10px] font-bold uppercase',
-                                                isSelected ? 'text-white/85' : 'text-[#9CA3AF]',
-                                            )}
-                                        >
-                                            {date.isToday ? 'Hôm nay' : date.weekday}
-                                        </span>
-                                        <span className="text-[18px] font-extrabold leading-none mt-1">{date.day}</span>
-                                        <span
-                                            className={cn(
-                                                'text-[10px] font-medium mt-0.5',
-                                                isSelected ? 'text-white/80' : 'text-[#9CA3AF]',
-                                            )}
-                                        >
-                                            Th{date.month}
-                                        </span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                        <button
-                            type="button"
-                            disabled={dateScrollIndex + 5 >= DATE_OPTIONS.length || isPending}
-                            onClick={() => setDateScrollIndex((i) => Math.min(DATE_OPTIONS.length - 5, i + 1))}
-                            className="w-8 h-8 rounded-full border border-[#E5E7EB] flex items-center justify-center disabled:opacity-30 shrink-0"
-                        >
-                            <ChevronRight className="w-4 h-4" />
-                        </button>
-                    </div>
-
-                    {isPending ? (
-                        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                            {Array.from({ length: 8 }).map((_, i) => (
-                                <div key={i} className="h-11 rounded-xl bg-[#F3F4F6] animate-pulse" />
-                            ))}
-                        </div>
-                    ) : doctorSlots.length > 0 ? (
-                        <div className="space-y-4">
-                            <div className="flex flex-wrap items-center gap-3 text-[11px] text-[#6B7280]">
-                                <span className="inline-flex items-center gap-1.5">
-                                    <span className="w-3 h-3 rounded border border-[#D1D5DB] bg-white" />
-                                    Còn chỗ
-                                </span>
-                                <span className="inline-flex items-center gap-1.5">
-                                    <span className="w-3 h-3 rounded border border-[#FCA5A5] bg-[#FEE2E2]" />
-                                    Đã đầy
-                                </span>
-                                <span className="inline-flex items-center gap-1.5">
-                                    <span className="w-3 h-3 rounded bg-[#16A34A]" />
-                                    Đang chọn
-                                </span>
+            {triageSession.is_analyzed && bookingPreference === 'manual' && (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                    {/* Cột trái: Danh sách Bác sĩ trực của khoa gợi ý */}
+                    <div className={cn("rounded-[16px] border border-[#EBEBEB] bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.04)]", specialtyId ? "lg:col-span-6" : "lg:col-span-12")}>
+                        <div className="flex items-center justify-between gap-3 mb-4">
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-lg bg-[#F5F3FF] flex items-center justify-center">
+                                    <User className="w-4 h-4 text-[#8B7CF6]" strokeWidth={2.25} />
+                                </div>
+                                <div>
+                                    <h2 className="text-[15px] font-bold text-[#1F2937]">
+                                        Bác sĩ trực khoa {recommendedLabel} <span className="text-[#EF4444]">*</span>
+                                    </h2>
+                                    <p className="text-[11px] text-[#9CA3AF] mt-0.5">Chọn bác sĩ phụ trách khám</p>
+                                </div>
                             </div>
-                            {groupedSlots.map((group) => (
-                                <div key={group.id}>
-                                    <div className="flex items-center gap-2 mb-2.5">
-                                        <Clock className="w-3.5 h-3.5 text-[#8B7CF6]" />
-                                        <p className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wide">
-                                            {group.label}
-                                        </p>
-                                    </div>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                                        {group.slots.map((slot, i) => {
-                                            const id = slot.slot_id ?? slot.id ?? String(i);
-                                            const isSelected = slotId === id;
-                                            const isFull = Boolean(slot.is_full);
-                                            
-                                            // Kiểm tra nếu là khung giờ đã qua so với thời gian hiện tại
-                                            let isPast = false;
-                                            if (selectedDate === getTodayDateString()) {
-                                                const now = new Date();
-                                                const currentHours = now.getHours();
-                                                const currentMinutes = now.getMinutes();
-                                                if (slot.start_time) {
-                                                    const [h, m] = slot.start_time.split(':').map(Number);
-                                                    if (h < currentHours || (h === currentHours && m <= currentMinutes)) {
-                                                        isPast = true;
-                                                    }
-                                                }
-                                            }
-
-                                            return (
-                                                <button
-                                                    key={id}
-                                                    type="button"
-                                                    disabled={isFull || isPast}
-                                                    onClick={() => {
-                                                        if (!isFull && !isPast) onSlotChange(id);
-                                                    }}
-                                                    className={cn(
-                                                        'relative px-3 py-3 rounded-xl border text-center transition-all disabled:cursor-not-allowed',
-                                                        isSelected
-                                                            ? 'border-[#16A34A] bg-[#16A34A] text-white shadow-[0_4px_12px_rgba(22,163,74,0.3)]'
-                                                            : isPast
-                                                              ? 'border-neutral-200 bg-neutral-100 text-neutral-400 opacity-60'
-                                                              : isFull
-                                                                ? 'border-[#FCA5A5] bg-[#FEE2E2] text-[#B91C1C]'
-                                                                : 'border-[#E5E7EB] bg-white text-[#374151] hover:border-[#86EFAC] hover:bg-[#F0FDF4]',
-                                                    )}
-                                                >
-                                                    <span className="text-[13px] font-bold block">
-                                                        {slot.start_time?.slice(0, 5)}
-                                                    </span>
-                                                    {slot.end_time && (
-                                                        <span
-                                                            className={cn(
-                                                                'text-[10px] block mt-0.5',
-                                                                isSelected
-                                                                    ? 'text-white/80'
-                                                                    : isPast
-                                                                      ? 'text-neutral-400'
-                                                                      : isFull
-                                                                        ? 'text-[#DC2626]'
-                                                                        : 'text-[#9CA3AF]',
+                            {showDoctors && (
+                                <span className="text-[11px] font-semibold text-[#8B7CF6] bg-[#F5F3FF] px-2.5 py-1 rounded-full">
+                                    {isLoadingDoctors ? 'Đang tải...' : `${filteredDoctors.length} bác sĩ`}
+                                </span>
+                            )}
+                        </div>
+                        {isLoadingMeta || isLoadingDoctors ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {Array.from({ length: 4 }).map((_, i) => (
+                                    <div key={i} className="h-[88px] rounded-2xl bg-[#F3F4F6] animate-pulse" />
+                                ))}
+                            </div>
+                        ) : showDoctors ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[380px] overflow-y-auto pr-1">
+                                {filteredDoctors.map((doctor, index) => {
+                                    const key = getDoctorKey(doctor, index);
+                                    const isSelected = specialtyId === key;
+                                    const name = getDoctorName(doctor);
+                                    const degree = getDoctorDegree(doctor);
+                                    return (
+                                        <button
+                                            key={key}
+                                            type="button"
+                                            disabled={isPending}
+                                            onClick={() => handleDoctorSelect(key)}
+                                            className={cn(
+                                                'flex items-start gap-3 p-3.5 rounded-2xl border text-left transition-all',
+                                                isSelected
+                                                    ? 'border-[#8B7CF6] bg-gradient-to-br from-[#FAFAFF] to-[#F5F3FF] shadow-[0_4px_16px_rgba(139,124,246,0.18)] ring-1 ring-[#8B7CF6]/25'
+                                                    : 'border-[#F3F4F6] bg-[#FAFAFA] hover:border-[#DDD6FE] hover:bg-white',
+                                            )}
+                                        >
+                                            <div
+                                                role="img"
+                                                aria-label={`Ảnh ${name}`}
+                                                className="w-14 h-14 rounded-2xl shrink-0 bg-cover bg-center border border-[#EDE9FE]"
+                                                style={{
+                                                    backgroundImage: `url("${doctor.avatar_url || DEFAULT_DOCTOR_AVATAR}"), url("${DEFAULT_DOCTOR_AVATAR}")`,
+                                                }}
+                                            />
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-[10px] font-bold uppercase tracking-wide text-[#8B7CF6] truncate">
+                                                    {degree}
+                                                </p>
+                                                <p className="text-[13px] font-bold text-[#1F2937] truncate mt-0.5">{name}</p>
+                                                <p className="text-[11px] text-[#6B7280] truncate mt-0.5">
+                                                    {doctor.specialty_name ?? 'Bác sĩ điều trị'}
+                                                </p>
+                                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5">
+                                                    {doctor.rating !== undefined && (
+                                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#B45309]">
+                                                            <Star className="w-3 h-3 fill-[#FBBF24] text-[#F59E0B]" />
+                                                            {doctor.rating.toFixed(1)}
+                                                            {doctor.review_count !== undefined && (
+                                                                <span className="font-medium text-[#9CA3AF]">
+                                                                    ({doctor.review_count})
+                                                                </span>
                                                             )}
-                                                        >
-                                                            đến {slot.end_time.slice(0, 5)}
                                                         </span>
                                                     )}
+                                                    {doctor.experience_years !== undefined && (
+                                                        <span className="text-[10px] font-medium text-[#6B7280]">
+                                                            {doctor.experience_years} năm KN
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            {isSelected && (
+                                                <div className="w-6 h-6 rounded-full bg-[#8B7CF6] flex items-center justify-center shrink-0">
+                                                    <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
+                                                </div>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <p className="text-[12px] text-[#9CA3AF] py-6 text-center">
+                                {isLoadingDoctors
+                                    ? 'Đang tải bác sĩ theo chuyên khoa...'
+                                    : 'Chưa có bác sĩ trực cho chuyên khoa này hôm nay.'}
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Cột phải: Chọn Ngày & Giờ khám */}
+                    {specialtyId && (
+                        <div className="lg:col-span-6 rounded-[16px] border border-[#EBEBEB] bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.04)] flex flex-col justify-between">
+                            <div>
+                                <div className="flex items-center gap-2 mb-4">
+                                    <div className="w-8 h-8 rounded-lg bg-[#F5F3FF] flex items-center justify-center">
+                                        <CalendarDays className="w-4 h-4 text-[#8B7CF6]" strokeWidth={2.25} />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-[15px] font-bold text-[#1F2937]">
+                                            Chọn ngày & giờ khám <span className="text-[#EF4444]">*</span>
+                                        </h2>
+                                        <p className="text-[11px] text-[#9CA3AF] mt-0.5">{getDoctorName(selectedDoctor ?? {})}</p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 mb-4">
+                                    <button
+                                        type="button"
+                                        disabled={dateScrollIndex <= 0 || isPending}
+                                        onClick={() => setDateScrollIndex((i) => Math.max(0, i - 1))}
+                                        className="w-8 h-8 rounded-full border border-[#E5E7EB] flex items-center justify-center disabled:opacity-30 shrink-0"
+                                    >
+                                        <ChevronLeft className="w-4 h-4" />
+                                    </button>
+                                    <div className="flex-1 grid grid-cols-5 gap-2">
+                                        {visibleDates.map((date) => {
+                                            const isSelected = selectedDate === date.value;
+                                            return (
+                                                <button
+                                                    key={date.value}
+                                                    type="button"
+                                                    disabled={isPending}
+                                                    onClick={() => {
+                                                        setSelectedDate(date.value);
+                                                        onSlotChange('');
+                                                    }}
+                                                    className={cn(
+                                                        'flex flex-col items-center justify-center py-2 px-1 rounded-xl border transition-all min-h-[64px]',
+                                                        isSelected
+                                                            ? 'border-[#8B7CF6] bg-[#8B7CF6] text-white shadow-[0_4px_12px_rgba(139,124,246,0.35)]'
+                                                            : 'border-[#F3F4F6] bg-[#FAFAFA] text-[#374151] hover:border-[#DDD6FE] hover:bg-[#F5F3FF]',
+                                                    )}
+                                                >
                                                     <span
                                                         className={cn(
-                                                            'text-[9px] font-semibold block mt-1',
-                                                            isSelected
-                                                                ? 'text-white'
-                                                                : isPast
-                                                                  ? 'text-neutral-400'
-                                                                  : isFull
-                                                                    ? 'text-[#B91C1C]'
-                                                                    : 'text-[#16A34A]',
+                                                            'text-[9px] font-bold uppercase',
+                                                            isSelected ? 'text-white/85' : 'text-[#9CA3AF]',
                                                         )}
                                                     >
-                                                        {isPast
-                                                            ? 'Đã qua'
-                                                            : isFull
-                                                              ? 'Đã đầy'
-                                                              : slot.capacity !== undefined
-                                                                ? `Còn ${slot.capacity} chỗ`
-                                                                : 'Còn chỗ'}
+                                                        {date.isToday ? 'Hôm nay' : date.weekday}
                                                     </span>
-                                                    {isSelected && (
-                                                        <Check
-                                                            className="w-3 h-3 absolute top-1.5 right-1.5 text-white"
-                                                            strokeWidth={3}
-                                                        />
-                                                    )}
+                                                    <span className="text-[16px] font-extrabold leading-none mt-1">{date.day}</span>
+                                                    <span
+                                                        className={cn(
+                                                            'text-[9px] font-medium mt-0.5',
+                                                            isSelected ? 'text-white/80' : 'text-[#9CA3AF]',
+                                                        )}
+                                                    >
+                                                        Th{date.month}
+                                                    </span>
                                                 </button>
                                             );
                                         })}
                                     </div>
+                                    <button
+                                        type="button"
+                                        disabled={dateScrollIndex + 5 >= DATE_OPTIONS.length || isPending}
+                                        onClick={() => setDateScrollIndex((i) => Math.min(DATE_OPTIONS.length - 5, i + 1))}
+                                        className="w-8 h-8 rounded-full border border-[#E5E7EB] flex items-center justify-center disabled:opacity-30 shrink-0"
+                                    >
+                                        <ChevronRight className="w-4 h-4" />
+                                    </button>
                                 </div>
-                            ))}
+
+                                {isPending ? (
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {Array.from({ length: 6 }).map((_, i) => (
+                                            <div key={i} className="h-11 rounded-xl bg-[#F3F4F6] animate-pulse" />
+                                        ))}
+                                    </div>
+                                ) : doctorSlots.length > 0 ? (
+                                    <div className="space-y-3 max-h-[260px] overflow-y-auto pr-1">
+                                        {groupedSlots.map((group) => (
+                                            <div key={group.id}>
+                                                <div className="flex items-center gap-1.5 mb-2">
+                                                    <Clock className="w-3 h-3 text-[#8B7CF6]" />
+                                                    <p className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wide">
+                                                        {group.label}
+                                                    </p>
+                                                </div>
+                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                    {group.slots.map((slot, i) => {
+                                                        const id = slot.slot_id ?? slot.id ?? String(i);
+                                                        const isSelected = slotId === id;
+                                                        const isFull = Boolean(slot.is_full);
+
+                                                        let isPast = false;
+                                                        if (selectedDate === getTodayDateString()) {
+                                                            const now = new Date();
+                                                            const currentHours = now.getHours();
+                                                            const currentMinutes = now.getMinutes();
+                                                            if (slot.start_time) {
+                                                                const [h, m] = slot.start_time.split(':').map(Number);
+                                                                if (h < currentHours || (h === currentHours && m <= currentMinutes)) {
+                                                                    isPast = true;
+                                                                }
+                                                            }
+                                                        }
+
+                                                        return (
+                                                            <button
+                                                                key={id}
+                                                                type="button"
+                                                                disabled={isFull || isPast}
+                                                                onClick={() => {
+                                                                    if (!isFull && !isPast) onSlotChange(id);
+                                                                }}
+                                                                className={cn(
+                                                                    'relative px-2.5 py-2 rounded-xl border text-center transition-all disabled:cursor-not-allowed',
+                                                                    isSelected
+                                                                        ? 'border-[#16A34A] bg-[#16A34A] text-white shadow-[0_4px_12px_rgba(22,163,74,0.3)]'
+                                                                        : isPast
+                                                                            ? 'border-neutral-200 bg-neutral-100 text-neutral-400 opacity-60'
+                                                                            : isFull
+                                                                                ? 'border-[#FCA5A5] bg-[#FEE2E2] text-[#B91C1C]'
+                                                                                : 'border-[#E5E7EB] bg-white text-[#374151] hover:border-[#86EFAC] hover:bg-[#F0FDF4]',
+                                                                )}
+                                                            >
+                                                                <span className="text-[12px] font-bold block">
+                                                                    {slot.start_time?.slice(0, 5)}
+                                                                </span>
+                                                                {slot.end_time && (
+                                                                    <span
+                                                                        className={cn(
+                                                                            'text-[9px] block mt-0.5',
+                                                                            isSelected
+                                                                                ? 'text-white/80'
+                                                                                : isPast
+                                                                                    ? 'text-neutral-400'
+                                                                                    : isFull
+                                                                                        ? 'text-[#DC2626]'
+                                                                                        : 'text-[#9CA3AF]',
+                                                                        )}
+                                                                    >
+                                                                        đến {slot.end_time.slice(0, 5)}
+                                                                    </span>
+                                                                )}
+                                                                {isSelected && (
+                                                                    <Check
+                                                                        className="w-3 h-3 absolute top-1.5 right-1.5 text-white"
+                                                                        strokeWidth={3}
+                                                                    />
+                                                                )}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="rounded-2xl border border-dashed border-[#E5E7EB] bg-[#FAFAFA] px-4 py-6 text-center">
+                                        <CalendarDays className="w-7 h-7 text-[#D1D5DB] mx-auto mb-1.5" />
+                                        <p className="text-[12px] text-[#9CA3AF]">Không có khung giờ trống cho ngày này.</p>
+                                        <p className="text-[11px] text-[#C4B5FD] mt-0.5">Thử chọn ngày khác hoặc bác sĩ khác.</p>
+                                    </div>
+                                )}
+                            </div>
+
                             {slotId && selectedSlot && (
-                                <div className="rounded-xl border border-[#86EFAC] bg-[#F0FDF4] px-4 py-3 flex items-center gap-3">
-                                    <div className="w-9 h-9 rounded-lg bg-[#16A34A] flex items-center justify-center shrink-0">
+                                <div className="mt-3 rounded-xl border border-[#86EFAC] bg-[#F0FDF4] px-3.5 py-2.5 flex items-center gap-2.5">
+                                    <div className="w-7 h-7 rounded-lg bg-[#16A34A] flex items-center justify-center shrink-0">
                                         <CheckCircle2 className="w-4 h-4 text-white" />
                                     </div>
-                                    <div>
-                                        <p className="text-[12px] font-bold text-[#166534]">Đã chọn lịch khám</p>
-                                        <p className="text-[11px] text-[#15803D] mt-0.5">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-[11px] font-bold text-[#166534]">Đã chọn khung giờ</p>
+                                        <p className="text-[11px] text-[#15803D] truncate">
                                             {selectedDateMeta?.isToday ? 'Hôm nay' : selectedDateMeta?.weekday} ·{' '}
                                             {formatSlotTimeRange(selectedSlot.start_time, selectedSlot.end_time)}
                                         </p>
                                     </div>
                                 </div>
                             )}
-                        </div>
-                    ) : (
-                        <div className="rounded-2xl border border-dashed border-[#E5E7EB] bg-[#FAFAFA] px-4 py-8 text-center">
-                            <CalendarDays className="w-8 h-8 text-[#D1D5DB] mx-auto mb-2" />
-                            <p className="text-[12px] text-[#9CA3AF]">Không có khung giờ trống cho ngày này.</p>
-                            <p className="text-[11px] text-[#C4B5FD] mt-1">Thử chọn ngày khác hoặc bác sĩ khác.</p>
                         </div>
                     )}
                 </div>

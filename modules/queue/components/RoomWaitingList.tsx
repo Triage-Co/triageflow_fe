@@ -1,14 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { Clock, Pin, PhoneCall, RotateCcw, UserX } from 'lucide-react';
+import { Clock, Pin, PhoneCall, RotateCcw, UserX, CheckCircle2, X, Loader2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 import { cn } from '@/lib/utils';
-import type { MissingEntry, WaitingEntry } from '../types/queue.types';
+import type { FinishedEntry, MissingEntry, WaitingEntry } from '../types/queue.types';
 
 export interface RoomWaitingListProps {
     waiting: WaitingEntry[];
     missing: MissingEntry[];
+    finished?: FinishedEntry[];
     isActing?: boolean;
     onCallByStep?: (stepId: string, queueId: string) => void | Promise<void>;
     onMiss?: (queueId: string) => void | Promise<void>;
@@ -44,6 +45,7 @@ function formatEtaTime(eta: string | null | undefined): string {
 export function RoomWaitingList({
     waiting,
     missing,
+    finished = [],
     isActing = false,
     onCallByStep,
     onMiss,
@@ -51,7 +53,8 @@ export function RoomWaitingList({
     onPinTop,
     className,
 }: RoomWaitingListProps) {
-    const [tab, setTab] = useState<'waiting' | 'missing'>('waiting');
+    const [tab, setTab] = useState<'waiting' | 'missing' | 'finished'>('waiting');
+    const [missPatient, setMissPatient] = useState<WaitingEntry | null>(null);
 
     return (
         <div className={cn('flex h-full min-h-0 flex-col rounded-2xl border border-neutral-200/70 bg-white shadow-sm overflow-hidden', className)}>
@@ -61,7 +64,7 @@ export function RoomWaitingList({
                     <button
                         type="button"
                         className={cn(
-                            'flex-1 flex items-center justify-center gap-2 py-1.5 px-3 rounded-lg text-xs font-bold transition-all',
+                            'flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-bold transition-all',
                             tab === 'waiting'
                                 ? 'bg-white text-indigo-700 shadow-xs'
                                 : 'text-neutral-600 hover:text-neutral-900',
@@ -83,7 +86,7 @@ export function RoomWaitingList({
                     <button
                         type="button"
                         className={cn(
-                            'flex-1 flex items-center justify-center gap-2 py-1.5 px-3 rounded-lg text-xs font-bold transition-all',
+                            'flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-bold transition-all',
                             tab === 'missing'
                                 ? 'bg-white text-amber-700 shadow-xs'
                                 : 'text-neutral-600 hover:text-neutral-900',
@@ -100,6 +103,28 @@ export function RoomWaitingList({
                             )}
                         >
                             {missing.length}
+                        </span>
+                    </button>
+                    <button
+                        type="button"
+                        className={cn(
+                            'flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-bold transition-all',
+                            tab === 'finished'
+                                ? 'bg-white text-emerald-700 shadow-xs'
+                                : 'text-neutral-600 hover:text-neutral-900',
+                        )}
+                        onClick={() => setTab('finished')}
+                    >
+                        <span>Đã khám</span>
+                        <span
+                            className={cn(
+                                'rounded-full px-2 py-0.2 text-[10px] font-extrabold',
+                                tab === 'finished'
+                                    ? 'bg-emerald-100 text-emerald-700'
+                                    : 'bg-neutral-300/70 text-neutral-600',
+                            )}
+                        >
+                            {finished.length}
                         </span>
                     </button>
                 </div>
@@ -180,7 +205,7 @@ export function RoomWaitingList({
                                             variant="outline"
                                             className="h-8 rounded-lg border-rose-200 px-2 text-xs font-bold text-rose-600 hover:bg-rose-50 shadow-2xs"
                                             disabled={isActing}
-                                            onClick={() => void onMiss(w.queue_id)}
+                                            onClick={() => setMissPatient(w)}
                                             title="Báo vắng mặt"
                                         >
                                             <UserX className="h-3.5 w-3.5" />
@@ -226,7 +251,154 @@ export function RoomWaitingList({
                             )}
                         </div>
                     ))}
+
+                {tab === 'finished' && finished.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-12 text-center text-neutral-400">
+                        <CheckCircle2 className="h-8 w-8 mb-2 stroke-1 opacity-50 text-emerald-500" />
+                        <p className="text-xs font-semibold">Chưa có bệnh nhân nào đã khám</p>
+                    </div>
+                )}
+                {tab === 'finished' &&
+                    finished.map((f) => {
+                        const patientName = f.patient_name || f.patient?.full_name || 'Bệnh nhân';
+                        return (
+                            <div
+                                key={f.queue_id}
+                                className="rounded-xl border border-neutral-200/70 bg-white p-3 hover:border-emerald-200 hover:bg-emerald-50/20 transition-all shadow-2xs"
+                            >
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="flex items-start gap-3 min-w-0">
+                                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 font-black text-emerald-800 text-sm border border-emerald-200/60">
+                                            {f.queue_number}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                {f.queue_type && (
+                                                    <span className="rounded-md bg-emerald-50 border border-emerald-200/60 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                                                        {typeBadge(f.queue_type)}
+                                                    </span>
+                                                )}
+                                                {f.step?.step_name && (
+                                                    <span className="rounded-md bg-neutral-100 border border-neutral-200/80 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">
+                                                        {f.step.step_name}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="mt-1 truncate text-sm font-bold text-neutral-800">
+                                                {patientName}
+                                            </p>
+                                            <p className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-neutral-400">
+                                                <Clock className="h-3 w-3 text-emerald-600" />
+                                                {f.finished_at
+                                                    ? `Đã khám lúc ${formatEtaTime(f.finished_at)}`
+                                                    : 'Đã hoàn thành'}
+                                                {f.duration_minutes !== undefined && f.duration_minutes !== null
+                                                    ? ` · ${f.duration_minutes} phút`
+                                                    : ''}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex shrink-0 items-center">
+                                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200/60 px-2 py-1 rounded-lg">
+                                            <CheckCircle2 className="h-3.5 w-3.5" />
+                                            Đã khám
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
             </div>
+
+            {/* Miss Patient Confirmation Modal */}
+            {missPatient && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    {/* Backdrop */}
+                    <div
+                        className="absolute inset-0 bg-neutral-900/60 backdrop-blur-xs transition-opacity"
+                        onClick={() => setMissPatient(null)}
+                    />
+
+                    {/* Modal Box */}
+                    <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-neutral-100 overflow-hidden animate-in fade-in zoom-in duration-200">
+                        {/* Header */}
+                        <div className="px-6 pt-6 pb-4 flex items-center justify-between border-b border-neutral-100">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-amber-50 flex items-center justify-center border border-amber-200/80 shadow-xs">
+                                    <UserX className="w-5 h-5 text-amber-600" />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-extrabold text-neutral-900">
+                                        Xác nhận báo vắng mặt
+                                    </h3>
+                                    <p className="text-xs text-neutral-500 font-medium mt-0.5">
+                                        Đánh dấu bệnh nhân vắng mặt
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setMissPatient(null)}
+                                className="p-1.5 rounded-xl hover:bg-neutral-100 text-neutral-400 hover:text-neutral-600 transition cursor-pointer"
+                            >
+                                <X className="w-4.5 h-4.5" />
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-6 space-y-4 text-xs">
+                            <div className="bg-amber-50/50 border border-amber-200/60 rounded-2xl p-4 space-y-2.5">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-neutral-500 font-medium">Bệnh nhân:</span>
+                                    <span className="font-extrabold text-neutral-900 text-sm">
+                                        {missPatient.patient_name}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-neutral-500 font-medium">Số thứ tự:</span>
+                                    <span className="font-extrabold text-amber-800 font-mono bg-amber-100 px-2 py-0.5 rounded-md text-xs">
+                                        Số {missPatient.queue_number}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <p className="text-xs text-neutral-600 leading-relaxed font-medium">
+                                Bạn có chắc chắn muốn báo bệnh nhân này <strong className="text-amber-700 font-bold">Vắng mặt</strong> không?
+                            </p>
+                        </div>
+
+                        {/* Footer Actions */}
+                        <div className="px-6 py-4 bg-neutral-50/80 border-t border-neutral-100 flex items-center justify-end gap-2.5">
+                            <Button
+                                variant="outline"
+                                className="h-9.5 rounded-xl border-neutral-200 text-xs font-bold text-neutral-700 hover:bg-neutral-100 px-4"
+                                disabled={isActing}
+                                onClick={() => setMissPatient(null)}
+                            >
+                                Hủy
+                            </Button>
+                            <Button
+                                className="h-9.5 rounded-xl bg-amber-600 text-white text-xs font-bold shadow-sm shadow-amber-200 hover:bg-amber-700 px-5"
+                                disabled={isActing}
+                                onClick={async () => {
+                                    const qid = missPatient.queue_id;
+                                    setMissPatient(null);
+                                    await onMiss?.(qid);
+                                }}
+                                startIcon={
+                                    isActing ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <UserX className="h-4 w-4" />
+                                    )
+                                }
+                            >
+                                Xác nhận vắng mặt
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

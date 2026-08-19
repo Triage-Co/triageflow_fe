@@ -27,12 +27,11 @@ function getPostLoginPath(role: string) {
             return '/pharmacy';
         case 'CASHIER':
             return '/cashier';
-        case 'USER':
-            return '/queue';
         case 'NURSE':
             return '/nurse/dashboard';
         case 'DOCTOR':
             return '/doctor/dashboard';
+        case 'USER':
         default:
             return '/doctor/dashboard';
     }
@@ -118,6 +117,13 @@ export function LoginForm() {
             console.error('Failed to sync profile during login:', err);
         }
 
+        const roleClean = resolvedRole.trim().toUpperCase().replace(/^ROLE_/, '');
+        if (roleClean === 'USER') {
+            throw new Error(
+                'Tài khoản của bạn chưa được phân quyền nhân viên y tế. Vui lòng liên hệ Quản trị viên để cấp quyền truy cập.',
+            );
+        }
+
         loginSuccess({
             user: {
                 id: userId,
@@ -162,7 +168,7 @@ export function LoginForm() {
                 const { token, refreshToken, username, role } = loginRes.data;
 
                 const resolvedRole = await completeLogin(token, refreshToken, username, role);
-                
+
                 let redirectPath = getPostLoginPath(resolvedRole);
                 const roleClean = resolvedRole.trim().toUpperCase().replace(/^ROLE_/, '');
                 if (roleClean === 'DOCTOR' || roleClean === 'NURSE') {
@@ -191,7 +197,7 @@ export function LoginForm() {
                 } else {
                     localStorage.removeItem('tfopd_active_room_type');
                 }
-                
+
                 router.push(redirectPath);
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'Đăng nhập thất bại. Vui lòng kiểm tra lại tài khoản hoặc mật khẩu.');

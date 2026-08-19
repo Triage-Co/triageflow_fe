@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import {
     AlertCircle,
     Bell,
-    Check,
     CheckCircle2,
     Loader2,
     RefreshCw,
@@ -32,7 +31,6 @@ export function NotificationPanel() {
         error,
         fetchNotifications,
         toggleRead,
-        markAllRead,
         deleteNotification,
         deleteAllNotifications,
         clearError,
@@ -80,7 +78,7 @@ export function NotificationPanel() {
                                 </p>
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
-                                <Button
+                                 <Button
                                     onClick={() => {
                                         clearError();
                                         void fetchNotifications(accessToken);
@@ -95,16 +93,6 @@ export function NotificationPanel() {
                                     }
                                 >
                                     Làm mới
-                                </Button>
-                                <Button
-                                    onClick={markAllRead}
-                                    variant="outline"
-                                    size="sm"
-                                    className="rounded-full shadow-sm bg-white"
-                                    startIcon={<Check className="w-4 h-4" />}
-                                    disabled={unreadCount === 0}
-                                >
-                                    Đánh dấu đã đọc tất cả
                                 </Button>
                                 <Button
                                     onClick={() => void deleteAllNotifications(accessToken)}

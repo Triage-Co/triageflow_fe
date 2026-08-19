@@ -629,12 +629,13 @@ async function resolveRecommendedSpecialist(params: {
 }): Promise<{
     recommended: ReturnType<typeof normalizeRecommendedSpecialist>;
     resolvedToken: string;
+    bestSlotId: string | null;
 }> {
     const { payload, interviewToken, accessToken, onDebug } = params;
     const trimmedToken = interviewToken.trim();
     if (!trimmedToken) {
         onDebug?.('recommend.skip', { reason: 'missing interview_token' });
-        return { recommended: null, resolvedToken: '' };
+        return { recommended: null, resolvedToken: '', bestSlotId: null };
     }
 
     onDebug?.('recommend.request', {
@@ -649,14 +650,16 @@ async function resolveRecommendedSpecialist(params: {
             trimmedToken,
             accessToken,
         );
+        const rawData = recommendRes.data as any;
         const recommended = normalizeRecommendedSpecialist(recommendRes.data);
-        onDebug?.('recommend.response', { recommended });
-        return { recommended, resolvedToken: trimmedToken };
+        const bestSlotId = rawData?.best_slot_id || rawData?.data?.best_slot_id || null;
+        onDebug?.('recommend.response', { recommended, bestSlotId });
+        return { recommended, resolvedToken: trimmedToken, bestSlotId };
     } catch (err) {
         onDebug?.('recommend.error', {
             message: err instanceof Error ? err.message : String(err),
         });
-        return { recommended: null, resolvedToken: trimmedToken };
+        return { recommended: null, resolvedToken: trimmedToken, bestSlotId: null };
     }
 }
 
@@ -701,7 +704,7 @@ async function finalizeSession(params: {
     });
 
     // 5) recommend_specialist — cần interview_token
-    const { recommended, resolvedToken } = await resolveRecommendedSpecialist({
+    const { recommended, resolvedToken, bestSlotId } = await resolveRecommendedSpecialist({
         payload,
         interviewToken,
         accessToken,
@@ -736,6 +739,7 @@ async function finalizeSession(params: {
         department_label: dept.label,
         triage_level: triageLevel,
         recommended: displayRecommended,
+        best_slot_id: bestSlotId,
     });
 
     return {
@@ -754,6 +758,7 @@ async function finalizeSession(params: {
             questions_answered: questionsAnswered,
             required_questions: requiredQuestions,
             routing_note: routingNote,
+            best_slot_id: bestSlotId,
         },
         specialties: [],
         slots: [],

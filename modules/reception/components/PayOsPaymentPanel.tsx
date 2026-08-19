@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
 import type { RegistrationResult } from '@/modules/reception/types/reception.types';
 import { useAuthStore } from '@/modules/auth/store/authStore';
 import { receptionService } from '@/modules/reception/services/receptionService';
-import { formatQueueTicketNo } from '@/modules/reception/utils/receptionMapper';
+import { formatQueueTicketNo, getTodayDateString } from '@/modules/reception/utils/receptionMapper';
 import {
     mapActiveFlowsList,
     flowItemToRegistrationResult,
@@ -63,7 +63,7 @@ export function PayOsPaymentPanel({ result, onUpdateResult, className }: PayOsPa
             // 2. Tra cứu luồng khám Active của bệnh nhân từ API GET /api/flow/patient/{id}/active
             if (patientId) {
                 try {
-                    const rawFlows = await receptionService.getPatientActiveFlows(patientId, accessToken);
+                    const rawFlows = await receptionService.getPatientActiveFlows(patientId, accessToken, getTodayDateString());
                     const mappedFlows = mapActiveFlowsList(rawFlows);
                     const matchedFlow =
                         mappedFlows.find((f) => f.bookingId === result.bookingId) ||
