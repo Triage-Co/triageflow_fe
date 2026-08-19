@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Search, Check, Activity, Loader2 } from 'lucide-react';
+import { X, Search, Check, Activity, Loader2, Keyboard } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTriageStore } from '../store/triageStore';
-import { SymptomItem } from '../types/triage.types'; // Import để định nghĩa kiểu dữ liệu chuẩn
+import { useVirtualKeyboardStore } from '../store/virtualKeyboardStore';
+import { SymptomItem } from '../types/triage.types';
+import { removeVietnameseTones } from '../utils/kioskHelpers';
 
 interface SymptomSelectorModalProps {
   isOpen: boolean;
@@ -35,14 +37,30 @@ export const SymptomSelectorModal: React.FC<SymptomSelectorModalProps> = ({
     }
   }, [isOpen, selectedSymptomsStore]);
 
-  // Bộ lọc tìm kiếm triệu chứng
+  // Bộ lọc tìm kiếm triệu chứng (không phân biệt dấu tiếng Việt)
   const filteredSymptoms = useMemo(() => {
-    if (!searchQuery.trim()) return availableSymptoms;
-    const q = searchQuery.toLowerCase().trim();
-    return availableSymptoms.filter(
-      (s) => s.labelVn.toLowerCase().includes(q)
-    );
+    const normQ = removeVietnameseTones(searchQuery);
+    if (!normQ) return availableSymptoms;
+
+    return availableSymptoms.filter((s) => {
+      const normVn = removeVietnameseTones(s.labelVn);
+      const normEn = removeVietnameseTones(s.labelEn || '');
+      return normVn.includes(normQ) || normEn.includes(normQ);
+    });
   }, [availableSymptoms, searchQuery]);
+
+  const openKeyboard = useVirtualKeyboardStore((state) => state.openKeyboard);
+
+  const handleOpenVirtualKeyboard = () => {
+    openKeyboard({
+      inputId: 'symptom-search',
+      title: `Tìm kiếm triệu chứng (${bodyPartIdOrName})`,
+      initialValue: searchQuery,
+      placeholder: 'Nhập tên triệu chứng đau (VD: đau nhói, buốt, sưng...)',
+      onChange: (val) => setSearchQuery(val),
+      onSubmit: (val) => setSearchQuery(val),
+    });
+  };
 
   if (!isOpen || !bodyPartIdOrName) return null;
 
@@ -91,25 +109,36 @@ export const SymptomSelectorModal: React.FC<SymptomSelectorModalProps> = ({
           </button>
         </div>
 
-        {/* Search Bar */}
+        {/* Search Bar with Virtual Keyboard */}
         <div className="px-8 py-3 bg-neutral-50/80 border-b border-neutral-100 shrink-0">
           <div className="relative flex items-center">
             <Search className="w-5 h-5 text-neutral-400 absolute left-4 pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
+              onClick={handleOpenVirtualKeyboard}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Tìm kiếm nhanh triệu chứng..."
-              className="w-full pl-11 pr-4 py-3 bg-white rounded-2xl border border-neutral-200 text-sm font-semibold text-neutral-800 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#2563EB] shadow-sm transition-all"
+              className="w-full pl-11 pr-24 py-3 bg-white rounded-2xl border border-neutral-200 text-sm font-semibold text-neutral-800 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#2563EB] shadow-sm transition-all cursor-pointer"
             />
-            {searchQuery && (
+            <div className="absolute right-3 flex items-center gap-1.5">
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="text-xs font-bold text-neutral-400 hover:text-neutral-600 cursor-pointer px-2 py-1"
+                >
+                  Xóa
+                </button>
+              )}
               <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-4 text-xs font-bold text-neutral-400 hover:text-neutral-600 cursor-pointer"
+                type="button"
+                onClick={handleOpenVirtualKeyboard}
+                className="p-2 rounded-xl bg-blue-50 text-[#2563EB] hover:bg-blue-100 transition-colors cursor-pointer"
+                title="Mở bàn phím ảo"
               >
-                Xóa tìm kiếm
+                <Keyboard className="w-4 h-4" />
               </button>
-            )}
+            </div>
           </div>
         </div>
 

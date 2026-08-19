@@ -30,9 +30,7 @@ export function EMRWorkspaceLayout({ activeTabId, activeTabName, children }: EMR
         'settings',
         'pharmacy',
         'pharmacy_checkin',
-        'pharmacy_create',
-        'pharmacy_medicines',
-        'pharmacy_patients'
+        'pharmacy_medicines'
     ];
 
     const showHeader = !isLabRole && !isPharmacyRole && !hideHeaderIds.includes(activeTabId);

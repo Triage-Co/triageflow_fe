@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { X, Search } from 'lucide-react';
+import { X, Search, Keyboard } from 'lucide-react';
 import { ApiFloor, ApiRoom } from '../../navigation/types/navigation.types';
+import { useVirtualKeyboardStore } from '../store/virtualKeyboardStore';
+import { removeVietnameseTones } from '../utils/kioskHelpers';
 
 interface RoomPickerModalProps {
   isOpen: boolean;
@@ -18,15 +20,29 @@ export const RoomPickerModal: React.FC<RoomPickerModalProps> = ({
   onSelect,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const openKeyboard = useVirtualKeyboardStore((state) => state.openKeyboard);
+
+  const handleOpenVirtualKeyboard = () => {
+    openKeyboard({
+      inputId: 'room-search',
+      title: 'Tìm kiếm phòng khám trên bản đồ',
+      initialValue: searchTerm,
+      placeholder: 'Nhập tên phòng hoặc mã phòng...',
+      onChange: (val) => setSearchTerm(val),
+      onSubmit: (val) => setSearchTerm(val),
+    });
+  };
 
   if (!isOpen) return null;
 
   const filteredFloors = floors.map((floor) => {
-    const matchedRooms = floor.rooms.filter(
-      (room) =>
-        room.roomLabel.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        room.roomCode.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const normSearch = removeVietnameseTones(searchTerm);
+    const matchedRooms = floor.rooms.filter((room) => {
+      if (!normSearch) return true;
+      const normLabel = removeVietnameseTones(room.roomLabel);
+      const normCode = removeVietnameseTones(room.roomCode);
+      return normLabel.includes(normSearch) || normCode.includes(normSearch);
+    });
     return { ...floor, rooms: matchedRooms };
   }).filter((floor) => floor.rooms.length > 0);
 
@@ -45,17 +61,36 @@ export const RoomPickerModal: React.FC<RoomPickerModalProps> = ({
           </button>
         </div>
 
-        {/* Search Input */}
+        {/* Search Input with Virtual Keyboard */}
         <div className="p-4 border-b border-slate-100">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <div className="relative flex items-center">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             <input
               type="text"
               value={searchTerm}
+              onClick={handleOpenVirtualKeyboard}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Tìm kiếm tên phòng hoặc mã phòng..."
-              className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
+              className="w-full pl-11 pr-20 py-3 rounded-2xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white transition-all cursor-pointer"
             />
+            <div className="absolute right-3 flex items-center gap-1.5">
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="text-xs font-bold text-slate-400 hover:text-slate-600 cursor-pointer px-1.5 py-0.5"
+                >
+                  Xóa
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleOpenVirtualKeyboard}
+                className="p-1.5 rounded-xl bg-blue-50 text-[#155DFC] hover:bg-blue-100 transition-colors cursor-pointer"
+                title="Mở bàn phím ảo"
+              >
+                <Keyboard className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </div>
 

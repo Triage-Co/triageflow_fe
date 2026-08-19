@@ -11,6 +11,7 @@ import { useTriageStore } from './triageStore';
 import { useBookingStore } from './bookingStore';
 import { useFlowStore } from './flowStore';
 import { usePackageBookingStore } from './packageBookingStore';
+import { useVirtualKeyboardStore } from './virtualKeyboardStore';
 
 export interface KioskStoreState {
   currentView: ActiveView;
@@ -167,6 +168,7 @@ export const useKioskStore = create<KioskStoreState>((set, get) => ({
     useBookingStore.getState().resetBooking();
     useFlowStore.getState().resetFlow();
     usePackageBookingStore.getState().resetStore();
+    useVirtualKeyboardStore.getState().closeKeyboard();
 
     set({
       currentView: 'home',
@@ -175,6 +177,10 @@ export const useKioskStore = create<KioskStoreState>((set, get) => ({
       targetViewAfterScan: null,
       aiRegisterStep: 'body_select',
       bookingFlowMode: 'ai',
+      selectedGender: 'male',
+      selectedBodyPart: null,
+      selectedBodyParts: [],
+      selectedDoctor: null,
       isLoading: false,
       mapNavigationRoomId: null,
     });

@@ -65,5 +65,14 @@ export const labService = {
     async overrideQueue(queueId: string, data: { action: string; position: number; reason: string }): Promise<any> {
         const res = await apiClient.post<any>(`/api/queue/${queueId}/override`, data);
         return res.data;
+    },
+
+    /**
+     * POST /api/queue/{queueId}/refuse
+     * Từ chối lượt SERVING tại phòng (Step DECLINED, đóng queue, sync SO).
+     */
+    async refuseQueue(queueId: string, reason: string): Promise<any> {
+        const res = await apiClient.post<any>(`/api/queue/${queueId}/refuse`, { reason });
+        return res.data;
     }
 };
