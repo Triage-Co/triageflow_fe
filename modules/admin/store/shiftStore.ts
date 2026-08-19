@@ -1,16 +1,18 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import type { Shift, CreateShiftDto } from '../types/shift.types';
+import type { Shift, CreateShiftDto, QueryShiftParams, ShiftListMeta } from '../types/shift.types';
 import { shiftService } from '../services/shiftService';
 
 export interface ShiftState {
     shifts: Shift[];
+    meta: ShiftListMeta | null;
+    lastQuery: QueryShiftParams;
     isLoading: boolean;
     error: string | null;
 }
 
 export interface ShiftActions {
-    fetchShifts: (token: string) => Promise<void>;
+    fetchShifts: (token: string, params?: QueryShiftParams) => Promise<void>;
     createShift: (data: CreateShiftDto, token: string) => Promise<void>;
     updateShift: (id: string, data: Partial<CreateShiftDto>, token: string) => Promise<void>;
     deleteShift: (id: string, token: string) => Promise<void>;
@@ -21,6 +23,8 @@ type ShiftStore = ShiftState & ShiftActions;
 
 const initialState: ShiftState = {
     shifts: [],
+    meta: null,
+    lastQuery: {},
     isLoading: false,
     error: null,
 };
@@ -30,11 +34,16 @@ export const useShiftStore = create<ShiftStore>()(
         (set, get) => ({
             ...initialState,
 
-            fetchShifts: async (token: string) => {
-                set({ isLoading: true, error: null }, false, 'fetchShifts/pending');
+            fetchShifts: async (token: string, params?: QueryShiftParams) => {
+                const query = params ?? get().lastQuery;
+                set({ isLoading: true, error: null, lastQuery: query }, false, 'fetchShifts/pending');
                 try {
-                    const res = await shiftService.getShifts(token);
-                    set({ shifts: res.data || [], isLoading: false }, false, 'fetchShifts/success');
+                    const res = await shiftService.getShifts(token, query);
+                    set({
+                        shifts: res.data || [],
+                        meta: res.meta,
+                        isLoading: false,
+                    }, false, 'fetchShifts/success');
                 } catch (err) {
                     set({
                         error: err instanceof Error ? err.message : 'Không thể tải danh sách ca trực từ DB.',
@@ -64,7 +73,6 @@ export const useShiftStore = create<ShiftStore>()(
                     };
                     const current = get().shifts;
                     set({ shifts: [newShift, ...current], isLoading: false }, false, 'createShift/success');
-                    // Refresh from Backend Database
                     await get().fetchShifts(token);
                 } catch (err) {
                     set(
@@ -106,6 +114,7 @@ export const useShiftStore = create<ShiftStore>()(
                     await shiftService.deleteShift(id, token);
                     const updated = get().shifts.filter((s) => s.shift_id !== id);
                     set({ shifts: updated, isLoading: false }, false, 'deleteShift/success');
+                    await get().fetchShifts(token);
                 } catch (err) {
                     set(
                         {

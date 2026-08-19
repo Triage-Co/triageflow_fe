@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRoomStore } from '@/modules/admin/store/roomStore';
 import { useStaffStore } from '@/modules/admin/store/staffStore';
 import { useShiftStore } from '@/modules/admin/store/shiftStore';
+import { todayYmd } from '@/modules/admin/utils/shiftValidation';
 import { clinicalService } from '@/modules/clinical/services/clinicalService';
 import { extractServiceOptions } from '@/modules/clinical/workflow/flowPickers';
 import type { ServiceOption, SpecialtyOption } from '@/modules/clinical/workflow/types';
@@ -68,7 +69,7 @@ export function useWorkflowCatalog({
         if (!accessToken) return;
         fetchRooms(accessToken).catch(() => {});
         fetchStaffs(accessToken).catch(() => {});
-        fetchShifts(accessToken).catch(() => {});
+        fetchShifts(accessToken, { date: todayYmd(), limit: 500 }).catch(() => {});
     }, [accessToken, fetchRooms, fetchStaffs, fetchShifts]);
 
     useEffect(() => {
