@@ -27,7 +27,6 @@ export function TopBar({ user, notificationsHref = '/notifications' }: TopBarPro
     notifications,
     isLoading,
     fetchNotifications,
-    markAllRead,
   } = useNotificationStore();
 
   useEffect(() => {
@@ -76,14 +75,6 @@ export function TopBar({ user, notificationsHref = '/notifications' }: TopBarPro
             <div className="absolute right-0 mt-3 w-80 bg-white rounded-[32px] border border-neutral-100 shadow-xl z-50 py-3 animate-in fade-in-0 zoom-in-95 duration-150">
               <div className="px-4 pb-2 border-b border-neutral-50 flex items-center justify-between">
                 <span className="text-xs font-bold text-neutral-800">Thông báo</span>
-                <button
-                  type="button"
-                  onClick={markAllRead}
-                  disabled={unreadCount === 0}
-                  className="text-[10px] text-brand-500 font-bold hover:underline cursor-pointer disabled:opacity-40 disabled:no-underline"
-                >
-                  Đánh dấu đã đọc
-                </button>
               </div>
               <div className="max-h-60 overflow-y-auto py-2">
                 {isLoading && preview.length === 0 ? (

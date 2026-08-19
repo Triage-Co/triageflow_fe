@@ -10,9 +10,14 @@ export interface PatientFlowStepInfo {
   stepType?: string;
   roomName?: string;
   doctorName?: string;
+  specialtyName?: string;
   queueNumber?: string;
   paymentStatus?: string;
   slotTimeLabel?: string;
+  startTime?: string;
+  endTime?: string;
+  shiftDate?: string;
+  raw?: any;
 }
 
 export interface PatientActiveFlowItem {
@@ -155,26 +160,27 @@ export function formatRealTimeRange(
     }
   }
 
-  if (!timeText) {
-    const now = new Date();
-    timeText = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  }
-
   let dateText = "";
   if (date) {
-    try {
-      const d = new Date(date);
-      if (!isNaN(d.getTime())) {
-        const dd = String(d.getDate()).padStart(2, "0");
-        const mm = String(d.getMonth() + 1).padStart(2, "0");
-        const yyyy = d.getFullYear();
-        dateText = `${dd}/${mm}/${yyyy}`;
+    const cleanDate = date.slice(0, 10);
+    const parts = cleanDate.split("-");
+    if (parts.length === 3) {
+      const [y, m, d] = parts;
+      if (d && m && y && y.length === 4) {
+        dateText = `${d.padStart(2, "0")}/${m.padStart(2, "0")}/${y}`;
       }
-    } catch {
-      const cleanDate = date.slice(0, 10);
-      const [y, m, d] = cleanDate.split("-");
-      if (d && m && y) {
-        dateText = `${d}/${m}/${y}`;
+    }
+    if (!dateText) {
+      try {
+        const d = new Date(date);
+        if (!isNaN(d.getTime())) {
+          const dd = String(d.getDate()).padStart(2, "0");
+          const mm = String(d.getMonth() + 1).padStart(2, "0");
+          const yyyy = d.getFullYear();
+          dateText = `${dd}/${mm}/${yyyy}`;
+        }
+      } catch {
+        // ignore
       }
     }
   }
@@ -187,7 +193,7 @@ export function formatRealTimeRange(
     dateText = `${dd}/${mm}/${yyyy}`;
   }
 
-  return `${dateText}, ${timeText}`;
+  return timeText ? `${dateText}, ${timeText}` : dateText;
 }
 
 export const sortStepsTopologically = (steps: any[]): any[] => {
@@ -357,7 +363,9 @@ export function mapActiveFlowsList(
     const flowId = String(flow.flow_id || flow.id || "");
     const booking = (flow.booking || {}) as Record<string, unknown>;
     const bookingId = String(booking.booking_id || flow.booking_id || "");
-    const appointmentDate = String(flow.date);
+    const appointmentDate = String(flow.date || "");
+    const flowCreatedAt = String(flow.create_at || flow.created_at || "");
+
     // Slot & Shift details
     const slot = (booking.slot || {}) as Record<string, unknown>;
     const shift = (slot.shift || {}) as Record<string, unknown>;
@@ -395,58 +403,72 @@ export function mapActiveFlowsList(
         stepType: st.step_type || st.type,
         roomName: stRoom.room_name || stRoom.name || "",
         doctorName: stStaff.full_name || stStaff.name || "",
+        specialtyName: st.specialty_info?.specialty_name || "",
         queueNumber: qNum ? String(qNum) : undefined,
         paymentStatus: st.payment_status,
       };
     });
 
-    // Tìm step chính (ưu tiên step có queue_number, hoặc step không phụ thuộc depends_on, hoặc step khám bệnh)
+    // 1. Lọc bỏ các bước thanh toán
     const nonPaymentSteps = rawSteps.filter((st: any) => {
       const name = String(st.step_name || st.name || "").toLowerCase();
-      return !name.includes("thanh toán");
+      const type = String(st.step_type || st.type || "").toUpperCase();
+      const isPay =
+        name.includes("thanh toán") ||
+        name.includes("thanh toan") ||
+        type === "PAYMENT" ||
+        Boolean(st.service_order_id && st.step_status === "COMPLETED");
+      return !isPay;
     });
 
-    const examStepRaw =
-      nonPaymentSteps.find(
-        (st: any) =>
-          Array.isArray(st.queues) &&
-          st.queues.length > 0 &&
-          st.queues[0]?.queue_number,
-      ) ||
-      nonPaymentSteps.find(
-        (st: any) =>
-          (!st.depends_on || st.depends_on.length === 0) &&
-          st.room_info?.room_name,
-      ) ||
-      nonPaymentSteps.find((st: any) =>
-        String(st.step_name || "")
-          .toLowerCase()
-          .includes("khám"),
-      ) ||
+    // 2. Tìm bước IN_PROGRESS (hoặc bước đang thực hiện)
+    const activeStepRaw =
+      nonPaymentSteps.find((st: any) => {
+        const status = String(st.step_status || st.status || "").toUpperCase();
+        return (
+          status === "IN_PROGRESS" ||
+          status === "PROCESSING" ||
+          status === "EXAMINING"
+        );
+      }) ||
+      nonPaymentSteps.find((st: any) => {
+        const queues = Array.isArray(st.queues) ? st.queues : [];
+        return queues.length > 0 && queues[0]?.queue_number;
+      }) ||
+      nonPaymentSteps.find((st: any) => {
+        const status = String(st.step_status || st.status || "").toUpperCase();
+        return status === "WAITING" || status === "QUEUED";
+      }) ||
       nonPaymentSteps[0] ||
       rawSteps[0];
 
-    const examStepQueues = Array.isArray(examStepRaw?.queues)
-      ? examStepRaw.queues
+    const activeStepQueues = Array.isArray(activeStepRaw?.queues)
+      ? activeStepRaw.queues
       : [];
-    const queueNumber = examStepQueues[0]?.queue_number
-      ? String(examStepQueues[0].queue_number)
+    const queueNumber = activeStepQueues[0]?.queue_number
+      ? String(activeStepQueues[0].queue_number)
       : steps.find((s) => s.queueNumber)?.queueNumber;
 
-    const ticketNo = queueNumber ? String(queueNumber).trim() : "—";
+    const ticketNo = queueNumber
+      ? String(queueNumber).trim()
+      : flow.ticket_code
+        ? String(flow.ticket_code)
+        : "—";
 
-    // Chuyên khoa lấy từ step hoặc phòng/lịch khám
+    // Chuyên khoa lấy từ step hoặc room/shift
     const specialty = String(
-      examStepRaw?.specialty_info?.specialty_name ||
+      activeStepRaw?.specialty_info?.specialty_name ||
         specialtyObj.specialty_name ||
         specialtyObj.name ||
         flow.specialty ||
         "Khám chuyên khoa",
     );
 
-    // Tên Bác sĩ phụ trách từ staff_info của step hoặc doctor của shift
+    // Tên Bác sĩ phụ trách từ staff_info của active step hoặc doctor của shift
     const stepDoctorName = String(
-      examStepRaw?.staff_info?.full_name || examStepRaw?.staff_info?.name || "",
+      activeStepRaw?.staff_info?.full_name ||
+        activeStepRaw?.staff_info?.name ||
+        "",
     ).trim();
     const shiftDoctorName = String(
       doctorObj.full_name || doctorObj.name || "",
@@ -458,25 +480,27 @@ export function mapActiveFlowsList(
         : `BS. ${rawDoctorName}`
       : "Bác sĩ phụ trách";
 
-    // Phòng khám từ room_info của step hoặc room của shift
+    // Phòng khám từ room_info của active step hoặc room của shift
     const stepRoomName = String(
-      examStepRaw?.room_info?.room_name || examStepRaw?.room_info?.name || "",
+      activeStepRaw?.room_info?.room_name ||
+        activeStepRaw?.room_info?.name ||
+        "",
     ).trim();
     const shiftRoomName = String(room.room_name || room.name || "").trim();
     const roomLabel =
       stepRoomName || shiftRoomName || `Phòng khám ${specialty}`;
 
-    // Slot time label
+    // Slot time label kết hợp flow.date và slot/create_at
     const startTime = slot.start_time
       ? String(slot.start_time).slice(0, 5)
       : "";
     const endTime = slot.end_time ? String(slot.end_time).slice(0, 5) : "";
-    const shiftDate = shift.date ? String(shift.date).slice(0, 10) : "";
+    const dateForSlot = appointmentDate || (shift.date ? String(shift.date).slice(0, 10) : "");
     const slotTimeLabel = formatRealTimeRange(
       startTime,
       endTime,
-      shiftDate,
-      flow.created_at ? String(flow.created_at) : undefined,
+      dateForSlot,
+      flowCreatedAt || (flow.created_at ? String(flow.created_at) : undefined),
     );
 
     const flowStatus = String(flow.status || "WAITING_EXAMINATION");
@@ -496,7 +520,7 @@ export function mapActiveFlowsList(
       flowStatus,
       statusLabel,
       statusBadgeClass,
-      createdAt: flow.created_at ? String(flow.created_at) : undefined,
+      createdAt: flowCreatedAt || (flow.created_at ? String(flow.created_at) : undefined),
       steps,
       raw: flow,
     };
@@ -521,12 +545,19 @@ export function mapStepDetailToInfo(detail: any): PatientFlowStepInfo | null {
   const shiftObj = slotObj.shift || {};
   const roomObj = shiftObj.room || detail.room_info || detail.room || {};
   const roomName = roomObj.room_name || roomObj.name || "";
+  const specialtyName =
+    roomObj.specialty?.specialty_name ||
+    detail.specialty_info?.specialty_name ||
+    detail.specialty?.specialty_name ||
+    "";
 
   const startTime = slotObj.start_time
     ? String(slotObj.start_time).slice(0, 5)
     : "";
   const endTime = slotObj.end_time ? String(slotObj.end_time).slice(0, 5) : "";
-  const shiftDate = shiftObj.date ? String(shiftObj.date).slice(0, 10) : "";
+  const shiftDate = shiftObj.date
+    ? String(shiftObj.date).slice(0, 10)
+    : String(detail.flow?.date || "").slice(0, 10);
   const slotTimeLabel = formatRealTimeRange(
     startTime,
     endTime,
@@ -543,9 +574,14 @@ export function mapStepDetailToInfo(detail: any): PatientFlowStepInfo | null {
     stepType: detail.step_type,
     roomName,
     doctorName: staffName,
+    specialtyName,
     queueNumber: qNum ? String(qNum) : undefined,
     paymentStatus: detail.payment_status,
     slotTimeLabel,
+    startTime,
+    endTime,
+    shiftDate,
+    raw: detail,
   };
 }
 

@@ -76,6 +76,7 @@ export interface InfermedicaRecommendedSpecialist {
 export interface InfermedicaRecommendResult {
     recommended_specialist?: InfermedicaRecommendedSpecialist;
     recommended_channel?: string;
+    best_slot_id?: string;
 }
 
 export interface InfermedicaTriagePayload {
@@ -113,6 +114,8 @@ export interface SymptomTriageSession {
     required_questions: number;
     /** Ghi chú khi không gợi ý được chuyên khoa */
     routing_note?: string | null;
+    /** ID slot tối ưu do AI/BE tự động tính toán */
+    best_slot_id?: string | null;
 }
 
 export const EMPTY_TRIAGE_SESSION: SymptomTriageSession = {
@@ -129,4 +132,5 @@ export const EMPTY_TRIAGE_SESSION: SymptomTriageSession = {
     is_emergency: false,
     questions_answered: 0,
     required_questions: DEFAULT_DIAGNOSIS_QUESTION_COUNT,
+    best_slot_id: null,
 };

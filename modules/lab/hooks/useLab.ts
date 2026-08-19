@@ -7,6 +7,7 @@ import { labService } from '../services/labService';
 import { ShiftInfo, RoomQueueData, QueuePatientItem, Toast } from '../types/lab.types';
 import { OverrideConfirmData } from '../modals/OverrideConfirmModal';
 import { RefuseConfirmData } from '../modals/RefuseConfirmModal';
+import { CompleteConfirmData } from '../modals/CompleteConfirmModal';
 import { PROCEDURE_ROOM_TYPES } from '@/modules/clinical/utils/staffShift';
 
 export function useLab() {
@@ -26,9 +27,10 @@ export function useLab() {
     const [isRefusing, setIsRefusing] = useState(false);
     const [isCompletingDetail, setIsCompletingDetail] = useState<Record<string, boolean>>({});
 
-    // Override & Refuse Queue state
+    // Override, Refuse & Complete Queue state
     const [overrideConfirmData, setOverrideConfirmData] = useState<OverrideConfirmData | null>(null);
     const [refuseConfirmData, setRefuseConfirmData] = useState<RefuseConfirmData | null>(null);
+    const [completeConfirmData, setCompleteConfirmData] = useState<CompleteConfirmData | null>(null);
     const [isOverriding, setIsOverriding] = useState(false);
 
     // Ca trực & Hàng chờ state
@@ -172,6 +174,23 @@ export function useLab() {
         })() : [];
         const initialWaiting = queueData?.waiting ?? [];
         const initialMissing = queueData?.missing ?? [];
+        const initialFinished: QueuePatientItem[] = (queueData?.finished ?? []).map((f) => ({
+            queue_id: f.queue_id,
+            queue_number: f.queue_number,
+            patient_name: f.patient?.full_name || (f as any).patient_name || 'Bệnh nhân',
+            queue_type: f.queue_type || f.step?.step_name || 'Xét nghiệm phòng Lab',
+            enqueued_at: f.serving_started_at || undefined,
+            serving_started_at: f.serving_started_at || undefined,
+            finished_at: f.finished_at || undefined,
+            duration_minutes: f.duration_minutes,
+            refusal_reason: f.refusal_reason,
+            patient: f.patient,
+            step: f.step,
+            service_order: f.service_order,
+            status: f.status,
+            initialStatus: 'COMPLETED',
+            localStatus: 'COMPLETED',
+        }));
 
         // Lists to build
         const servingList: QueuePatientItem[] = [];
@@ -182,7 +201,8 @@ export function useLab() {
         const allRawPatients = [
             ...initialServing.map(p => ({ ...p, initialStatus: 'SERVING' })),
             ...initialWaiting.map(p => ({ ...p, initialStatus: 'WAITING' })),
-            ...initialMissing.map(p => ({ ...p, initialStatus: 'MISSING' }))
+            ...initialMissing.map(p => ({ ...p, initialStatus: 'MISSING' })),
+            ...initialFinished.map(p => ({ ...p, initialStatus: 'COMPLETED' })),
         ];
 
         allRawPatients.forEach((patient) => {
@@ -205,10 +225,18 @@ export function useLab() {
         });
 
         // Filter helper by search query
-        const filterFn = (p: QueuePatientItem) => 
-            (p.patient_name || '').toLowerCase().includes(search.toLowerCase()) ||
-            (p.queue_number || '').includes(search) ||
-            (p.queue_id || '').includes(search);
+        const filterFn = (p: QueuePatientItem) => {
+            const q = search.trim().toLowerCase();
+            if (!q) return true;
+            return (
+                (p.patient_name || '').toLowerCase().includes(q) ||
+                (p.queue_number || '').includes(q) ||
+                (p.queue_id || '').toLowerCase().includes(q) ||
+                (p.patient?.phone || '').includes(q) ||
+                (p.patient?.citizen_id || '').includes(q) ||
+                (p.step?.step_name || '').toLowerCase().includes(q)
+            );
+        };
 
         return {
             waiting: [...servingList, ...waitingList].filter(filterFn),
@@ -398,6 +426,41 @@ export function useLab() {
         }
     };
 
+    const handleOpenCompleteConfirm = (patient: {
+        queue_id: string;
+        patient_name: string;
+        queue_number: string;
+        step?: any;
+        service_order?: any;
+    }) => {
+        if (!patient) return;
+        const services = patient.service_order?.details?.map((d: any) => d.service_name || d.name).filter(Boolean) || [];
+        setCompleteConfirmData({
+            queueId: patient.queue_id,
+            patientName: patient.patient_name,
+            queueNumber: patient.queue_number,
+            stepName: patient.step?.step_name,
+            services,
+        });
+    };
+
+    const handleConfirmComplete = async () => {
+        if (!completeConfirmData) return;
+        setIsCompleting(true);
+        try {
+            await labService.completeQueue(completeConfirmData.queueId);
+            showToast(`Đã hoàn thành lượt phục vụ của bệnh nhân ${completeConfirmData.patientName}.`, 'success');
+            setCompleteConfirmData(null);
+            await handleRefresh();
+        } catch (e: any) {
+            console.error('[useLab] Error completing queue:', e);
+            const errMsg = e?.response?.data?.message || e?.message || 'Có lỗi xảy ra khi hoàn thành lượt phục vụ.';
+            showToast(errMsg, 'error');
+        } finally {
+            setIsCompleting(false);
+        }
+    };
+
     return {
         mounted,
         accessToken,
@@ -432,5 +495,9 @@ export function useLab() {
         isRefusing,
         handleOpenRefuseConfirm,
         handleConfirmRefuse,
+        completeConfirmData,
+        setCompleteConfirmData,
+        handleOpenCompleteConfirm,
+        handleConfirmComplete,
     };
 }

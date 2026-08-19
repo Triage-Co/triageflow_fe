@@ -22,40 +22,13 @@ export interface ShiftInfo {
     room: ShiftRoom;
 }
 
-export interface QueuePatientItem {
-    position?: number;
-    queue_id: string;
-    queue_number: string;
-    patient_name: string;
-    queue_type?: 'APPOINTMENT' | 'WALK_IN' | string;
-    effective_score?: number;
-    reasons?: string[];
-    is_pinned?: boolean;
-    enqueued_at?: string;
-    waited_minutes?: number;
-    eta_minutes?: number;
-    eta_time?: string;
-    missed_at?: string;
-    
-    // Local UI overrides/states
-    localStatus?: 'WAITING' | 'SERVING' | 'MISSING' | 'COMPLETED';
-    resultValue?: string;
-    resultNotes?: string;
-    tubeType?: string;
-    volume?: string;
-
-    // Serving nested objects fallback
-    patient?: ServingPatient;
-    step?: ServingStep;
-    serving_started_at?: string;
-    service_order?: any;
-}
-
 export interface ServingPatient {
     patient_id: string;
     full_name: string;
     dob: string;
     gender: string;
+    phone?: string;
+    citizen_id?: string;
 }
 
 export interface ServingStep {
@@ -75,12 +48,60 @@ export interface ServingQueueItem {
     service_order: any;
 }
 
+export interface FinishedQueueItem {
+    queue_id: string;
+    queue_number: string;
+    queue_type?: 'APPOINTMENT' | 'WALK_IN' | string;
+    status: 'FINISHED' | string;
+    serving_started_at?: string | null;
+    finished_at?: string | null;
+    duration_minutes?: number;
+    refusal_reason?: string | null;
+    patient: ServingPatient;
+    step?: ServingStep;
+    service_order?: any;
+}
+
+export interface QueuePatientItem {
+    position?: number;
+    queue_id: string;
+    queue_number: string;
+    patient_name: string;
+    queue_type?: 'APPOINTMENT' | 'WALK_IN' | string;
+    effective_score?: number;
+    reasons?: string[];
+    is_pinned?: boolean;
+    enqueued_at?: string;
+    waited_minutes?: number;
+    eta_minutes?: number;
+    eta_time?: string;
+    missed_at?: string;
+    finished_at?: string;
+    duration_minutes?: number;
+    refusal_reason?: string | null;
+    status?: string;
+    
+    // Local UI overrides/states
+    localStatus?: 'WAITING' | 'SERVING' | 'MISSING' | 'COMPLETED';
+    resultValue?: string;
+    resultNotes?: string;
+    tubeType?: string;
+    volume?: string;
+
+    // Serving / finished nested objects fallback
+    patient?: ServingPatient;
+    step?: ServingStep;
+    serving_started_at?: string;
+    service_order?: any;
+}
+
 export interface RoomQueueData {
     room_id: string;
     expected_service_minutes: number;
     serving: ServingQueueItem | null;
     waiting: QueuePatientItem[];
     missing: QueuePatientItem[];
+    finished?: FinishedQueueItem[];
 }
 
 export interface Toast {
@@ -88,3 +109,4 @@ export interface Toast {
     message: string;
     type: 'success' | 'error' | 'info';
 }
+

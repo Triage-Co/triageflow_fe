@@ -25,6 +25,7 @@ interface PatientDetailsModalProps {
     onCompleteOrderDetail?: (queueId: string, detailId: string) => Promise<void>;
     isCompletingDetail?: Record<string, boolean>;
     onRefuseQueue?: (patient: { queue_id: string; patient_name: string; queue_number: string }) => void;
+    onCompleteQueue?: (patient: QueuePatientItem) => void;
 }
 
 const STATUS_MAP = {
@@ -40,7 +41,8 @@ export default function PatientDetailsModal({
     selectedPatient,
     onCompleteOrderDetail,
     isCompletingDetail,
-    onRefuseQueue
+    onRefuseQueue,
+    onCompleteQueue,
 }: PatientDetailsModalProps) {
     if (!isOpen || !selectedPatient) return null;
 
@@ -133,10 +135,68 @@ export default function PatientDetailsModal({
                                     </span>
                                 </div>
                             )}
-                            {selectedPatient.enqueued_at && (
+                            {selectedPatient.patient?.citizen_id && (
+                                <div className="flex justify-between items-center py-1 border-b border-slate-100/50">
+                                    <span className="text-neutral-500 font-semibold">Số CCCD / CMT:</span>
+                                    <span className="font-mono font-bold text-neutral-800">
+                                        {selectedPatient.patient.citizen_id}
+                                    </span>
+                                </div>
+                            )}
+                            {selectedPatient.patient?.phone && (
+                                <div className="flex justify-between items-center py-1 border-b border-slate-100/50">
+                                    <span className="text-neutral-500 font-semibold">Số điện thoại:</span>
+                                    <span className="font-bold text-neutral-800">
+                                        {selectedPatient.patient.phone}
+                                    </span>
+                                </div>
+                            )}
+                            {selectedPatient.serving_started_at && (
                                 <div className="flex justify-between items-center py-1 border-b border-slate-100/50">
                                     <span className="text-neutral-500 font-semibold">
-                                        {selectedPatient.localStatus === 'SERVING' ? 'Giờ phục vụ:' : 'Giờ vào:'}
+                                        Giờ bắt đầu phục vụ:
+                                    </span>
+                                    <span className="font-bold text-neutral-800">
+                                        {(() => {
+                                            try {
+                                                const d = new Date(selectedPatient.serving_started_at);
+                                                return isNaN(d.getTime()) ? '—' : d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                                            } catch {
+                                                return '—';
+                                            }
+                                        })()}
+                                    </span>
+                                </div>
+                            )}
+                            {selectedPatient.finished_at && (
+                                <div className="flex justify-between items-center py-1 border-b border-slate-100/50">
+                                    <span className="text-neutral-500 font-semibold">
+                                        Giờ hoàn thành:
+                                    </span>
+                                    <span className="font-bold text-emerald-700">
+                                        {(() => {
+                                            try {
+                                                const d = new Date(selectedPatient.finished_at);
+                                                return isNaN(d.getTime()) ? '—' : d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                                            } catch {
+                                                return '—';
+                                            }
+                                        })()}
+                                    </span>
+                                </div>
+                            )}
+                            {selectedPatient.duration_minutes !== undefined && selectedPatient.duration_minutes !== null && (
+                                <div className="flex justify-between items-center py-1 border-b border-slate-100/50">
+                                    <span className="text-neutral-500 font-semibold">Thời gian thực hiện:</span>
+                                    <span className="font-bold text-emerald-700">
+                                        {selectedPatient.duration_minutes > 0 ? `${selectedPatient.duration_minutes} phút` : '< 1 phút'}
+                                    </span>
+                                </div>
+                            )}
+                            {selectedPatient.enqueued_at && !selectedPatient.serving_started_at && (
+                                <div className="flex justify-between items-center py-1 border-b border-slate-100/50">
+                                    <span className="text-neutral-500 font-semibold">
+                                        Giờ vào:
                                     </span>
                                     <span className="font-bold text-neutral-800">
                                         {(() => {
@@ -165,7 +225,13 @@ export default function PatientDetailsModal({
                                     </span>
                                 </div>
                             )}
-                            {selectedPatient.waited_minutes !== undefined && selectedPatient.waited_minutes !== null && (
+                            {selectedPatient.refusal_reason && (
+                                <div className="flex justify-between items-start py-1 border-b border-slate-100/50">
+                                    <span className="text-neutral-500 font-semibold">Lý do từ chối:</span>
+                                    <span className="font-bold text-rose-700 max-w-[60%] text-right">{selectedPatient.refusal_reason}</span>
+                                </div>
+                            )}
+                            {selectedPatient.waited_minutes !== undefined && selectedPatient.waited_minutes !== null && patientStatus === 'WAITING' && (
                                 <div className="flex justify-between items-center py-1">
                                     <span className="text-neutral-500 font-semibold">Đã chờ:</span>
                                     <span className="font-bold text-[#8B7CF6]">{selectedPatient.waited_minutes} phút</span>
@@ -192,8 +258,19 @@ export default function PatientDetailsModal({
                                 </div>
                                 <div className="flex justify-between items-center pt-2 border-t border-slate-100/50">
                                     <span className="text-neutral-500 font-semibold">Trạng thái tiến trình:</span>
-                                    <span className="font-bold text-[#8B7CF6]">
-                                        {selectedPatient.step.step_status === 'IN_PROGRESS' ? 'Đang thực hiện' : selectedPatient.step.step_status}
+                                    <span className={cn(
+                                        "font-bold px-2 py-0.5 rounded-full text-[10px] border",
+                                        selectedPatient.step.step_status === 'COMPLETED'
+                                            ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                                            : selectedPatient.step.step_status === 'IN_PROGRESS'
+                                            ? "bg-indigo-50 border-indigo-200 text-[#8B7CF6]"
+                                            : "bg-neutral-100 border-neutral-200 text-neutral-600"
+                                    )}>
+                                        {selectedPatient.step.step_status === 'COMPLETED'
+                                            ? 'Đã hoàn thành'
+                                            : selectedPatient.step.step_status === 'IN_PROGRESS'
+                                            ? 'Đang thực hiện'
+                                            : selectedPatient.step.step_status}
                                     </span>
                                 </div>
                             </div>
@@ -273,19 +350,37 @@ export default function PatientDetailsModal({
                         <div className="space-y-2.5 pt-2 border-t border-neutral-100">
                             <h4 className="text-[11px] font-bold text-neutral-450 uppercase tracking-wider flex items-center gap-1.5">
                                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                                Kết quả xét nghiệm
+                                Kết quả xét nghiệm / Trạng thái hoàn thành
                             </h4>
                             <div className="p-5 rounded-2xl bg-emerald-50/40 border border-emerald-100 space-y-4 text-xs">
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-1">
-                                        <p className="text-emerald-700 font-bold uppercase tracking-wider text-[10px]">Trị số đo</p>
-                                        <p className="text-xl font-black text-emerald-900 mt-1">{selectedPatient.resultValue || '—'}</p>
+                                        <p className="text-emerald-700 font-bold uppercase tracking-wider text-[10px]">Trạng thái thực hiện</p>
+                                        <p className="text-base font-black text-emerald-900 mt-1 flex items-center gap-1.5">
+                                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                            Đã hoàn tất xét nghiệm
+                                        </p>
                                     </div>
                                     <div className="space-y-1">
-                                        <p className="text-emerald-700 font-bold uppercase tracking-wider text-[10px]">Ngày trả kết quả</p>
-                                        <p className="text-sm font-bold text-neutral-800 mt-1">Hôm nay</p>
+                                        <p className="text-emerald-700 font-bold uppercase tracking-wider text-[10px]">Thời gian kết thúc</p>
+                                        <p className="text-sm font-bold text-neutral-800 mt-1">
+                                            {selectedPatient.finished_at ? (() => {
+                                                try {
+                                                    const d = new Date(selectedPatient.finished_at);
+                                                    return isNaN(d.getTime()) ? 'Hôm nay' : `${d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - ${d.toLocaleDateString('vi-VN')}`;
+                                                } catch {
+                                                    return 'Hôm nay';
+                                                }
+                                            })() : 'Hôm nay'}
+                                        </p>
                                     </div>
                                 </div>
+                                {selectedPatient.resultValue && (
+                                    <div className="border-t border-emerald-100/50 pt-3">
+                                        <p className="text-emerald-700 font-bold uppercase tracking-wider text-[10px]">Trị số đo</p>
+                                        <p className="text-lg font-black text-emerald-900 mt-1">{selectedPatient.resultValue}</p>
+                                    </div>
+                                )}
                                 {selectedPatient.resultNotes && (
                                     <div className="border-t border-emerald-100/50 pt-3">
                                         <p className="text-emerald-700 font-bold uppercase tracking-wider text-[10px]">Ghi chú / Kết luận chuyên môn</p>
@@ -299,7 +394,7 @@ export default function PatientDetailsModal({
 
                 {/* Modal Footer */}
                 <div className="px-6 py-4.5 border-t border-neutral-100 bg-neutral-50/50 flex items-center justify-between">
-                    <div>
+                    <div className="flex items-center gap-2">
                         {patientStatus === 'SERVING' && onRefuseQueue && (
                             <Button
                                 type="button"
@@ -314,6 +409,19 @@ export default function PatientDetailsModal({
                                 className="rounded-xl font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-4 text-xs shadow-3xs cursor-pointer"
                             >
                                 Từ chối phục vụ
+                            </Button>
+                        )}
+                        {patientStatus === 'SERVING' && onCompleteQueue && (
+                            <Button
+                                type="button"
+                                onClick={() => {
+                                    onClose();
+                                    onCompleteQueue(selectedPatient);
+                                }}
+                                className="rounded-xl font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white border-0 px-4 text-xs shadow-xs cursor-pointer flex items-center gap-1.5"
+                            >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Hoàn thành lượt khám
                             </Button>
                         )}
                     </div>

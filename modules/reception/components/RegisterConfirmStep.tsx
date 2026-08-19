@@ -5,7 +5,6 @@ import {
     Check,
     IdCard,
     QrCode,
-    Sparkles,
     WalletCards,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -96,22 +95,6 @@ function getDoctorLabel(specialty: ReceptionSpecialty | undefined): string {
     return getDoctorDisplayLabel(specialty);
 }
 
-function getAiSuggestion(
-    triageSession: SymptomTriageSession,
-    aiReference: string | null,
-): string {
-    const dept = aiReference || 'Khám theo triệu chứng';
-
-    const waitHint =
-        triageSession.triage_level === 'emergency'
-            ? 'Ưu tiên ngay'
-            : triageSession.triage_level === 'consultation'
-                ? '~20–30 phút'
-                : '~15–25 phút';
-
-    return `Gợi ý tham khảo AI: **${dept}** – Thời gian chờ dự kiến: ${waitHint}. Lễ tân đã chọn chuyên khoa chính thức ở bước trước.`;
-}
-
 export function RegisterConfirmStep({
     fullName,
     citizenId,
@@ -136,7 +119,6 @@ export function RegisterConfirmStep({
         (triageSession.is_analyzed ||
             Boolean(triageSession.recommended_specialist) ||
             Boolean(triageSession.recommended_department_label));
-    const aiText = isAiTriaged ? getAiSuggestion(triageSession, aiReference) : '';
 
     return (
         <div className="space-y-4">
@@ -201,29 +183,6 @@ export function RegisterConfirmStep({
                     </div>
                 </div>
             </div>
-
-            {/* AI banner - Chỉ hiển thị khi chọn chế độ Gợi ý chuyên khoa AI */}
-            {isAiTriaged && (
-                <div className="rounded-[14px] border border-[#E0E7FF] bg-[#F5F3FF] px-5 py-4 flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-[#8B7CF6] flex items-center justify-center shrink-0">
-                        <Sparkles className="w-5 h-5 text-white" strokeWidth={2} />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-[14px] font-bold text-[#5B21B6]">Kết quả phân loại AI</p>
-                        <p className="text-[12px] text-[#6D28D9] mt-1 leading-relaxed">
-                            {aiText.split('**').map((part, i) =>
-                                i % 2 === 1 ? (
-                                    <strong key={i} className="font-bold text-[#5B21B6]">
-                                        {part}
-                                    </strong>
-                                ) : (
-                                    <span key={i}>{part}</span>
-                                ),
-                            )}
-                        </p>
-                    </div>
-                </div>
-            )}
 
             {paymentMethod === 'qr' && (
                 <div className="rounded-xl border border-[#8B7CF6]/20 bg-[#F5F2FF] px-4 py-3 flex items-center gap-3 text-[12.5px] text-[#5B4EC9]">

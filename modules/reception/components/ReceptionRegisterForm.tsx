@@ -5,7 +5,6 @@ import {
   Brain,
   Building2,
   CalendarDays,
-  ChevronLeft,
   ChevronRight,
   CreditCard,
   FileText,
@@ -59,6 +58,7 @@ import {
   formatQueueTicketNo,
   formatSlotTimeLabel,
   getDoctorDisplayLabel,
+  getTodayDateString,
 } from "@/modules/reception/utils/receptionMapper";
 import {
   applyRegisterPrefillToForm,
@@ -368,10 +368,12 @@ export function ReceptionRegisterForm() {
 
   const step2Valid = Boolean(
     bookingMode &&
-    form.department_id.length > 0 &&
-    form.specialty_id.length > 0 &&
-    form.slot_id.length > 0 &&
-    (bookingMode !== "ai_triage" || form.symptoms.trim().length >= 5),
+      (bookingMode === "ai_triage"
+        ? triageSession.is_analyzed &&
+          (form.slot_id.length > 0 || Boolean(triageSession.best_slot_id))
+        : form.department_id.length > 0 &&
+          form.specialty_id.length > 0 &&
+          form.slot_id.length > 0),
   );
 
   async function lookupPatientByCitizen(citizenId: string) {
@@ -388,11 +390,11 @@ export function ReceptionRegisterForm() {
       if (found) {
         setForm((prev) => ({
           ...prev,
-          full_name: found.full_name || prev.full_name,
+          full_name: prev.full_name || found.full_name || "",
           email: found.email || prev.email,
-          gender: (found.gender as Gender) || prev.gender,
+          gender: (prev.gender as Gender) || (found.gender as Gender) || "FEMALE",
           phone: found.phone ?? prev.phone,
-          dob: found.dob ? found.dob.slice(0, 10) : prev.dob,
+          dob: prev.dob || (found.dob ? found.dob.slice(0, 10) : ""),
           insurance_id:
             found.bhyt && found.bhyt !== "N/A" ? found.bhyt : prev.insurance_id,
         }));
@@ -405,10 +407,10 @@ export function ReceptionRegisterForm() {
               await receptionService.ensurePatientProfileForTriage(
                 {
                   citizen_id: cleanId,
-                  full_name: found.full_name || form.full_name,
+                  full_name: form.full_name || found.full_name,
                   dob:
-                    (found.dob ? found.dob.slice(0, 10) : form.dob) || form.dob,
-                  gender: (found.gender as Gender) || form.gender,
+                    form.dob || (found.dob ? found.dob.slice(0, 10) : ""),
+                  gender: form.gender || (found.gender as Gender),
                   medical_coverage_id:
                     found.bhyt && found.bhyt !== "N/A"
                       ? found.bhyt
@@ -440,32 +442,25 @@ export function ReceptionRegisterForm() {
     }
   }
 
-  async function handleCccdData(
-    data: CccdScanResult,
-    source: "qr" | "image" = "qr",
-  ) {
+  async function handleCccdData(data: CccdScanResult) {
     setError(null);
-    setScanBanner(
-      source === "image"
-        ? "Đã phân tích ảnh CCCD và tự động điền thông tin."
-        : data.ekyc_verified
-          ? "Xác thực eKYC thành công! Đã điền thông tin từ CCCD/VNeID."
-          : "Quét thành công! Đã điền thông tin từ CCCD/VNeID.",
-    );
     const cleanCitizenId = data.citizen_id.replace(/\D/g, "");
+    setScanBanner(
+      `Quét CCCD thành công! Đã điền thông tin: ${data.full_name || cleanCitizenId}`,
+    );
     setForm((prev) => ({
       ...prev,
       citizen_id: cleanCitizenId,
-      full_name: data.full_name,
-      dob: data.dob,
-      gender: data.gender,
-      address: data.address,
+      full_name: data.full_name || prev.full_name,
+      dob: data.dob || prev.dob,
+      gender: data.gender || prev.gender,
+      address: data.address || prev.address,
     }));
     await lookupPatientByCitizen(cleanCitizenId);
   }
 
   async function handleQrSuccess(data: CccdScanResult) {
-    await handleCccdData(data, "qr");
+    await handleCccdData(data);
   }
 
   function handleCitizenBlur() {
@@ -538,16 +533,28 @@ export function ReceptionRegisterForm() {
         setError("Vui lòng chọn 1 trong 3 phương thức tiếp nhận khám.");
         return;
       }
-      if (!form.department_id) {
+      if (bookingMode === "ai_triage") {
+        if (!triageSession.is_analyzed) {
+          setError("Vui lòng hoàn thành phỏng vấn triệu chứng với AI.");
+          return;
+        }
+        if (!form.slot_id && triageSession.best_slot_id) {
+          update("slot_id", triageSession.best_slot_id);
+        }
+        if (!form.department_id && triageSession.recommended_department_id) {
+          update("department_id", triageSession.recommended_department_id);
+        }
+      }
+      if (!form.department_id && !triageSession.recommended_department_id) {
         setError("Vui lòng chọn chuyên khoa khám.");
         return;
       }
-      if (!form.specialty_id) {
+      if (bookingMode !== "ai_triage" && !form.specialty_id) {
         setError("Vui lòng chọn bác sĩ khám.");
         return;
       }
-      if (!form.slot_id) {
-        setError("Vui lòng chọn khung giờ khám.");
+      if (!form.slot_id && !triageSession.best_slot_id) {
+        setError("Vui lòng chọn khung giờ khám hoặc chọn Xếp phòng tự động.");
         return;
       }
       if (bookingMode === "ai_triage" && form.symptoms.trim().length < 5) {
@@ -578,11 +585,6 @@ export function ReceptionRegisterForm() {
     setRegistrationResult(null);
     patientPromiseRef.current = null;
     setStep(1);
-  }
-
-  function handleBack() {
-    setError(null);
-    if (step > 1 && step < 4) setStep((s) => (s - 1) as Step);
   }
 
   const selectedSlot = slots.find((s) => (s.slot_id ?? s.id) === form.slot_id);
@@ -653,7 +655,15 @@ export function ReceptionRegisterForm() {
           throw new Error("Không tìm thấy hồ sơ bệnh nhân để đặt lịch.");
         }
 
-        if (!form.slot_id) {
+        const effectiveSlotId =
+          form.slot_id ||
+          (bookingMode === "ai_triage" ? triageSession.best_slot_id : "") ||
+          "";
+
+        if (
+          !effectiveSlotId &&
+          !(bookingMode === "ai_triage" && triageSession.interview_token)
+        ) {
           throw new Error(
             "Vui lòng chọn bác sĩ và khung giờ khám để đặt lịch.",
           );
@@ -667,19 +677,23 @@ export function ReceptionRegisterForm() {
 
         if (!bookingId) {
           let bookingRes;
-          if (form.payment_method === "cash" && form.slot_id) {
+          if (form.payment_method === "cash" && effectiveSlotId) {
             bookingRes = await receptionService.createBookingCash(
               {
                 patient_id: patientId,
-                slot_id: form.slot_id,
+                slot_id: effectiveSlotId,
               },
               accessToken,
             );
-          } else if (bookingMode === "package" && form.package_id) {
+          } else if (
+            bookingMode === "package" &&
+            form.package_id &&
+            effectiveSlotId
+          ) {
             bookingRes = await receptionService.createBookingWithPackage(
               {
                 patient_id: patientId,
-                slot_id: form.slot_id,
+                slot_id: effectiveSlotId,
                 package_id: form.package_id,
               },
               accessToken,
@@ -687,7 +701,7 @@ export function ReceptionRegisterForm() {
           } else if (
             bookingMode === "ai_triage" &&
             triageSession.interview_token &&
-            !form.slot_id
+            !effectiveSlotId
           ) {
             bookingRes = await receptionService.createBookingRecommend(
               {
@@ -700,7 +714,7 @@ export function ReceptionRegisterForm() {
             bookingRes = await receptionService.createBooking(
               {
                 patient_id: patientId,
-                slot_id: form.slot_id,
+                slot_id: effectiveSlotId,
               },
               accessToken,
             );
@@ -766,6 +780,9 @@ export function ReceptionRegisterForm() {
           });
           setRegistrationResult({
             ticketNo: "Chờ thanh toán",
+            appointmentDate: selectedSlot?.shift?.date
+              ? String(selectedSlot.shift.date).slice(0, 10)
+              : getTodayDateString(),
             queueNumber: undefined,
             bookingId,
             stepId,
@@ -820,6 +837,7 @@ export function ReceptionRegisterForm() {
           const rawFlows = await receptionService.getPatientActiveFlows(
             patientId,
             accessToken,
+            getTodayDateString(),
           );
           const mappedFlows = mapActiveFlowsList(rawFlows);
           const matchedFlow =
@@ -861,6 +879,9 @@ export function ReceptionRegisterForm() {
 
         setRegistrationResult({
           ticketNo,
+          appointmentDate: selectedSlot?.shift?.date
+            ? String(selectedSlot.shift.date).slice(0, 10)
+            : getTodayDateString(),
           queueNumber: queueFields.queueNumber,
           bookingId: bookingId,
           stepId: stepId,
@@ -1461,21 +1482,7 @@ export function ReceptionRegisterForm() {
 
             {/* Footer actions */}
             {step < 4 && (
-              <div className="flex items-center justify-between mt-8 pt-4 border-t border-[#F3F4F6]">
-                {step > 1 ? (
-                  <button
-                    type="button"
-                    onClick={handleBack}
-                    disabled={isPending}
-                    className="inline-flex items-center gap-1.5 min-h-[44px] px-4 rounded-lg border border-[#E5E7EB] bg-white text-[13px] font-semibold text-[#6B7280] hover:bg-[#F9FAFB] transition-colors"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                    Quay lại
-                  </button>
-                ) : (
-                  <div />
-                )}
-
+              <div className="flex items-center justify-end mt-8 pt-4 border-t border-[#F3F4F6]">
                 {step < 3 ? (
                   <button
                     type="button"

@@ -617,10 +617,11 @@ export const receptionService = {
         );
     },
 
-    async getPatientActiveFlows(patientId: string, token: string): Promise<any[]> {
+    async getPatientActiveFlows(patientId: string, token: string, date?: string): Promise<any[]> {
         try {
+            const queryParams = date ? `?date=${encodeURIComponent(date)}` : '';
             const res = await apiClient.get<any>(
-                `/api/flow/patient/${encodeURIComponent(patientId)}/active`,
+                `/api/flow/patient/${encodeURIComponent(patientId)}/active${queryParams}`,
                 {
                     headers: { Authorization: `Bearer ${token}` },
                 },
