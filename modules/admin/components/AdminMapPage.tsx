@@ -26,6 +26,7 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { AutoRebalanceToggle } from './AutoRebalanceToggle';
 import {
   FloorMap,
   type PendingAddNode,
@@ -851,6 +852,7 @@ export function AdminMapPage() {
       </div>
 
       {mode === 'watch' && (
+        <>
         <button
           type="button"
           onClick={() => {
@@ -874,6 +876,8 @@ export function AdminMapPage() {
           <Flame className="w-3.5 h-3.5" />
           Heatmap
         </button>
+        <AutoRebalanceToggle variant="toolbar" />
+        </>
       )}
 
       <button

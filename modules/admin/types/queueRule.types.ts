@@ -115,3 +115,16 @@ export interface RoomServiceStat {
     updated_at?: string;
     room?: { room_id: string; room_name: string };
 }
+
+export interface RebalanceConfig {
+    enabled: boolean;
+    eta_gap_minutes: number;
+    suggestion_ttl_minutes: number;
+    rule_id: string | null;
+}
+
+export interface UpdateRebalanceConfigDto {
+    enabled: boolean;
+    eta_gap_minutes?: number;
+    suggestion_ttl_minutes?: number;
+}

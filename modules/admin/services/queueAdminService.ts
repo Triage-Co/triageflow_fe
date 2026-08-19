@@ -3,8 +3,10 @@ import type {
     CreatePriorityRuleDto,
     QueryPriorityRuleParams,
     QueuePriorityRule,
+    RebalanceConfig,
     RoomServiceStat,
     UpdatePriorityRuleDto,
+    UpdateRebalanceConfigDto,
 } from '../types/queueRule.types';
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -83,6 +85,16 @@ export const queueAdminService = {
     /* ─── Heatmap ─── */
     getHeatmap: (token: string) =>
         apiClient.get<unknown>('/api/queue/admin/heatmap', {
+            headers: { Authorization: `Bearer ${token}` },
+        }),
+
+    getRebalanceConfig: (token: string) =>
+        apiClient.get<RebalanceConfig>('/api/queue/admin/rebalance-config', {
+            headers: { Authorization: `Bearer ${token}` },
+        }),
+
+    updateRebalanceConfig: (body: UpdateRebalanceConfigDto, token: string) =>
+        apiClient.patch<RebalanceConfig>('/api/queue/admin/rebalance-config', body, {
             headers: { Authorization: `Bearer ${token}` },
         }),
 };
