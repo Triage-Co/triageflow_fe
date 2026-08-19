@@ -1,5 +1,11 @@
 import { apiClient } from '@/shared/services/apiClient';
-import type { BulkWeeklyResult, BulkWeeklyShiftDto, Shift, CreateShiftDto } from '../types/shift.types';
+import type {
+    BulkImportShiftDto,
+    BulkWeeklyResult,
+    BulkWeeklyShiftDto,
+    Shift,
+    CreateShiftDto,
+} from '../types/shift.types';
 
 export const shiftService = {
     getShifts: async (token: string) => {
@@ -34,6 +40,12 @@ export const shiftService = {
 
     bulkWeekly: async (data: BulkWeeklyShiftDto, token: string) => {
         return apiClient.post<BulkWeeklyResult>('/api/shift/bulk-weekly', data, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+    },
+
+    bulkImport: async (data: BulkImportShiftDto, token: string) => {
+        return apiClient.post<BulkWeeklyResult>('/api/shift/bulk-import', data, {
             headers: { Authorization: `Bearer ${token}` },
         });
     },

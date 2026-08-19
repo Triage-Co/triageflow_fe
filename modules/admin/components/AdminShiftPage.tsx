@@ -16,6 +16,7 @@ import {
     UserCheck,
     Pencil,
     CalendarRange,
+    Upload,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useShiftStore } from '../store/shiftStore';
@@ -26,6 +27,7 @@ import type { Shift, CreateShiftDto } from '../types/shift.types';
 import { getCompactPages } from '../utils/pagination';
 import { validateShiftAssignment, filterEligibleStaffForRoom } from '../utils/shiftValidation';
 import { BulkWeeklyShiftModal } from './BulkWeeklyShiftModal';
+import { ImportShiftModal } from './ImportShiftModal';
 
 /* ─── Role Badges Config ─────────────────────────────────────────────────── */
 
@@ -66,7 +68,7 @@ export function AdminShiftPage() {
 
     const { shifts, isLoading, error, fetchShifts, createShift, updateShift, deleteShift, clearError } = useShiftStore();
     const { staffs, fetchStaffs } = useStaffStore();
-    const { rooms, fetchRooms } = useRoomStore();
+    const { rooms, specialties, fetchRooms, fetchSpecialties } = useRoomStore();
 
     const [roomFilter, setRoomFilter] = useState('ALL');
     const [dateFilter, setDateFilter] = useState('');
@@ -107,6 +109,7 @@ export function AdminShiftPage() {
 
     // Bulk Weekly Modal
     const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     // Delete Confirm
     const [deletingShift, setDeletingShift] = useState<Shift | null>(null);
@@ -118,8 +121,9 @@ export function AdminShiftPage() {
             fetchShifts(accessToken);
             fetchStaffs(accessToken, { mergeAccounts: true });
             fetchRooms(accessToken);
+            fetchSpecialties(accessToken);
         }
-    }, [accessToken, fetchShifts, fetchStaffs, fetchRooms]);
+    }, [accessToken, fetchShifts, fetchStaffs, fetchRooms, fetchSpecialties]);
 
     /* ── Lookup helpers ── */
     const isStaffsLoading = useStaffStore((s) => s.isLoading);
@@ -323,6 +327,13 @@ export function AdminShiftPage() {
                                 </p>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                    onClick={() => setIsImportModalOpen(true)}
+                                    className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#8B7CF6]/30 hover:bg-[#F5F2FF] text-[#8B7CF6] text-[13px] font-bold rounded-xl transition-all shadow-sm cursor-pointer"
+                                >
+                                    <Upload className="w-4 h-4" />
+                                    Import file
+                                </button>
                                 <button
                                     onClick={() => setIsBulkModalOpen(true)}
                                     className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#8B7CF6]/30 hover:bg-[#F5F2FF] text-[#8B7CF6] text-[13px] font-bold rounded-xl transition-all shadow-sm cursor-pointer"
@@ -563,6 +574,18 @@ export function AdminShiftPage() {
                     staffs={staffs}
                     accessToken={accessToken}
                     onClose={() => setIsBulkModalOpen(false)}
+                    onSuccess={() => { if (accessToken) fetchShifts(accessToken); }}
+                />
+            )}
+
+            {isImportModalOpen && (
+                <ImportShiftModal
+                    rooms={rooms}
+                    staffs={staffs}
+                    specialties={specialties}
+                    shifts={shifts}
+                    accessToken={accessToken}
+                    onClose={() => setIsImportModalOpen(false)}
                     onSuccess={() => { if (accessToken) fetchShifts(accessToken); }}
                 />
             )}

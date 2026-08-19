@@ -46,3 +46,16 @@ export interface BulkWeeklyResult {
     skipped: BulkWeeklySkipped[];
     errors: unknown[];
 }
+
+export interface BulkImportShiftItem {
+    staff_id: string;
+    room_id: string;
+    date: string;
+    start_time: string;
+    end_time: string;
+}
+
+export interface BulkImportShiftDto {
+    items: BulkImportShiftItem[];
+    skip_conflicts?: boolean;
+}
