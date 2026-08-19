@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Pill, RefreshCw } from 'lucide-react';
+import { PhoneCall, Pill, RefreshCw } from 'lucide-react';
 import { Prescription } from '@/shared/types/prescription.types';
 import { usePharmacyQueue } from '../../hooks/usePharmacyQueue';
 import { QueueSearchBar } from './QueueSearchBar';
@@ -34,7 +34,14 @@ export function PharmacyQueue({
         scanning,
         scanError,
         fetchQueue,
-        handleScanSubmit
+        handleScanSubmit,
+        readyUnshownCount,
+        handleCallNext,
+        handleMiss,
+        handleRecall,
+        actingId,
+        callNextLoading,
+        actionError
     } = usePharmacyQueue(refreshKey, onSelectPrescription);
 
     return (
@@ -54,6 +61,15 @@ export function PharmacyQueue({
                         </p>
                     </div>
                 </div>
+                <button
+                    type="button"
+                    onClick={() => void handleCallNext()}
+                    disabled={callNextLoading || readyUnshownCount === 0}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-[11px] font-black shadow-sm cursor-pointer"
+                >
+                    {callNextLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <PhoneCall className="w-3.5 h-3.5" />}
+                    Call next{readyUnshownCount > 0 ? ` (${readyUnshownCount})` : ''}
+                </button>
             </div>
 
             {/* Search & Scan Controls */}
@@ -77,6 +93,9 @@ export function PharmacyQueue({
                     onStatusChange={setActiveStatus}
                     counts={counts}
                 />
+                {actionError && (
+                    <p className="text-[11px] font-medium text-rose-600">{actionError}</p>
+                )}
             </div>
 
             {/* Prescriptions List */}
@@ -98,6 +117,9 @@ export function PharmacyQueue({
                             prescription={prescription}
                             isSelected={selectedPrescriptionId === prescription.prescription_id}
                             onSelect={() => onSelectPrescription(prescription)}
+                            acting={actingId === prescription.prescription_id}
+                            onMiss={(item) => void handleMiss(item)}
+                            onRecall={(item) => void handleRecall(item)}
                         />
                     ))
                 )}

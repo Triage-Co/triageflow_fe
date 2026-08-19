@@ -4,6 +4,7 @@ import {
     CreatePrescriptionDto,
     PrescriptionStatusEnum
 } from '@/shared/types/prescription.types';
+import type { PharmacyDisplayPayload } from '../types/pharmacy-display.types';
 
 export function normalizePrescription(item: any): Prescription {
     if (!item) return {} as Prescription;
@@ -74,7 +75,11 @@ export function normalizePrescription(item: any): Prescription {
         diagnosis_note: item.diagnosis_note || '',
         status: effectiveStatus,
         total_amount: item.total_amount !== undefined && item.total_amount !== null ? item.total_amount : calculatedTotal,
-        prescriptionDetails: details
+        prescriptionDetails: details,
+        pickup_number: item.pickup_number ?? null,
+        pickup_date: item.pickup_date ?? null,
+        called_at: item.called_at ?? null,
+        missed_at: item.missed_at ?? null
     };
 }
 
@@ -136,6 +141,7 @@ export const pharmacyService = {
             result = result.filter(
                 (p) =>
                     p.prescription_code?.toLowerCase().includes(s) ||
+                    p.pickup_number?.toLowerCase().includes(s) ||
                     p.patient_name?.toLowerCase().includes(s) ||
                     p.patient_code?.toLowerCase().includes(s)
             );
@@ -175,6 +181,38 @@ export const pharmacyService = {
 
     async updatePrescriptionStatus(prescriptionId: string, status: PrescriptionStatusEnum): Promise<Prescription> {
         const res = await apiClient.patch<any>(`/api/prescription/${prescriptionId}/status`, { status });
+        const data: any = res?.data || res;
+        return normalizePrescription(data);
+    },
+
+    async getPharmacyDisplay(roomId?: string): Promise<PharmacyDisplayPayload> {
+        const query = roomId ? `?room_id=${encodeURIComponent(roomId)}` : '';
+        const res = await apiClient.get<any>(`/api/prescription/pharmacy-display${query}`, {
+            suppressLogError: true
+        });
+        const data = (res as any)?.calling_numbers ? res : (res as any)?.data || res;
+        return {
+            kind: 'pharmacy',
+            room: data?.room || { room_id: roomId || '', room_name: 'Nhà thuốc' },
+            calling_numbers: Array.isArray(data?.calling_numbers) ? data.calling_numbers : [],
+            ready_unshown_count: Number(data?.ready_unshown_count || 0)
+        };
+    },
+
+    async callNextPharmacy(roomId?: string): Promise<PharmacyDisplayPayload & { called_count?: number }> {
+        const res = await apiClient.post<any>('/api/prescription/call-next', roomId ? { room_id: roomId } : {});
+        const data: any = res?.data || res;
+        return data;
+    },
+
+    async missPrescription(prescriptionId: string): Promise<Prescription> {
+        const res = await apiClient.post<any>(`/api/prescription/${prescriptionId}/miss`, {});
+        const data: any = res?.data || res;
+        return normalizePrescription(data);
+    },
+
+    async recallPrescription(prescriptionId: string): Promise<Prescription> {
+        const res = await apiClient.post<any>(`/api/prescription/${prescriptionId}/recall`, {});
         const data: any = res?.data || res;
         return normalizePrescription(data);
     }
