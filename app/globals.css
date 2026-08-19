@@ -158,14 +158,15 @@
 .cccd-qr-reader video {
   width: 100% !important;
   height: 100% !important;
-  object-fit: cover !important;
+  object-fit: contain !important;
+  background-color: #020617 !important;
   border-radius: 0 !important;
 }
 
 .cccd-qr-reader > div {
   width: 100% !important;
   height: 100% !important;
-  min-height: 320px !important;
+  min-height: 260px !important;
   border: none !important;
 }
 
