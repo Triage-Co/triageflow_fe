@@ -55,7 +55,8 @@ export function usePrescriptionDetail(
         try {
             const updated = await pharmacyService.payPrescriptionOffline(activeRx.prescription_id);
             setCurrentPrescription(updated);
-            setSuccessMessage('Đã xác nhận thu tiền mặt thành công! Đơn thuốc đã chuyển sang trạng thái "Đang soạn thuốc".');
+            const pickupLabel = updated.pickup_number ? ` Số lấy thuốc: ${updated.pickup_number}.` : '';
+            setSuccessMessage(`Đã xác nhận thu tiền mặt thành công!${pickupLabel} Đơn thuốc đã chuyển sang trạng thái "Đang soạn thuốc".`);
             broadcastPaymentDisplaySync({
                 status: 'success',
                 prescriptionId: activeRx.prescription_id,
@@ -81,7 +82,11 @@ export function usePrescriptionDetail(
         try {
             const updated = await pharmacyService.preparePrescription(activeRx.prescription_id);
             setCurrentPrescription(updated);
-            setSuccessMessage('Đã xác nhận soạn xong thuốc! Hệ thống đã tự động gửi thông báo đến ứng dụng Bệnh nhân.');
+            setSuccessMessage(
+                updated.pickup_number
+                    ? `Đã xác nhận soạn xong thuốc (số ${updated.pickup_number}). Bấm Call next để đưa số lên TV.`
+                    : 'Đã xác nhận soạn xong thuốc! Hệ thống đã tự động gửi thông báo đến ứng dụng Bệnh nhân.'
+            );
             onStatusChange?.(updated);
         } catch (err: any) {
             setError(err?.message || 'Không thể cập nhật trạng thái soạn xong');
@@ -111,7 +116,11 @@ export function usePrescriptionDetail(
     // 4. Callback khi thanh toán QR PayOS thành công
     const handlePayOsSuccess = useCallback((updated: Prescription) => {
         setCurrentPrescription(updated);
-        setSuccessMessage('Thanh toán PayOS thành công! Đơn thuốc đã chuyển sang trạng thái "Đang soạn thuốc".');
+        setSuccessMessage(
+            updated.pickup_number
+                ? `Thanh toán PayOS thành công! Số lấy thuốc: ${updated.pickup_number}. Đơn thuốc đã chuyển sang trạng thái "Đang soạn thuốc".`
+                : 'Thanh toán PayOS thành công! Đơn thuốc đã chuyển sang trạng thái "Đang soạn thuốc".'
+        );
         setShowPayOsModal(false);
         onStatusChange?.(updated);
     }, [onStatusChange]);

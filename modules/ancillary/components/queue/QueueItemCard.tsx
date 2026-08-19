@@ -1,21 +1,57 @@
 'use client';
 
 import React from 'react';
-import { Pill, Clock, PackageCheck, CheckCircle2, ChevronRight } from 'lucide-react';
+import { Pill, Clock, PackageCheck, CheckCircle2, ChevronRight, PhoneOff, PhoneCall } from 'lucide-react';
 import { Prescription, PrescriptionStatusEnum } from '@/shared/types/prescription.types';
+import {
+    isPharmacyNumberMissed,
+    isPharmacyNumberOnTv,
+    isPharmacyNumberReadyToCall
+} from '../../types/pharmacy-display.types';
 
 interface QueueItemCardProps {
     prescription: Prescription;
     isSelected: boolean;
     onSelect: () => void;
+    acting?: boolean;
+    onMiss?: (prescription: Prescription) => void;
+    onRecall?: (prescription: Prescription) => void;
 }
 
 export function QueueItemCard({
     prescription,
     isSelected,
-    onSelect
+    onSelect,
+    acting = false,
+    onMiss,
+    onRecall
 }: QueueItemCardProps) {
+    const onTv = isPharmacyNumberOnTv(prescription);
+    const readyToCall = isPharmacyNumberReadyToCall(prescription);
+    const missed = isPharmacyNumberMissed(prescription);
+
     const renderStatusBadge = (status: PrescriptionStatusEnum) => {
+        if (missed) {
+            return (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800 px-2 py-0.5 rounded-full">
+                    Miss
+                </span>
+            );
+        }
+        if (onTv) {
+            return (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-full">
+                    Đang trên TV
+                </span>
+            );
+        }
+        if (readyToCall) {
+            return (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-full">
+                    Chờ gọi
+                </span>
+            );
+        }
         switch (status) {
             case 'PENDING':
                 return (
@@ -62,6 +98,11 @@ export function QueueItemCard({
             <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
+                        {prescription.pickup_number && (
+                            <span className="text-sm font-mono font-black text-emerald-700 dark:text-emerald-400">
+                                {prescription.pickup_number}
+                            </span>
+                        )}
                         <span className="text-xs font-mono font-bold text-neutral-800 dark:text-neutral-200 truncate">
                             {prescription.prescription_code}
                         </span>
@@ -78,6 +119,39 @@ export function QueueItemCard({
                             {prescription.total_amount?.toLocaleString('vi-VN')} đ
                         </span>
                     </div>
+
+                    {(onTv || missed) && (
+                        <div className="mt-2 flex items-center gap-2">
+                            {onTv && onMiss && (
+                                <button
+                                    type="button"
+                                    disabled={acting}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        onMiss(prescription);
+                                    }}
+                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 disabled:opacity-50 cursor-pointer"
+                                >
+                                    <PhoneOff className="w-3 h-3" />
+                                    Miss
+                                </button>
+                            )}
+                            {missed && onRecall && (
+                                <button
+                                    type="button"
+                                    disabled={acting}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        onRecall(prescription);
+                                    }}
+                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 disabled:opacity-50 cursor-pointer"
+                                >
+                                    <PhoneCall className="w-3 h-3" />
+                                    Gọi lại
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 <ChevronRight className={`w-4 h-4 mt-2 shrink-0 transition-transform ${isSelected ? 'text-indigo-600 dark:text-indigo-400 translate-x-0.5' : 'text-neutral-400'}`} />

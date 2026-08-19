@@ -87,6 +87,10 @@ export interface Prescription {
     diagnosis_note: string;
     total_amount: number;
     status: PrescriptionStatusEnum;
+    pickup_number?: string | null;
+    pickup_date?: string | null;
+    called_at?: string | null;
+    missed_at?: string | null;
     created_at: string;
     updated_at: string;
     prescriptionDetails: PrescriptionDetail[];

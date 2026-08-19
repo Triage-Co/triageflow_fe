@@ -75,9 +75,12 @@ export function DispenseActionBar({
                     <div>
                         <h4 className="text-xs font-bold text-blue-900 dark:text-blue-300">
                             Đã thanh toán - Bắt đầu soạn thuốc
+                            {prescription.pickup_number ? ` · Số ${prescription.pickup_number}` : ''}
                         </h4>
                         <p className="text-xs text-blue-700 dark:text-blue-400 mt-0.5">
-                            Dược sĩ kiểm tra đúng loại & số lượng thuốc theo danh sách trên và bấm xác nhận khi hoàn tất.
+                            {prescription.pickup_number
+                                ? `Bệnh nhân nhận số ${prescription.pickup_number}. Dược sĩ kiểm tra đúng loại & số lượng thuốc theo danh sách trên và bấm xác nhận khi hoàn tất.`
+                                : 'Dược sĩ kiểm tra đúng loại & số lượng thuốc theo danh sách trên và bấm xác nhận khi hoàn tất.'}
                         </p>
                     </div>
 
@@ -98,6 +101,7 @@ export function DispenseActionBar({
                     <div>
                         <h4 className="text-xs font-bold text-indigo-900 dark:text-indigo-300">
                             Thuốc đã sẵn sàng - Chờ bệnh nhân nhận
+                            {prescription.pickup_number ? ` · Số ${prescription.pickup_number}` : ''}
                         </h4>
                         <p className="text-xs text-indigo-700 dark:text-indigo-400 mt-0.5">
                             Kiểm tra thông tin bệnh nhân, hướng dẫn liều dùng và bấm giao thuốc.

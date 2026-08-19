@@ -59,6 +59,11 @@ export function PrescriptionHeader({
                         <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300">
                             {prescription.prescription_code}
                         </span>
+                        {prescription.pickup_number && (
+                            <span className="text-xs font-mono font-black px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                Số {prescription.pickup_number}
+                            </span>
+                        )}
                         {renderStatusBadge(prescription.status)}
                         {loadingDetail && (
                             <span className="inline-flex items-center gap-1 text-[11px] text-neutral-400">

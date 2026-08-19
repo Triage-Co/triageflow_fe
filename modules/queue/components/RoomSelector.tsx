@@ -46,13 +46,19 @@ export function RoomSelector() {
 
     const handleSelectRoom = (room: BackendRoom) => {
         localStorage.setItem('tv_display_last_room_id', room.room_id);
-        router.push(`/display/room/${room.room_id}`);
+        const isPharmacy = (room.room_type || '').toUpperCase() === 'PHARMACY';
+        localStorage.setItem('tv_display_last_kind', isPharmacy ? 'pharmacy' : 'clinic');
+        router.push(isPharmacy ? `/display/pharmacy/${room.room_id}` : `/display/room/${room.room_id}`);
     };
 
     const handleRejoinLastRoom = () => {
-        if (lastRoomId) {
-            router.push(`/display/room/${lastRoomId}`);
-        }
+        if (!lastRoomId) return;
+        const lastKind = localStorage.getItem('tv_display_last_kind');
+        router.push(
+            lastKind === 'pharmacy'
+                ? `/display/pharmacy/${lastRoomId}`
+                : `/display/room/${lastRoomId}`
+        );
     };
 
     const handleBack = () => {
