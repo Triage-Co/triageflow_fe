@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useKioskStore } from '../store/kioskStore';
-import { ArrowLeft, MapPin, Navigation, RotateCw, CheckCircle2, Clock, User, X, FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, MapPin, Navigation, RotateCw, CheckCircle2, Clock, User, X, FileText, ChevronDown, ChevronUp, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFlowStore } from '../store/flowStore';
 import { useAuthStore } from '../store/authStore';
@@ -139,7 +139,7 @@ export const DoctorRouteView: React.FC = () => {
     }
   };
 
-  const handlePaymentSuccess = () => {
+  const handlePaymentSuccess = useCallback(() => {
     if (patientId) {
       // Đóng modal danh sách dịch vụ thanh toán
       setIsServiceOrderModalOpen(false);
@@ -151,7 +151,12 @@ export const DoctorRouteView: React.FC = () => {
       useFlowStore.getState().fetchActiveTicketForPatient(patientId);
       useFlowStore.getState().fetchDoctorRouteSteps(patientId);
     }
-  };
+  }, [patientId, fetchPendingServiceOrders]);
+
+  const handleCloseQrModal = useCallback(() => {
+    setIsQrModalOpen(false);
+    clearTransactionQr();
+  }, [clearTransactionQr]);
 
   useEffect(() => {
     if (patientId) {
@@ -184,12 +189,15 @@ export const DoctorRouteView: React.FC = () => {
         });
 
         // Determine grouped status:
-        // - completed if all are completed
+        // - declined if all are declined
+        // - completed if all are completed or completed+declined
         // - in_progress if any is in_progress
         // - pending if any is pending
         // - waiting otherwise
-        let groupedStatus: 'completed' | 'in_progress' | 'pending' | 'waiting' = 'waiting';
-        if (siblingSteps.every(s => s.status === 'completed')) {
+        let groupedStatus: 'completed' | 'in_progress' | 'pending' | 'waiting' | 'declined' = 'waiting';
+        if (siblingSteps.every(s => s.status === 'declined')) {
+          groupedStatus = 'declined';
+        } else if (siblingSteps.every(s => s.status === 'completed' || s.status === 'declined')) {
           groupedStatus = 'completed';
         } else if (siblingSteps.some(s => s.status === 'in_progress')) {
           groupedStatus = 'in_progress';
@@ -227,7 +235,7 @@ export const DoctorRouteView: React.FC = () => {
     }));
   }, [routeSteps]);
 
-  const currentStepItem = routeSteps.find(s => s.status === 'in_progress') || routeSteps.find(s => s.status === 'pending') || routeSteps[0];
+  const currentStepItem = routeSteps.find(s => s.status === 'in_progress') || routeSteps.find(s => s.status === 'pending') || routeSteps.find(s => s.status !== 'completed' && s.status !== 'declined') || routeSteps[0];
   const activeQueueNo = currentStepItem?.queueNo || activeTicket?.ticketNumber || undefined;
   
   const isPaymentStep = currentStepItem?.title?.toLowerCase().trim().startsWith('thanh toán') || false;
@@ -346,6 +354,7 @@ export const DoctorRouteView: React.FC = () => {
                   const isInProgress = step.status === 'in_progress';
                   const isPending = step.status === 'pending';
                   const isWaiting = step.status === 'waiting';
+                  const isDeclined = step.status === 'declined';
                   const isLast = index === displaySteps.length - 1;
 
                   if (step.isGrouped) {
@@ -369,10 +378,13 @@ export const DoctorRouteView: React.FC = () => {
                             isCompleted && "bg-blue-100 text-[#155DFC] border-2 border-blue-300",
                             isInProgress && "bg-[#155DFC] text-white ring-4 ring-blue-100",
                             isPending && "bg-amber-400 text-white",
+                            isDeclined && "bg-rose-100 text-rose-600 border-2 border-rose-300",
                             isWaiting && "bg-neutral-100 text-neutral-400 border border-neutral-300"
                           )}>
                             {isCompleted ? <CheckCircle2 className="w-5 h-5 text-[#155DFC]" /> : (
-                              isPending ? <Clock className="w-5 h-5 text-amber-800" /> : step.displayId
+                              isDeclined ? <XCircle className="w-5 h-5 text-rose-600" /> : (
+                                isPending ? <Clock className="w-5 h-5 text-amber-800" /> : step.displayId
+                              )
                             )}
                           </div>
                         </div>
@@ -427,9 +439,10 @@ export const DoctorRouteView: React.FC = () => {
                                 isCompleted && "bg-blue-100/90 text-[#155DFC] border-blue-200",
                                 isInProgress && "bg-[#155DFC] text-white border-transparent shadow-sm",
                                 isPending && "bg-amber-50 border-amber-200 text-amber-700",
+                                isDeclined && "bg-rose-50 border-rose-200 text-rose-700 font-extrabold",
                                 isWaiting && "bg-neutral-50 border-neutral-200 text-neutral-500"
                               )}>
-                                {isCompleted ? 'Hoàn thành' : isInProgress ? 'Đang thực hiện' : isPending ? 'Đang chờ' : 'Chưa thực hiện'}
+                                {isCompleted ? 'Hoàn thành' : isInProgress ? 'Đang thực hiện' : isPending ? 'Đang chờ' : isDeclined ? 'Đã từ chối' : 'Chưa thực hiện'}
                               </span>
                             </div>
                           </div>
@@ -442,6 +455,7 @@ export const DoctorRouteView: React.FC = () => {
                                 const isSubInProgress = subStep.status === 'in_progress';
                                 const isSubPending = subStep.status === 'pending';
                                 const isSubWaiting = subStep.status === 'waiting';
+                                const isSubDeclined = subStep.status === 'declined';
 
                                 return (
                                   <div
@@ -451,7 +465,8 @@ export const DoctorRouteView: React.FC = () => {
                                       "p-4 rounded-xl border flex items-center justify-between gap-4 transition-all bg-white hover:shadow-md cursor-pointer hover:border-neutral-300 active:scale-[0.99]",
                                       isSubInProgress && "bg-blue-50/50 border-[#155DFC] ring-1 ring-blue-200",
                                       isSubCompleted && "bg-neutral-50/50 border-neutral-100 opacity-90",
-                                      isSubPending && "bg-amber-50/30 border-amber-200"
+                                      isSubPending && "bg-amber-50/30 border-amber-200",
+                                      isSubDeclined && "bg-rose-50/30 border-rose-200 opacity-80"
                                     )}
                                   >
                                     <div className="flex-1 space-y-0.5">
@@ -472,9 +487,10 @@ export const DoctorRouteView: React.FC = () => {
                                         isSubCompleted && "bg-blue-100/90 text-[#155DFC] border-blue-200",
                                         isSubInProgress && "bg-[#155DFC] text-white shadow-sm",
                                         isSubPending && "bg-amber-100 text-amber-800 border-amber-250/80",
+                                        isSubDeclined && "bg-rose-100 text-rose-700 border-rose-200 font-extrabold",
                                         isSubWaiting && "bg-neutral-100 text-neutral-400 border-neutral-200"
                                       )}>
-                                        {isSubCompleted ? 'Hoàn thành' : isSubInProgress ? 'Đang gọi' : isSubPending ? 'Đang chờ' : 'Chưa khám'}
+                                        {isSubCompleted ? 'Hoàn thành' : isSubInProgress ? 'Đang gọi' : isSubPending ? 'Đang chờ' : isSubDeclined ? 'Đã từ chối' : 'Chưa khám'}
                                       </span>
                                     </div>
                                   </div>
@@ -489,7 +505,7 @@ export const DoctorRouteView: React.FC = () => {
 
                   const isPaymentStep = step.title.toLowerCase().trim().startsWith('thanh toán');
                   const isPaidPayment = isPaymentStep && isCompleted;
-                  const isClickable = !isPaidPayment;
+                  const isClickable = !isPaidPayment && !isDeclined;
 
                   return (
                     <div key={step.id} className="flex items-center gap-4">
@@ -506,10 +522,13 @@ export const DoctorRouteView: React.FC = () => {
                           isCompleted && "bg-blue-100 text-[#155DFC] border-2 border-blue-300",
                           isInProgress && "bg-[#155DFC] text-white ring-4 ring-blue-100",
                           isPending && "bg-amber-400 text-white",
+                          isDeclined && "bg-rose-100 text-rose-600 border-2 border-rose-300",
                           isWaiting && "bg-neutral-100 text-neutral-400 border border-neutral-300"
                         )}>
                           {isCompleted ? <CheckCircle2 className="w-5 h-5 text-[#155DFC]" /> : (
-                            isPending ? <Clock className="w-5 h-5 text-amber-800" /> : step.displayId
+                            isDeclined ? <XCircle className="w-5 h-5 text-rose-600" /> : (
+                              isPending ? <Clock className="w-5 h-5 text-amber-800" /> : step.displayId
+                            )
                           )}
                         </div>
                       </div>
@@ -522,6 +541,7 @@ export const DoctorRouteView: React.FC = () => {
                           isInProgress && "bg-blue-50/90 border-[#155DFC] shadow-sm ring-1 ring-blue-200",
                           isCompleted && "bg-neutral-50/80 border-neutral-200/60 opacity-90",
                           isPending && "bg-amber-50/40 border-amber-200/80",
+                          isDeclined && "bg-rose-50/20 border-rose-200/60 opacity-80",
                           isWaiting && "bg-white border-neutral-100 text-neutral-400",
                           isClickable ? "cursor-pointer hover:shadow-md hover:scale-[1.01] active:scale-95" : "pointer-events-none opacity-80"
                         )}
@@ -579,6 +599,11 @@ export const DoctorRouteView: React.FC = () => {
                               Đang chờ
                             </span>
                           )}
+                          {isDeclined && (
+                            <span className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap text-center inline-block">
+                              Đã từ chối
+                            </span>
+                          )}
                           {isWaiting && (
                             <span className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-neutral-100 text-neutral-400 border border-neutral-200 whitespace-nowrap text-center inline-block">
                               Chưa thực hiện
@@ -613,10 +638,7 @@ export const DoctorRouteView: React.FC = () => {
       {/* Popup 2: Hiển thị mã QR thanh toán */}
       <ServicePaymentQrModal
         isOpen={isQrModalOpen}
-        onClose={() => {
-          setIsQrModalOpen(false);
-          clearTransactionQr();
-        }}
+        onClose={handleCloseQrModal}
         qrResult={activeTransactionQr}
         patientId={patientId || ''}
         serviceOrderId={selectedServiceOrderId}

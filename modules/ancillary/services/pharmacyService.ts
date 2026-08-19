@@ -5,52 +5,12 @@ import {
     PrescriptionStatusEnum
 } from '@/shared/types/prescription.types';
 
-const STATUS_OVERRIDE_KEY = 'triageflow_prescription_status_overrides';
-
-export function getStatusOverrides(): Record<string, PrescriptionStatusEnum> {
-    if (typeof window === 'undefined') return {};
-    try {
-        const stored = localStorage.getItem(STATUS_OVERRIDE_KEY);
-        return stored ? JSON.parse(stored) : {};
-    } catch {
-        return {};
-    }
-}
-
-export function saveStatusOverride(idOrCode: string, status: PrescriptionStatusEnum) {
-    if (!idOrCode || typeof window === 'undefined') return;
-    try {
-        const current = getStatusOverrides();
-        const cleanKey = idOrCode.trim().toLowerCase();
-        current[cleanKey] = status;
-        localStorage.setItem(STATUS_OVERRIDE_KEY, JSON.stringify(current));
-        localStorage.setItem('triageflow_prescription_paid', JSON.stringify({ id: idOrCode, status, time: Date.now() }));
-
-        // Fire window events for real-time reactive sync across components
-        window.dispatchEvent(new Event('storage'));
-        window.dispatchEvent(new CustomEvent('triageflow_prescription_paid', { detail: { id: idOrCode, status } }));
-    } catch (e) {
-        console.error('[pharmacyService] Failed to save status override:', e);
-    }
-}
-
 export function normalizePrescription(item: any): Prescription {
     if (!item) return {} as Prescription;
 
     const rxCode = item.prescription_code || item.code || '';
     const rxId = item.prescription_id || item.id || '';
-
-    // Apply status overrides if present in localStorage
-    const overrides = getStatusOverrides();
-    const cleanId = (rxId || '').trim().toLowerCase();
-    const cleanCode = (rxCode || '').trim().toLowerCase();
-
-    let effectiveStatus: PrescriptionStatusEnum = item.status || 'PENDING';
-    if (cleanId && overrides[cleanId]) {
-        effectiveStatus = overrides[cleanId];
-    } else if (cleanCode && overrides[cleanCode]) {
-        effectiveStatus = overrides[cleanCode];
-    }
+    const effectiveStatus: PrescriptionStatusEnum = item.status || 'PENDING';
 
     const patientName =
         item.visitSession?.patient?.full_name ||
@@ -73,10 +33,10 @@ export function normalizePrescription(item: any): Prescription {
 
     const rawDetails =
         (Array.isArray(item.prescriptionDetails) && item.prescriptionDetails.length > 0) ? item.prescriptionDetails
-        : (Array.isArray(item.details) && item.details.length > 0) ? item.details
-        : (Array.isArray(item.prescription_details) && item.prescription_details.length > 0) ? item.prescription_details
-        : (Array.isArray(item.items) && item.items.length > 0) ? item.items
-        : [];
+            : (Array.isArray(item.details) && item.details.length > 0) ? item.details
+                : (Array.isArray(item.prescription_details) && item.prescription_details.length > 0) ? item.prescription_details
+                    : (Array.isArray(item.items) && item.items.length > 0) ? item.items
+                        : [];
 
     const details = rawDetails.map((d: any, idx: number) => ({
         prescription_detail_id: d.prescription_detail_id || d.id || `detail-${idx}`,
@@ -129,20 +89,13 @@ export interface GetPrescriptionsParams {
 }
 
 export const pharmacyService = {
-    /**
-     * Kê đơn thuốc cho phiên khám (Bác sĩ / Admin)
-     * POST /api/prescription
-     */
+
     async createPrescription(data: CreatePrescriptionDto): Promise<Prescription> {
         const res = await apiClient.post<any>('/api/prescription', data);
         const resData = res?.data || res;
         return normalizePrescription(resData);
     },
 
-    /**
-     * Quét QR code / Tra cứu mã đơn thuốc (Nhà thuốc)
-     * GET /api/prescription/scan/:code
-     */
     async scanPrescription(code: string): Promise<Prescription> {
         const cleanCode = encodeURIComponent(code.trim());
         const res = await apiClient.get<any>(`/api/prescription/scan/${cleanCode}`);
@@ -153,10 +106,6 @@ export const pharmacyService = {
         return normalizePrescription(data);
     },
 
-    /**
-     * Lấy danh sách đơn thuốc (dành cho Nhà thuốc / Quản lý queue)
-     * GET /api/prescription
-     */
     async getPrescriptions(params?: GetPrescriptionsParams): Promise<Prescription[]> {
         let rawList: any[] = [];
 
@@ -182,8 +131,6 @@ export const pharmacyService = {
         }
 
         let result = rawList.map(normalizePrescription);
-
-        // Client-side search fallback if search was also provided
         if (params?.search) {
             const s = params.search.toLowerCase();
             result = result.filter(
@@ -197,49 +144,35 @@ export const pharmacyService = {
         return result;
     },
 
-    /**
-     * Xác nhận thanh toán offline tại quầy (Nhà thuốc / Thu ngân)
-     * PATCH /api/prescription/:id/pay
-     */
+
+    async getPrescriptionById(prescriptionId: string): Promise<Prescription> {
+        const res = await apiClient.get<any>(`/api/prescription/${prescriptionId}`);
+        const data = res?.data || res;
+        return normalizePrescription(data);
+    },
+
+
     async payPrescriptionOffline(prescriptionId: string): Promise<Prescription> {
         const res = await apiClient.patch<any>(`/api/prescription/${prescriptionId}/pay`, {});
         const data: any = res?.data || res;
-        const norm = normalizePrescription(data);
-        if (norm.prescription_code) saveStatusOverride(norm.prescription_code, 'PROCESSING');
-        if (norm.prescription_id) saveStatusOverride(norm.prescription_id, 'PROCESSING');
-        return norm;
+        return normalizePrescription(data);
     },
 
-    /**
-     * Xác nhận soạn xong thuốc (Dược sĩ) - CHỈ ĐƯỢC BỐC THUỐC KHI ĐÃ THANH TOÁN
-     * PATCH /api/prescription/:id/prepare
-     */
+
     async preparePrescription(prescriptionId: string): Promise<Prescription> {
         const res = await apiClient.patch<any>(`/api/prescription/${prescriptionId}/prepare`, {});
         const data: any = res?.data || res;
-        const norm = normalizePrescription(data);
-        if (norm.prescription_code) saveStatusOverride(norm.prescription_code, 'PREPARED');
-        if (norm.prescription_id) saveStatusOverride(norm.prescription_id, 'PREPARED');
-        return norm;
+        return normalizePrescription(data);
     },
 
-    /**
-     * Xác nhận đã giao thuốc cho Bệnh nhân (Dược sĩ)
-     * PATCH /api/prescription/:id/dispense
-     */
+
     async dispensePrescription(prescriptionId: string): Promise<Prescription> {
         const res = await apiClient.patch<any>(`/api/prescription/${prescriptionId}/dispense`, {});
         const data: any = res?.data || res;
-        const norm = normalizePrescription(data);
-        if (norm.prescription_code) saveStatusOverride(norm.prescription_code, 'DISPENSED');
-        if (norm.prescription_id) saveStatusOverride(norm.prescription_id, 'DISPENSED');
-        return norm;
+        return normalizePrescription(data);
     },
 
-    /**
-     * Cập nhật trực tiếp trạng thái đơn thuốc (STAFF - ADMIN)
-     * PATCH /api/prescription/:id/status
-     */
+
     async updatePrescriptionStatus(prescriptionId: string, status: PrescriptionStatusEnum): Promise<Prescription> {
         const res = await apiClient.patch<any>(`/api/prescription/${prescriptionId}/status`, { status });
         const data: any = res?.data || res;

@@ -281,11 +281,12 @@ export const mapApiToRouteSteps = (detailedSteps: any[]): RouteStepItem[] => {
     const staffObj = step.staff_info || step.staff;
     const staffName = staffObj?.full_name || '';
 
-    let status: 'completed' | 'in_progress' | 'waiting' | 'pending' = 'pending';
+    let status: 'completed' | 'in_progress' | 'waiting' | 'pending' | 'declined' = 'pending';
     if (step.step_status === 'COMPLETED') status = 'completed';
     else if (step.step_status === 'IN_PROGRESS') status = 'in_progress';
     else if (step.step_status === 'PENDING') status = 'pending';
     else if (step.step_status === 'WAITING') status = 'waiting';
+    else if (step.step_status === 'DECLINED') status = 'declined';
 
     const queueObj = Array.isArray(step.queues) && step.queues.length > 0 ? step.queues[0] : null;
     const queueNoStr = queueObj?.queue_number ? `${queueObj.queue_number}` : undefined;

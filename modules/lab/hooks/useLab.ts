@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/authStore';
 import { labService } from '../services/labService';
 import { ShiftInfo, RoomQueueData, QueuePatientItem, Toast } from '../types/lab.types';
 import { OverrideConfirmData } from '../modals/OverrideConfirmModal';
+import { RefuseConfirmData } from '../modals/RefuseConfirmModal';
 
 export function useLab() {
     const router = useRouter();
@@ -21,10 +22,12 @@ export function useLab() {
     const [isCallingNext, setIsCallingNext] = useState(false);
     const [isCompleting, setIsCompleting] = useState(false);
     const [isRecalling, setIsRecalling] = useState(false);
+    const [isRefusing, setIsRefusing] = useState(false);
     const [isCompletingDetail, setIsCompletingDetail] = useState<Record<string, boolean>>({});
 
-    // Override Queue state
+    // Override & Refuse Queue state
     const [overrideConfirmData, setOverrideConfirmData] = useState<OverrideConfirmData | null>(null);
+    const [refuseConfirmData, setRefuseConfirmData] = useState<RefuseConfirmData | null>(null);
     const [isOverriding, setIsOverriding] = useState(false);
 
     // Ca trực & Hàng chờ state
@@ -365,6 +368,32 @@ export function useLab() {
         }
     };
 
+    const handleOpenRefuseConfirm = (patient: { queue_id: string; patient_name: string; queue_number: string }) => {
+        if (!patient) return;
+        setRefuseConfirmData({
+            queueId: patient.queue_id,
+            patientName: patient.patient_name,
+            queueNumber: patient.queue_number,
+        });
+    };
+
+    const handleConfirmRefuse = async (reason: string) => {
+        if (!refuseConfirmData) return;
+        setIsRefusing(true);
+        try {
+            await labService.refuseQueue(refuseConfirmData.queueId, reason);
+            showToast(`Đã từ chối lượt phục vụ của bệnh nhân ${refuseConfirmData.patientName}.`, 'success');
+            setRefuseConfirmData(null);
+            await handleRefresh();
+        } catch (e: any) {
+            console.error('[useLab] Error refusing queue:', e);
+            const errMsg = e?.response?.data?.message || e?.message || 'Có lỗi xảy ra khi từ chối lượt phục vụ.';
+            showToast(errMsg, 'error');
+        } finally {
+            setIsRefusing(false);
+        }
+    };
+
     return {
         mounted,
         accessToken,
@@ -394,5 +423,10 @@ export function useLab() {
         isOverriding,
         handleOpenOverrideConfirm,
         handleConfirmOverride,
+        refuseConfirmData,
+        setRefuseConfirmData,
+        isRefusing,
+        handleOpenRefuseConfirm,
+        handleConfirmRefuse,
     };
 }

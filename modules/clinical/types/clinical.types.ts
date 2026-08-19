@@ -65,7 +65,7 @@ export interface StatItem {
 }
 
 // ── Clinical workflow ────────────────────────────────────────────────────────
-export type WorkflowStepStatus = 'completed' | 'current' | 'pending';
+export type WorkflowStepStatus = 'completed' | 'current' | 'pending' | 'declined';
 
 export interface WorkflowStep {
     id: string;
