@@ -74,7 +74,7 @@ export function useWorkflowFlow({
             console.error('Failed to reload active flow:', err);
             return null;
         }
-    }, [accessToken, flowData?.flow_id, patient?.bookingId, patient?.flowId, patient?.patientId]);
+    }, [accessToken, flowData, patient]);
 
     useEffect(() => {
         if (!accessToken) return;
