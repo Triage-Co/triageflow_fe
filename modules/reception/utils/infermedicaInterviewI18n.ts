@@ -2,7 +2,7 @@ import type {
     InfermedicaQuestion,
     InfermedicaQuestionItem,
 } from '@/modules/reception/types/infermedica.types';
-import { translateQuestionWithDeepSeek } from '@/modules/reception/services/deepseekTranslationService';
+import { translateQuestionWithGoogle } from '@/modules/reception/services/googleTranslationService';
 
 export type InfermedicaQuestionType = 'single' | 'group_single' | 'group_multiple' | 'duration' | string;
 
@@ -15,12 +15,12 @@ export function localizeInfermedicaQuestion(question: InfermedicaQuestion): Infe
     return { ...question, text: fallbackText };
 }
 
-/** Dịch câu hỏi y khoa sang tiếng Việt chuyên ngành thông qua DeepSeek AI */
+/** Dịch câu hỏi y khoa sang tiếng Việt qua Google Translate */
 export async function localizeInfermedicaQuestionAsync(
     question: InfermedicaQuestion,
 ): Promise<InfermedicaQuestion> {
     const base = localizeInfermedicaQuestion(question);
-    return await translateQuestionWithDeepSeek(base);
+    return await translateQuestionWithGoogle(base);
 }
 
 

@@ -7,6 +7,7 @@ import { labService } from '../services/labService';
 import { ShiftInfo, RoomQueueData, QueuePatientItem, Toast } from '../types/lab.types';
 import { OverrideConfirmData } from '../modals/OverrideConfirmModal';
 import { RefuseConfirmData } from '../modals/RefuseConfirmModal';
+import { PROCEDURE_ROOM_TYPES } from '@/modules/clinical/utils/staffShift';
 
 export function useLab() {
     const router = useRouter();
@@ -86,8 +87,11 @@ export function useLab() {
             const shifts = await labService.getMyShifts(todayStr);
             setMyShifts(shifts);
 
-            // Tìm ca trực của phòng Lab (LABORATORY) hoặc phòng thủ thuật (PROCEDURE_ROOM)
-            const labShift = shifts.find(s => s.room?.room_type === 'LABORATORY' || s.room?.room_type === 'PROCEDURE_ROOM') || shifts[0];
+            // Tìm ca trực của phòng cận lâm sàng / Lab / thủ thuật
+            const labShift =
+                shifts.find((s) =>
+                    PROCEDURE_ROOM_TYPES.has(String(s.room?.room_type || '').toUpperCase())
+                ) || shifts[0];
             if (labShift) {
                 setActiveShift(labShift);
                 // 2. Fetch Hàng chờ của Room ID này

@@ -3,6 +3,7 @@
 import { ReactNode } from 'react';
 import { EMRHeader } from './EMRHeader';
 import { useAuthStore } from '@/store/authStore';
+import { PROCEDURE_ROOM_TYPES } from '@/modules/clinical/utils/staffShift';
 
 interface EMRWorkspaceLayoutProps {
     activeTabId: string;
@@ -12,11 +13,12 @@ interface EMRWorkspaceLayoutProps {
 
 export function EMRWorkspaceLayout({ activeTabId, activeTabName, children }: EMRWorkspaceLayoutProps) {
     const user = useAuthStore((s) => s.user);
+    const storedRoomType =
+        (typeof window !== 'undefined' ? localStorage.getItem('tfopd_active_room_type') : null) || '';
+    const isParaclinicalShift = PROCEDURE_ROOM_TYPES.has(storedRoomType.toUpperCase());
     const isLabRole =
         user?.role === 'LAB_TECHNICIAN' ||
-        (user?.role === 'DOCTOR' &&
-            typeof window !== 'undefined' &&
-            localStorage.getItem('tfopd_active_room_type') === 'PROCEDURE_ROOM');
+        ((user?.role === 'DOCTOR' || user?.role === 'NURSE') && isParaclinicalShift);
     const isPharmacyRole = user?.role === 'PHARMACIST' || user?.role === 'PHARMACY_STAFF';
 
     const hideHeaderIds = [

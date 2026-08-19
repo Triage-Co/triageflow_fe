@@ -7,7 +7,7 @@ const CLINICAL_ROOM_TYPES = new Set([
     'CONSULTATION',
 ]);
 
-const PROCEDURE_ROOM_TYPES = new Set([
+export const PROCEDURE_ROOM_TYPES = new Set([
     'PROCEDURE_ROOM',
     'PROCEDURE',
     'LABORATORY',

@@ -25,6 +25,7 @@ import { uploadImageToCloudinary } from '@/shared/services/cloudinaryService';
 import { authService } from '@/modules/auth/services/authService';
 import { labService } from '@/modules/lab/services/labService';
 import type { ShiftInfo } from '@/modules/lab/types/lab.types';
+import { PROCEDURE_ROOM_TYPES } from '@/modules/clinical/utils/staffShift';
 
 const ROLE_LABELS: Record<string, string> = {
     RECEPTIONIST: 'Nhân viên Lễ tân',
@@ -40,11 +41,24 @@ const ROLE_LABELS: Record<string, string> = {
     USER: 'Bệnh nhân',
 };
 
+const PARACLINICAL_ROLE_MAP: Record<string, { DOCTOR: string; NURSE: string }> = {
+    PROCEDURE_ROOM: { DOCTOR: 'Bác sĩ Thủ thuật', NURSE: 'Điều dưỡng Thủ thuật' },
+    PROCEDURE: { DOCTOR: 'Bác sĩ Thủ thuật', NURSE: 'Điều dưỡng Thủ thuật' },
+    LABORATORY: { DOCTOR: 'Bác sĩ Xét nghiệm', NURSE: 'Điều dưỡng Xét nghiệm' },
+    IMAGING_ROOM: { DOCTOR: 'Bác sĩ CĐHA', NURSE: 'Điều dưỡng CĐHA' },
+    FUNCTIONAL_EXPLORATION: { DOCTOR: 'Bác sĩ Thăm dò chức năng', NURSE: 'Điều dưỡng Thăm dò chức năng' },
+};
+
 export function getRoleDisplayName(role?: string): string {
     if (!role) return 'Nhân viên Y tế';
     const key = role.trim().toUpperCase().replace(/^ROLE_/, '');
-    if (key === 'DOCTOR' && typeof window !== 'undefined' && localStorage.getItem('tfopd_active_room_type') === 'PROCEDURE_ROOM') {
-        return 'Bác sĩ Thủ thuật';
+    if (typeof window !== 'undefined') {
+        const storedRoomType = (localStorage.getItem('tfopd_active_room_type') || '').toUpperCase();
+        const mapping = PARACLINICAL_ROLE_MAP[storedRoomType];
+        if (mapping) {
+            if (key === 'DOCTOR') return mapping.DOCTOR;
+            if (key === 'NURSE') return mapping.NURSE;
+        }
     }
     return ROLE_LABELS[key] || role;
 }
@@ -109,9 +123,9 @@ export default function StaffSettingsView() {
                         const shift =
                             shifts.find(
                                 (s) =>
-                                    s.room?.room_type === 'LABORATORY' ||
-                                    s.room?.room_type === 'PROCEDURE_ROOM' ||
-                                    s.room?.room_type === 'EXAMINATION_ROOM',
+                                    PROCEDURE_ROOM_TYPES.has(String(s.room?.room_type || '').toUpperCase()) ||
+                                    s.room?.room_type === 'EXAMINATION_ROOM' ||
+                                    s.room?.room_type === 'CLINICAL_ROOM',
                             ) || shifts[0];
                         if (shift) {
                             setActiveShift(shift);

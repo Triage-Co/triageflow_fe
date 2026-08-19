@@ -249,4 +249,3 @@ Hãy trả về duy nhất 1 JSON object có định dạng:
         return result;
     }
 }
-
