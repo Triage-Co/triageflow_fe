@@ -11,9 +11,9 @@ import {
     InfermedicaRecommendedSpecialist
 } from '../types/triage.types';
 import { 
-    translateQuestionWithDeepSeek, 
-    translateSymptomLabelsWithDeepSeek 
-} from '@/modules/reception/services/deepseekTranslationService';
+    translateQuestionWithGoogle, 
+    translateSymptomLabelsWithGoogle 
+} from '@/modules/reception/services/googleTranslationService';
 import { calculateAgeFromDob } from '../utils/kioskHelpers';
 
 const compileGlobalStaticSymptomMap = (): Record<string, string> => {
@@ -192,7 +192,7 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
                 // Dịch tự động các triệu chứng mới chưa có trong từ điển tĩnh
                 let translationMap = new Map<string, string>();
                 if (needsTranslationItems.length > 0) {
-                    translationMap = await translateSymptomLabelsWithDeepSeek(needsTranslationItems);
+                    translationMap = await translateSymptomLabelsWithGoogle(needsTranslationItems);
                 }
 
                 if (candidateItems.length > 0) {
@@ -278,10 +278,9 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
                 } else {
                     let finalQuestion = question;
                     try {
-                        finalQuestion = await translateQuestionWithDeepSeek(question as any) as any;
+                        finalQuestion = await translateQuestionWithGoogle(question as any) as any;
                     } catch (err: any) {
-                        console.error("DeepSeek Translation error:", err);
-                        kioskState.showToast(`Dịch AI thất bại (${err.message || 'Lỗi hệ thống'}). Hiển thị tiếng Anh gốc.`, 'error');
+                        console.error("Translation error:", err);
                     }
                     set({ currentQuestion: finalQuestion });
                     kioskState.setAIRegisterStep('quiz_detail');
@@ -363,10 +362,9 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
                 } else {
                     let finalQuestion = question;
                     try {
-                        finalQuestion = await translateQuestionWithDeepSeek(question as any) as any;
+                        finalQuestion = await translateQuestionWithGoogle(question as any) as any;
                     } catch (err: any) {
-                        console.error("DeepSeek Translation error:", err);
-                        kioskState.showToast(`Dịch AI thất bại (${err.message || 'Lỗi hệ thống'}). Hiển thị tiếng Anh gốc.`, 'error');
+                        console.error("Translation error:", err);
                     }
                     set({ currentQuestion: finalQuestion });
                 }

@@ -34,7 +34,7 @@ export const bookingService = {
     if (specialtyCode) params.append('specialty_code', specialtyCode);
     if (dateTime) params.append('date_time', dateTime);
     return kioskApiClient.get<DoctorItem[]>(
-      `/api/doctor/specialty?${params.toString()}`,
+      `/api/doctor/specialty/clinical?${params.toString()}`,
       { token }
     );
   },

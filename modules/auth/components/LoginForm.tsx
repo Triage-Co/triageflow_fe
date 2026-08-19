@@ -7,6 +7,7 @@ import { Eye, EyeOff, Cross, AlertCircle, Loader2 } from 'lucide-react';
 import { authService } from '@/modules/auth/services/authService';
 import { useAuthStore } from '@/store/authStore';
 import { labService } from '@/modules/lab/services/labService';
+import { PROCEDURE_ROOM_TYPES } from '@/modules/clinical/utils/staffShift';
 import { isValidEmail } from '@/shared/utils/validators';
 import { cn } from '@/lib/utils';
 
@@ -29,7 +30,7 @@ function getPostLoginPath(role: string) {
         case 'USER':
             return '/queue';
         case 'NURSE':
-            return '/doctor/dashboard';
+            return '/nurse/dashboard';
         case 'DOCTOR':
             return '/doctor/dashboard';
         default:
@@ -163,7 +164,8 @@ export function LoginForm() {
                 const resolvedRole = await completeLogin(token, refreshToken, username, role);
                 
                 let redirectPath = getPostLoginPath(resolvedRole);
-                if (resolvedRole.trim().toUpperCase().replace(/^ROLE_/, '') === 'DOCTOR') {
+                const roleClean = resolvedRole.trim().toUpperCase().replace(/^ROLE_/, '');
+                if (roleClean === 'DOCTOR' || roleClean === 'NURSE') {
                     try {
                         const d = new Date();
                         const year = d.getFullYear();
@@ -172,15 +174,18 @@ export function LoginForm() {
                         const todayStr = `${year}-${month}-${day}`;
 
                         const shifts = await labService.getMyShifts(todayStr);
-                        const hasProcedureShift = shifts.some(s => s.room?.room_type === 'PROCEDURE_ROOM');
-                        if (hasProcedureShift) {
-                            localStorage.setItem('tfopd_active_room_type', 'PROCEDURE_ROOM');
+                        const paraclinicalShift = shifts.find(s =>
+                            PROCEDURE_ROOM_TYPES.has(String(s.room?.room_type || '').toUpperCase())
+                        );
+                        if (paraclinicalShift) {
+                            const roomType = String(paraclinicalShift.room?.room_type || 'PROCEDURE_ROOM').toUpperCase();
+                            localStorage.setItem('tfopd_active_room_type', roomType);
                             redirectPath = '/lab';
                         } else {
                             localStorage.removeItem('tfopd_active_room_type');
                         }
                     } catch (err) {
-                        console.error('Lỗi khi kiểm tra ca trực phòng thủ thuật của bác sĩ:', err);
+                        console.error('Lỗi khi kiểm tra ca trực phòng thủ thuật của nhân viên y tế:', err);
                         localStorage.removeItem('tfopd_active_room_type');
                     }
                 } else {

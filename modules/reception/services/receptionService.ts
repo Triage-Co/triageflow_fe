@@ -234,7 +234,7 @@ export const receptionService = {
     ): Promise<ReceptionSpecialty[]> {
         try {
             const res = await apiClient.get<unknown>(
-                `/api/doctor/specialty?specialty_code=${encodeURIComponent(specialtyCode)}&date_time=${encodeURIComponent(dateTime)}`,
+                `/api/doctor/specialty/clinical?specialty_code=${encodeURIComponent(specialtyCode)}&date_time=${encodeURIComponent(dateTime)}`,
                 { headers: { Authorization: `Bearer ${token}` } },
             );
             return mapDoctorSpecialtyResponse(res.data);
