@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { Account, BanDuration } from '../types/admin.types';
-import { adminService } from '../services/adminService';
+import { adminService, type QueryUserParams } from '../services/adminService';
 
 export interface AdminState {
     accounts: Account[];
@@ -10,7 +10,7 @@ export interface AdminState {
 }
 
 export interface AdminActions {
-    fetchAccounts: (token: string) => Promise<void>;
+    fetchAccounts: (token: string, params?: QueryUserParams) => Promise<void>;
     banAccount: (id: string, duration: BanDuration, token: string) => Promise<void>;
     unbanAccount: (id: string, token: string) => Promise<void>;
     clearError: () => void;
@@ -29,10 +29,10 @@ export const useAdminStore = create<AdminStore>()(
         (set, get) => ({
             ...initialState,
 
-            fetchAccounts: async (token: string) => {
+            fetchAccounts: async (token: string, params: QueryUserParams = {}) => {
                 set({ isLoading: true, error: null }, false, 'fetchAccounts/pending');
                 try {
-                    const res = await adminService.getAccounts(token);
+                    const res = await adminService.getAccounts(token, params);
                     set({ accounts: res.data || [], isLoading: false }, false, 'fetchAccounts/success');
                 } catch (err) {
                     set({

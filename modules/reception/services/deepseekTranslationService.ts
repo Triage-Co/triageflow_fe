@@ -125,3 +125,128 @@ Hãy trả về duy nhất 1 JSON object có định dạng:
         return question;
     }
 }
+
+const symptomLabelCache = new Map<string, string>();
+
+/**
+ * Dịch danh sách các nhãn triệu chứng y khoa từ Tiếng Anh sang Tiếng Việt bằng DeepSeek AI
+ */
+export async function translateSymptomLabelsWithDeepSeek(
+    items: { id: string; label: string }[],
+): Promise<Map<string, string>> {
+    const result = new Map<string, string>();
+    if (!items || items.length === 0) return result;
+
+    const needTranslate: { id: string; label: string }[] = [];
+    items.forEach((item) => {
+        if (!item.label) return;
+        const cached = symptomLabelCache.get(item.id);
+        if (cached) {
+            result.set(item.id, cached);
+        } else {
+            // Check localStorage if in browser environment
+            if (typeof window !== 'undefined') {
+                try {
+                    const localSaved = localStorage.getItem(`symptom_vn_${item.id}`);
+                    if (localSaved) {
+                        symptomLabelCache.set(item.id, localSaved);
+                        result.set(item.id, localSaved);
+                        return;
+                    }
+                } catch {
+                    // Ignore storage access errors
+                }
+            }
+            needTranslate.push(item);
+        }
+    });
+
+    if (needTranslate.length === 0) {
+        return result;
+    }
+
+    const apiKey = getApiKey();
+    if (!apiKey) {
+        needTranslate.forEach((item) => result.set(item.id, item.label));
+        return result;
+    }
+
+    const payload = {
+        model: 'deepseek-chat',
+        messages: [
+            {
+                role: 'system',
+                content: DEEPSEEK_MEDICAL_SYSTEM_PROMPT,
+            },
+            {
+                role: 'user',
+                content: `Hãy dịch danh sách các triệu chứng y khoa sau sang Tiếng Việt chuẩn y khoa, ngắn gọn, dễ hiểu với người bệnh tại Kiosk bệnh viện:
+${JSON.stringify(needTranslate.map((i) => ({ id: i.id, text: i.label })))}
+
+Hãy trả về duy nhất 1 JSON object có định dạng:
+{
+  "items": [
+    { "id": "mã_id", "translated": "Tên tiếng Việt chuẩn y khoa" }
+  ]
+}`,
+            },
+        ],
+        temperature: 0.1,
+        response_format: { type: 'json_object' },
+    };
+
+    try {
+        const res = await fetch(DEEPSEEK_API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+            console.warn(`[DeepSeek API Error] Status ${res.status}`);
+            needTranslate.forEach((item) => result.set(item.id, item.label));
+            return result;
+        }
+
+        const data = await res.json();
+        const content = data.choices?.[0]?.message?.content;
+        if (!content) {
+            needTranslate.forEach((item) => result.set(item.id, item.label));
+            return result;
+        }
+
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed.items)) {
+            parsed.items.forEach((it: any) => {
+                if (it.id && it.translated) {
+                    symptomLabelCache.set(it.id, it.translated);
+                    result.set(it.id, it.translated);
+                    if (typeof window !== 'undefined') {
+                        try {
+                            localStorage.setItem(`symptom_vn_${it.id}`, it.translated);
+                        } catch {
+                            // Ignore quota / storage error
+                        }
+                    }
+                }
+            });
+        }
+
+        // Fallback for any missing items in response
+        needTranslate.forEach((item) => {
+            if (!result.has(item.id)) {
+                result.set(item.id, item.label);
+            }
+        });
+
+        return result;
+    } catch (err) {
+        console.error('[DeepSeek Symptom Translation Error]:', err);
+        needTranslate.forEach((item) => result.set(item.id, item.label));
+        return result;
+    }
+}
+

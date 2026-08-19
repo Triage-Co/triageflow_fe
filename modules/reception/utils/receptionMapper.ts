@@ -1,16 +1,13 @@
 import type { BackendQueuePatient } from '@/modules/clinical/services/clinicalService';
 import type {
     BackendSpecialtyCatalogItem,
-    HighPriorityPatient,
     QueuePatient,
-    RecentActivity,
     ReceptionAccount,
     ReceptionPatientDetail,
     ReceptionPatientRecord,
     ReceptionPriority,
     ReceptionSlot,
     ReceptionSpecialty,
-    ReceptionStat,
     ReceptionStatus,
 } from '@/modules/reception/types/reception.types';
 
@@ -105,6 +102,11 @@ function mapDoctorRecord(
             doctor.rating_count,
             profile?.review_count,
         ),
+        room_name:
+            (doctor.room_name as string | undefined) ??
+            (doctor.room as any)?.name ??
+            (doctor.room as any)?.room_name ??
+            (profile?.room_name as string | undefined),
     };
 }
 
@@ -238,17 +240,27 @@ export function mapShiftResponse(raw: unknown): ReceptionSlot[] {
 export function mapPatientRecordToAccount(record: ReceptionPatientRecord): ReceptionAccount {
     const account = record.account;
     const patientId = record.patient_id?.trim() || undefined;
+    const dob = (record.dob || account?.dob || '').trim();
+    const gender = (record.gender || account?.gender || '').trim();
+    const fullName = (record.full_name || account?.full_name || '').trim();
+    const citizenId = (record.citizen_id || account?.citizen_id || '').trim();
+    const email = (record.email || account?.email || '').trim();
+    const phone = record.phone || account?.phone || null;
+
     return {
         account_id: account?.account_id ?? '',
         patient_id: patientId,
-        full_name: account?.full_name ?? record.full_name ?? '',
-        citizen_id: account?.citizen_id ?? record.citizen_id ?? '',
-        email: account?.email ?? record.email ?? '',
-        dob: account?.dob ?? record.dob ?? '',
-        gender: account?.gender ?? record.gender ?? '',
+        full_name: fullName,
+        citizen_id: citizenId,
+        email: email,
+        dob: dob,
+        gender: gender,
         role: account?.role ?? 'PATIENT',
-        phone: account?.phone ?? record.phone ?? null,
+        phone: phone,
         bhyt: record.medical_coverage_id ?? null,
+        blood_type: record.blood_type ?? null,
+        allergy_notes: record.allergy_notes ?? null,
+        createdAt: record.createdAt,
     };
 }
 
@@ -301,24 +313,41 @@ function normalizePatientRecord(raw: unknown): ReceptionPatientRecord | null {
     const account = (record.account ??
         record.Account ??
         record.user ??
-        record.User) as ReceptionPatientRecord['account'];
+        record.User) as ReceptionPatientRecord['account'] | undefined;
 
-    const patient_id = extractRealPatientId(record) ?? '';
-    const citizen_id = String(account?.citizen_id ?? record.citizen_id ?? '').trim();
-    const full_name = String(account?.full_name ?? record.full_name ?? '').trim();
+    const patient_id = extractRealPatientId(record) ?? String(record.patient_id ?? '').trim();
+    const citizen_id = String(record.citizen_id || account?.citizen_id || '').trim();
+    const full_name = String(record.full_name || account?.full_name || '').trim();
 
     if (!patient_id && !citizen_id && !full_name) return null;
 
+    const rawDob =
+        record.dob ||
+        record.date_of_birth ||
+        record.birth_date ||
+        record.birthday ||
+        account?.dob ||
+        (account as Record<string, unknown> | undefined)?.date_of_birth;
+
+    const rawGender = record.gender || account?.gender;
+    const rawPhone = record.phone || account?.phone;
+    const rawEmail = record.email || account?.email;
+    const rawCoverage = record.medical_coverage_id || record.bhyt || record.insurance_id;
+
     return {
         patient_id,
-        medical_coverage_id: (record.medical_coverage_id as string | null | undefined) ?? null,
+        medical_coverage_id: rawCoverage ? String(rawCoverage).trim() : null,
         account,
         full_name: full_name || undefined,
         citizen_id: citizen_id || undefined,
-        email: (account?.email ?? record.email) as string | undefined,
-        dob: (account?.dob ?? record.dob) as string | undefined,
-        gender: (account?.gender ?? record.gender) as string | undefined,
-        phone: (account?.phone ?? record.phone) as string | null | undefined,
+        email: rawEmail ? String(rawEmail).trim() : undefined,
+        dob: rawDob ? String(rawDob).trim() : undefined,
+        gender: rawGender ? String(rawGender).trim() : undefined,
+        phone: rawPhone ? String(rawPhone).trim() : null,
+        blood_type: ((record.blood_type ?? (account as Record<string, unknown> | undefined)?.blood_type) as string | null | undefined) ?? null,
+        allergy_notes: ((record.allergy_notes ?? (account as Record<string, unknown> | undefined)?.allergy_notes) as string | null | undefined) ?? null,
+        createdAt: (record.createdAt ?? record.created_at) as string | undefined,
+        updatedAt: (record.updatedAt ?? record.updated_at) as string | undefined,
     };
 }
 
@@ -441,10 +470,8 @@ export function extractBookingFlowFields(
 }
 
 export function formatQueueTicketNo(queueNumber?: string): string {
-    if (!queueNumber) return 'A-—';
-    const trimmed = queueNumber.trim();
-    if (/^[A-Z]-/i.test(trimmed)) return trimmed.toUpperCase();
-    return `A-${trimmed}`;
+    if (!queueNumber) return '—';
+    return String(queueNumber).trim();
 }
 
 function formatTicketNo(queueNumber?: string): string {
@@ -510,43 +537,6 @@ export function mapBackendToQueuePatient(item: BackendQueuePatient): QueuePatien
         bookingId: item.step.flow.booking.booking_id,
         accountId: item.step.flow.booking.patient.patient_id,
     };
-}
-
-export function extractHighPriorityPatients(patients: QueuePatient[]): HighPriorityPatient[] {
-    return patients
-        .filter((p) => p.priority === 'Khẩn cấp' || p.priority === 'Ưu tiên')
-        .slice(0, 5)
-        .map((p) => ({ id: p.id, name: p.name, ticketNo: p.ticketNo, specialty: p.specialty, priority: p.priority }));
-}
-
-export function buildRecentActivities(patients: QueuePatient[]): RecentActivity[] {
-    return patients.slice(0, 5).map((p, i) => ({
-        id: String(i + 1),
-        time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        title: 'Đăng ký mới',
-        ticketNo: p.ticketNo,
-        patientName: p.name,
-        type: p.priority === 'Khẩn cấp' ? 'emergency' : 'register',
-    }));
-}
-
-export function buildReceptionStats(patients: QueuePatient[], bookingCount?: number): ReceptionStat[] {
-    const waiting = patients.filter((p) => p.status === 'Chờ khám').length;
-    const payment = patients.filter((p) => p.status === 'Chờ TT').length;
-    const emergency = patients.filter((p) => p.priority === 'Khẩn cấp').length;
-    const avgWait = patients.length ? Math.round(patients.reduce((s, p) => s + p.waitMinutes, 0) / patients.length) : 0;
-    const totalRegistered = bookingCount && bookingCount > patients.length ? bookingCount : patients.length;
-
-    return [
-        { value: waiting, label: 'Đang chờ khám', icon: 'waiting', iconBg: 'bg-[#E8F2FF]', iconColor: 'text-[#3B82F6]' },
-        { value: totalRegistered, label: 'Đăng ký hôm nay', icon: 'registered', iconBg: 'bg-[#E2F7EB]', iconColor: 'text-[#10B981]' },
-        { value: Math.max(patients.length > 0 ? 1 : 0, Math.ceil(patients.length / 8)), label: 'Hàng đợi đang hoạt động', icon: 'queues', iconBg: 'bg-[#E2F7EB]', iconColor: 'text-[#10B981]' },
-        { value: payment, label: 'Chờ thanh toán', icon: 'payment', iconBg: 'bg-[#FFF4E5]', iconColor: 'text-[#F59E0B]' },
-        { value: emergency, label: 'Ca khẩn cấp', icon: 'emergency', iconBg: 'bg-[#FEE2E2]', iconColor: 'text-[#EF4444]' },
-        { value: `${avgWait || 0} phút`, label: 'Thời gian chờ TB', icon: 'avgTime', iconBg: 'bg-[#F3E8FF]', iconColor: 'text-[#8B7CF6]' },
-        { value: Math.round(patients.length * 0.35), label: 'Vãng lai (walk-in)', icon: 'walkin', iconBg: 'bg-[#E8F2FF]', iconColor: 'text-[#3B82F6]' },
-        { value: 0, label: 'Vé cấp lại', icon: 'reissue', iconBg: 'bg-[#F3F4F6]', iconColor: 'text-[#6B7280]' },
-    ];
 }
 
 export function getTodayDateString(): string {

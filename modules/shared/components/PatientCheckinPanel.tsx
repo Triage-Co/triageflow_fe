@@ -7,6 +7,7 @@ import {
     Eye,
     Package,
     CheckCircle2,
+    AlertCircle,
     X,
     User,
     Clock,
@@ -40,8 +41,8 @@ interface PatientRecord {
     name: string;
     rxCode: string;
     patientCode?: string;
-    paymentStatus: 'Đã Thanh Toán' | 'Đã Xác Nhận';
-    status: 'Đang Chuẩn Bị' | 'Sẵn Sàng' | 'Đang Chờ' | 'Đã Check-in';
+    paymentStatus: string;
+    status: string;
     doctorName: string;
     diagnosisNote?: string;
     totalAmount?: number;
@@ -60,130 +61,85 @@ export function PatientCheckinPanel({
     title = 'Tiếp Nhận Đơn Thuốc',
     subtitle = 'Quét mã QR đơn thuốc hoặc nhập mã lượt khám để tiếp nhận',
 }: PatientCheckinPanelProps) {
-    const [patientList, setPatientList] = useState<PatientRecord[]>([]);
-    const [isLoadingApi, setIsLoadingApi] = useState(true);
     const [searchCode, setSearchCode] = useState('');
     const [isScanning, setIsScanning] = useState(false);
     const [selectedPatientForModal, setSelectedPatientForModal] = useState<PatientRecord | null>(null);
     const [toastMessage, setToastMessage] = useState<string | null>(null);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     const mapPrescriptionToRecord = (item: any, idx: number): PatientRecord => {
         const rawDetails =
             (Array.isArray(item.prescriptionDetails) && item.prescriptionDetails.length > 0) ? item.prescriptionDetails
-            : (Array.isArray(item.details) && item.details.length > 0) ? item.details
-            : (Array.isArray(item.prescription_details) && item.prescription_details.length > 0) ? item.prescription_details
-            : (Array.isArray(item.items) && item.items.length > 0) ? item.items
-            : (Array.isArray(item.medicines) && item.medicines.length > 0) ? item.medicines
-            : null;
+                : (Array.isArray(item.details) && item.details.length > 0) ? item.details
+                    : (Array.isArray(item.prescription_details) && item.prescription_details.length > 0) ? item.prescription_details
+                        : (Array.isArray(item.items) && item.items.length > 0) ? item.items
+                            : (Array.isArray(item.medicines) && item.medicines.length > 0) ? item.medicines
+                                : [];
 
-        const medicinesList: MedicineDetailItem[] = rawDetails ? rawDetails.map((d: any) => ({
+        const medicinesList: MedicineDetailItem[] = rawDetails.map((d: any) => ({
             name: d.medicine?.medicine_name || d.medicine_name || d.name || 'Thuốc kê đơn',
-            activeIngredient: d.medicine?.active_ingredient || d.active_ingredient || d.medicine?.description || 'Kháng sinh / Giảm đau',
-            dosage: `Liều lượng: ${d.quantity || 10} ${d.medicine?.unit || d.unit || 'Viên'}`,
-            usage: d.dosage_instruction || d.usage || 'Uống 2 lần/ngày sau khi ăn 30 phút',
-            quantity: `${d.quantity || 10} ${d.medicine?.unit || d.unit || 'Viên'}`,
-            unitPrice: d.unit_price || d.medicine?.unit_price || 15000,
-            subTotal: d.sub_total || ((d.quantity || 10) * (d.unit_price || d.medicine?.unit_price || 15000))
-        })) : [
-            {
-                name: 'Amoxicillin 500mg',
-                activeIngredient: 'Amoxicillin Trihydrate',
-                dosage: 'Liều lượng: 14 Viên',
-                usage: 'Sáng 1 viên, tối 1 viên sau ăn 30 phút',
-                quantity: '14 Viên',
-                unitPrice: 15000,
-                subTotal: 210000
-            },
-            {
-                name: 'Paracetamol Extra 500mg',
-                activeIngredient: 'Paracetamol + Caffeine',
-                dosage: 'Liều lượng: 10 Viên',
-                usage: 'Uống 1 viên khi sốt trên 38.5°C hoặc đau nhẹ',
-                quantity: '10 Viên',
-                unitPrice: 18000,
-                subTotal: 180000
-            }
-        ];
+            activeIngredient: d.medicine?.active_ingredient || d.active_ingredient || '',
+            dosage: d.dosage_instruction ? `Liều lượng: ${d.dosage_instruction}` : `${d.quantity || 1} ${d.medicine?.unit || d.unit || 'Viên'}`,
+            usage: d.dosage_instruction || d.usage || 'Theo chỉ định bác sĩ',
+            quantity: `${d.quantity || 1} ${d.medicine?.unit || d.unit || 'Viên'}`,
+            unitPrice: d.unit_price || d.medicine?.unit_price || 0,
+            subTotal: d.sub_total || ((d.quantity || 1) * (d.unit_price || d.medicine?.unit_price || 0))
+        }));
 
         const calculatedTotal = medicinesList.reduce((sum, m) => sum + (m.subTotal || 0), 0);
 
+        let statusText = 'Chờ Nhận Đơn';
+        if (item.status === 'PREPARED') statusText = 'Sẵn Sàng';
+        else if (item.status === 'PROCESSING') statusText = 'Đang Chuẩn Bị';
+        else if (item.status === 'DISPENSED') statusText = 'Đã Giao Thuốc';
+
         return {
             stt: `P${(idx + 1).toString().padStart(3, '0')}`,
-            name: item.patient_name || item.visitSession?.patient?.full_name || 'Nguyễn Văn An',
-            rxCode: item.prescription_code || 'RX-20260731-0030',
-            patientCode: item.patient_code || item.visitSession?.patient?.patient_code || 'BN-OPD',
-            paymentStatus: 'Đã Thanh Toán',
-            status: item.status === 'PREPARED' ? 'Sẵn Sàng' : item.status === 'PROCESSING' ? 'Đang Chuẩn Bị' : 'Đã Check-in',
-            doctorName: item.prescribed_by_name || item.doctor?.full_name || 'BS. Nguyễn Thế Hiển',
-            diagnosisNote: item.diagnosis_note || 'Chẩn đoán lâm sàng theo đơn',
-            totalAmount: item.total_amount || calculatedTotal || 390000,
+            name: item.patient_name || item.visitSession?.patient?.full_name || item.patient?.full_name || 'Bệnh nhân',
+            rxCode: item.prescription_code || item.code || '',
+            patientCode: item.patient_code || item.visitSession?.patient?.patient_code || item.patient?.patient_code || '',
+            paymentStatus: item.status === 'PENDING' ? 'Chờ Thanh Toán' : 'Đã Thanh Toán',
+            status: statusText,
+            doctorName: item.prescribed_by_name || item.doctor?.full_name || item.prescribed_by || 'Bác sĩ kê đơn',
+            diagnosisNote: item.diagnosis_note || 'Theo chỉ định bác sĩ',
+            totalAmount: item.total_amount !== undefined && item.total_amount !== null ? item.total_amount : calculatedTotal,
             waitTime: `${Math.max(5, (idx + 1) * 5)} phút`,
             medicines: medicinesList
         };
     };
 
-    const loadApiPrescriptions = async () => {
-        setIsLoadingApi(true);
-        try {
-            const list = await pharmacyService.getPrescriptions();
-            // ONLY show paid prescriptions (PROCESSING, PREPARED, DISPENSED), hiding PENDING, CANCELLED, EXPIRED
-            const paidList = list.filter(
-                (p) => p.status === 'PROCESSING' || p.status === 'PREPARED' || p.status === 'DISPENSED'
-            );
-
-            if (paidList && paidList.length > 0) {
-                const mapped: PatientRecord[] = paidList.map((item, idx) => mapPrescriptionToRecord(item, idx));
-                setPatientList(mapped);
-            } else {
-                setPatientList([]);
-            }
-        } catch (e) {
-            console.error('[PatientCheckinPanel] API fetch error:', e);
-            setPatientList([]);
-        } finally {
-            setIsLoadingApi(false);
-        }
-    };
-
-    useEffect(() => {
-        void loadApiPrescriptions();
-
-        const handleStorageChange = () => {
-            void loadApiPrescriptions();
-        };
-
-        window.addEventListener('storage', handleStorageChange);
-        window.addEventListener('triageflow_prescription_paid', handleStorageChange);
-
-        return () => {
-            window.removeEventListener('storage', handleStorageChange);
-            window.removeEventListener('triageflow_prescription_paid', handleStorageChange);
-        };
-    }, []);
-
     const handleStartScan = async () => {
-        setIsScanning(true);
-        try {
-            if (patientList.length > 0) {
-                const found = patientList[0];
-                setSelectedPatientForModal(found);
-            }
-        } finally {
-            setIsScanning(false);
+        if (!searchCode.trim()) {
+            setErrorMessage('Vui lòng nhập mã đơn thuốc (ví dụ: RX-...) vào ô tìm kiếm bên dưới để tra cứu.');
+            return;
         }
+        await handleManualSearch();
     };
 
     const handleManualSearch = async () => {
-        if (!searchCode.trim()) return;
+        const query = searchCode.trim();
+        if (!query) return;
+
         setIsScanning(true);
+        setErrorMessage(null);
         try {
-            const rx = await pharmacyService.scanPrescription(searchCode.trim());
-            if (rx) {
+            const rx = await pharmacyService.scanPrescription(query);
+            if (rx && (rx.prescription_code || rx.prescription_id)) {
                 const record = mapPrescriptionToRecord(rx, 0);
                 setSelectedPatientForModal(record);
+            } else {
+                setSelectedPatientForModal(null);
+                setErrorMessage(`Không tìm thấy đơn thuốc tương ứng với mã "${query}"`);
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error('[PatientCheckinPanel] Scan error:', e);
+            const msg =
+                e?.response?.data?.detail ||
+                e?.response?.data?.message ||
+                e?.message ||
+                `Không tìm thấy đơn thuốc hoặc mã "${query}" không hợp lệ.`;
+            setErrorMessage(msg);
+            setSelectedPatientForModal(null);
         } finally {
             setIsScanning(false);
         }
@@ -191,11 +147,22 @@ export function PatientCheckinPanel({
 
     return (
         <div className="flex-1 flex flex-col overflow-y-auto bg-white rounded-tl-[48px] rounded-bl-[48px] p-6 md:p-10 space-y-8 relative">
-            {/* Toast alert */}
+            {/* Success Toast alert */}
             {toastMessage && (
                 <div className="fixed top-6 right-6 z-50 bg-emerald-50 border border-emerald-200 rounded-[18px] p-4 text-emerald-900 shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
                     <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
                     <span className="text-xs font-bold">{toastMessage}</span>
+                </div>
+            )}
+
+            {/* Error Toast alert */}
+            {errorMessage && (
+                <div className="fixed top-6 right-6 z-50 bg-rose-50 border border-rose-200 rounded-[18px] p-4 text-rose-900 shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 max-w-md">
+                    <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+                    <div className="flex-1 text-xs font-bold">{errorMessage}</div>
+                    <button onClick={() => setErrorMessage(null)} className="text-rose-400 hover:text-rose-700 cursor-pointer">
+                        <X className="w-4 h-4" />
+                    </button>
                 </div>
             )}
 
@@ -264,11 +231,10 @@ export function PatientCheckinPanel({
                         <button
                             onClick={handleManualSearch}
                             disabled={isScanning || !searchCode.trim()}
-                            className={`w-full py-3.5 rounded-[16px] font-bold text-xs transition active:scale-[0.98] shadow-sm flex items-center justify-center gap-2 cursor-pointer ${
-                                searchCode.trim()
-                                    ? 'bg-[#7C6CF5] hover:bg-[#6b5be3] text-white shadow-purple-500/20'
-                                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                            }`}
+                            className={`w-full py-3.5 rounded-[16px] font-bold text-xs transition active:scale-[0.98] shadow-sm flex items-center justify-center gap-2 cursor-pointer ${searchCode.trim()
+                                ? 'bg-[#7C6CF5] hover:bg-[#6b5be3] text-white shadow-purple-500/20'
+                                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                }`}
                         >
                             {isScanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
                             <span>Tra Cứu & Tiếp Nhận Đơn</span>

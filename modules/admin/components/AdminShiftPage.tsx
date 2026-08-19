@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import {
+    Search,
     Plus,
     Loader2,
     AlertCircle,
@@ -70,10 +71,11 @@ export function AdminShiftPage() {
     const { staffs, fetchStaffs } = useStaffStore();
     const { rooms, specialties, fetchRooms, fetchSpecialties } = useRoomStore();
 
+    const [searchQuery, setSearchQuery] = useState('');
     const [roomFilter, setRoomFilter] = useState('ALL');
     const [dateFilter, setDateFilter] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
-    const ITEMS_PER_PAGE = 10;
+    const ITEMS_PER_PAGE = 7;
 
     // Room Staff Detail Modal
     const [selectedRoomShift, setSelectedRoomShift] = useState<{
@@ -119,7 +121,7 @@ export function AdminShiftPage() {
     useEffect(() => {
         if (accessToken) {
             fetchShifts(accessToken);
-            fetchStaffs(accessToken, { mergeAccounts: true });
+            fetchStaffs(accessToken);
             fetchRooms(accessToken);
             fetchSpecialties(accessToken);
         }
@@ -288,7 +290,15 @@ export function AdminShiftPage() {
         const shiftDate = toDateKey(shift.date);
         const matchesDate = dateFilter === '' || shiftDate === dateFilter;
 
-        return matchesRoom && matchesDate;
+        const roomName = getRoomName(shift.room_id).toLowerCase();
+        const q = searchQuery.toLowerCase().trim();
+        const matchesSearch = !q ||
+            roomName.includes(q) ||
+            shiftDate.includes(q) ||
+            shift.start_time.includes(q) ||
+            shift.end_time.includes(q);
+
+        return matchesRoom && matchesDate && matchesSearch;
     });
 
     const sortedShifts = [...filteredShifts].sort((a, b) => {
@@ -364,19 +374,33 @@ export function AdminShiftPage() {
                             </div>
                         )}
 
-                        {/* ── Filter Panel ── */}
-                        <div className="bg-[#F8F9FA] rounded-2xl p-5 border border-[#EBEBEB] mb-6">
-                            <div className="flex items-center gap-2 mb-4 text-[#2D2D2D]">
-                                <Filter className="w-4 h-4 text-[#8B7CF6]" />
-                                <span className="text-sm font-bold">Bộ lọc ca trực</span>
+                        {/* ── Toolbar: Search & Filters ── */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                            {/* Search Bar */}
+                            <div className="flex items-center gap-2.5 bg-[#F5F5F8] rounded-xl px-3.5 py-2.5 text-[12.5px] w-full sm:w-80 border border-neutral-200/60 shadow-xs focus-within:border-[#8B7CF6] focus-within:bg-white transition-all">
+                                <Search className="w-4 h-4 shrink-0 text-[#9CA3AF]" />
+                                <input
+                                    type="text"
+                                    placeholder="Tìm theo tên phòng, ngày, giờ..."
+                                    value={searchQuery}
+                                    onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                                    className="bg-transparent flex-1 outline-none text-[#1F2937] placeholder-[#9CA3AF] font-medium"
+                                />
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-[11px] font-bold text-neutral-400 uppercase">Lọc theo phòng trực</label>
+
+                            {/* Inline Filters */}
+                            <div className="flex flex-wrap items-center gap-2.5">
+                                <div className={cn(
+                                    "flex items-center gap-2 bg-[#F5F5F8] border rounded-xl px-3.5 py-2 text-[12.5px] transition-all shadow-xs",
+                                    roomFilter !== 'ALL'
+                                        ? "border-[#8B7CF6] bg-[#8B7CF6]/5"
+                                        : "border-neutral-200/60 hover:border-neutral-300 focus-within:border-[#8B7CF6] focus-within:bg-white"
+                                )}>
+                                    <span className="text-[11.5px] font-bold text-neutral-400 uppercase tracking-wider shrink-0">Phòng:</span>
                                     <select
                                         value={roomFilter}
                                         onChange={(e) => { setRoomFilter(e.target.value); setCurrentPage(1); }}
-                                        className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
+                                        className="bg-transparent font-bold text-[#2D2D2D] outline-none cursor-pointer max-w-[180px] truncate pr-1"
                                     >
                                         <option value="ALL">Tất cả phòng</option>
                                         {rooms.map((room) => (
@@ -386,28 +410,36 @@ export function AdminShiftPage() {
                                         ))}
                                     </select>
                                 </div>
-                                <div className="space-y-1">
-                                    <label className="text-[11px] font-bold text-neutral-400 uppercase">Lọc theo ngày</label>
+
+                                <div className={cn(
+                                    "flex items-center gap-2 bg-[#F5F5F8] border rounded-xl px-3.5 py-2 text-[12.5px] transition-all shadow-xs",
+                                    dateFilter !== ''
+                                        ? "border-[#8B7CF6] bg-[#8B7CF6]/5"
+                                        : "border-neutral-200/60 hover:border-neutral-300 focus-within:border-[#8B7CF6] focus-within:bg-white"
+                                )}>
+                                    <span className="text-[11.5px] font-bold text-neutral-400 uppercase tracking-wider shrink-0">Ngày:</span>
                                     <input
                                         type="date"
                                         value={dateFilter}
                                         onChange={(e) => { setDateFilter(e.target.value); setCurrentPage(1); }}
-                                        className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
+                                        className="bg-transparent font-bold text-[#2D2D2D] outline-none cursor-pointer text-[12.5px]"
                                     />
                                 </div>
+
+                                {(dateFilter || roomFilter !== 'ALL' || searchQuery) && (
+                                    <button
+                                        onClick={() => {
+                                            setDateFilter('');
+                                            setRoomFilter('ALL');
+                                            setSearchQuery('');
+                                            setCurrentPage(1);
+                                        }}
+                                        className="text-[11.5px] font-bold text-[#8B7CF6] hover:underline cursor-pointer px-2 py-1"
+                                    >
+                                        Xoá lọc
+                                    </button>
+                                )}
                             </div>
-                            {(dateFilter || roomFilter !== 'ALL') && (
-                                <button
-                                    onClick={() => {
-                                        setDateFilter('');
-                                        setRoomFilter('ALL');
-                                        setCurrentPage(1);
-                                    }}
-                                    className="mt-3 text-[11px] font-bold text-[#8B7CF6] hover:underline cursor-pointer"
-                                >
-                                    Xoá bộ lọc
-                                </button>
-                            )}
                         </div>
 
                         {/* ── Table ── */}
@@ -442,19 +474,14 @@ export function AdminShiftPage() {
                                                             start_time: shift.start_time,
                                                             end_time: shift.end_time,
                                                         })}
-                                                        className="flex items-center gap-2 group/btn cursor-pointer text-left"
+                                                        className="flex items-center gap-2.5 group/btn cursor-pointer text-left"
                                                     >
                                                         <div className="w-8 h-8 rounded-xl bg-[#F5F2FF] border border-[#E0DCFB] flex items-center justify-center shrink-0 group-hover/btn:bg-[#8B7CF6] transition-colors">
                                                             <Home className="w-4 h-4 text-[#8B7CF6] group-hover/btn:text-white transition-colors" />
                                                         </div>
-                                                        <div>
-                                                            <span className="text-[13px] font-bold text-[#2D2D2D] group-hover/btn:text-[#8B7CF6] transition-colors block">
-                                                                {getRoomName(shift.room_id)}
-                                                            </span>
-                                                            <span className="text-[10px] text-[#8B7CF6] font-semibold opacity-0 group-hover/btn:opacity-100 transition-opacity">
-                                                                Xem danh sách nhân viên →
-                                                            </span>
-                                                        </div>
+                                                        <span className="text-[13px] font-bold text-[#2D2D2D] group-hover/btn:text-[#8B7CF6] transition-colors">
+                                                            {getRoomName(shift.room_id)}
+                                                        </span>
                                                     </button>
                                                 </td>
                                                 <td className="px-5 py-4">
@@ -469,7 +496,7 @@ export function AdminShiftPage() {
                                                     </div>
                                                 </td>
                                                 <td className="px-5 py-4">
-                                                    <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <div className="flex items-center justify-end gap-2 text-neutral-400">
                                                         <button
                                                             onClick={() => setSelectedRoomShift({
                                                                 room_id: shift.room_id,
@@ -478,21 +505,21 @@ export function AdminShiftPage() {
                                                                 end_time: shift.end_time,
                                                             })}
                                                             title="Xem danh sách nhân viên trực"
-                                                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-400 hover:text-[#8B7CF6] hover:border-[#8B7CF6]/30 hover:bg-[#F5F2FF] transition cursor-pointer"
+                                                            className="p-1 hover:text-[#8B7CF6] transition-colors cursor-pointer"
                                                         >
                                                             <Eye className="w-3.5 h-3.5" />
                                                         </button>
                                                         <button
                                                             onClick={() => openEditModal(shift)}
                                                             title="Chỉnh sửa ca trực"
-                                                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-400 hover:text-[#8B7CF6] hover:border-[#8B7CF6]/30 hover:bg-[#F5F2FF] transition cursor-pointer"
+                                                            className="p-1 hover:text-[#8B7CF6] transition-colors cursor-pointer"
                                                         >
                                                             <Pencil className="w-3.5 h-3.5" />
                                                         </button>
                                                         <button
                                                             onClick={() => { setDeleteError(null); setDeletingShift(shift); }}
                                                             title="Xóa ca trực"
-                                                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition cursor-pointer"
+                                                            className="p-1 text-red-500 hover:text-red-700 transition-colors cursor-pointer"
                                                         >
                                                             <Trash2 className="w-3.5 h-3.5" />
                                                         </button>
@@ -512,51 +539,52 @@ export function AdminShiftPage() {
                             )}
                         </div>
 
-                        {/* ── Pagination ── */}
-                        {filteredShifts.length > 0 && (
-                            <div className="mt-5 flex items-center justify-between border-t border-neutral-100 pt-4">
-                                <p className="text-[12px] text-[#ADADAD] font-bold">
-                                    Hiển thị {Math.min(filteredShifts.length, (currentPage - 1) * ITEMS_PER_PAGE + 1)} – {Math.min(filteredShifts.length, currentPage * ITEMS_PER_PAGE)} trong số {filteredShifts.length} ca trực
-                                </p>
-                                {totalPages > 1 && (
-                                    <div className="flex items-center gap-1">
-                                        <button
-                                            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                                            disabled={currentPage === 1}
-                                            className="px-3 py-1.5 text-xs font-bold border border-[#EBEBEB] rounded-lg bg-white text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6] disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
-                                        >
-                                            Trước
-                                        </button>
-                                        {getCompactPages(currentPage, totalPages).map((page, idx) => (
-                                            page === 'ellipsis' ? (
-                                                <span key={`ellipsis-${idx}`} className="px-1 text-sm font-bold text-[#ADADAD] select-none">...</span>
-                                            ) : (
-                                                <button
-                                                    key={page}
-                                                    onClick={() => setCurrentPage(page)}
-                                                    className={cn(
-                                                        'w-8 h-8 flex items-center justify-center text-xs font-bold rounded-lg border transition cursor-pointer',
-                                                        currentPage === page
-                                                            ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white'
-                                                            : 'bg-white border-[#EBEBEB] text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6]'
-                                                    )}
-                                                >
-                                                    {page}
-                                                </button>
-                                            )
-                                        ))}
-                                        <button
-                                            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                                            disabled={currentPage === totalPages}
-                                            className="px-3 py-1.5 text-xs font-bold border border-[#EBEBEB] rounded-lg bg-white text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6] disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
-                                        >
-                                            Sau
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        )}
                     </div>
+
+                    {/* ── Fixed Bottom Pagination Controls ── */}
+                    {filteredShifts.length > 0 && (
+                        <div className="px-6 py-4 border-t border-neutral-100 bg-white flex items-center justify-between shrink-0">
+                            <p className="text-[12px] text-[#ADADAD] font-bold">
+                                Hiển thị {Math.min(filteredShifts.length, (currentPage - 1) * ITEMS_PER_PAGE + 1)} – {Math.min(filteredShifts.length, currentPage * ITEMS_PER_PAGE)} trong số {filteredShifts.length} ca trực
+                            </p>
+                            {totalPages > 1 && (
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                                        disabled={currentPage === 1}
+                                        className="px-3 py-1.5 text-xs font-bold border border-[#EBEBEB] rounded-lg bg-white text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6] disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+                                    >
+                                        Trước
+                                    </button>
+                                    {getCompactPages(currentPage, totalPages).map((page, idx) => (
+                                        page === 'ellipsis' ? (
+                                            <span key={`ellipsis-${idx}`} className="px-1 text-sm font-bold text-[#ADADAD] select-none">...</span>
+                                        ) : (
+                                            <button
+                                                key={page}
+                                                onClick={() => setCurrentPage(page)}
+                                                className={cn(
+                                                    'w-8 h-8 flex items-center justify-center text-xs font-bold rounded-lg border transition cursor-pointer',
+                                                    currentPage === page
+                                                        ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white'
+                                                        : 'bg-white border-[#EBEBEB] text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6]'
+                                                )}
+                                            >
+                                                {page}
+                                            </button>
+                                        )
+                                    ))}
+                                    <button
+                                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                                        disabled={currentPage === totalPages}
+                                        className="px-3 py-1.5 text-xs font-bold border border-[#EBEBEB] rounded-lg bg-white text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6] disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+                                    >
+                                        Sau
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
 

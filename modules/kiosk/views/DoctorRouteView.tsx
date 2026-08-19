@@ -197,11 +197,18 @@ export const DoctorRouteView: React.FC = () => {
           groupedStatus = 'pending';
         }
 
+        const roomSibling = siblingSteps.find(s => s.room) || siblingSteps[0] || step;
+        const queueSibling = siblingSteps.find(s => s.queueNo) || siblingSteps[0] || step;
+
         result.push({
           isGrouped: true,
           serviceOrderId,
           status: groupedStatus,
           title: `Thực hiện chỉ định dịch vụ`,
+          room: roomSibling?.room || step.room,
+          location: roomSibling?.location || step.location,
+          queueNo: queueSibling?.queueNo || step.queueNo,
+          estimatedWait: queueSibling?.estimatedWait || step.estimatedWait,
           subSteps: siblingSteps,
           id: step.id,
         });
@@ -226,25 +233,25 @@ export const DoctorRouteView: React.FC = () => {
   const isPaymentStep = currentStepItem?.title?.toLowerCase().trim().startsWith('thanh toán') || false;
 
   return (
-    <div className="flex-1 min-h-0 px-8 py-6 z-10 flex flex-col gap-5">
+    <div className="w-full h-full min-h-0 p-4 sm:p-6 lg:p-8 z-10 select-none flex flex-col justify-between gap-4 max-w-7xl mx-auto overflow-hidden">
       {/* Header bar */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigateToView('patient_info')}
-            className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-neutral-50 rounded-2xl shadow-sm border border-neutral-200 text-sm font-extrabold text-neutral-800 transition-all cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 bg-white hover:bg-neutral-50 active:scale-95 rounded-2xl shadow-sm border border-neutral-200 text-xs sm:text-sm font-extrabold text-neutral-800 transition-all cursor-pointer shrink-0"
           >
             <ArrowLeft className="w-4 h-4" /> Quay lại
           </button>
-          <h2 className="text-3xl font-black text-[#1E2939] tracking-tight">
+          <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-[#1E2939] tracking-tight">
             Lộ trình bác sĩ chỉ định
           </h2>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 shrink-0">
           <button
             onClick={handleOpenServiceOrders}
-            className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-2xl text-xs lg:text-sm font-extrabold shadow-md shadow-amber-500/10 transition-all cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-2xl text-xs sm:text-sm font-extrabold shadow-md shadow-amber-500/10 transition-all cursor-pointer"
           >
             Các mục cần thanh toán
           </button>
@@ -252,7 +259,7 @@ export const DoctorRouteView: React.FC = () => {
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="flex items-center gap-2 px-5 py-2.5 bg-white rounded-2xl text-xs lg:text-sm font-extrabold text-[#1E2939] shadow-sm border border-neutral-200 hover:bg-neutral-50 active:scale-95 disabled:opacity-60 transition-all cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 bg-white rounded-2xl text-xs sm:text-sm font-extrabold text-[#1E2939] shadow-sm border border-neutral-200 hover:bg-neutral-50 active:scale-95 disabled:opacity-60 transition-all cursor-pointer"
           >
             <RotateCw className={cn("w-4 h-4 text-[#155DFC]", isRefreshing && "animate-spin")} />
             Cập nhật
@@ -261,10 +268,10 @@ export const DoctorRouteView: React.FC = () => {
       </div>
 
       {/* Main Grid (fills remaining height) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 flex-1 min-h-0 overflow-hidden">
         {/* Left Card Column: Điểm đến hiện tại (Solid Blue Card) */}
-        <div className="lg:col-span-4 flex flex-col min-h-0">
-          <div className="bg-[#4F80E1] text-white rounded-[28px] p-6 shadow-xl flex flex-col justify-between flex-1 h-full">
+        <div className="lg:col-span-4 flex flex-col min-h-0 h-full overflow-hidden">
+          <div className="bg-[#4F80E1] text-white rounded-[28px] p-5 sm:p-6 shadow-xl flex flex-col justify-between flex-1 h-full overflow-y-auto">
             {currentStepItem ? (
               <div className="space-y-4">
                 <span className="text-xs font-black text-blue-100 uppercase tracking-wider block">{isPaymentStep ? 'Thanh toán hiện tại' : 'Điểm đến hiện tại'}</span>
@@ -375,24 +382,50 @@ export const DoctorRouteView: React.FC = () => {
                           {/* Group Header (Clickable to Toggle Collapse/Expand) */}
                           <div 
                             onClick={() => toggleGroup(step.serviceOrderId)}
-                            className="flex items-center justify-between cursor-pointer hover:bg-neutral-50/50 p-1.5 rounded-xl transition-all select-none"
+                            className="grid grid-cols-12 gap-4 items-center cursor-pointer hover:bg-neutral-50/70 p-1.5 rounded-xl transition-all select-none"
                           >
-                            <div className="flex items-center gap-3">
-                              <div className="space-y-0.5">
-                                <h4 className="font-black text-base lg:text-lg tracking-tight text-[#1E2939]">
-                                  Bước {step.displayId}. Thực hiện chỉ định dịch vụ
-                                </h4>
-                                <p className="text-xs text-neutral-400 font-bold uppercase tracking-wider block">
-                                  Tổng cộng {step.subSteps.length} xét nghiệm/thăm dò (Nhấp để {isExpanded ? 'thu gọn' : 'mở rộng'})
-                                </p>
-                              </div>
+                            {/* Col 1: Title & Expand/Collapse text (5 cols) */}
+                            <div className="col-span-5 space-y-0.5">
+                              <h4 className={cn("font-black text-base lg:text-lg tracking-tight", isInProgress ? "text-[#155DFC]" : "text-[#1E2939]")}>
+                                Bước {step.displayId}. Thực hiện chỉ định dịch vụ
+                              </h4>
+                              <p className="text-xs text-neutral-400 font-bold uppercase tracking-wider block">
+                                (Nhấp để {isExpanded ? 'thu gọn' : 'mở rộng'})
+                              </p>
                             </div>
 
-                            <div className="flex items-center gap-3 shrink-0">
+                            {/* Col 2: Room Info (3 cols) */}
+                            <div className="col-span-3">
+                              {step.room ? (
+                                <div className="text-xs space-y-0.5">
+                                  <span className="text-neutral-400 font-bold block uppercase tracking-wider text-[10px]">Phòng</span>
+                                  <span className="font-black text-[#1E2939] text-sm block">{step.room}</span>
+                                  {step.location && (
+                                    <span className="text-neutral-500 text-xs font-semibold block">{step.location}</span>
+                                  )}
+                                </div>
+                              ) : null}
+                            </div>
+
+                            {/* Col 3: Queue Number & Time (2 cols) */}
+                            <div className="col-span-2">
+                              {step.queueNo ? (
+                                <div className="text-xs space-y-0.5">
+                                  <span className="text-neutral-400 font-bold block uppercase tracking-wider text-[10px]">Số thứ tự</span>
+                                  <span className="font-black text-[#155DFC] text-sm block">{step.queueNo}</span>
+                                  {step.estimatedWait && (
+                                    <span className="text-neutral-500 text-xs font-semibold block">~{step.estimatedWait}</span>
+                                  )}
+                                </div>
+                              ) : null}
+                            </div>
+
+                            {/* Col 4: Status Badge (2 cols - right aligned) */}
+                            <div className="col-span-2 flex justify-end shrink-0">
                               <span className={cn(
-                                "px-3 py-1.5 rounded-xl text-xs font-extrabold border shadow-xs tracking-wide",
-                                isCompleted && "bg-emerald-50 border-emerald-200 text-emerald-700",
-                                isInProgress && "bg-blue-50 border-blue-200 text-blue-700",
+                                "px-3.5 py-1.5 rounded-xl text-xs font-extrabold border shadow-xs tracking-wide whitespace-nowrap text-center inline-block",
+                                isCompleted && "bg-blue-100/90 text-[#155DFC] border-blue-200",
+                                isInProgress && "bg-[#155DFC] text-white border-transparent shadow-sm",
                                 isPending && "bg-amber-50 border-amber-200 text-amber-700",
                                 isWaiting && "bg-neutral-50 border-neutral-200 text-neutral-500"
                               )}>
@@ -415,13 +448,13 @@ export const DoctorRouteView: React.FC = () => {
                                     key={subStep.stepId || subIdx}
                                     onClick={() => handleStepClick(subStep)}
                                     className={cn(
-                                      "p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all bg-white hover:shadow-md cursor-pointer hover:border-neutral-300 active:scale-[0.99]",
+                                      "p-4 rounded-xl border flex items-center justify-between gap-4 transition-all bg-white hover:shadow-md cursor-pointer hover:border-neutral-300 active:scale-[0.99]",
                                       isSubInProgress && "bg-blue-50/50 border-[#155DFC] ring-1 ring-blue-200",
                                       isSubCompleted && "bg-neutral-50/50 border-neutral-100 opacity-90",
                                       isSubPending && "bg-amber-50/30 border-amber-200"
                                     )}
                                   >
-                                    <div className="flex-1 space-y-1">
+                                    <div className="flex-1 space-y-0.5">
                                       <span className={cn(
                                         "font-black text-sm lg:text-base tracking-tight",
                                         isSubInProgress ? "text-[#155DFC]" : "text-neutral-800"
@@ -429,36 +462,20 @@ export const DoctorRouteView: React.FC = () => {
                                         {subIdx + 1}. {subStep.title}
                                       </span>
                                       {subStep.subtitle && (
-                                        <span className="text-xs text-neutral-450 block font-semibold">{subStep.subtitle}</span>
+                                        <span className="text-xs text-neutral-400 block font-semibold">{subStep.subtitle}</span>
                                       )}
                                     </div>
 
-                                    <div className="flex items-center gap-6 shrink-0 text-xs">
-                                      {subStep.room && (
-                                        <div className="space-y-0.5">
-                                          <span className="text-neutral-400 font-bold block uppercase tracking-wider text-[9px]">Phòng</span>
-                                          <span className="font-extrabold text-[#1E2939]">{subStep.room}</span>
-                                        </div>
-                                      )}
-
-                                      {subStep.queueNo && (
-                                        <div className="space-y-0.5">
-                                          <span className="text-neutral-400 font-bold block uppercase tracking-wider text-[9px]">Số thứ tự</span>
-                                          <span className="font-black text-[#155DFC]">{subStep.queueNo}</span>
-                                        </div>
-                                      )}
-
-                                      <div className="min-w-28 flex justify-end">
-                                        <span className={cn(
-                                          "px-2.5 py-1 rounded-lg text-[10px] font-black border uppercase tracking-wider",
-                                          isSubCompleted && "bg-blue-100/90 text-[#155DFC] border-blue-200",
-                                          isSubInProgress && "bg-[#155DFC] text-white shadow-sm",
-                                          isSubPending && "bg-amber-100 text-amber-800 border-amber-250/80",
-                                          isSubWaiting && "bg-neutral-100 text-neutral-400 border-neutral-200"
-                                        )}>
-                                          {isSubCompleted ? 'Hoàn thành' : isSubInProgress ? 'Đang gọi' : isSubPending ? 'Đang chờ' : 'Chưa khám'}
-                                        </span>
-                                      </div>
+                                    <div className="flex items-center shrink-0">
+                                      <span className={cn(
+                                        "px-2.5 py-1 rounded-lg text-[10px] font-black border uppercase tracking-wider whitespace-nowrap text-center",
+                                        isSubCompleted && "bg-blue-100/90 text-[#155DFC] border-blue-200",
+                                        isSubInProgress && "bg-[#155DFC] text-white shadow-sm",
+                                        isSubPending && "bg-amber-100 text-amber-800 border-amber-250/80",
+                                        isSubWaiting && "bg-neutral-100 text-neutral-400 border-neutral-200"
+                                      )}>
+                                        {isSubCompleted ? 'Hoàn thành' : isSubInProgress ? 'Đang gọi' : isSubPending ? 'Đang chờ' : 'Chưa khám'}
+                                      </span>
                                     </div>
                                   </div>
                                 );
@@ -546,24 +563,24 @@ export const DoctorRouteView: React.FC = () => {
                         </div>
 
                         {/* Col 4: Status Badge (2 cols - right aligned) */}
-                        <div className="col-span-2 flex justify-end">
+                        <div className="col-span-2 flex justify-end shrink-0">
                           {isCompleted && (
-                            <span className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-blue-100/90 text-[#155DFC] border border-blue-200">
+                            <span className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-blue-100/90 text-[#155DFC] border border-blue-200 whitespace-nowrap text-center inline-block">
                               Hoàn thành
                             </span>
                           )}
                           {isInProgress && (
-                            <span className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-[#155DFC] text-white shadow-sm">
+                            <span className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-[#155DFC] text-white shadow-sm whitespace-nowrap text-center inline-block">
                               Đang thực hiện
                             </span>
                           )}
                           {isPending && (
-                            <span className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-amber-100 text-amber-800 border border-amber-200">
+                            <span className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-amber-100 text-amber-800 border border-amber-200 whitespace-nowrap text-center inline-block">
                               Đang chờ
                             </span>
                           )}
                           {isWaiting && (
-                            <span className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-neutral-100 text-neutral-400 border border-neutral-200">
+                            <span className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-neutral-100 text-neutral-400 border border-neutral-200 whitespace-nowrap text-center inline-block">
                               Chưa thực hiện
                             </span>
                           )}
@@ -621,7 +638,7 @@ export const DoctorRouteView: React.FC = () => {
             {/* Header */}
             <div className="space-y-1.5 border-b border-neutral-100 pb-4 pr-8 text-left">
               <span className={cn(
-                "inline-flex items-center px-3 py-1 rounded-full text-xs font-extrabold border",
+                "inline-flex items-center px-3 py-1 rounded-full text-xs font-extrabold border whitespace-nowrap",
                 selectedDetailStep.status === 'completed' && "bg-blue-50 text-[#155DFC] border-blue-200",
                 selectedDetailStep.status === 'in_progress' && "bg-teal-50 text-teal-700 border-teal-200",
                 selectedDetailStep.status === 'waiting' && "bg-amber-50 text-amber-700 border-amber-200",

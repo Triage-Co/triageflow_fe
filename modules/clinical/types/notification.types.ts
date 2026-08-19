@@ -1,9 +1,14 @@
 export interface ApiNotification {
-    id: string;
-    account_id: string;
-    message: string;
-    created_at: string;
-    updated_at: string;
+    id?: string;
+    notification_id?: string;
+    account_id?: string;
+    message?: string;
+    content?: string;
+    title?: string;
+    created_at?: string;
+    updated_at?: string;
+    is_read?: boolean;
+    read?: boolean;
 }
 
 export interface NotificationItem {

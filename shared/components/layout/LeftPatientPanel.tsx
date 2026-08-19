@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import type { Patient } from '@/modules/clinical/types/clinical.types';
 import { Heart, Activity, Thermometer, Gauge, AlertTriangle, User, Pencil, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { WorkflowDiagram } from '@/modules/clinical/components/WorkflowDiagram';
+import { WorkflowDiagram } from '@/app/(staff)/doctor/_components/workflow/WorkflowDiagram';
 import { clinicalService } from '@/modules/clinical/services/clinicalService';
+import { labService } from '@/modules/lab/services/labService';
+import { pickStaffShift } from '@/modules/clinical/utils/staffShift';
 import { useAuthStore } from '@/store/authStore';
 import { isClinicalEmrReadOnly } from '@/modules/clinical/utils/appointmentDate';
 
@@ -81,6 +83,7 @@ export function LeftPatientPanel({
     const accessToken = useAuthStore((s) => s.accessToken);
     const isReadOnly = isClinicalEmrReadOnly(user?.role, patient.appointmentDate);
     const [tab, setTab] = useState<SidePanelTab>('info');
+    const [shiftRoomName, setShiftRoomName] = useState('');
     const [sessionData, setSessionData] = useState<VisitSessionData | null>(null);
     const [editingField, setEditingField] = useState<EditingField>(null);
     const [isSaving, setIsSaving] = useState(false);
@@ -105,6 +108,33 @@ export function LeftPatientPanel({
         blood_pressure_dia: null,
         spo2: null,
     });
+
+    useEffect(() => {
+        if (!accessToken) return;
+        let cancelled = false;
+
+        const dateStr = (() => {
+            const fromVisit = (patient.appointmentDate || '').trim();
+            if (/^\d{4}-\d{2}-\d{2}$/.test(fromVisit)) return fromVisit;
+            const d = new Date();
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        })();
+
+        void (async () => {
+            try {
+                const list = await labService.getMyShifts(dateStr);
+                if (cancelled) return;
+                const shift = pickStaffShift(Array.isArray(list) ? list : [], user?.role);
+                setShiftRoomName((shift?.room?.room_name || '').trim());
+            } catch {
+                if (!cancelled) setShiftRoomName('');
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [accessToken, user?.role, patient.appointmentDate]);
 
     useEffect(() => {
         if (!accessToken) return;
@@ -334,7 +364,11 @@ export function LeftPatientPanel({
                 <div className="flex flex-col h-full overflow-hidden">
                     {/* Panel header */}
                     <div className="px-5 pt-5 pb-4 shrink-0">
-                        <h2 className="text-[18px] font-bold text-neutral-800 tracking-tight">PK. Nội tổng quát 1</h2>
+                        {shiftRoomName ? (
+                            <h2 className="text-[18px] font-bold text-neutral-800 tracking-tight">
+                                {shiftRoomName}
+                            </h2>
+                        ) : null}
 
                         {/* Tabs Switcher */}
                         <div className="flex p-0.5 bg-[#E8E7F5]/80 rounded-full mt-3 border border-neutral-200/30 w-full">
@@ -400,7 +434,12 @@ export function LeftPatientPanel({
                                     <div className="pt-3 border-t border-neutral-100 space-y-3">
                                         <div className="flex items-center justify-between">
                                             <span className="text-[11px] text-neutral-400 font-medium">Giới tính / Tuổi:</span>
-                                            <span className="text-[11px] font-bold text-neutral-800">{patient.gender} - {patient.age} tuổi</span>
+                                            <span className="text-[11px] font-bold text-neutral-800">
+                                                {[
+                                                    patient.gender,
+                                                    patient.age != null ? `${patient.age} tuổi` : null,
+                                                ].filter(Boolean).join(' - ') || '—'}
+                                            </span>
                                         </div>
                                         <div className="flex items-center justify-between">
                                             <span className="text-[11px] text-neutral-400 font-medium">CCCD:</span>

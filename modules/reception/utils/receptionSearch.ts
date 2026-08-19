@@ -61,19 +61,24 @@ function mapQueueItem(item: BackendQueuePatient): PatientSearchResult {
 
     return {
         accountId: patient.patient_id,
+        patient_id: patient.patient_id,
         queueId: item.queue_id,
         name: patient.full_name || account?.full_name || account?.user_name || 'Bệnh nhân',
         citizenId: patient.citizen_id || account?.citizen_id || '',
         phone: account?.phone || null,
         email: account?.email || '',
+        dob: patient.dob || account?.dob || undefined,
+        gender: (patient.gender || account?.gender) as any,
         ticketNo: queue.ticketNo,
         specialty: 'Nội khoa',
-        bhyt: patient.medical_coverage_id,
+        bhyt: patient.medical_coverage_id || null,
         priority: queue.priority,
         status: queue.status,
         waitMinutes: queue.waitMinutes,
         bookingId: queue.bookingId,
         inQueueToday: true,
+        blood_type: (patient as any).blood_type || null,
+        allergy_notes: (patient as any).allergy_notes || null,
     };
 }
 
@@ -90,11 +95,16 @@ function mapAccountOnly(account: ReceptionAccount): PatientSearchResult {
         citizenId: account.citizen_id,
         phone: account.phone,
         email: account.email,
+        dob: account.dob ?? undefined,
+        gender: account.gender ?? undefined,
         specialty: '—',
         bhyt: account.bhyt ?? null,
         priority,
         status: 'Không trong hàng đợi',
         inQueueToday: false,
+        blood_type: account.blood_type ?? null,
+        allergy_notes: account.allergy_notes ?? null,
+        createdAt: account.createdAt,
     };
 }
 
@@ -155,90 +165,6 @@ function extractPatientFields(patient: Record<string, unknown>): {
         medical_coverage_id:
             (patient.medical_coverage_id as string | null | undefined) ?? null,
     };
-}
-
-function extractBookingPatient(raw: Record<string, unknown>): {
-    patient_id: string;
-    full_name: string;
-    citizen_id: string;
-    phone: string | null;
-    email: string;
-    medical_coverage_id: string | null;
-} | null {
-    const candidates: unknown[] = [
-        raw.patient,
-        raw.Patient,
-        (raw.booking as Record<string, unknown> | undefined)?.patient,
-        (raw.flow as Record<string, unknown> | undefined)?.booking &&
-            ((raw.flow as Record<string, unknown>).booking as Record<string, unknown>).patient,
-        (raw.step as Record<string, unknown> | undefined)?.flow &&
-            (((raw.step as Record<string, unknown>).flow as Record<string, unknown>).booking as
-                | Record<string, unknown>
-                | undefined)?.patient,
-    ];
-
-    for (const candidate of candidates) {
-        if (!candidate || typeof candidate !== 'object') continue;
-        const extracted = extractPatientFields(candidate as Record<string, unknown>);
-        if (extracted) return extracted;
-    }
-
-    return null;
-}
-
-export function searchPatientRecordsFromBookings(
-    query: string,
-    bookings: Record<string, unknown>[],
-    queueItems: BackendQueuePatient[],
-): PatientSearchResult[] {
-    const q = normalizeQuery(query);
-    if (!q) return [];
-
-    const queueByPatientId = new Map<string, BackendQueuePatient>();
-    for (const item of queueItems) {
-        const pid = item.step?.flow?.booking?.patient?.patient_id;
-        if (pid) queueByPatientId.set(pid, item);
-    }
-
-    const results: PatientSearchResult[] = [];
-    const seen = new Set<string>();
-
-    for (const booking of bookings) {
-        const extracted = extractBookingPatient(booking);
-        if (!extracted) continue;
-
-        const key = `${extracted.citizen_id}:${extracted.patient_id}`;
-        if (seen.has(key)) continue;
-
-        const queued = queueByPatientId.get(extracted.patient_id);
-        if (queued) {
-            const mapped = mapQueueItem(queued);
-            if (matchesQuery(mapped, query)) {
-                seen.add(key);
-                results.push(mapped);
-            }
-            continue;
-        }
-
-        const accountResult = mapAccountOnly({
-            account_id: extracted.patient_id,
-            full_name: extracted.full_name,
-            citizen_id: extracted.citizen_id,
-            phone: extracted.phone,
-            email: extracted.email,
-            dob: '',
-            gender: '',
-            role: 'USER',
-            bhyt: extracted.medical_coverage_id,
-        });
-
-        if (matchesQuery(accountResult, query)) {
-            seen.add(key);
-            results.push(accountResult);
-        }
-    }
-
-    return results;
 }
 
 export function formatPhoneDisplay(phone?: string | null): string {

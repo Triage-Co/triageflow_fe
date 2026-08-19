@@ -47,59 +47,67 @@ export function RoomQueueDesk({
 
     return (
         <div className={cn('flex min-h-0 flex-1 flex-col gap-4', className)}>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-2 border-b border-neutral-100/80">
                 <div>
-                    <h1 className="text-xl font-extrabold tracking-tight text-neutral-900">
+                    <h1 className="text-xl font-bold tracking-tight text-neutral-900">
                         {title}
                     </h1>
                     {roomLabel && (
-                        <p className="mt-0.5 text-sm font-medium text-neutral-500">{roomLabel}</p>
+                        <p className="mt-0.5 text-xs font-medium text-neutral-500 flex items-center gap-1.5">
+                            <span className="inline-block h-1.5 w-1.5 rounded-full bg-indigo-500" />
+                            {roomLabel}
+                        </p>
                     )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                     <span
                         className={cn(
-                            'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold',
+                            'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold shadow-xs border transition-colors',
                             isConnected
-                                ? 'bg-emerald-50 text-emerald-700'
-                                : 'bg-neutral-100 text-neutral-500',
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60'
+                                : 'bg-neutral-100 text-neutral-500 border-neutral-200',
                         )}
                     >
-                        {isConnected ? (
-                            <Wifi className="h-3.5 w-3.5" />
-                        ) : (
-                            <WifiOff className="h-3.5 w-3.5" />
-                        )}
+                        <span
+                            className={cn(
+                                'h-2 w-2 rounded-full',
+                                isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-neutral-400'
+                            )}
+                        />
                         {isConnected ? 'Realtime' : 'Polling'}
                     </span>
                     <Button
                         variant="outline"
-                        className="h-10 rounded-xl text-xs font-bold"
+                        className="h-9 rounded-xl border-neutral-200 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 shadow-xs"
                         disabled={isLoading || isActing}
                         onClick={() => void refresh()}
+                        startIcon={
+                            <RefreshCw
+                                className={cn('h-3.5 w-3.5 text-neutral-500', isLoading && 'animate-spin')}
+                            />
+                        }
                     >
-                        <RefreshCw
-                            className={cn('mr-1.5 h-3.5 w-3.5', isLoading && 'animate-spin')}
-                        />
                         Làm mới
                     </Button>
                     <Button
-                        className="h-10 rounded-xl bg-indigo-600 text-sm font-bold hover:bg-indigo-700"
+                        className="h-9 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white text-xs font-bold shadow-sm shadow-indigo-200 transition-all active:scale-[0.99]"
                         disabled={isActing || isLoading}
                         onClick={() => void callNext().catch(() => undefined)}
+                        startIcon={
+                            isActing ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                                <PhoneCall className="h-3.5 w-3.5" />
+                            )
+                        }
                     >
-                        {isActing ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                            <PhoneCall className="mr-2 h-4 w-4" />
-                        )}
                         Gọi tiếp theo
                     </Button>
                 </div>
             </div>
 
             {error && (
-                <div className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+                <div className="rounded-xl border border-rose-200 bg-rose-50/90 px-3.5 py-2.5 text-xs font-medium text-rose-700 shadow-xs">
                     {error}
                 </div>
             )}

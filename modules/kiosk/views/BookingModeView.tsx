@@ -87,7 +87,7 @@ export const BookingModeView: React.FC = () => {
                   Đặt khám theo gợi ý AI
                 </h3>
                 <p className="text-xs sm:text-sm text-neutral-500 font-medium leading-relaxed line-clamp-2 sm:line-clamp-3">
-                  Hệ thống AI phân tích triệu chứng qua sơ đồ cơ thể 3D trực quan và tự động đề xuất chuyên khoa khám phù hợp nhất.
+                  Hệ thống AI phân tích triệu chứng qua sơ đồ cơ thể trực quan và tự động đề xuất chuyên khoa khám phù hợp nhất.
                 </p>
               </div>
 
@@ -99,7 +99,7 @@ export const BookingModeView: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-2 text-xs font-bold text-neutral-700 bg-neutral-50/80 group-hover:bg-indigo-50/50 p-2 sm:p-2.5 rounded-xl border border-neutral-100 transition-colors">
                   <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0" />
-                  <span className="truncate">Gợi ý khoa chính xác</span>
+                  <span className="truncate">Gợi ý khoa phù hợp</span>
                 </div>
               </div>
             </div>

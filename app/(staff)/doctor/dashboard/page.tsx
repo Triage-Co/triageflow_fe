@@ -1,4 +1,4 @@
-import { DoctorDashboard } from '@/modules/clinical/components/DoctorDashboard';
+import { DoctorDashboard } from '../_components/DoctorDashboard';
 
 export default function DoctorDashboardRoutePage() {
     return <DoctorDashboard />;

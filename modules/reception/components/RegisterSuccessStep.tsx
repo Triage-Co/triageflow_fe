@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { RegistrationResult } from '@/modules/reception/types/reception.types';
-import { formatPhoneDisplay } from '@/modules/reception/utils/receptionSearch';
 import {
     downloadRegistrationTicketPdf,
     getQrImageUrl,
@@ -63,19 +62,6 @@ export function RegisterSuccessStep({ result, onRegisterNew }: RegisterSuccessSt
                             Phiếu Đăng Ký Khám
                         </h3>
                     </div>
-                    {/* Priority Badge */}
-                    <span className={cn(
-                        "inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider",
-                        result.priority === 'Khẩn cấp' 
-                            ? 'bg-red-50 text-red-700 border border-red-100'
-                            : result.priority === 'Người cao tuổi'
-                            ? 'bg-blue-50 text-blue-700 border border-blue-100'
-                            : result.priority === 'Ưu tiên'
-                            ? 'bg-amber-50 text-amber-700 border border-amber-100'
-                            : 'bg-neutral-50 text-neutral-600 border border-neutral-200'
-                    )}>
-                        {result.priority}
-                    </span>
                 </div>
 
                 {/* Queue Number Panel */}
@@ -86,9 +72,6 @@ export function RegisterSuccessStep({ result, onRegisterNew }: RegisterSuccessSt
                     <div className="text-[52px] font-black text-[#8B7CF6] tracking-tight leading-none my-1">
                         {result.ticketNo}
                     </div>
-                    <span className="text-[11px] font-medium text-neutral-500 block mt-2">
-                        Bệnh viện Đa khoa Trung ương
-                    </span>
                 </div>
 
                 {/* Details Section */}
@@ -106,10 +89,6 @@ export function RegisterSuccessStep({ result, onRegisterNew }: RegisterSuccessSt
                             <div className="flex justify-between items-center py-0.5 border-t border-neutral-200/50 pt-2.5">
                                 <span className="text-neutral-500 font-medium">CCCD/CMND</span>
                                 <span className="font-semibold text-neutral-800 font-mono">{result.citizenId}</span>
-                            </div>
-                            <div className="flex justify-between items-center py-0.5 border-t border-neutral-200/50 pt-2.5">
-                                <span className="text-neutral-500 font-medium">Số điện thoại</span>
-                                <span className="font-semibold text-neutral-800 font-mono">{formatPhoneDisplay(result.phone)}</span>
                             </div>
                         </div>
                     </div>
@@ -136,12 +115,6 @@ export function RegisterSuccessStep({ result, onRegisterNew }: RegisterSuccessSt
                                 <span className="text-neutral-500 font-medium">Ngày & Giờ khám</span>
                                 <span className="font-bold text-neutral-800">{result.slotTimeLabel || '—'}</span>
                             </div>
-                            <div className="flex justify-between items-center py-0.5 border-t border-neutral-200/50 pt-2.5">
-                                <span className="text-neutral-500 font-medium">Trạng thái thanh toán</span>
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-[#ECFDF5] text-[#10B981] border border-[#A7F3D0]">
-                                    {result.paymentLabel}
-                                </span>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -157,9 +130,6 @@ export function RegisterSuccessStep({ result, onRegisterNew }: RegisterSuccessSt
                             className="block"
                         />
                     </div>
-                    <p className="text-[10px] text-neutral-400 font-semibold tracking-wide uppercase mt-3 text-center">
-                        Quét QR để theo dõi & dẫn đường trong bệnh viện
-                    </p>
                 </div>
 
                 {/* Footer Notes */}

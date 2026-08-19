@@ -2,38 +2,32 @@ import {
     clinicalService,
     type BackendQueuePatient,
 } from '@/modules/clinical/services/clinicalService';
-import { authService } from '@/modules/auth/services/authService';
+import { useAuthStore } from '@/modules/auth/store/authStore';
 import { apiClient, ApiError, type ApiResponse } from '@/shared/services/apiClient';
 import { resolveApiError } from '@/shared/utils/apiError';
 import type {
     CreateBookingRecommendRequest,
     CreateBookingRequest,
-    CreateTransactionRequest,
     PatientSearchResult,
     ReceptionAccount,
     ReceptionFlow,
-    ReceptionPatientRecord,
     ReceptionSlot,
     ReceptionSpecialty,
-    TransactionQrResponse,
 } from '@/modules/reception/types/reception.types';
-import type { Gender, RegisterRequest } from '@/shared/types/auth.types';
-import { buildUserNameFromFullName } from '@/shared/utils/userName';
+import type { Gender } from '@/shared/types/auth.types';
 import {
     getTodayDateString,
     extractBookingCreateFields,
     extractBookingFlowFields,
     extractRealPatientId,
     mapDoctorSlotsResponse,
-    mapDoctorSpecialties,
     mapDoctorSpecialtyResponse,
     mapSpecialtyCatalogResponse,
     mapPatientRecordToAccount,
-    mapShiftResponse,
     normalizeBookingListResponse,
     normalizePatientListResponse,
 } from '@/modules/reception/utils/receptionMapper';
-import { searchPatientRecords, searchPatientRecordsFromBookings } from '@/modules/reception/utils/receptionSearch';
+import { searchPatientRecords } from '@/modules/reception/utils/receptionSearch';
 
 const CACHE_KEYS = {
     QUEUE_PATIENTS: 'triageflow_queue_patients_cache',
@@ -79,11 +73,22 @@ export function clearPatientLocalStorageCache(): void {
     }
 }
 
-async function fetchPatientAccounts(token: string): Promise<ReceptionAccount[]> {
-    const cached = getLocalStorageCache<ReceptionAccount[]>(CACHE_KEYS.PATIENT_ACCOUNTS);
+async function fetchPatientAccounts(
+    token: string,
+    params?: { search?: string; page?: number; limit?: number },
+): Promise<ReceptionAccount[]> {
+    const isSearch = !!params?.search;
+    const cached = isSearch ? null : getLocalStorageCache<ReceptionAccount[]>(CACHE_KEYS.PATIENT_ACCOUNTS);
 
     const fetchFresh = async (): Promise<ReceptionAccount[]> => {
-        const res = await apiClient.get<unknown>('/api/patient', {
+        const queryParams = new URLSearchParams();
+        if (params?.search) queryParams.append('search', params.search);
+        if (params?.page) queryParams.append('page', String(params.page));
+        if (params?.limit) queryParams.append('limit', String(params.limit));
+
+        const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+
+        const res = await apiClient.get<unknown>(`/api/patient${queryString}`, {
             headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -95,12 +100,15 @@ async function fetchPatientAccounts(token: string): Promise<ReceptionAccount[]> 
         const mapped = records
             .map(mapPatientRecordToAccount)
             .filter((a) => a.citizen_id || a.full_name || a.email);
-        setLocalStorageCache(CACHE_KEYS.PATIENT_ACCOUNTS, mapped);
+
+        if (!isSearch) {
+            setLocalStorageCache(CACHE_KEYS.PATIENT_ACCOUNTS, mapped);
+        }
         return mapped;
     };
 
     if (cached && Array.isArray(cached) && cached.length > 0) {
-        fetchFresh().catch(() => {});
+        fetchFresh().catch(() => { });
         return cached;
     }
 
@@ -125,90 +133,6 @@ async function resolvePatientIdByCitizenId(
     return patientId;
 }
 
-/** Đối chiếu CCCD / patient_id với GET /api/patient — chứng minh Search thấy nhưng /diagnoise vẫn P2003. */
-async function verifyPatientAgainstDb(
-    citizenId: string,
-    knownPatientId: string | null | undefined,
-    token: string,
-): Promise<{
-    citizen_id: string;
-    known_patient_id: string | null;
-    found_by_cccd: ReceptionAccount | null;
-    found_by_patient_id: ReceptionAccount | null;
-    get_by_id_ok: boolean;
-    get_by_id_error: string | null;
-    get_by_id_raw: unknown;
-    conclusion: string;
-}> {
-    const cleanId = citizenId.replace(/\D/g, '');
-    const accounts = await fetchPatientAccounts(token);
-    const foundByCccd =
-        accounts.find((a) => (a.citizen_id || '').replace(/\D/g, '') === cleanId) ?? null;
-    const known = knownPatientId?.trim() || null;
-    const foundByPatientId = known
-        ? accounts.find((a) => a.patient_id === known) ?? null
-        : null;
-
-    let getByIdOk = false;
-    let getByIdError: string | null = null;
-    let getByIdRaw: unknown = null;
-    if (known) {
-        try {
-            const res = await apiClient.get<unknown>(`/api/patient/${known}`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            getByIdRaw = res;
-            getByIdOk = !(res.status === 'error' || (typeof res.code === 'number' && res.code >= 400));
-            if (!getByIdOk) {
-                getByIdError = res.message || `code ${res.code}`;
-            }
-        } catch (err) {
-            getByIdError = err instanceof Error ? err.message : String(err);
-        }
-    }
-
-    const idsMatch =
-        !!foundByCccd?.patient_id &&
-        !!known &&
-        foundByCccd.patient_id === known;
-    const accountIdLooksLikePatientId =
-        !!known &&
-        !!foundByCccd?.account_id &&
-        foundByCccd.account_id === known;
-
-    let conclusion: string;
-    if (accountIdLooksLikePatientId) {
-        conclusion =
-            'Form đang giữ account_id chứ không phải patient_id. Search vẫn thấy CCCD (vì join Account) nhưng /diagnoise lưu patient_anwser bằng FK Patient → P2003.';
-    } else if (foundByCccd?.patient_id && (getByIdOk || idsMatch)) {
-        conclusion =
-            'GET /api/patient CÓ BN với CCCD này. Search đúng. Nếu /diagnoise vẫn P2003 → BE tra/gán patient_id sai khi lưu patient_anwser (bug backend).';
-    } else if (foundByCccd && !foundByCccd.patient_id) {
-        conclusion =
-            'Search thấy CCCD trên Account nhưng bản ghi không có patient_id (chưa có hồ sơ Patient) → P2003 là đúng kỳ vọng.';
-    } else if (!foundByCccd && known) {
-        conclusion =
-            'Có known patient_id trên form nhưng GET /api/patient không tìm thấy CCCD khớp — lệch dữ liệu form/DB.';
-    } else {
-        conclusion = 'GET /api/patient không thấy CCCD này — Search và form đang lệch nhau.';
-    }
-
-    return {
-        citizen_id: cleanId,
-        known_patient_id: known,
-        found_by_cccd: foundByCccd
-            ? {
-                  ...foundByCccd,
-              }
-            : null,
-        found_by_patient_id: foundByPatientId,
-        get_by_id_ok: getByIdOk,
-        get_by_id_error: getByIdError,
-        get_by_id_raw: getByIdRaw,
-        conclusion,
-    };
-}
-
 function extractPatientIdFromCreateResponse(res: ApiResponse<unknown>): string | null {
     const fromData = extractRealPatientId(res.data);
     if (fromData) return fromData;
@@ -229,8 +153,6 @@ function assertApiSuccess<T>(res: ApiResponse<T>, fallbackMessage: string): ApiR
 }
 
 export const receptionService = {
-    verifyPatientAgainstDb,
-
     async getQueueByDate(date: string, token: string): Promise<BackendQueuePatient[]> {
         const cacheKey = `${CACHE_KEYS.QUEUE_PATIENTS}_${date}`;
 
@@ -243,92 +165,7 @@ export const receptionService = {
                     return list as BackendQueuePatient[];
                 }
             } catch {
-                // Lễ tân hoặc role khác không gọi được API doctor -> tiếp tục fallback
-            }
-
-            try {
-                const [bookingRes, patientRes] = await Promise.all([
-                    receptionService.getBookings(token).catch(() => null),
-                    fetchPatientAccounts(token).catch(() => []),
-                ]);
-
-                const rawBookings = bookingRes
-                    ? normalizeBookingListResponse((bookingRes as { data?: unknown }).data ?? bookingRes)
-                    : [];
-
-                const patientMap = new Map<string, ReceptionAccount>();
-                if (Array.isArray(patientRes)) {
-                    patientRes.forEach((acc) => {
-                        if (acc.patient_id) patientMap.set(acc.patient_id, acc);
-                        if (acc.account_id) patientMap.set(acc.account_id, acc);
-                    });
-                }
-
-                if (rawBookings.length > 0) {
-                    const result = rawBookings.map((b, index) => {
-                        const bPatient = (b.patient as Record<string, unknown>) ?? {};
-                        const bPatientId = String(bPatient.patient_id ?? b.patient_id ?? '');
-                        const accFromMap = patientMap.get(bPatientId);
-                        const bAcc = (bPatient.account as Record<string, unknown>) ?? (b.account as Record<string, unknown>) ?? {};
-                        const slotObj = (b.slot as Record<string, unknown>) ?? {};
-                        const shiftObj = (slotObj.shift as Record<string, unknown>) ?? {};
-
-                        const fullName = String(
-                            accFromMap?.full_name ?? bAcc.full_name ?? bAcc.user_name ?? b.full_name ?? `Bệnh nhân ${index + 1}`
-                        );
-                        const citizenId = String(accFromMap?.citizen_id ?? bAcc.citizen_id ?? b.citizen_id ?? '');
-                        const email = String(accFromMap?.email ?? bAcc.email ?? b.email ?? '');
-                        const dob = String(accFromMap?.dob ?? bAcc.dob ?? b.dob ?? '1995-01-01');
-                        const gender = String(accFromMap?.gender ?? bAcc.gender ?? b.gender ?? 'MALE');
-                        const phone = (accFromMap?.phone ?? bAcc.phone ?? b.phone ?? null) as string | null;
-
-                        return {
-                            queue_id: String(b.queue_id ?? b.booking_id ?? `q-${index + 1}`),
-                            queue_number: String(b.queue_number ?? b.ticket_no ?? index + 1),
-                            status: String(b.queue_status ?? b.status ?? 'WAITING'),
-                            step: {
-                                step_id: String(b.step_id ?? `step-${index + 1}`),
-                                next_step_id: null,
-                                step_status: String(b.step_status ?? 'WAITING'),
-                                docNo: 1,
-                                payment_status: String(b.payment_status ?? (b.status === 'PAID' || b.is_paid ? 'PAID' : 'PENDING')),
-                                flow: {
-                                    flow_id: String(b.flow_id ?? `flow-${index + 1}`),
-                                    status: String(b.priority ?? b.flow_status ?? 'NORMAL'),
-                                    booking: {
-                                        booking_id: String(b.booking_id ?? `b-${index + 1}`),
-                                        status: String(b.status ?? 'CONFIRMED'),
-                                        slot: {
-                                            slot_id: String(slotObj.slot_id ?? `s-${index + 1}`),
-                                            start_time: String(slotObj.start_time ?? '08:00'),
-                                            end_time: String(slotObj.end_time ?? '08:30'),
-                                            shift: {
-                                                date: String(shiftObj.date ?? date),
-                                            },
-                                        },
-                                        patient: {
-                                            patient_id: bPatientId || `p-${index + 1}`,
-                                            medical_coverage_id: (bPatient.medical_coverage_id as string) ?? null,
-                                            account: {
-                                                full_name: fullName,
-                                                citizen_id: citizenId,
-                                                email: email,
-                                                dob: dob,
-                                                gender: gender,
-                                                role: 'PATIENT',
-                                                phone: phone,
-                                            },
-                                        },
-                                    },
-                                },
-                            },
-                        };
-                    });
-                    setLocalStorageCache(cacheKey, result);
-                    return result;
-                }
-            } catch {
-                // fallback
+                // Tiếp tục fallback
             }
 
             return [];
@@ -336,7 +173,7 @@ export const receptionService = {
 
         const cached = getLocalStorageCache<BackendQueuePatient[]>(cacheKey);
         if (cached && Array.isArray(cached) && cached.length > 0) {
-            fetchFreshData().catch(() => {});
+            fetchFreshData().catch(() => { });
             return cached;
         }
 
@@ -373,42 +210,10 @@ export const receptionService = {
         throw new ApiError(404, `Không tìm thấy bệnh nhân nào với mã hàng đợi ${queueId}`);
     },
 
-    getBookings: (token: string) =>
-        apiClient.get<unknown>('/api/booking', {
-            headers: { Authorization: `Bearer ${token}` },
-        }),
-
     getFlows: (token: string) =>
         apiClient.get<ReceptionFlow[]>('/api/flow', {
             headers: { Authorization: `Bearer ${token}` },
         }),
-
-    getTransactions: (token: string) =>
-        apiClient.get<Record<string, unknown>[]>('/api/transaction', {
-            headers: { Authorization: `Bearer ${token}` },
-        }),
-
-    getPatients: (token: string) =>
-        apiClient.get<ReceptionPatientRecord[]>('/api/patient', {
-            headers: { Authorization: `Bearer ${token}` },
-        }),
-
-    getPatientById: (id: string, token: string) =>
-        apiClient.get<ReceptionPatientRecord>(`/api/patient/${id}`, {
-            headers: { Authorization: `Bearer ${token}` },
-        }),
-
-    async getSlots(token: string): Promise<ReceptionSlot[]> {
-        try {
-            const res = await apiClient.get<unknown>('/api/shift', {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            return mapShiftResponse(res.data);
-        } catch (err) {
-            if (err instanceof ApiError && err.statusCode === 404) return [];
-            throw err;
-        }
-    },
 
     async getSpecialtyCatalog(token: string) {
         try {
@@ -416,20 +221,6 @@ export const receptionService = {
                 headers: { Authorization: `Bearer ${token}` },
             });
             return mapSpecialtyCatalogResponse(res.data ?? res);
-        } catch (err) {
-            if (err instanceof ApiError && err.statusCode === 404) return [];
-            throw err;
-        }
-    },
-
-    async getSpecialties(token: string): Promise<ReceptionSpecialty[]> {
-        try {
-            const headers = { Authorization: `Bearer ${token}` };
-            const [doctorRes, specialtyRes] = await Promise.all([
-                apiClient.get<unknown>('/api/doctor', { headers }),
-                apiClient.get<unknown>('/api/specialty', { headers }),
-            ]);
-            return mapDoctorSpecialties(doctorRes.data, specialtyRes.data);
         } catch (err) {
             if (err instanceof ApiError && err.statusCode === 404) return [];
             throw err;
@@ -472,6 +263,50 @@ export const receptionService = {
             headers: { Authorization: `Bearer ${token}` },
         });
         return assertApiSuccess(res, 'Không tạo được lịch khám.');
+    },
+
+    async createBookingCash(data: { patient_id: string; slot_id: string }, token: string) {
+        const res = await apiClient.post<Record<string, unknown>>('/api/booking/cash', data, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        return assertApiSuccess(res, 'Không tạo được lịch khám tiền mặt.');
+    },
+
+    async createBookingWithPackage(data: { patient_id: string; slot_id: string; package_id: string; return_url?: string; cancel_url?: string }, token: string) {
+        const res = await apiClient.post<Record<string, unknown>>('/api/booking/with-package', {
+            ...data,
+            return_url: data.return_url || 'https://triageflow.me/payment/success',
+            cancel_url: data.cancel_url || 'https://triageflow.me/payment/cancel',
+        }, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        return assertApiSuccess(res, 'Không tạo được lịch khám theo gói.');
+    },
+
+    async getExamPackages(token?: string) {
+        const res = await apiClient.get<unknown>('/api/exam-package', {
+            ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
+        });
+        const list = (res as { data?: unknown }).data ?? res;
+        return Array.isArray(list) ? (list as import('@/modules/reception/types/reception.types').ExamPackage[]) : [];
+    },
+
+    async getExamPackageDetail(id: string, token?: string) {
+        const res = await apiClient.get<unknown>(`/api/exam-package/${encodeURIComponent(id)}`, {
+            ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
+        });
+        return ((res as { data?: unknown }).data ?? res) as import('@/modules/reception/types/reception.types').ExamPackageDetail;
+    },
+
+    async getRoomSlots(date: string, token?: string, roomId = 'd6b5891e-3d1c-44f1-9636-aaeb66fae2d5') {
+        const res = await apiClient.get<unknown>(
+            `/api/room/${encodeURIComponent(roomId)}/slots?date=${encodeURIComponent(date)}`,
+            {
+                ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
+            },
+        );
+        const list = (res as { data?: unknown }).data ?? res;
+        return Array.isArray(list) ? (list as import('@/modules/reception/types/reception.types').RoomSlot[]) : [];
     },
 
     async createBookingRecommend(data: CreateBookingRecommendRequest, token: string) {
@@ -527,7 +362,23 @@ export const receptionService = {
             }
         }
 
-        // 1. Ưu tiên kiểm tra hàng đợi hôm nay (nếu BE/Webhook đã tự động tạo queue)
+        // 1. Kiểm tra chi tiết Step (nếu BE đã cấp queue cho step)
+        if (!fields.queueNumber && fields.stepId) {
+            try {
+                const stepData = await receptionService.getStepDetail(fields.stepId, token);
+                if (stepData?.queues && Array.isArray(stepData.queues) && stepData.queues.length > 0 && stepData.queues[0]?.queue_number) {
+                    fields = {
+                        ...fields,
+                        queueNumber: String(stepData.queues[0].queue_number),
+                        queueId: stepData.queues[0].queue_id,
+                    };
+                }
+            } catch {
+                // bỏ qua
+            }
+        }
+
+        // 2. Ưu tiên kiểm tra hàng đợi hôm nay (nếu BE/Webhook đã tự động tạo queue)
         if (!fields.queueNumber) {
             try {
                 const queueItems = await receptionService.getQueueByDate(getTodayDateString(), token);
@@ -567,25 +418,6 @@ export const receptionService = {
         return fields;
     },
 
-    async createTransaction(data: CreateTransactionRequest, token: string) {
-        const res = await apiClient.post<TransactionQrResponse>('/api/transaction', data, {
-            headers: { Authorization: `Bearer ${token}` },
-        });
-        return assertApiSuccess(res, 'Tạo link thanh toán không thành công.');
-    },
-
-    getTransactionById: (id: string, token: string) =>
-        apiClient.get<Record<string, unknown>>(`/api/transaction/${encodeURIComponent(id)}`, {
-            headers: { Authorization: `Bearer ${token}` },
-        }),
-
-    triggerTransactionWebhook: (payload?: unknown, token?: string) =>
-        apiClient.post<unknown>(
-            '/api/transaction/webhook',
-            payload ?? {},
-            token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
-        ),
-
     async findAccountByCitizenId(citizenId: string, token: string): Promise<ReceptionAccount | null> {
         const cleanId = citizenId.replace(/\D/g, '');
         if (!cleanId) return null;
@@ -600,55 +432,20 @@ export const receptionService = {
         );
     },
 
-    async searchAccounts(query: string, token: string): Promise<ReceptionAccount[]> {
-        const accounts = await fetchPatientAccounts(token);
-        const q = query.trim().toLowerCase();
-        if (!q) return accounts;
-
-        return accounts.filter(
-            (a) =>
-                a.citizen_id.includes(q) ||
-                a.full_name.toLowerCase().includes(q) ||
-                a.email.toLowerCase().includes(q) ||
-                (a.phone?.includes(q) ?? false),
-        );
-    },
-
     /** Lấy toàn bộ bệnh nhân từ GET /api/patient (DB). */
     async listPatients(token: string): Promise<PatientSearchResult[]> {
         const cached = getLocalStorageCache<PatientSearchResult[]>(CACHE_KEYS.PATIENT_LIST);
 
         const fetchFresh = async (): Promise<PatientSearchResult[]> => {
             const accounts = await fetchPatientAccounts(token);
-            const [queueItems, bookingRes] = await Promise.all([
-                receptionService.getQueueByDate(getTodayDateString(), token),
-                receptionService.getBookings(token).catch(() => null),
-            ]);
-
-            const bookings =
-                bookingRes && bookingRes.status !== 'error' && (bookingRes.code ?? 200) < 400
-                    ? normalizeBookingListResponse(bookingRes.data ?? bookingRes)
-                    : [];
-
-            const fromPatients = searchPatientRecords('', accounts, queueItems);
-            const fromBookings = searchPatientRecordsFromBookings('', bookings, queueItems);
-
-            const seen = new Set<string>();
-            const merged: PatientSearchResult[] = [];
-            for (const item of [...fromPatients, ...fromBookings]) {
-                const key = `${item.citizenId}:${item.accountId}:${item.queueId ?? ''}`;
-                if (seen.has(key)) continue;
-                seen.add(key);
-                merged.push(item);
-            }
-
-            const sorted = merged.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+            const results = searchPatientRecords('', accounts, []);
+            const sorted = results.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
             setLocalStorageCache(CACHE_KEYS.PATIENT_LIST, sorted);
             return sorted;
         };
 
         if (cached && Array.isArray(cached) && cached.length > 0) {
-            fetchFresh().catch(() => {});
+            fetchFresh().catch(() => { });
             return cached;
         }
 
@@ -665,39 +462,19 @@ export const receptionService = {
         let accounts: ReceptionAccount[] = [];
 
         try {
-            accounts = await fetchPatientAccounts(token);
+            accounts = await fetchPatientAccounts(token, { search: trimmed });
         } catch (err) {
             patientLoadError =
                 err instanceof Error ? err : new Error('Không tải được danh sách bệnh nhân.');
         }
 
-        const [queueItems, bookingRes] = await Promise.all([
-            receptionService.getQueueByDate(getTodayDateString(), token),
-            receptionService.getBookings(token).catch(() => null),
-        ]);
+        const results = searchPatientRecords('', accounts, []);
 
-        const bookings =
-            bookingRes && bookingRes.status !== 'error' && (bookingRes.code ?? 200) < 400
-                ? normalizeBookingListResponse(bookingRes.data ?? bookingRes)
-                : [];
-
-        const fromPatients = searchPatientRecords(query, accounts, queueItems);
-        const fromBookings = searchPatientRecordsFromBookings(query, bookings, queueItems);
-
-        const seen = new Set<string>();
-        const merged: PatientSearchResult[] = [];
-        for (const item of [...fromPatients, ...fromBookings]) {
-            const key = `${item.citizenId}:${item.accountId}:${item.queueId ?? ''}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            merged.push(item);
-        }
-
-        if (merged.length === 0 && patientLoadError) {
+        if (results.length === 0 && patientLoadError) {
             throw patientLoadError;
         }
 
-        return merged.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+        return results.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
     },
 
     async createPatientProfile(
@@ -709,6 +486,7 @@ export const receptionService = {
             medical_coverage_id?: string;
             phone?: string;
             email?: string;
+            account_id?: string;
         },
         token: string,
         debug?: (stage: string, data: unknown) => void,
@@ -719,58 +497,11 @@ export const receptionService = {
         const existingPatientId = await resolvePatientIdByCitizenId(cleanCitizenId, token);
         if (existingPatientId) return existingPatientId;
 
-        // 2. Tìm xem account_id đã tồn tại chưa
-        let accountId: string | undefined = undefined;
-        const existingAccounts = await fetchPatientAccounts(token).catch(() => []);
-        const matchedAccount = existingAccounts.find(
-            (a) => (a.citizen_id || '').replace(/\D/g, '') === cleanCitizenId,
-        );
-        if (matchedAccount?.account_id) {
-            accountId = matchedAccount.account_id;
-        }
+        // 2. Lấy account_id của lễ tân (từ param hoặc từ auth store user.id)
+        const currentUser = useAuthStore.getState().user;
+        const staffAccountId = data.account_id || (currentUser as any)?.account_id || currentUser?.id || undefined;
 
-        // 3. Nếu chưa có, BẮT BUỘC gọi POST /api/auth/register trước để tạo account
-        if (!accountId) {
-            const baseUser = buildUserNameFromFullName(data.full_name, 'bn');
-            const user_name = `${baseUser}${cleanCitizenId.slice(-6)}`.toLowerCase();
-            const email = data.email?.trim() || `bn.${cleanCitizenId.slice(-8)}@patient.triageflow.me`;
-            const suffix = cleanCitizenId.slice(-6) || '000000';
-            const password = `Patient@${suffix}`;
-            const phone = data.phone?.trim() || (`09${cleanCitizenId.slice(-8)}`).padEnd(10, '0');
-
-            const registerPayload: RegisterRequest = {
-                user_name,
-                email,
-                password,
-                gender: data.gender,
-                phone,
-            };
-
-            debug?.('auth.register.start', registerPayload);
-            console.log('[createPatientProfile] Step 1: POST /api/auth/register:', registerPayload);
-
-            try {
-                const regRes = await authService.register(registerPayload);
-                console.log('[createPatientProfile] Step 1 res:', regRes);
-                const resData = regRes.data as any;
-                accountId = resData?.id || resData?.account_id || resData?.data?.id || resData?.data?.account_id;
-                debug?.('auth.register.success', { account_id: accountId });
-            } catch (err) {
-                console.warn('[createPatientProfile] Step 1 register exception:', err);
-                debug?.('auth.register.failed_or_exists', { message: String(err) });
-                
-                // Nếu account đã tồn tại, tìm lại account_id từ danh sách bệnh nhân
-                const accountsAfter = await fetchPatientAccounts(token).catch(() => []);
-                const match = accountsAfter.find(
-                    (a) => (a.citizen_id || '').replace(/\D/g, '') === cleanCitizenId,
-                );
-                if (match?.account_id) {
-                    accountId = match.account_id;
-                }
-            }
-        }
-
-        // 4. Bước 2: Gọi POST /api/patient [STAFF - ADMIN] với account_id (không truyền phone vì BE báo property phone should not exist)
+        // 3. Gọi trực tiếp POST /api/patient bằng token Lễ tân
         const payload: Record<string, unknown> = {
             citizen_id: cleanCitizenId,
             full_name: data.full_name,
@@ -778,12 +509,12 @@ export const receptionService = {
             gender: data.gender,
             medical_coverage_id: data.medical_coverage_id || 'N/A',
         };
-        if (accountId) {
-            payload.account_id = accountId;
+        if (staffAccountId) {
+            payload.account_id = staffAccountId;
         }
 
         debug?.('patient.createStaff.start', payload);
-        console.log('[createPatientProfile] Step 2: POST /api/patient:', payload);
+        console.log('[createPatientProfile] POST /api/patient:', payload);
 
         const res = await apiClient.post<unknown>(
             '/api/patient',
@@ -791,7 +522,7 @@ export const receptionService = {
             { headers: { Authorization: `Bearer ${token}` } },
         );
 
-        console.log('[createPatientProfile] Step 2 res:', res);
+        console.log('[createPatientProfile] POST /api/patient res:', res);
 
         if (res.status === 'error' || (typeof res.code === 'number' && res.code >= 400)) {
             const msg = (res.message || '').toLowerCase();
@@ -884,6 +615,79 @@ export const receptionService = {
             token,
             debug,
         );
+    },
+
+    async getPatientActiveFlows(patientId: string, token: string): Promise<any[]> {
+        try {
+            const res = await apiClient.get<any>(
+                `/api/flow/patient/${encodeURIComponent(patientId)}/active`,
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                },
+            );
+            const data = (res as any)?.data || res;
+            if (Array.isArray(data)) return data;
+            if (data && Array.isArray(data.data)) return data.data;
+            if (data && typeof data === 'object' && (data.flow_id || Array.isArray(data.steps))) return [data];
+            return [];
+        } catch (err) {
+            console.error('[receptionService] getPatientActiveFlows error:', err);
+            return [];
+        }
+    },
+
+    async getStepDetail(stepId: string, token: string): Promise<any> {
+        try {
+            const res = await apiClient.get<any>(
+                `/api/step/${encodeURIComponent(stepId)}`,
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                },
+            );
+            return (res as any)?.data || res;
+        } catch (err) {
+            console.error('[receptionService] getStepDetail error:', err);
+            return null;
+        }
+    },
+
+    async getPendingServiceOrders(patientId: string, token: string): Promise<any[]> {
+        try {
+            const res = await apiClient.get<any>(
+                `/api/service-order/pending/${encodeURIComponent(patientId)}`,
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                },
+            );
+            const data = (res as any)?.data || res;
+            if (Array.isArray(data)) return data;
+            if (data && Array.isArray(data.data)) return data.data;
+            return [];
+        } catch (err) {
+            console.error('[receptionService] getPendingServiceOrders error:', err);
+            return [];
+        }
+    },
+
+    async payCashServiceOrder(
+        serviceOrderId: string,
+        token: string,
+    ): Promise<any> {
+        try {
+            const res = await apiClient.post<any>(
+                '/api/transaction/cash',
+                {
+                    service_order_id: serviceOrderId,
+                },
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                },
+            );
+            return res?.data || res;
+        } catch (err) {
+            console.error('[receptionService] payCashServiceOrder error:', err);
+            throw err;
+        }
     },
 
     resolvePatientIdByCitizenId,

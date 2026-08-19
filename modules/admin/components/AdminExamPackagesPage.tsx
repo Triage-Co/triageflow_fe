@@ -44,7 +44,6 @@ export function AdminExamPackagesPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [showInactive, setShowInactive] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
 
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -68,7 +67,7 @@ export function AdminExamPackagesPage() {
         setError(null);
         try {
             const res = await examPackageService.getPackages(accessToken, {
-                is_active: showInactive ? undefined : true,
+                is_active: true,
             });
             setPackages(extractExamPackageList(res?.data));
         } catch (err) {
@@ -76,7 +75,7 @@ export function AdminExamPackagesPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [accessToken, showInactive]);
+    }, [accessToken]);
 
     useEffect(() => {
         void loadPackages();
@@ -91,8 +90,9 @@ export function AdminExamPackagesPage() {
 
     const filtered = useMemo(() => {
         const q = searchQuery.trim().toLowerCase();
-        if (!q) return packages;
-        return packages.filter((p) => (p.package_name || '').toLowerCase().includes(q));
+        let list = packages.filter((p) => p.is_active !== false);
+        if (!q) return list;
+        return list.filter((p) => (p.package_name || '').toLowerCase().includes(q));
     }, [packages, searchQuery]);
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
@@ -226,17 +226,6 @@ export function AdminExamPackagesPage() {
                                         className="flex-1 text-sm outline-none bg-transparent"
                                     />
                                 </div>
-                                <label className="inline-flex items-center gap-2 text-xs font-bold text-neutral-600 select-none cursor-pointer bg-white border border-neutral-200 rounded-xl px-3 py-2.5">
-                                    <input
-                                        type="checkbox"
-                                        checked={showInactive}
-                                        onChange={(e) => {
-                                            setShowInactive(e.target.checked);
-                                            setCurrentPage(1);
-                                        }}
-                                    />
-                                    Hiện đã tắt
-                                </label>
                             </div>
 
                             {error && (

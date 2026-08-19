@@ -70,7 +70,7 @@ export const PatientInfoView: React.FC = () => {
   const currentTimeStr = activeTicket?.createdAt || new Date().toLocaleTimeString('vi-VN');
 
   return (
-    <div className="flex-1 min-h-0 px-8 py-6 z-10 flex flex-col gap-5">
+    <div className="w-full h-full min-h-0 p-4 sm:p-6 lg:p-8 z-10 select-none flex flex-col justify-between gap-4 max-w-7xl mx-auto overflow-hidden">
       {/* CSS dành riêng khi gọi window.print(): Phóng to to rõ & Căn đúng chính giữa trang giấy */}
       <style>{`
         @media print {
@@ -240,44 +240,44 @@ export const PatientInfoView: React.FC = () => {
       )}
 
       {/* ── Top Header bar ── */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 shrink-0">
         <button
           onClick={goHome}
-          className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-neutral-50 rounded-2xl shadow-sm border border-neutral-200 text-sm font-extrabold text-neutral-800 transition-all cursor-pointer"
+          className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-neutral-50 rounded-2xl shadow-sm border border-neutral-200 text-sm font-extrabold text-neutral-800 transition-all cursor-pointer active:scale-95"
         >
           <ArrowLeft className="w-4 h-4" /> Trang chủ
         </button>
-        <h2 className="text-3xl font-black text-[#1E2939] tracking-tight">
+        <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-[#1E2939] tracking-tight">
           Thông tin khám bệnh
         </h2>
       </div>
 
       {/* ── Empty State ── */}
       {!activeTicket && !selectedDoctor ? (
-        <div className="flex-1 flex flex-col items-center justify-center p-14 bg-white/90 backdrop-blur-xl rounded-[36px] border border-neutral-100 shadow-2xl space-y-6 text-center max-w-2xl mx-auto w-full my-auto">
-          <div className="w-24 h-24 rounded-3xl bg-blue-50 text-[#155DFC] flex items-center justify-center shadow-inner">
-            <FileText className="w-12 h-12" strokeWidth={2.2} />
+        <div className="flex-1 flex flex-col items-center justify-center p-8 sm:p-14 bg-white/90 backdrop-blur-xl rounded-[36px] border border-neutral-100 shadow-2xl space-y-6 text-center max-w-2xl mx-auto w-full my-auto">
+          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-blue-50 text-[#155DFC] flex items-center justify-center shadow-inner">
+            <FileText className="w-10 h-10 sm:w-12 sm:h-12" strokeWidth={2.2} />
           </div>
 
           <div className="space-y-2 max-w-lg">
-            <h3 className="text-2xl sm:text-3xl font-black text-[#1E2939] tracking-tight">
+            <h3 className="text-xl sm:text-2xl lg:text-3xl font-black text-[#1E2939] tracking-tight">
               Bạn chưa có phiếu khám hôm nay
             </h3>
-            <p className="text-sm sm:text-base text-neutral-500 font-bold leading-relaxed">
+            <p className="text-xs sm:text-sm lg:text-base text-neutral-500 font-bold leading-relaxed">
               Hệ thống không tìm thấy lượt khám nào đang diễn ra của bạn. Vui lòng đăng ký khám bệnh mới để nhận phiếu khám.
             </p>
           </div>
 
-          <div className="flex gap-4 pt-2">
+          <div className="flex flex-wrap justify-center gap-3 sm:gap-4 pt-2">
             <button
               onClick={goHome}
-              className="px-8 py-4 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-2xl font-extrabold text-base transition-all cursor-pointer"
+              className="px-6 sm:px-8 py-3 sm:py-4 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-2xl font-extrabold text-xs sm:text-base transition-all cursor-pointer"
             >
               Về trang chủ Kiosk
             </button>
             <button
-              onClick={() => navigateToView('register')}
-              className="px-8 py-4 bg-[#155DFC] hover:bg-blue-700 active:scale-95 text-white rounded-2xl font-black text-base shadow-xl shadow-blue-500/25 transition-all cursor-pointer"
+              onClick={() => navigateToView('booking_mode')}
+              className="px-6 sm:px-8 py-3 sm:py-4 bg-[#155DFC] hover:bg-blue-700 active:scale-95 text-white rounded-2xl font-black text-xs sm:text-base shadow-xl shadow-blue-500/25 transition-all cursor-pointer"
             >
               Đăng ký khám ngay →
             </button>
@@ -285,23 +285,23 @@ export const PatientInfoView: React.FC = () => {
         </div>
       ) : (
         /* ── Main 2-Column Layout ── */
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1 min-h-0">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 flex-1 min-h-0 overflow-hidden">
 
           {/* ════════════════════════════════
               LEFT COLUMN — Phiếu khám bệnh
               ════════════════════════════════ */}
-          <div className="flex flex-col min-h-0">
+          <div className="flex flex-col min-h-0 overflow-hidden">
             {/* Ticket card */}
             <div className="bg-white rounded-[28px] shadow-lg border border-neutral-100 flex flex-col flex-1 overflow-hidden">
               {/* Card header */}
-              <div className="bg-gradient-to-r from-[#155DFC] to-[#4F80E1] px-6 py-4">
-                <h3 className="text-white font-black text-lg tracking-wide text-center uppercase">
+              <div className="bg-gradient-to-r from-[#155DFC] to-[#4F80E1] px-6 py-3.5 shrink-0">
+                <h3 className="text-white font-black text-base sm:text-lg tracking-wide text-center uppercase">
                   Phiếu khám bệnh
                 </h3>
               </div>
 
               {/* Card body */}
-              <div className="flex flex-col flex-1 p-6 gap-5">
+              <div className="flex flex-col flex-1 p-4 sm:p-6 gap-3 sm:gap-4 overflow-y-auto">
                 {/* QR + ticket code */}
                 <div className="flex flex-col items-center gap-3">
                   <div className="w-40 h-40 bg-[#EEF4FF] rounded-2xl p-3 flex items-center justify-center border-2 border-[#A4C8FF] shadow-sm">
@@ -353,15 +353,15 @@ export const PatientInfoView: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-neutral-500">Trạng thái</span>
                     {activeTicket?.status === 'completed' ? (
-                      <span className="px-3 py-1 bg-green-50 text-green-700 border border-green-200 rounded-xl text-xs font-extrabold">
+                      <span className="px-3 py-1 bg-green-50 text-green-700 border border-green-200 rounded-xl text-xs font-extrabold whitespace-nowrap">
                         Đã khám xong
                       </span>
                     ) : activeTicket?.status === 'in_consultation' ? (
-                      <span className="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-xl text-xs font-extrabold">
+                      <span className="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-xl text-xs font-extrabold whitespace-nowrap">
                         Đang khám
                       </span>
                     ) : (
-                      <span className="px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-xs font-extrabold">
+                      <span className="px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-xs font-extrabold whitespace-nowrap">
                         Đang chờ khám
                       </span>
                     )}

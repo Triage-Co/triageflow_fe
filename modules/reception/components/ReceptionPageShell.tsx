@@ -27,7 +27,7 @@ export function ReceptionBackLink() {
             className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#8B7CF6] mb-5"
         >
             <ChevronLeft className="w-4 h-4" />
-            Quay lại tổng quan
+            Quay lại tiếp nhận bệnh nhân
         </Link>
     );
 }

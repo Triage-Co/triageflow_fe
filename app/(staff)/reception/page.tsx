@@ -1,5 +1,5 @@
-import { ReceptionDashboard } from '@/modules/reception/components/ReceptionDashboard';
+import { ReceptionRegisterForm } from '@/modules/reception/components/ReceptionRegisterForm';
 
 export default function ReceptionPage() {
-    return <ReceptionDashboard />;
+    return <ReceptionRegisterForm />;
 }

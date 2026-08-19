@@ -45,6 +45,7 @@ import type {
   GeometryTool,
 } from '@/modules/admin/hooks/useMapGeometryEditor';
 import type { LngLat } from '@/modules/admin/utils/mapEditorGeometry';
+import type { HeatmapRoom } from '@/modules/admin/hooks/useQueueHeatmap';
 
 const EDITABLE_NODE_TYPES = new Set(['CORRIDOR', 'JUNCTION']);
 
@@ -84,6 +85,9 @@ interface BuildingMapCanvasProps {
   onEditorPointerDown?: (e: EditorPointerEvent) => void;
   onEditorPointerMove?: (e: EditorPointerEvent) => void;
   onEditorPointerUp?: (e: EditorPointerEvent) => void;
+  onHoverRoom?: (roomId: string | null) => void;
+  heatmapEnabled?: boolean;
+  heatmapRooms?: HeatmapRoom[];
 }
 
 interface ProjectedMarker {
@@ -95,7 +99,8 @@ interface ProjectedMarker {
   screenY: number;
   isHighlighted: boolean;
   isVisible: boolean;
-  kind: 'default' | 'start' | 'target';
+  kind: 'default' | 'start' | 'target' | 'heatmap';
+  heatmapData?: HeatmapRoom;
 }
 
 function createArrowTexture(): THREE.Texture {
@@ -138,6 +143,25 @@ function createArrowTexture(): THREE.Texture {
   return texture;
 }
 
+function findHeatmapRoom(
+  room: RoomData,
+  heatmapRooms?: HeatmapRoom[]
+): HeatmapRoom | undefined {
+  if (!heatmapRooms || heatmapRooms.length === 0) return undefined;
+  return heatmapRooms.find((hr) => {
+    if (hr.physical_room_id && (hr.physical_room_id === room.id || hr.physical_room_id === room.roomCode)) {
+      return true;
+    }
+    if (hr.room_id && (hr.room_id === room.id || hr.room_id === room.roomCode)) {
+      return true;
+    }
+    if (hr.room_name && (hr.room_name.toLowerCase() === room.roomLabel.toLowerCase() || hr.room_name.toLowerCase() === room.roomCode.toLowerCase())) {
+      return true;
+    }
+    return false;
+  });
+}
+
 export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   floorData,
   apiFloor = null,
@@ -174,6 +198,9 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   onEditorPointerDown,
   onEditorPointerMove,
   onEditorPointerUp,
+  onHoverRoom,
+  heatmapEnabled = false,
+  heatmapRooms = [],
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -187,6 +214,7 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   const startRoomIdRef = useRef<string | null>(startRoomId);
   const targetRoomIdRef = useRef<string | null>(targetRoomId);
   const onSelectRoomRef = useRef(onSelectRoom);
+  const onHoverRoomRef = useRef(onHoverRoom);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const pathMeshRef = useRef<THREE.Mesh | null>(null);
   const routeLineRef = useRef<THREE.Mesh | null>(null);
@@ -211,6 +239,8 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   const onEditorPointerMoveRef = useRef(onEditorPointerMove);
   const onEditorPointerUpRef = useRef(onEditorPointerUp);
   const draggingEditorRef = useRef(false);
+  const heatmapEnabledRef = useRef(heatmapEnabled);
+  const heatmapRoomsRef = useRef(heatmapRooms);
 
   const nodeEditModeRef = useRef(nodeEditMode);
   const placingNodeRef = useRef(placingNode);
@@ -232,6 +262,7 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   startRoomIdRef.current = startRoomId;
   targetRoomIdRef.current = targetRoomId;
   onSelectRoomRef.current = onSelectRoom;
+  onHoverRoomRef.current = onHoverRoom;
   routePathRef.current = routePath;
   debugStepsRef.current = debugSteps;
   showNodesRef.current = showNodes;
@@ -253,6 +284,8 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   onEditorPointerDownRef.current = onEditorPointerDown;
   onEditorPointerMoveRef.current = onEditorPointerMove;
   onEditorPointerUpRef.current = onEditorPointerUp;
+  heatmapEnabledRef.current = heatmapEnabled;
+  heatmapRoomsRef.current = heatmapRooms;
 
   const activeHighlightId = targetRoomId || selectedRoomId || highlightedRoomId || null;
   activeHighlightIdRef.current = activeHighlightId;
@@ -275,6 +308,8 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   const applyFloorColors = (focusId: string | null) => {
     const startId = startRoomIdRef.current;
     const targetId = targetRoomIdRef.current;
+    const isHeatmap = heatmapEnabledRef.current;
+    const hRooms = heatmapRoomsRef.current;
 
     const focusRoom = floorData.rooms.find(
       (r) =>
@@ -307,17 +342,45 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
 
       if (startId && rId === startId) {
         mat.color.set('#10b981');
+        mat.emissive.set('#047857');
+        mat.emissiveIntensity = 0.3;
       } else if (targetId && rId === targetId) {
         mat.color.set('#ef476f');
+        mat.emissive.set('#be123c');
+        mat.emissiveIntensity = 0.3;
       } else if (focusRoom && focusRoom.id === rId) {
         mat.color.set('#dbeafe');
+        mat.emissive.set('#3b82f6');
+        mat.emissiveIntensity = 0.2;
+      } else if (isHeatmap) {
+        const roomObj = floorData.rooms.find((r) => r.id === rId);
+        const hr = roomObj ? findHeatmapRoom(roomObj, hRooms) : undefined;
+        if (hr) {
+          if (hr.congestion_level === 'HIGH') {
+            mat.color.set('#ef4444');
+            mat.emissive.set('#b91c1c');
+            mat.emissiveIntensity = 0.35;
+          } else if (hr.congestion_level === 'MEDIUM') {
+            mat.color.set('#f59e0b');
+            mat.emissive.set('#b45309');
+            mat.emissiveIntensity = 0.25;
+          } else {
+            mat.color.set('#10b981');
+            mat.emissive.set('#047857');
+            mat.emissiveIntensity = 0.2;
+          }
+        } else {
+          mat.color.set(originalColor);
+          mat.emissive.set('#000000');
+          mat.emissiveIntensity = 0;
+        }
       } else {
         mat.color.set(originalColor);
+        mat.emissive.set('#000000');
+        mat.emissiveIntensity = 0;
       }
     });
   };
-
-  // Removed unused drawRouteLine helper to use drawRoutePath directly
 
   useEffect(() => {
     applyFloorColors(activeHighlightId);
@@ -328,6 +391,8 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
     highlightAreaId,
     startRoomId,
     targetRoomId,
+    heatmapEnabled,
+    heatmapRooms,
   ]);
 
   const drawRoutePath = (path: RoutePathNode[] | null | undefined) => {
@@ -1033,7 +1098,29 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       onEditorPointerUpRef.current?.(payload);
     };
 
+    const handleCanvasMouseMove = (event: MouseEvent) => {
+      if (geometryEditModeRef.current || nodeEditModeRef.current) return;
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      const cam = activeCameraRef.current || camera;
+      raycaster.setFromCamera(mouse, cam);
+
+      const intersects = raycaster.intersectObjects(roomMeshesGroup.children);
+      if (intersects.length > 0) {
+        const hitObj = intersects[0].object;
+        if (hitObj.userData && hitObj.userData.id) {
+          const roomId = hitObj.userData.id as string;
+          onHoverRoomRef.current?.(roomId);
+          return;
+        }
+      }
+      onHoverRoomRef.current?.(null);
+    };
+
     canvas.addEventListener('click', handleCanvasClick);
+    canvas.addEventListener('mousemove', handleCanvasMouseMove);
     canvas.addEventListener('pointerdown', handlePointerDown);
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp);
@@ -1053,6 +1140,7 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       const currentHlId = activeHighlightIdRef.current;
       const startId = startRoomIdRef.current;
       const targetId = targetRoomIdRef.current;
+      const isHeatmap = heatmapEnabledRef.current;
 
       const newMarkers: ProjectedMarker[] = floorData.rooms
         .filter((r) => r.roomCode && r.roomCode.trim() !== '')
@@ -1062,10 +1150,11 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
           const isHl =
             isStart ||
             isEnd ||
-            (currentHlId && r.id === currentHlId) ||
-            (highlightRoomCode &&
+            (!isHeatmap && currentHlId && r.id === currentHlId) ||
+            (!isHeatmap &&
+              highlightRoomCode &&
               r.roomCode.toLowerCase() === highlightRoomCode.toLowerCase()) ||
-            (highlightAreaId && r.areaId === highlightAreaId);
+            (!isHeatmap && highlightAreaId && r.areaId === highlightAreaId);
 
           tempVec.set(r.centerX, r.height + 0.5, r.centerZ);
           tempVec.project(activeCameraRef.current || camera);
@@ -1126,6 +1215,7 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       cancelAnimationFrame(animationFrameId);
       window.removeEventListener('resize', handleResize);
       canvas.removeEventListener('click', handleCanvasClick);
+      canvas.removeEventListener('mousemove', handleCanvasMouseMove);
       canvas.removeEventListener('pointerdown', handlePointerDown);
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
@@ -1170,24 +1260,23 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
         className="w-full h-full block cursor-grab active:cursor-grabbing"
       />
 
-      {markers.map(
-        (m) =>
-          m.isVisible &&
-          m.isHighlighted &&
-          !geometryEditMode && (
-            <div
-              key={m.id}
-              style={{
-                left: `${m.screenX}px`,
-                top: `${m.screenY}px`,
-                transform: 'translate(-50%, -100%)',
-              }}
-              className={`absolute pointer-events-none transition-all duration-75 flex items-center px-3 py-1.5 rounded-xl shadow-md text-xs font-bold whitespace-nowrap scale-110 z-30 animate-bounce ${markerClass(m.kind)}`}
-            >
-              <span>{m.label}</span>
-            </div>
-          )
-      )}
+      {markers.map((m) => {
+        if (!m.isVisible || !m.isHighlighted || geometryEditMode) return null;
+
+        return (
+          <div
+            key={m.id}
+            style={{
+              left: `${m.screenX}px`,
+              top: `${m.screenY}px`,
+              transform: 'translate(-50%, -100%)',
+            }}
+            className={`absolute pointer-events-none transition-all duration-75 flex items-center px-3 py-1.5 rounded-xl shadow-md text-xs font-bold whitespace-nowrap scale-110 z-30 animate-bounce ${markerClass(m.kind)}`}
+          >
+            <span>{m.label}</span>
+          </div>
+        );
+      })}
     </div>
   );
 };

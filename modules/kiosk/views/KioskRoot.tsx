@@ -67,7 +67,7 @@ export const KioskRoot: React.FC = () => {
       )}
 
       {/* Dynamic Main Views */}
-      <main className="flex-1 min-h-0 w-full flex flex-col relative z-10 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <main className="flex-1 min-h-0 w-full flex flex-col relative z-10 overflow-hidden">
         {currentView === 'home' && <HomeMenuView />}
         {currentView === 'register' && <RegisterView />}
         {currentView === 'booking_mode' && <BookingModeView />}

@@ -2,6 +2,7 @@ import { apiClient } from '@/shared/services/apiClient';
 import type {
     CreateServiceOrderReqDto,
     ServiceOrder,
+    UpdateServiceOrderDetailReqDto,
     UpdateServiceOrderReqDto,
 } from '../types/serviceOrder.types';
 
@@ -227,6 +228,20 @@ export const serviceOrderService = {
         apiClient.patch<unknown>(`/api/service-order/${id}`, body, {
             headers: { Authorization: `Bearer ${token}` },
         }),
+
+    /** PATCH /api/service-order/detail/{serviceOrderDetailId} */
+    updateOrderDetail: (
+        serviceOrderDetailId: string,
+        body: UpdateServiceOrderDetailReqDto,
+        token: string
+    ) =>
+        apiClient.patch<unknown>(
+            `/api/service-order/detail/${serviceOrderDetailId}`,
+            body,
+            {
+                headers: { Authorization: `Bearer ${token}` },
+            }
+        ),
 
     deleteOrder: (id: string, token: string) =>
         apiClient.delete<unknown>(`/api/service-order/${id}`, {

@@ -5,7 +5,7 @@ import { SettingsWorkflowPanel } from '@/modules/settings/components/SettingsWor
 
 export default function DoctorSettingsPage() {
     return (
-        <EMRWorkspaceLayout activeTabId="setting" activeTabName="Cài đặt">
+        <EMRWorkspaceLayout activeTabId="setting" activeTabName="Thông tin cá nhân">
             <SettingsWorkflowPanel />
         </EMRWorkspaceLayout>
     );

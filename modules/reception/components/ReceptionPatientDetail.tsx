@@ -56,7 +56,7 @@ export function ReceptionPatientDetailView({ patient, isLoading, error }: Recept
                 <div className="flex-1 bg-white rounded-tl-[48px] rounded-bl-[48px] p-6">
                     <Link href="/reception" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#8B7CF6] mb-6">
                         <ChevronLeft className="w-4 h-4" />
-                        Quay lại tổng quan
+                        Quay lại tiếp nhận bệnh nhân
                     </Link>
                     <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 p-4">
                         <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
@@ -79,7 +79,7 @@ export function ReceptionPatientDetailView({ patient, isLoading, error }: Recept
                         className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#8B7CF6] mb-5"
                     >
                         <ChevronLeft className="w-4 h-4" />
-                        Quay lại tổng quan
+                        Quay lại tiếp nhận bệnh nhân
                     </Link>
 
                     <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">

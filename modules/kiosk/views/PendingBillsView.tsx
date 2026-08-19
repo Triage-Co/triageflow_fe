@@ -20,20 +20,20 @@ export const PendingBillsView: React.FC = () => {
   const selectPendingStep = useFlowStore((state) => state.selectPendingStep);
 
   return (
-    <div className="flex-1 min-h-0 px-8 py-6 z-10 flex flex-col gap-6 max-w-6xl mx-auto w-full">
+    <div className="w-full h-full min-h-0 p-4 sm:p-6 lg:p-8 z-10 select-none flex flex-col gap-4 sm:gap-6 max-w-6xl mx-auto overflow-y-auto">
       {/* Header bar */}
-      <div className="flex items-center gap-5">
+      <div className="flex items-center gap-4 shrink-0">
         <button 
           onClick={goHome} 
-          className="flex items-center gap-2 px-6 py-3 bg-white hover:bg-neutral-50 rounded-2xl shadow-sm border border-neutral-200 text-base font-extrabold text-neutral-800 transition-all cursor-pointer hover:scale-105 active:scale-95"
+          className="flex items-center gap-2 px-4 py-2 sm:px-6 sm:py-3 bg-white hover:bg-neutral-50 active:scale-95 rounded-2xl shadow-sm border border-neutral-200 text-xs sm:text-base font-extrabold text-neutral-800 transition-all cursor-pointer"
         >
-          <ArrowLeft className="w-5 h-5 text-[#155DFC]" /> Quay lại
+          <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 text-[#155DFC]" /> Quay lại
         </button>
         <div>
-          <h2 className="text-3xl sm:text-4xl font-black text-[#1E2939] tracking-tight">
+          <h2 className="text-xl sm:text-3xl lg:text-4xl font-black text-[#1E2939] tracking-tight">
             Thanh toán viện phí & dịch vụ
           </h2>
-          <p className="text-sm text-neutral-500 font-bold mt-1">
+          <p className="text-xs sm:text-sm text-neutral-500 font-bold mt-0.5 sm:mt-1">
             Vui lòng chọn dịch vụ chưa thanh toán bên dưới để mở mã QR thanh toán
           </p>
         </div>

@@ -3,8 +3,6 @@
 import { useEffect, useState } from 'react';
 import type { Patient } from '@/modules/clinical/types/clinical.types';
 import {
-    Search,
-    Settings,
     Pencil,
     Stethoscope,
     Microscope,
@@ -414,27 +412,56 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
                         <div className="space-y-3">
                             {/* Dynamic rows */}
                             <div className="space-y-2">
-                                {editPhysicalExamRows.map((row) => (
+                                {editPhysicalExamRows.map((row, idx) => (
                                     <div key={row.id} className="flex gap-2 items-start">
                                         <input
                                             type="text"
+                                            data-pe-label={row.id}
                                             value={row.label}
                                             onChange={(e) =>
                                                 setEditPhysicalExamRows((prev) =>
                                                     prev.map((r) => r.id === row.id ? { ...r, label: e.target.value } : r)
                                                 )
                                             }
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    (document.querySelector(`[data-pe-value="${row.id}"]`) as HTMLInputElement)?.focus();
+                                                }
+                                            }}
                                             placeholder="Vùng khám (VD: Họng)"
                                             className="w-28 shrink-0 text-xs text-[#2D2D2D] border border-neutral-200 rounded-lg px-2.5 py-1.5 focus:border-[#8B7CF6] outline-none"
                                         />
                                         <input
                                             type="text"
+                                            data-pe-value={row.id}
                                             value={row.value}
                                             onChange={(e) =>
                                                 setEditPhysicalExamRows((prev) =>
                                                     prev.map((r) => r.id === row.id ? { ...r, value: e.target.value } : r)
                                                 )
                                             }
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    if (idx < editPhysicalExamRows.length - 1) {
+                                                        const nextRow = editPhysicalExamRows[idx + 1];
+                                                        const target = nextRow.label
+                                                            ? document.querySelector(`[data-pe-value="${nextRow.id}"]`)
+                                                            : document.querySelector(`[data-pe-label="${nextRow.id}"]`);
+                                                        (target as HTMLInputElement)?.focus();
+                                                    } else {
+                                                        const newId = `pe-${Date.now()}`;
+                                                        setEditPhysicalExamRows((prev) => [
+                                                            ...prev,
+                                                            { id: newId, label: '', value: '' },
+                                                        ]);
+                                                        setTimeout(() => {
+                                                            (document.querySelector(`[data-pe-label="${newId}"]`) as HTMLInputElement)?.focus();
+                                                        }, 50);
+                                                    }
+                                                }
+                                            }}
                                             placeholder="Kết quả khám..."
                                             className="flex-1 text-xs text-[#2D2D2D] border border-neutral-200 rounded-lg px-2.5 py-1.5 focus:border-[#8B7CF6] outline-none"
                                         />
@@ -897,25 +924,15 @@ export function RightMedicalArea({
                         )}
                     </div>
                     <p className="text-[11px] text-[#9C9C9C] mt-0.5 truncate">
-                        {patient.gender} · {patient.age} tuổi · CCCD: {patient.code} · {patient.visitType}
-                        {patient.shortDiagnosis && (
-                            <span className="text-[#555] ml-2">· {patient.shortDiagnosis}</span>
-                        )}
+                        {[
+                            patient.gender,
+                            patient.age != null ? `${patient.age} tuổi` : null,
+                            patient.code ? `CCCD: ${patient.code}` : null,
+                            patient.visitType,
+                            patient.shortDiagnosis,
+                        ].filter(Boolean).join(' · ') || '—'}
                     </p>
                 </div>
-
-                {/* Search */}
-                <div className="hidden lg:flex items-center gap-2 bg-[#F5F5F8] rounded-xl px-3 py-1.5 text-[12px] text-[#ADADAD] w-40 xl:w-56 shrink-0 transition-all">
-                    <Search className="w-3.5 h-3.5 shrink-0" />
-                    <input 
-                        type="text"
-                        placeholder="Tìm trong hồ sơ..."
-                        className="bg-transparent border-none outline-none w-full text-neutral-800 placeholder:text-[#ADADAD]"
-                    />
-                </div>
-                <button className="w-8 h-8 rounded-lg flex items-center justify-center text-[#ADADAD] hover:text-[#8B7CF6] hover:bg-[#F5F2FF] transition-colors shrink-0 cursor-pointer">
-                    <Settings className="w-4 h-4" />
-                </button>
             </div>
 
             {/* ── Toolbar tabs + Hoàn tất khám ── */}

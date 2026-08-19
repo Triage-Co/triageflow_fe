@@ -7,6 +7,8 @@ import {
     Loader2,
     Pencil,
     Plus,
+    Power,
+    PowerOff,
     Search,
     X,
 } from 'lucide-react';
@@ -34,7 +36,7 @@ import { getErrorMessage } from '../utils/errorMessage';
 import { SoftDisableConfirmDialog } from './SoftDisableConfirmDialog';
 import { ServiceRoomsDrawer } from './ServiceRoomsDrawer';
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 7;
 
 const EMPTY_FORM: CreateServiceReqDto = {
     service_code: '',
@@ -61,7 +63,6 @@ export function AdminServicesPage() {
 
     const [filterServiceType, setFilterServiceType] = useState<string>('');
     const [filterRoomType, setFilterRoomType] = useState<string>('');
-    const [showInactive, setShowInactive] = useState(false);
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editing, setEditing] = useState<CatalogService | null>(null);
@@ -88,7 +89,7 @@ export function AdminServicesPage() {
             const params: QueryServiceParams = { limit: 500 };
             if (filterServiceType) params.service_type = filterServiceType;
             if (filterRoomType) params.room_type = filterRoomType;
-            if (!showInactive) params.is_active = true;
+            params.is_active = true;
             if (searchQuery.trim()) params.search = searchQuery.trim();
             const res = await serviceCatalogService.getServices(accessToken, params);
             setServices(extractServiceList(res?.data));
@@ -97,7 +98,7 @@ export function AdminServicesPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [accessToken, filterServiceType, filterRoomType, showInactive, searchQuery]);
+    }, [accessToken, filterServiceType, filterRoomType, searchQuery]);
 
     useEffect(() => {
         void loadServices();
@@ -116,9 +117,9 @@ export function AdminServicesPage() {
         }
         if (filterServiceType) list = list.filter((s) => s.service_type === filterServiceType);
         if (filterRoomType) list = list.filter((s) => s.room_type === filterRoomType);
-        if (!showInactive) list = list.filter((s) => s.is_active !== false);
+        list = list.filter((s) => s.is_active !== false);
         return list;
-    }, [services, searchQuery, filterServiceType, filterRoomType, showInactive]);
+    }, [services, searchQuery, filterServiceType, filterRoomType]);
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
     const safePage = Math.min(currentPage, totalPages);
@@ -245,248 +246,275 @@ export function AdminServicesPage() {
             <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-[#EEEDFC] via-[#F9ECF2] to-[#E6E9FC] pt-6 pb-5">
                 <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-tl-[16px] rounded-bl-[48px] shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
                     <div className="flex-1 min-h-0 overflow-y-auto p-6">
-                        <div className="max-w-6xl mx-auto space-y-5">
-                            <div className="flex items-start justify-between gap-4 flex-wrap">
-                                <div>
-                                    <h1 className="text-xl font-bold text-neutral-900">Quản lý dịch vụ</h1>
-                                    <p className="text-sm text-neutral-500 mt-0.5">Danh mục dịch vụ khám, xét nghiệm, thủ thuật và đơn thuốc</p>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={openCreate}
-                                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#8B7CF6] hover:bg-[#7a6ae5] text-white text-sm font-bold cursor-pointer"
-                                >
-                                    <Plus className="w-4 h-4" />
-                                    Thêm dịch vụ
-                                </button>
+                        {/* ── Title + Actions ── */}
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
+                            <div>
+                                <h1 className="text-[22px] font-bold text-[#2D2D2D] tracking-tight">
+                                    Quản lý dịch vụ
+                                </h1>
+                                <p className="text-[13px] text-[#7B7B7B] font-medium mt-1">
+                                    Danh mục dịch vụ khám, xét nghiệm, thủ thuật và đơn thuốc
+                                </p>
                             </div>
+                            <button
+                                type="button"
+                                onClick={openCreate}
+                                className="flex items-center gap-2 px-4 py-2.5 bg-[#8B7CF6] hover:bg-[#7a6ae5] text-white text-[13px] font-bold rounded-xl transition-all shadow-sm cursor-pointer"
+                            >
+                                <Plus className="w-4 h-4" />
+                                Thêm dịch vụ
+                            </button>
+                        </div>
 
-                            <div className="flex flex-wrap items-center gap-3">
-                                <div className="flex items-center gap-2 bg-white border border-neutral-200 rounded-xl px-3 py-2 max-w-md flex-1 min-w-[220px]">
-                                    <Search className="w-4 h-4 text-neutral-400" />
-                                    <input
-                                        value={searchQuery}
-                                        onChange={(e) => {
-                                            setSearchQuery(e.target.value);
-                                            setCurrentPage(1);
-                                        }}
-                                        placeholder="Tìm theo mã hoặc tên..."
-                                        className="flex-1 text-sm outline-none bg-transparent"
-                                    />
-                                </div>
-
-                                <select
-                                    value={filterServiceType}
+                        {/* ── Toolbar: Search & Filters ── */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                            {/* Search Bar */}
+                            <div className="flex items-center gap-2.5 bg-[#F5F5F8] rounded-xl px-3.5 py-2.5 text-[12.5px] w-full sm:w-80 border border-neutral-200/60 shadow-xs focus-within:border-[#8B7CF6] focus-within:bg-white transition-all">
+                                <Search className="w-4 h-4 shrink-0 text-[#9CA3AF]" />
+                                <input
+                                    type="text"
+                                    value={searchQuery}
                                     onChange={(e) => {
-                                        setFilterServiceType(e.target.value);
+                                        setSearchQuery(e.target.value);
                                         setCurrentPage(1);
                                     }}
-                                    className="text-sm font-medium border border-neutral-200 rounded-xl px-3 py-2 bg-white text-neutral-700"
-                                >
-                                    <option value="">Tất cả loại dịch vụ</option>
-                                    {SERVICE_TYPE_OPTIONS.map((opt) => (
-                                        <option key={opt.value} value={opt.value}>
-                                            {opt.label}
-                                        </option>
-                                    ))}
-                                </select>
-
-                                <select
-                                    value={filterRoomType}
-                                    onChange={(e) => {
-                                        setFilterRoomType(e.target.value);
-                                        setCurrentPage(1);
-                                    }}
-                                    className="text-sm font-medium border border-neutral-200 rounded-xl px-3 py-2 bg-white text-neutral-700"
-                                >
-                                    <option value="">Tất cả loại phòng</option>
-                                    {ROOM_TYPE_OPTIONS.map((opt) => (
-                                        <option key={opt.value} value={opt.value}>
-                                            {opt.label}
-                                        </option>
-                                    ))}
-                                </select>
-
-                                <label className="flex items-center gap-2 text-sm font-semibold text-neutral-600 cursor-pointer select-none px-1">
-                                    <input
-                                        type="checkbox"
-                                        checked={showInactive}
-                                        onChange={(e) => {
-                                            setShowInactive(e.target.checked);
-                                            setCurrentPage(1);
-                                        }}
-                                        className="accent-[#8B7CF6]"
-                                    />
-                                    Hiện đã tắt
-                                </label>
+                                    placeholder="Tìm theo mã hoặc tên dịch vụ..."
+                                    className="bg-transparent flex-1 outline-none text-[#1F2937] placeholder-[#9CA3AF] font-medium"
+                                />
                             </div>
 
-                            {error && (
-                                <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-700 whitespace-pre-line">
-                                    <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                                    <span>{error}</span>
+                            {/* Inline Filters */}
+                            <div className="flex flex-wrap items-center gap-2.5">
+                                <div className={cn(
+                                    "flex items-center gap-2 bg-[#F5F5F8] border rounded-xl px-3.5 py-2 text-[12.5px] transition-all shadow-xs",
+                                    filterServiceType !== ''
+                                        ? "border-[#8B7CF6] bg-[#8B7CF6]/5"
+                                        : "border-neutral-200/60 hover:border-neutral-300 focus-within:border-[#8B7CF6] focus-within:bg-white"
+                                )}>
+                                    <span className="text-[11.5px] font-bold text-neutral-400 uppercase tracking-wider shrink-0">Loại DV:</span>
+                                    <select
+                                        value={filterServiceType}
+                                        onChange={(e) => {
+                                            setFilterServiceType(e.target.value);
+                                            setCurrentPage(1);
+                                        }}
+                                        className="bg-transparent font-bold text-[#2D2D2D] outline-none cursor-pointer max-w-[170px] truncate pr-1"
+                                    >
+                                        <option value="">Tất cả loại DV</option>
+                                        {SERVICE_TYPE_OPTIONS.map((opt) => (
+                                            <option key={opt.value} value={opt.value}>
+                                                {opt.label}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
-                            )}
 
-                            <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
-                                {isLoading ? (
-                                    <div className="p-12 flex flex-col items-center gap-2 text-neutral-500">
-                                        <Loader2 className="w-6 h-6 animate-spin text-[#8B7CF6]" />
-                                        <span className="text-sm font-medium">Đang tải...</span>
-                                    </div>
-                                ) : filtered.length === 0 ? (
-                                    <div className="p-12 text-center text-sm text-neutral-500">Chưa có dịch vụ nào.</div>
-                                ) : (
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-sm">
-                                            <thead className="bg-neutral-50 border-b border-neutral-200 text-left text-xs font-bold text-neutral-500 uppercase tracking-wide sticky top-0 z-10">
-                                                <tr>
-                                                    <th className="px-4 py-3">Mã</th>
-                                                    <th className="px-4 py-3">Tên dịch vụ</th>
-                                                    <th className="px-4 py-3 text-right">Giá</th>
-                                                    <th className="px-4 py-3">Loại dịch vụ</th>
-                                                    <th className="px-4 py-3">Loại phòng</th>
-                                                    <th className="px-4 py-3">Trạng thái</th>
-                                                    <th className="px-4 py-3 text-right">Thao tác</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-neutral-100">
-                                                {paginated.map((service) => {
-                                                    const id = getServiceId(service);
-                                                    const active = service.is_active !== false;
-                                                    return (
-                                                        <tr key={id || service.service_code || service.service_name} className="hover:bg-neutral-50/80">
-                                                            <td className="px-4 py-3 font-mono text-xs text-neutral-600">
-                                                                {service.service_code || '—'}
-                                                            </td>
-                                                            <td className="px-4 py-3 font-semibold text-neutral-800">
-                                                                {service.service_name}
-                                                            </td>
-                                                            <td className="px-4 py-3 text-right font-medium">
-                                                                {Number(service.price || 0).toLocaleString('vi-VN')}₫
-                                                            </td>
-                                                            <td className="px-4 py-3 text-neutral-600">
-                                                                {serviceTypeLabel(service.service_type)}
-                                                            </td>
-                                                            <td className="px-4 py-3 text-neutral-600">
-                                                                {roomTypeLabel(service.room_type)}
-                                                            </td>
-                                                            <td className="px-4 py-3">
-                                                                <span
-                                                                    className={cn(
-                                                                        'text-[10px] font-bold px-2 py-0.5 rounded-full border',
-                                                                        active
-                                                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                                                            : 'bg-neutral-50 text-neutral-500 border-neutral-200'
-                                                                    )}
-                                                                >
-                                                                    {active ? 'Đang hoạt động' : 'Đã tắt'}
-                                                                </span>
-                                                            </td>
-                                                            <td className="px-4 py-3">
-                                                                <div className="flex justify-end gap-1">
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => setRoomsDrawerFor(service)}
-                                                                        className="p-2 rounded-lg text-neutral-400 hover:text-[#8B7CF6] hover:bg-neutral-50 cursor-pointer"
-                                                                        title="Phòng thực hiện"
-                                                                    >
-                                                                        <Home className="w-4 h-4" />
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => openEdit(service)}
-                                                                        className="p-2 rounded-lg text-neutral-400 hover:text-[#8B7CF6] hover:bg-neutral-50 cursor-pointer"
-                                                                        title="Sửa"
-                                                                    >
-                                                                        <Pencil className="w-4 h-4" />
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => {
-                                                                            setToggleError(null);
-                                                                            setTogglingTarget(service);
-                                                                        }}
-                                                                        className={cn(
-                                                                            'px-2.5 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer border',
-                                                                            active
-                                                                                ? 'text-red-500 border-red-100 hover:bg-red-50'
-                                                                                : 'text-emerald-600 border-emerald-100 hover:bg-emerald-50'
-                                                                        )}
-                                                                        title={active ? 'Vô hiệu hóa' : 'Kích hoạt'}
-                                                                    >
-                                                                        {active ? 'Tắt' : 'Bật'}
-                                                                    </button>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                <div className={cn(
+                                    "flex items-center gap-2 bg-[#F5F5F8] border rounded-xl px-3.5 py-2 text-[12.5px] transition-all shadow-xs",
+                                    filterRoomType !== ''
+                                        ? "border-[#8B7CF6] bg-[#8B7CF6]/5"
+                                        : "border-neutral-200/60 hover:border-neutral-300 focus-within:border-[#8B7CF6] focus-within:bg-white"
+                                )}>
+                                    <span className="text-[11.5px] font-bold text-neutral-400 uppercase tracking-wider shrink-0">Loại phòng:</span>
+                                    <select
+                                        value={filterRoomType}
+                                        onChange={(e) => {
+                                            setFilterRoomType(e.target.value);
+                                            setCurrentPage(1);
+                                        }}
+                                        className="bg-transparent font-bold text-[#2D2D2D] outline-none cursor-pointer max-w-[170px] truncate pr-1"
+                                    >
+                                        <option value="">Tất cả loại phòng</option>
+                                        {ROOM_TYPE_OPTIONS.map((opt) => (
+                                            <option key={opt.value} value={opt.value}>
+                                                {opt.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {(filterServiceType || filterRoomType || searchQuery) && (
+                                    <button
+                                        onClick={() => {
+                                            setFilterServiceType('');
+                                            setFilterRoomType('');
+                                            setSearchQuery('');
+                                            setCurrentPage(1);
+                                        }}
+                                        className="text-[11.5px] font-bold text-[#8B7CF6] hover:underline cursor-pointer px-2 py-1"
+                                    >
+                                        Xoá lọc
+                                    </button>
                                 )}
                             </div>
+                        </div>
 
-                            {filtered.length > 0 && (
-                                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-neutral-100 pt-4">
-                                    <p className="text-[12px] text-[#ADADAD] font-bold">
-                                        Hiển thị{' '}
-                                        {Math.min(filtered.length, (safePage - 1) * ITEMS_PER_PAGE + 1)}
-                                        {' - '}
-                                        {Math.min(filtered.length, safePage * ITEMS_PER_PAGE)} trong số{' '}
-                                        {filtered.length} dịch vụ
-                                    </p>
-                                    {totalPages > 1 && (
-                                        <div className="flex items-center gap-1">
+                        {error && (
+                            <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-700 whitespace-pre-line mb-6">
+                                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                                <span>{error}</span>
+                            </div>
+                        )}
+
+                        {/* ── Table Content ── */}
+                        <div className="bg-white border border-[#EBEBEB] rounded-2xl overflow-hidden shadow-sm">
+                            {isLoading ? (
+                                <div className="flex flex-col items-center justify-center py-20 gap-3">
+                                    <Loader2 className="w-8 h-8 animate-spin text-[#8B7CF6]" />
+                                    <span className="text-[13px] text-[#7B7B7B] font-bold">Đang tải danh mục dịch vụ...</span>
+                                </div>
+                            ) : filtered.length === 0 ? (
+                                <div className="flex items-center justify-center py-16">
+                                    <p className="text-[13px] text-[#ADADAD] font-medium">Không tìm thấy dịch vụ phù hợp.</p>
+                                </div>
+                            ) : (
+                                <table className="w-full text-left">
+                                    <thead>
+                                        <tr className="bg-neutral-50/80 border-b border-[#EBEBEB]">
+                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider w-[64px] whitespace-nowrap">STT</th>
+                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider w-[120px] whitespace-nowrap">Mã</th>
+                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Tên dịch vụ</th>
+                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider text-right whitespace-nowrap">Giá</th>
+                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider whitespace-nowrap">Loại dịch vụ</th>
+                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider whitespace-nowrap">Loại phòng</th>
+                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider whitespace-nowrap w-[140px]">Trạng thái</th>
+                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider text-right w-[110px] whitespace-nowrap">Thao tác</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-neutral-100">
+                                        {paginated.map((service, index) => {
+                                            const id = getServiceId(service);
+                                            const active = service.is_active !== false;
+                                            return (
+                                                <tr key={id || service.service_code || service.service_name} className="hover:bg-neutral-50/50 transition-colors group">
+                                                    <td className="px-5 py-4 text-[13px] font-semibold text-[#7B7B7B] whitespace-nowrap">
+                                                        {(safePage - 1) * ITEMS_PER_PAGE + index + 1}
+                                                    </td>
+                                                    <td className="px-5 py-4 font-mono text-[12px] text-[#7B7B7B] whitespace-nowrap">
+                                                        {service.service_code || '—'}
+                                                    </td>
+                                                    <td className="px-5 py-4 font-bold text-[13px] text-[#2D2D2D]">
+                                                        {service.service_name}
+                                                    </td>
+                                                    <td className="px-5 py-4 text-right text-[12.5px] font-bold text-[#2D2D2D] whitespace-nowrap">
+                                                        {Number(service.price || 0).toLocaleString('vi-VN')}₫
+                                                    </td>
+                                                    <td className="px-5 py-4 text-[12px] text-[#7B7B7B] whitespace-nowrap">
+                                                        {serviceTypeLabel(service.service_type)}
+                                                    </td>
+                                                    <td className="px-5 py-4 text-[12px] text-[#7B7B7B] whitespace-nowrap">
+                                                        {roomTypeLabel(service.room_type)}
+                                                    </td>
+                                                    <td className="px-5 py-4 whitespace-nowrap">
+                                                        <span
+                                                            className={cn(
+                                                                'text-[10px] font-bold px-3 py-1 rounded-full border whitespace-nowrap inline-flex items-center',
+                                                                active
+                                                                    ? 'bg-[#E8F9EE] text-[#10B981] border-[#C6F6D5]'
+                                                                    : 'bg-[#FFEBEE] text-[#E53935] border-[#FFCDD2]'
+                                                            )}
+                                                        >
+                                                            {active ? 'Đang hoạt động' : 'Đã tắt'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-5 py-4 whitespace-nowrap">
+                                                        <div className="flex items-center justify-end gap-2 text-neutral-400">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setRoomsDrawerFor(service)}
+                                                                className="p-1 hover:text-[#8B7CF6] transition-colors cursor-pointer"
+                                                                title="Phòng thực hiện"
+                                                            >
+                                                                <Home className="w-3.5 h-3.5" />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openEdit(service)}
+                                                                className="p-1 hover:text-[#8B7CF6] transition-colors cursor-pointer"
+                                                                title="Chỉnh sửa dịch vụ"
+                                                            >
+                                                                <Pencil className="w-3.5 h-3.5" />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setToggleError(null);
+                                                                    setTogglingTarget(service);
+                                                                }}
+                                                                className={cn(
+                                                                    'p-1 transition-colors cursor-pointer',
+                                                                    active ? 'hover:text-red-600' : 'hover:text-emerald-600'
+                                                                )}
+                                                                title={active ? 'Vô hiệu hóa' : 'Kích hoạt'}
+                                                            >
+                                                                {active ? <PowerOff className="w-3.5 h-3.5" /> : <Power className="w-3.5 h-3.5" />}
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+
+                    </div>
+
+                    {/* ── Fixed Bottom Pagination Controls ── */}
+                    {filtered.length > 0 && (
+                        <div className="px-6 py-4 border-t border-neutral-100 bg-white flex items-center justify-between shrink-0">
+                            <p className="text-[12px] text-[#ADADAD] font-bold">
+                                Hiển thị {Math.min(filtered.length, (safePage - 1) * ITEMS_PER_PAGE + 1)} - {Math.min(filtered.length, safePage * ITEMS_PER_PAGE)} trong số {filtered.length} dịch vụ
+                            </p>
+                            {totalPages > 1 && (
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                                        disabled={safePage === 1}
+                                        className="px-3 py-1.5 text-xs font-bold border border-[#EBEBEB] rounded-lg bg-white text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6] disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+                                    >
+                                        Trước
+                                    </button>
+                                    {getCompactPages(safePage, totalPages).map((page, idx) =>
+                                        page === 'ellipsis' ? (
+                                            <span
+                                                key={`ellipsis-${idx}`}
+                                                className="px-1 text-sm font-bold text-[#ADADAD] select-none"
+                                            >
+                                                ...
+                                            </span>
+                                        ) : (
                                             <button
                                                 type="button"
-                                                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                                                disabled={safePage === 1}
-                                                className="px-3 py-1.5 text-xs font-bold border border-[#EBEBEB] rounded-lg bg-white text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6] disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+                                                key={page}
+                                                onClick={() => setCurrentPage(page)}
+                                                className={cn(
+                                                    'w-8 h-8 flex items-center justify-center text-xs font-bold rounded-lg border transition cursor-pointer',
+                                                    safePage === page
+                                                        ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white'
+                                                        : 'bg-white border-[#EBEBEB] text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6]'
+                                                )}
                                             >
-                                                Trước
+                                                {page}
                                             </button>
-                                            {getCompactPages(safePage, totalPages).map((page, idx) =>
-                                                page === 'ellipsis' ? (
-                                                    <span
-                                                        key={`ellipsis-${idx}`}
-                                                        className="px-1 text-sm font-bold text-[#ADADAD] select-none"
-                                                    >
-                                                        ...
-                                                    </span>
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        key={page}
-                                                        onClick={() => setCurrentPage(page)}
-                                                        className={cn(
-                                                            'w-8 h-8 flex items-center justify-center text-xs font-bold rounded-lg border transition cursor-pointer',
-                                                            safePage === page
-                                                                ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white'
-                                                                : 'bg-white border-[#EBEBEB] text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6]'
-                                                        )}
-                                                    >
-                                                        {page}
-                                                    </button>
-                                                )
-                                            )}
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-                                                }
-                                                disabled={safePage === totalPages}
-                                                className="px-3 py-1.5 text-xs font-bold border border-[#EBEBEB] rounded-lg bg-white text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6] disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
-                                            >
-                                                Sau
-                                            </button>
-                                        </div>
+                                        )
                                     )}
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                                        }
+                                        disabled={safePage === totalPages}
+                                        className="px-3 py-1.5 text-xs font-bold border border-[#EBEBEB] rounded-lg bg-white text-[#7B7B7B] hover:bg-[#8B7CF6]/5 hover:text-[#8B7CF6] disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+                                    >
+                                        Sau
+                                    </button>
                                 </div>
                             )}
                         </div>
-                    </div>
+                    )}
                 </div>
             </div>
 

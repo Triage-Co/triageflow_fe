@@ -37,16 +37,16 @@ export const PaymentView: React.FC = () => {
   const qrImageUrl = qrCodePayload ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrCodePayload)}` : '';
 
   return (
-    <div className="flex-1 min-h-0 px-8 py-6 z-10 flex flex-col gap-5 max-w-6xl mx-auto w-full">
+    <div className="w-full h-full min-h-0 p-4 sm:p-6 lg:p-8 z-10 select-none flex flex-col gap-4 sm:gap-5 max-w-6xl mx-auto overflow-y-auto">
       {/* Header bar */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 shrink-0">
         <button
           onClick={goHome}
-          className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-neutral-50 rounded-2xl shadow-sm border border-neutral-200 text-sm font-extrabold text-neutral-800 transition-all cursor-pointer hover:scale-105 active:scale-95"
+          className="flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 bg-white hover:bg-neutral-50 active:scale-95 rounded-2xl shadow-sm border border-neutral-200 text-xs sm:text-sm font-extrabold text-neutral-800 transition-all cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4 text-[#155DFC]" /> Quay lại
         </button>
-        <h2 className="text-3xl font-black text-[#1E2939] tracking-tight">
+        <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-[#1E2939] tracking-tight">
           {paymentMethod === null && 'Thanh toán viện phí'}
           {paymentMethod === 'bank' && 'Thanh toán chuyển khoản QR'}
           {paymentMethod === 'counter' && 'Hỗ trợ thanh toán tại quầy'}
@@ -55,7 +55,7 @@ export const PaymentView: React.FC = () => {
 
       {/* STATE 1: LỰA CHỌN PHƯƠNG THỨC THANH TOÁN */}
       {paymentMethod === null && (
-        <div className="bg-white/80 backdrop-blur-md rounded-[32px] p-10 shadow-xl border border-neutral-100 text-center space-y-8 max-w-3xl mx-auto my-auto w-full">
+        <div className="bg-white/80 backdrop-blur-md rounded-[32px] p-6 sm:p-10 shadow-xl border border-neutral-100 text-center space-y-6 sm:space-y-8 max-w-3xl mx-auto my-auto w-full">
           <div className="space-y-2">
             <h3 className="text-2xl sm:text-3xl font-black text-[#1E2939] tracking-tight">Chọn hình thức thanh toán</h3>
             <p className="text-sm text-neutral-500 font-bold">Vui lòng chọn ngân hàng chuyển khoản hoặc đóng tại quầy</p>
