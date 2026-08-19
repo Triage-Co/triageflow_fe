@@ -5,6 +5,7 @@ import { Clock, ListOrdered, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PriorityRulesPanel } from './PriorityRulesPanel';
 import { RoomStatsPanel } from './RoomStatsPanel';
+import { AutoRebalanceToggle } from './AutoRebalanceToggle';
 
 type QueueConfigTab = 'rules' | 'room-stats';
 
@@ -32,16 +33,19 @@ export function AdminQueueConfigPage() {
                                         Quy tắc ưu tiên phân luồng bệnh nhân và thời gian phục vụ mặc định theo phòng.
                                     </p>
                                 </div>
-                                {activeTab === 'rules' && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setCreateRuleTrigger((prev) => prev + 1)}
-                                        className="flex items-center gap-2 px-4 py-2.5 bg-[#8B7CF6] hover:bg-[#7a6ae5] text-white text-[13px] font-bold rounded-xl transition-all shadow-sm cursor-pointer shrink-0"
-                                    >
-                                        <Plus className="w-4 h-4" />
-                                        Thêm quy tắc
-                                    </button>
-                                )}
+                                <div className="flex items-center gap-3 shrink-0">
+                                    <AutoRebalanceToggle variant="panel" />
+                                    {activeTab === 'rules' && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setCreateRuleTrigger((prev) => prev + 1)}
+                                            className="flex items-center gap-2 px-4 py-2.5 bg-[#8B7CF6] hover:bg-[#7a6ae5] text-white text-[13px] font-bold rounded-xl transition-all shadow-sm cursor-pointer shrink-0"
+                                        >
+                                            <Plus className="w-4 h-4" />
+                                            Thêm quy tắc
+                                        </button>
+                                    )}
+                                </div>
                             </div>
 
                             <div className="inline-flex rounded-xl border border-neutral-200 bg-neutral-50 p-1">

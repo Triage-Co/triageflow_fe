@@ -90,7 +90,7 @@ export function AdminExamPackagesPage() {
 
     const filtered = useMemo(() => {
         const q = searchQuery.trim().toLowerCase();
-        let list = packages.filter((p) => p.is_active !== false);
+        const list = packages.filter((p) => p.is_active !== false);
         if (!q) return list;
         return list.filter((p) => (p.package_name || '').toLowerCase().includes(q));
     }, [packages, searchQuery]);

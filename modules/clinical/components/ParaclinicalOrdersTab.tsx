@@ -42,6 +42,7 @@ import {
 import { useAuthStore } from '@/store/authStore';
 import { useRoomStore } from '@/modules/admin/store/roomStore';
 import { useShiftStore } from '@/modules/admin/store/shiftStore';
+import { todayYmd } from '@/modules/admin/utils/shiftValidation';
 import {
     Dialog,
     DialogContent,
@@ -913,7 +914,7 @@ export function ParaclinicalOrdersTab({
         if (!accessToken) return;
         void fetchRooms(accessToken);
         void fetchSpecialties(accessToken);
-        void fetchShifts(accessToken).catch(() => {
+        void fetchShifts(accessToken, { date: todayYmd(), limit: 500 }).catch(() => {
             // Doctor may not have shift list permission — on-duty stays empty
         });
         void serviceCatalogService

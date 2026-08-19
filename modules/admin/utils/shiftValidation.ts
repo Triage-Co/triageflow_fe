@@ -1,6 +1,7 @@
 import type { HospitalRoom, Specialty } from '../types/room.types';
 import type { Staff } from '../types/staff.types';
 import type { Shift } from '../types/shift.types';
+import { shiftService } from '../services/shiftService';
 
 /* ─── Week helpers (Asia/Ho_Chi_Minh) ─────────────────────────────────────── */
 
@@ -42,6 +43,37 @@ export function addDaysToWeekStart(weekStart: string, dayOffset: number): string
 export const isPastOrCompletedShift = (_shift: { date?: string; status?: string; end_time?: string }): boolean => {
     return false;
 };
+
+/** Today's date `yyyy-MM-dd` in Asia/Ho_Chi_Minh. */
+export function todayYmd(timeZone = 'Asia/Ho_Chi_Minh'): string {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).format(new Date());
+}
+
+export function addCalendarDays(dateStr: string, days: number): string {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const date = new Date(Date.UTC(y, m - 1, d, 12));
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().split('T')[0];
+}
+
+export async function loadShiftsForRoomDate(
+    token: string,
+    roomId: string,
+    date: string
+): Promise<Shift[]> {
+    const dateKey = date.split('T')[0];
+    const res = await shiftService.getShifts(token, {
+        room_id: roomId,
+        date: dateKey,
+        limit: 500,
+    });
+    return res.data || [];
+}
 
 interface ShiftValidationParams {
     roomId: string;
@@ -91,7 +123,7 @@ export function validateShiftAssignment({
             return `Bác sĩ ${targetStaff.full_name} thuộc chuyên khoa "${doctorSpecName}", không cùng chuyên khoa với phòng ${targetRoom.room_name} ("${roomSpecName}").`;
         }
 
-        // 2. Only 1 Doctor per Room validation
+        // 2. Only 1 Doctor per Room validation — callers should pass room_id + date scoped shifts
         const targetDateKey = date.split('T')[0];
         const existingShiftsOnDate = shifts.filter(
             (s) =>

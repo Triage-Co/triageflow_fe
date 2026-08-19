@@ -1,7 +1,5 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import { AdminSpecialtiesPage } from '@/modules/admin/components/AdminSpecialtiesPage';
-
-export default function AdminSpecialtiesRoute() {
-    return <AdminSpecialtiesPage />;
+export default function AdminSpecialtiesRedirect() {
+    redirect('/admin/ai-config');
 }

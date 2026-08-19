@@ -7,7 +7,6 @@ import {
     Loader2,
     AlertCircle,
     X,
-    Filter,
     CalendarDays,
     Trash2,
     AlertTriangle,
@@ -17,6 +16,7 @@ import {
     UserCheck,
     Pencil,
     CalendarRange,
+    Upload,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useShiftStore } from '../store/shiftStore';
@@ -25,8 +25,15 @@ import { useRoomStore } from '../store/roomStore';
 import { useAuthStore } from '@/modules/auth/store/authStore';
 import type { Shift, CreateShiftDto } from '../types/shift.types';
 import { getCompactPages } from '../utils/pagination';
-import { validateShiftAssignment, filterEligibleStaffForRoom } from '../utils/shiftValidation';
+import {
+    validateShiftAssignment,
+    filterEligibleStaffForRoom,
+    todayYmd,
+    loadShiftsForRoomDate,
+} from '../utils/shiftValidation';
+import { shiftService } from '../services/shiftService';
 import { BulkWeeklyShiftModal } from './BulkWeeklyShiftModal';
+import { ImportShiftModal } from './ImportShiftModal';
 
 /* ─── Role Badges Config ─────────────────────────────────────────────────── */
 
@@ -54,26 +61,23 @@ const toDateKey = (dateValue: string): string => {
     return date.toISOString().split('T')[0];
 };
 
-const toTimestamp = (dateValue: string): number => {
-    const date = new Date(dateValue);
-    if (isNaN(date.getTime())) return 0;
-    return date.getTime();
-};
+const SHIFT_PAGE_SIZE = 7;
 
 /* ─── Component ──────────────────────────────────────────────────────────── */
 
 export function AdminShiftPage() {
     const accessToken = useAuthStore((s) => s.accessToken);
 
-    const { shifts, isLoading, error, fetchShifts, createShift, updateShift, deleteShift, clearError } = useShiftStore();
+    const { shifts, meta, isLoading, error, fetchShifts, createShift, updateShift, deleteShift, clearError } = useShiftStore();
     const { staffs, fetchStaffs } = useStaffStore();
-    const { rooms, fetchRooms } = useRoomStore();
+    const { rooms, specialties, fetchRooms, fetchSpecialties } = useRoomStore();
 
     const [searchQuery, setSearchQuery] = useState('');
     const [roomFilter, setRoomFilter] = useState('ALL');
-    const [dateFilter, setDateFilter] = useState('');
+    const [fromDate, setFromDate] = useState(todayYmd);
+    const [toDate, setToDate] = useState(todayYmd);
     const [currentPage, setCurrentPage] = useState(1);
-    const ITEMS_PER_PAGE = 7;
+    const [modalShifts, setModalShifts] = useState<Shift[]>([]);
 
     // Room Staff Detail Modal
     const [selectedRoomShift, setSelectedRoomShift] = useState<{
@@ -109,6 +113,7 @@ export function AdminShiftPage() {
 
     // Bulk Weekly Modal
     const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     // Delete Confirm
     const [deletingShift, setDeletingShift] = useState<Shift | null>(null);
@@ -117,11 +122,44 @@ export function AdminShiftPage() {
 
     useEffect(() => {
         if (accessToken) {
-            fetchShifts(accessToken);
             fetchStaffs(accessToken);
             fetchRooms(accessToken);
+            fetchSpecialties(accessToken);
         }
-    }, [accessToken, fetchShifts, fetchStaffs, fetchRooms]);
+    }, [accessToken, fetchStaffs, fetchRooms, fetchSpecialties]);
+
+    useEffect(() => {
+        if (!accessToken) return;
+        const from = fromDate || undefined;
+        const to = toDate || undefined;
+        fetchShifts(accessToken, {
+            room_id: roomFilter === 'ALL' ? undefined : roomFilter,
+            from: from && to && from > to ? to : from,
+            to: from && to && from > to ? from : to,
+            page: currentPage,
+            limit: SHIFT_PAGE_SIZE,
+        });
+    }, [accessToken, roomFilter, fromDate, toDate, currentPage, fetchShifts]);
+
+    useEffect(() => {
+        if (!selectedRoomShift || !accessToken) return;
+        let cancelled = false;
+        shiftService
+            .getShifts(accessToken, {
+                room_id: selectedRoomShift.room_id,
+                date: selectedRoomShift.date.split('T')[0],
+                limit: 100,
+            })
+            .then((res) => {
+                if (!cancelled) setModalShifts(res.data || []);
+            })
+            .catch(() => {
+                if (!cancelled) setModalShifts([]);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedRoomShift, accessToken]);
 
     /* ── Lookup helpers ── */
     const isStaffsLoading = useStaffStore((s) => s.isLoading);
@@ -152,7 +190,8 @@ export function AdminShiftPage() {
 
     const getStaffsForRoomShift = (roomId: string, dateStr: string) => {
         const shiftDateKey = toDateKey(dateStr);
-        const matchingShifts = shifts.filter(
+        const source = modalShifts.length > 0 ? modalShifts : shifts;
+        const matchingShifts = source.filter(
             (s) => s.room_id === roomId && toDateKey(s.date) === shiftDateKey
         );
         const staffIds = new Set(matchingShifts.map((s) => s.staff_id));
@@ -171,7 +210,7 @@ export function AdminShiftPage() {
         setCreateForm({
             staff_id: staffs[0]?.staff_id || '',
             room_id: rooms[0]?.room_id || '',
-            date: new Date().toISOString().split('T')[0],
+            date: todayYmd(),
             start_time: '08:00',
             end_time: '17:00',
         });
@@ -188,6 +227,9 @@ export function AdminShiftPage() {
             return;
         }
 
+        const roomDateShifts = accessToken
+            ? await loadShiftsForRoomDate(accessToken, createForm.room_id, createForm.date)
+            : [];
         const valErr = validateShiftAssignment({
             roomId: createForm.room_id,
             staffId: createForm.staff_id,
@@ -195,7 +237,7 @@ export function AdminShiftPage() {
             rooms,
             staffs,
             specialties: useRoomStore.getState().specialties,
-            shifts,
+            shifts: roomDateShifts,
         });
         if (valErr) {
             setCreateError(valErr);
@@ -237,6 +279,9 @@ export function AdminShiftPage() {
             return;
         }
 
+        const roomDateShifts = accessToken
+            ? await loadShiftsForRoomDate(accessToken, editForm.room_id, editForm.date)
+            : [];
         const valErr = validateShiftAssignment({
             roomId: editForm.room_id,
             staffId: editForm.staff_id,
@@ -245,7 +290,7 @@ export function AdminShiftPage() {
             rooms,
             staffs,
             specialties: useRoomStore.getState().specialties,
-            shifts,
+            shifts: roomDateShifts,
         });
         if (valErr) {
             setUpdateError(valErr);
@@ -281,11 +326,7 @@ export function AdminShiftPage() {
     /* ── Computed ── */
 
     const filteredShifts = shifts.filter((shift) => {
-        const matchesRoom = roomFilter === 'ALL' || shift.room_id === roomFilter;
-
         const shiftDate = toDateKey(shift.date);
-        const matchesDate = dateFilter === '' || shiftDate === dateFilter;
-
         const roomName = getRoomName(shift.room_id).toLowerCase();
         const q = searchQuery.toLowerCase().trim();
         const matchesSearch = !q ||
@@ -294,25 +335,12 @@ export function AdminShiftPage() {
             shift.start_time.includes(q) ||
             shift.end_time.includes(q);
 
-        return matchesRoom && matchesDate && matchesSearch;
+        return matchesSearch;
     });
 
-    const sortedShifts = [...filteredShifts].sort((a, b) => {
-        const roomA = String(getRoomName(a.room_id) || '').toLowerCase();
-        const roomB = String(getRoomName(b.room_id) || '').toLowerCase();
-        const byRoom = roomA.localeCompare(roomB, 'vi');
-
-        if (byRoom !== 0) return byRoom;
-
-        // Same room: show newer shifts first.
-        return toTimestamp(b.date) - toTimestamp(a.date);
-    });
-
-    const totalPages = Math.ceil(sortedShifts.length / ITEMS_PER_PAGE);
-    const paginatedShifts = sortedShifts.slice(
-        (currentPage - 1) * ITEMS_PER_PAGE,
-        currentPage * ITEMS_PER_PAGE
-    );
+    const total = meta?.total ?? 0;
+    const totalPages = Math.max(1, Math.ceil(total / SHIFT_PAGE_SIZE));
+    const paginatedShifts = filteredShifts;
 
     /* ── Render ── */
 
@@ -333,6 +361,13 @@ export function AdminShiftPage() {
                                 </p>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                    onClick={() => setIsImportModalOpen(true)}
+                                    className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#8B7CF6]/30 hover:bg-[#F5F2FF] text-[#8B7CF6] text-[13px] font-bold rounded-xl transition-all shadow-sm cursor-pointer"
+                                >
+                                    <Upload className="w-4 h-4" />
+                                    Import file
+                                </button>
                                 <button
                                     onClick={() => setIsBulkModalOpen(true)}
                                     className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#8B7CF6]/30 hover:bg-[#F5F2FF] text-[#8B7CF6] text-[13px] font-bold rounded-xl transition-all shadow-sm cursor-pointer"
@@ -402,23 +437,32 @@ export function AdminShiftPage() {
 
                                 <div className={cn(
                                     "flex items-center gap-2 bg-[#F5F5F8] border rounded-xl px-3.5 py-2 text-[12.5px] transition-all shadow-xs",
-                                    dateFilter !== ''
+                                    fromDate || toDate
                                         ? "border-[#8B7CF6] bg-[#8B7CF6]/5"
                                         : "border-neutral-200/60 hover:border-neutral-300 focus-within:border-[#8B7CF6] focus-within:bg-white"
                                 )}>
-                                    <span className="text-[11.5px] font-bold text-neutral-400 uppercase tracking-wider shrink-0">Ngày:</span>
+                                    <span className="text-[11.5px] font-bold text-neutral-400 uppercase tracking-wider shrink-0">Từ:</span>
                                     <input
                                         type="date"
-                                        value={dateFilter}
-                                        onChange={(e) => { setDateFilter(e.target.value); setCurrentPage(1); }}
+                                        value={fromDate}
+                                        onChange={(e) => { setFromDate(e.target.value); setCurrentPage(1); }}
+                                        className="bg-transparent font-bold text-[#2D2D2D] outline-none cursor-pointer text-[12.5px]"
+                                    />
+                                    <span className="text-[11.5px] font-bold text-neutral-400 uppercase tracking-wider shrink-0">Đến:</span>
+                                    <input
+                                        type="date"
+                                        value={toDate}
+                                        onChange={(e) => { setToDate(e.target.value); setCurrentPage(1); }}
                                         className="bg-transparent font-bold text-[#2D2D2D] outline-none cursor-pointer text-[12.5px]"
                                     />
                                 </div>
 
-                                {(dateFilter || roomFilter !== 'ALL' || searchQuery) && (
+                                {(fromDate !== todayYmd() || toDate !== todayYmd() || roomFilter !== 'ALL' || searchQuery) && (
                                     <button
                                         onClick={() => {
-                                            setDateFilter('');
+                                            const today = todayYmd();
+                                            setFromDate(today);
+                                            setToDate(today);
                                             setRoomFilter('ALL');
                                             setSearchQuery('');
                                             setCurrentPage(1);
@@ -453,7 +497,7 @@ export function AdminShiftPage() {
                                         {paginatedShifts.map((shift, index) => (
                                             <tr key={shift.shift_id} className="hover:bg-neutral-50/50 transition-colors group">
                                                 <td className="px-5 py-4 text-[13px] font-semibold text-[#7B7B7B]">
-                                                    {(currentPage - 1) * ITEMS_PER_PAGE + index + 1}
+                                                    {(currentPage - 1) * SHIFT_PAGE_SIZE + index + 1}
                                                 </td>
                                                 <td className="px-5 py-4">
                                                     <button
@@ -531,10 +575,10 @@ export function AdminShiftPage() {
                     </div>
 
                     {/* ── Fixed Bottom Pagination Controls ── */}
-                    {filteredShifts.length > 0 && (
+                    {total > 0 && (
                         <div className="px-6 py-4 border-t border-neutral-100 bg-white flex items-center justify-between shrink-0">
                             <p className="text-[12px] text-[#ADADAD] font-bold">
-                                Hiển thị {Math.min(filteredShifts.length, (currentPage - 1) * ITEMS_PER_PAGE + 1)} – {Math.min(filteredShifts.length, currentPage * ITEMS_PER_PAGE)} trong số {filteredShifts.length} ca trực
+                                Hiển thị {Math.min(total, (currentPage - 1) * SHIFT_PAGE_SIZE + 1)} – {Math.min(total, currentPage * SHIFT_PAGE_SIZE)} trong số {total} ca trực
                             </p>
                             {totalPages > 1 && (
                                 <div className="flex items-center gap-1">
@@ -591,6 +635,18 @@ export function AdminShiftPage() {
                     staffs={staffs}
                     accessToken={accessToken}
                     onClose={() => setIsBulkModalOpen(false)}
+                    onSuccess={() => { if (accessToken) fetchShifts(accessToken); }}
+                />
+            )}
+
+            {isImportModalOpen && (
+                <ImportShiftModal
+                    rooms={rooms}
+                    staffs={staffs}
+                    specialties={specialties}
+                    shifts={shifts}
+                    accessToken={accessToken}
+                    onClose={() => setIsImportModalOpen(false)}
                     onSuccess={() => { if (accessToken) fetchShifts(accessToken); }}
                 />
             )}

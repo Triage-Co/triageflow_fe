@@ -24,7 +24,7 @@ import { useAuthStore } from '@/modules/auth/store/authStore';
 import type { HospitalRoom, Specialty } from '../types/room.types';
 import type { Shift } from '../types/shift.types';
 import { roomService } from '../services/roomService';
-import { validateShiftAssignment, filterEligibleStaffForRoom } from '../utils/shiftValidation';
+import { validateShiftAssignment, filterEligibleStaffForRoom, todayYmd, addCalendarDays, loadShiftsForRoomDate } from '../utils/shiftValidation';
 import { RoomServicesPanel } from './RoomServicesPanel';
 import { serviceCatalogService, extractServiceList } from '../services/serviceCatalogService';
 import type { CatalogService } from '../types/service.types';
@@ -106,10 +106,21 @@ export function AdminRoomDetailPage() {
         if (accessToken) {
             if (rooms.length === 0) fetchRooms(accessToken);
             if (specialties.length === 0) fetchSpecialties(accessToken);
-            if (shifts.length === 0) fetchShifts(accessToken);
             if (staffs.length === 0) fetchStaffs(accessToken);
         }
-    }, [accessToken, rooms.length, specialties.length, shifts.length, staffs.length, fetchRooms, fetchSpecialties, fetchShifts, fetchStaffs]);
+    }, [accessToken, rooms.length, specialties.length, staffs.length, fetchRooms, fetchSpecialties, fetchStaffs]);
+
+    useEffect(() => {
+        if (!accessToken || !roomId) return;
+        const today = todayYmd();
+        fetchShifts(accessToken, {
+            room_id: roomId,
+            from: addCalendarDays(today, -90),
+            to: addCalendarDays(today, 180),
+            page: 1,
+            limit: 100,
+        });
+    }, [accessToken, roomId, fetchShifts]);
 
     useEffect(() => {
         if (!accessToken || !roomId) return;
@@ -169,7 +180,7 @@ export function AdminRoomDetailPage() {
         setCreateError(null);
         setCreateForm({
             staff_id: eligibleStaffs[0]?.staff_id || '',
-            date: new Date().toISOString().split('T')[0],
+            date: todayYmd(),
             start_time: '08:00',
             end_time: '17:00',
         });
@@ -186,6 +197,9 @@ export function AdminRoomDetailPage() {
             return;
         }
 
+        const roomDateShifts = accessToken
+            ? await loadShiftsForRoomDate(accessToken, roomId, createForm.date)
+            : [];
         const valErr = validateShiftAssignment({
             roomId,
             staffId: createForm.staff_id,
@@ -193,7 +207,7 @@ export function AdminRoomDetailPage() {
             rooms,
             staffs,
             specialties,
-            shifts,
+            shifts: roomDateShifts,
         });
         if (valErr) {
             setCreateError(valErr);
@@ -243,6 +257,7 @@ export function AdminRoomDetailPage() {
             return;
         }
 
+        const roomDateShifts = await loadShiftsForRoomDate(accessToken, roomId, editForm.date);
         const valErr = validateShiftAssignment({
             roomId,
             staffId: editForm.staff_id,
@@ -251,7 +266,7 @@ export function AdminRoomDetailPage() {
             rooms,
             staffs,
             specialties,
-            shifts,
+            shifts: roomDateShifts,
         });
         if (valErr) {
             setUpdateError(valErr);
@@ -272,7 +287,6 @@ export function AdminRoomDetailPage() {
                 accessToken
             );
             setEditingShift(null);
-            fetchShifts(accessToken);
         } catch (err) {
             setUpdateError(err instanceof Error ? err.message : 'Cập nhật ca trực thất bại.');
         } finally {
@@ -338,13 +352,11 @@ export function AdminRoomDetailPage() {
 
     const specName = room.specialty?.specialty_name || specialties.find((s) => s.specialty_id === room.specialty_id)?.specialty_name || 'N/A';
     const specCode = room.specialty?.specialty_code || specialties.find((s) => s.specialty_id === room.specialty_id)?.specialty_code || 'N/A';
-    const roomShifts = shifts
-        .filter((s) => s.room_id === room.room_id)
-        .sort((a, b) => {
-            const dateA = a.date ? new Date(a.date).getTime() : 0;
-            const dateB = b.date ? new Date(b.date).getTime() : 0;
-            return dateA - dateB;
-        });
+    const roomShifts = [...shifts].sort((a, b) => {
+        const dateA = a.date ? new Date(a.date).getTime() : 0;
+        const dateB = b.date ? new Date(b.date).getTime() : 0;
+        return dateA - dateB;
+    });
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden relative">
