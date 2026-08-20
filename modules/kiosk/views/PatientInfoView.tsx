@@ -5,7 +5,6 @@ import {
   MapPin,
   Navigation,
   Printer,
-  Clock,
   User,
   X,
   FileText,
@@ -36,7 +35,6 @@ export const PatientInfoView: React.FC = () => {
   const patientName = activeTicket?.patientName || patientInfo?.fullName || '';
   const currentCallingNo = activeTicket?.currentCallingNo || ticketNo;
   const waitingCount = activeTicket?.waitingCount ?? 3;
-  const estimatedWait = activeTicket?.estimatedWaitMinutes ?? 10;
   const startTime = activeTicket?.startTime || '';
 
   const isPaymentStep = activeTicket?.stepName?.toLowerCase().trim().startsWith('thanh toán') || false;
@@ -137,10 +135,11 @@ export const PatientInfoView: React.FC = () => {
           <span className="text-5xl font-black tracking-widest block my-2">{ticketNo}</span>
         </div>
 
-        <div className="text-left text-xs space-y-1 my-3 font-bold">
-          <p>Thời gian chờ ước tính: {estimatedWait} phút</p>
-          {startTime && <p>Giờ khám dự kiến: {startTime}</p>}
-        </div>
+        {startTime && (
+          <div className="text-left text-xs space-y-1 my-3 font-bold">
+            <p>Giờ khám dự kiến: {startTime}</p>
+          </div>
+        )}
 
         {/* Notice */}
         <p className="text-xs font-bold my-3 text-center">
@@ -204,10 +203,11 @@ export const PatientInfoView: React.FC = () => {
                 <span className="text-4xl font-black text-[#155DFC] tracking-wider block my-1">{ticketNo}</span>
               </div>
 
-              <div className="text-left text-xs space-y-1 font-bold text-neutral-600">
-                <p>Thời gian chờ ước tính: {estimatedWait} phút</p>
-                {startTime && <p>Giờ khám dự kiến: {startTime}</p>}
-              </div>
+              {startTime && (
+                <div className="text-left text-xs space-y-1 font-bold text-neutral-600">
+                  <p>Giờ khám dự kiến: {startTime}</p>
+                </div>
+              )}
 
               <p className="text-xs font-bold text-neutral-500">
                 Vui lòng giữ phiếu khám và chờ đến lượt!
@@ -369,14 +369,6 @@ export const PatientInfoView: React.FC = () => {
 
                   {/* Divider */}
                   <div className="border-t border-neutral-100 my-1" />
-
-                  {/* Thời gian chờ */}
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-neutral-500">Thời gian chờ</span>
-                    <span className="font-black text-[#1E2939]">
-                      {estimatedWait} <span className="text-xs font-bold text-neutral-400">phút</span>
-                    </span>
-                  </div>
 
                   {/* Giờ khám dự kiến */}
                   <div className="flex items-center justify-between">
