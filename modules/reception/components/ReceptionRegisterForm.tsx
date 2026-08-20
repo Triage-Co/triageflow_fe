@@ -371,9 +371,11 @@ export function ReceptionRegisterForm() {
       (bookingMode === "ai_triage"
         ? triageSession.is_analyzed &&
           (form.slot_id.length > 0 || Boolean(triageSession.best_slot_id))
-        : form.department_id.length > 0 &&
-          form.specialty_id.length > 0 &&
-          form.slot_id.length > 0),
+        : bookingMode === "package"
+          ? form.package_id.length > 0 && form.slot_id.length > 0
+          : form.department_id.length > 0 &&
+            form.specialty_id.length > 0 &&
+            form.slot_id.length > 0),
   );
 
   async function lookupPatientByCitizen(citizenId: string) {
@@ -545,12 +547,16 @@ export function ReceptionRegisterForm() {
           update("department_id", triageSession.recommended_department_id);
         }
       }
-      if (!form.department_id && !triageSession.recommended_department_id) {
+      if (bookingMode !== "package" && !form.department_id && !triageSession.recommended_department_id) {
         setError("Vui lòng chọn chuyên khoa khám.");
         return;
       }
-      if (bookingMode !== "ai_triage" && !form.specialty_id) {
+      if (bookingMode !== "package" && bookingMode !== "ai_triage" && !form.specialty_id) {
         setError("Vui lòng chọn bác sĩ khám.");
+        return;
+      }
+      if (bookingMode === "package" && !form.package_id) {
+        setError("Vui lòng chọn gói khám.");
         return;
       }
       if (!form.slot_id && !triageSession.best_slot_id) {
@@ -677,15 +683,7 @@ export function ReceptionRegisterForm() {
 
         if (!bookingId) {
           let bookingRes;
-          if (form.payment_method === "cash" && effectiveSlotId) {
-            bookingRes = await receptionService.createBookingCash(
-              {
-                patient_id: patientId,
-                slot_id: effectiveSlotId,
-              },
-              accessToken,
-            );
-          } else if (
+          if (
             bookingMode === "package" &&
             form.package_id &&
             effectiveSlotId
@@ -695,6 +693,14 @@ export function ReceptionRegisterForm() {
                 patient_id: patientId,
                 slot_id: effectiveSlotId,
                 package_id: form.package_id,
+              },
+              accessToken,
+            );
+          } else if (form.payment_method === "cash" && effectiveSlotId) {
+            bookingRes = await receptionService.createBookingCash(
+              {
+                patient_id: patientId,
+                slot_id: effectiveSlotId,
               },
               accessToken,
             );

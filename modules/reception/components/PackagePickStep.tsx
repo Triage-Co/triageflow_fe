@@ -110,7 +110,7 @@ export function PackagePickStep({
                 setPackagesError(null);
                 const list = await receptionService.getExamPackages(accessToken);
                 if (mounted) {
-                    setPackages(list);
+                    setPackages(list.filter((pkg) => pkg.is_active !== false));
                     if (packageId) {
                         setSelectedPkgId(packageId);
                     }
@@ -179,7 +179,20 @@ export function PackagePickStep({
                 setIsLoadingSlots(true);
                 const slotsData = await receptionService.getRoomSlots(selectedDate, accessToken);
                 if (mounted) {
-                    const available = slotsData.filter((s) => s.status === 'AVAILABLE' || !s.status);
+                    let available = slotsData.filter((s) => s.status === 'AVAILABLE' || !s.status);
+                    const now = new Date();
+                    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                    if (selectedDate === todayStr) {
+                        const currentHour = now.getHours();
+                        const currentMinute = now.getMinutes();
+                        available = available.filter(s => {
+                            if (!s.start_time) return true;
+                            const [hourStr, minStr] = s.start_time.split(':');
+                            const hour = parseInt(hourStr, 10);
+                            const min = parseInt(minStr, 10);
+                            return hour > currentHour || (hour === currentHour && min > currentMinute);
+                        });
+                    }
                     setRoomSlots(available);
 
                     // Map to ReceptionSlot format for parent form
