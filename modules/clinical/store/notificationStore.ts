@@ -8,7 +8,6 @@ export interface NotificationState {
     error: string | null;
     fetchNotifications: (token: string) => Promise<void>;
     toggleRead: (id: string) => void;
-    markAllRead: () => void;
     deleteNotification: (id: string, token: string) => Promise<void>;
     deleteAllNotifications: (token: string) => Promise<void>;
     clearError: () => void;
@@ -102,12 +101,6 @@ export const useNotificationStore = create<NotificationState>((set) => ({
             notifications: state.notifications.map((n) =>
                 n.id === id ? { ...n, read: !n.read } : n
             ),
-        }));
-    },
-
-    markAllRead: () => {
-        set((state) => ({
-            notifications: state.notifications.map((n) => ({ ...n, read: true })),
         }));
     },
 

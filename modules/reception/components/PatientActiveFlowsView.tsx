@@ -36,9 +36,11 @@ import {
   mapActiveFlowsList,
   mapStepDetailToInfo,
   flowItemToRegistrationResult,
+  formatRealTimeRange,
   type PatientActiveFlowItem,
 } from "@/modules/reception/utils/receptionFlowMapper";
 import { formatPhoneDisplay } from "@/modules/reception/utils/receptionSearch";
+import { getTodayDateString } from "@/modules/reception/utils/receptionMapper";
 import {
   downloadRegistrationTicketPdf,
   getQrImageUrl,
@@ -65,6 +67,7 @@ export function PatientActiveFlowsView({
 }: PatientActiveFlowsViewProps) {
   const accessToken = useAuthStore((s) => s.accessToken);
   const [flows, setFlows] = useState<PatientActiveFlowItem[]>([]);
+  const [selectedDate, setSelectedDate] = useState<string>(getTodayDateString());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedFlow, setSelectedFlow] =
@@ -77,6 +80,9 @@ export function PatientActiveFlowsView({
   const [pendingOrders, setPendingOrders] = useState<any[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
   const [isOrdersModalOpen, setIsOrdersModalOpen] = useState(false);
+  // Bộ lọc booking_id cho Service Orders: 'TODAY' (mặc định theo ca hôm nay), 'ALL' (tất cả), hoặc booking_id cụ thể
+  const [selectedBookingFilter, setSelectedBookingFilter] =
+    useState<string>("TODAY");
 
   // State cho xác nhận thanh toán tiền mặt & xem mã QR
   const [confirmingCashOrder, setConfirmingCashOrder] = useState<any | null>(
@@ -90,6 +96,73 @@ export function PatientActiveFlowsView({
   } | null>(null);
 
   const patientId = patient.patient_id || patient.accountId;
+  const todayStr = getTodayDateString();
+
+  // Tìm ca khám của ngày hôm nay:
+  // - Nếu đang xem ngày hôm nay, API đã lọc sẵn → toàn bộ flows là của hôm nay
+  // - Nếu xem ngày khác, kiểm tra appointmentDate / createdAt
+  const todayFlows = (() => {
+    if (selectedDate === todayStr) return flows;
+    return flows.filter((f) => {
+      if (f.appointmentDate) return f.appointmentDate.slice(0, 10) === todayStr;
+      if (f.createdAt) return f.createdAt.slice(0, 10) === todayStr;
+      return false;
+    });
+  })();
+
+  const activeTodayFlow =
+    todayFlows.find(
+      (f) =>
+        f.flowStatus === "IN_PROGRESS" ||
+        f.flowStatus === "PROCESSING" ||
+        f.flowStatus === "EXAMINING",
+    ) ||
+    todayFlows[0] ||
+    null;
+
+  const todayBookingId =
+    activeTodayFlow?.bookingId ||
+    (activeTodayFlow?.raw as any)?.booking_id ||
+    (activeTodayFlow?.raw as any)?.booking?.booking_id ||
+    null;
+
+  // Hàm lọc danh sách đơn chỉ định theo booking_id & status PENDING giống Kiosk
+  // BẮT BUỘC có targetBookingId và đơn phải có booking_id khớp đúng targetBookingId
+  const filterOrdersByBooking = (
+    orders: any[],
+    targetBookingId?: string | null,
+  ) => {
+    if (!targetBookingId) return [];
+    return orders.filter((order) => {
+      if (!order.booking_id || order.booking_id !== targetBookingId) {
+        return false;
+      }
+      const details = Array.isArray(order.serviceOrderDetails)
+        ? order.serviceOrderDetails
+        : [];
+      return (
+        details.length === 0 ||
+        details.some(
+          (detail: any) =>
+            (detail.status || "PENDING").toUpperCase() === "PENDING",
+        )
+      );
+    });
+  };
+
+  // Các đơn cần thanh toán của ca khám hôm nay (dùng cho badge & header)
+  const todayUnpaidOrders = filterOrdersByBooking(pendingOrders, todayBookingId);
+
+  // Xác định booking_id thực tế cần lọc trong Modal
+  const currentModalBookingId =
+    selectedBookingFilter === "TODAY"
+      ? todayBookingId
+      : selectedBookingFilter;
+
+  const displayedOrdersInModal = filterOrdersByBooking(
+    pendingOrders,
+    currentModalBookingId,
+  );
 
   const loadPendingOrders = async () => {
     if (!accessToken || !patientId) return;
@@ -142,14 +215,16 @@ export function PatientActiveFlowsView({
     }
   };
 
-  const loadFlows = async () => {
+  const loadFlows = async (dateParam?: string) => {
     if (!accessToken || !patientId) return;
+    const dateToFetch = dateParam !== undefined ? dateParam : selectedDate;
     setIsLoading(true);
     setError(null);
     try {
       const rawFlows = await receptionService.getPatientActiveFlows(
         patientId,
         accessToken,
+        dateToFetch || undefined,
       );
       const mapped = mapActiveFlowsList(rawFlows);
 
@@ -171,12 +246,19 @@ export function PatientActiveFlowsView({
                       ...st,
                       roomName: mappedDetail.roomName || st.roomName,
                       doctorName: mappedDetail.doctorName || st.doctorName,
+                      specialtyName:
+                        mappedDetail.specialtyName || st.specialtyName,
                       queueNumber: mappedDetail.queueNumber || st.queueNumber,
                       stepName: mappedDetail.stepName || st.stepName,
                       stepStatus: mappedDetail.stepStatus || st.stepStatus,
                       statusLabel: mappedDetail.statusLabel || st.statusLabel,
                       statusBadgeClass:
                         mappedDetail.statusBadgeClass || st.statusBadgeClass,
+                      startTime: mappedDetail.startTime,
+                      endTime: mappedDetail.endTime,
+                      shiftDate: mappedDetail.shiftDate,
+                      slotTimeLabel:
+                        mappedDetail.slotTimeLabel || st.slotTimeLabel,
                     };
                   }
                 }
@@ -187,37 +269,67 @@ export function PatientActiveFlowsView({
             }),
           );
 
-          const examStep =
-            enrichedSteps.find(
+          // 1. Lọc bỏ các bước thanh toán
+          const nonPaySteps = enrichedSteps.filter((st) => {
+            const name = (st.stepName || "").toLowerCase();
+            const type = (st.stepType || "").toUpperCase();
+            return (
+              !name.includes("thanh toán") &&
+              !name.includes("thanh toan") &&
+              type !== "PAYMENT"
+            );
+          });
+
+          // 2. Tìm bước IN_PROGRESS (hoặc bước khám chính)
+          const activeExamStep =
+            nonPaySteps.find(
               (s) =>
-                (s.stepStatus === "IN_PROGRESS" ||
-                  s.stepStatus === "PROCESSING" ||
-                  s.stepStatus === "WAITING" ||
-                  s.stepStatus === "QUEUED") &&
-                s.queueNumber,
+                s.stepStatus === "IN_PROGRESS" ||
+                s.stepStatus === "PROCESSING" ||
+                s.stepStatus === "EXAMINING",
             ) ||
-            enrichedSteps.find((s) => s.queueNumber && s.roomName) ||
-            enrichedSteps.find((s) => s.queueNumber) ||
-            enrichedSteps.find((s) => s.roomName) ||
+            nonPaySteps.find((s) => s.queueNumber && s.roomName) ||
+            nonPaySteps.find((s) => s.queueNumber) ||
+            nonPaySteps.find(
+              (s) => s.stepStatus === "WAITING" || s.stepStatus === "QUEUED",
+            ) ||
+            nonPaySteps[0] ||
             enrichedSteps[0];
-          const queueNumber = examStep?.queueNumber || flowItem.queueNumber;
+
+          const queueNumber =
+            activeExamStep?.queueNumber || flowItem.queueNumber;
           const ticketNo = queueNumber
             ? String(queueNumber).trim()
             : flowItem.ticketNo;
-          const doctorLabel = examStep?.doctorName
-            ? examStep.doctorName.toLowerCase().startsWith("bs")
-              ? examStep.doctorName
-              : `BS. ${examStep.doctorName}`
+          const doctorLabel = activeExamStep?.doctorName
+            ? activeExamStep.doctorName.toLowerCase().startsWith("bs")
+              ? activeExamStep.doctorName
+              : `BS. ${activeExamStep.doctorName}`
             : flowItem.doctorLabel;
-          const roomLabel = examStep?.roomName || flowItem.roomLabel;
+          const roomLabel = activeExamStep?.roomName || flowItem.roomLabel;
+          const specialty =
+            activeExamStep?.specialtyName || flowItem.specialty;
+
+          // Slot time label từ activeExamStep hoặc flowItem
+          let slotTimeLabel = flowItem.slotTimeLabel;
+          if (activeExamStep?.startTime && activeExamStep?.endTime) {
+            slotTimeLabel = formatRealTimeRange(
+              activeExamStep.startTime,
+              activeExamStep.endTime,
+              flowItem.appointmentDate || activeExamStep.shiftDate,
+              flowItem.createdAt,
+            );
+          }
 
           return {
             ...flowItem,
             steps: enrichedSteps,
             queueNumber,
             ticketNo,
+            specialty,
             doctorLabel,
             roomLabel,
+            slotTimeLabel,
           };
         }),
       );
@@ -237,10 +349,10 @@ export function PatientActiveFlowsView({
   };
 
   useEffect(() => {
-    void loadFlows();
+    void loadFlows(selectedDate);
     void loadPendingOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patientId, accessToken]);
+  }, [patientId, accessToken, selectedDate]);
 
   const activeRegistrationResult: RegistrationResult | null = selectedFlow
     ? flowItemToRegistrationResult(selectedFlow, {
@@ -314,22 +426,25 @@ export function PatientActiveFlowsView({
             />
             Làm mới
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setIsOrdersModalOpen(true);
-              void loadPendingOrders();
-            }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#8B7CF6] hover:bg-[#7C6FE0] text-white text-[12.5px] font-bold shadow-[0_2px_8px_rgba(139,124,246,0.25)] transition-all cursor-pointer relative"
-          >
-            <CreditCard className="w-4 h-4" />
-            <span>Các mục cần thanh toán</span>
-            {pendingOrders.length > 0 && (
-              <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10.5px] font-black rounded-full bg-rose-500 text-white shadow-xs">
-                {pendingOrders.length}
-              </span>
-            )}
-          </button>
+          {todayBookingId && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedBookingFilter("TODAY");
+                setIsOrdersModalOpen(true);
+                void loadPendingOrders();
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#8B7CF6] hover:bg-[#7C6FE0] text-white text-[12.5px] font-bold shadow-[0_2px_8px_rgba(139,124,246,0.25)] transition-all cursor-pointer relative"
+            >
+              <CreditCard className="w-4 h-4" />
+              <span>Các mục cần thanh toán</span>
+              {todayUnpaidOrders.length > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10.5px] font-black rounded-full bg-rose-500 text-white shadow-xs">
+                  {todayUnpaidOrders.length}
+                </span>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
@@ -397,13 +512,55 @@ export function PatientActiveFlowsView({
 
       {/* Flows List Section */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-[15px] font-bold text-[#1F2937]">
-            Danh sách phiếu khám ({flows.length})
-          </h3>
-          <span className="text-[12px] text-[#9CA3AF]">
-            Dữ liệu khám trong ngày từ hệ thống
-          </span>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-neutral-100">
+          <div>
+            <h3 className="text-[15px] font-bold text-[#1F2937]">
+              Danh sách phiếu khám ({flows.length})
+            </h3>
+            <p className="text-[12px] text-[#9CA3AF]">
+              {selectedDate === getTodayDateString()
+                ? "Đang hiển thị phiếu khám hôm nay theo thời gian thực"
+                : selectedDate
+                  ? `Đang lọc phiếu khám ngày ${selectedDate}`
+                  : "Đang hiển thị tất cả phiếu khám"}
+            </p>
+          </div>
+
+          {/* Date Selector Bar */}
+          <div className="flex items-center flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedDate(getTodayDateString())}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border",
+                selectedDate === getTodayDateString()
+                  ? "bg-[#8B7CF6] text-white border-[#8B7CF6] shadow-xs"
+                  : "bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50"
+              )}
+            >
+              Hôm nay
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedDate("")}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border",
+                selectedDate === ""
+                  ? "bg-[#8B7CF6] text-white border-[#8B7CF6] shadow-xs"
+                  : "bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50"
+              )}
+            >
+              Tất cả
+            </button>
+            <div className="relative flex items-center">
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="px-2.5 py-1 text-xs rounded-lg border border-neutral-200 bg-white text-neutral-700 font-medium focus:border-[#8B7CF6] outline-none cursor-pointer"
+              />
+            </div>
+          </div>
         </div>
 
         {isLoading ? (
@@ -419,125 +576,142 @@ export function PatientActiveFlowsView({
               <FileText className="w-6 h-6" />
             </div>
             <h4 className="text-[15px] font-bold text-[#374151]">
-              Chưa có phiếu khám nào trong ngày hôm nay
+              {selectedDate === getTodayDateString()
+                ? "Chưa có phiếu khám nào trong ngày hôm nay"
+                : selectedDate
+                  ? `Chưa có phiếu khám nào trong ngày ${selectedDate}`
+                  : "Chưa có phiếu khám nào"}
             </h4>
             <p className="text-[12.5px] text-[#9CA3AF] max-w-md mx-auto">
-              Bệnh nhân hiện tại chưa có phiếu khám nào trong ngày hoặc đang có
-              các chỉ định dịch vụ cần kiểm tra thanh toán.
+              Bệnh nhân chưa có phiếu khám hoặc ca khám nào trong khoảng thời gian đã chọn.
             </p>
-            <button
-              type="button"
-              onClick={() => {
-                setIsOrdersModalOpen(true);
-                void loadPendingOrders();
-              }}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#8B7CF6] hover:bg-[#7C6FE0] text-white text-[13px] font-bold shadow-md transition-all cursor-pointer mt-2"
-            >
-              <CreditCard className="w-4 h-4" />
-              <span>Các mục cần thanh toán</span>
-              {pendingOrders.length > 0 && (
-                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10.5px] font-black rounded-full bg-rose-500 text-white shadow-xs">
-                  {pendingOrders.length}
-                </span>
-              )}
-            </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4">
-            {flows.map((flow) => (
-              <div
-                key={flow.flowId}
-                className="rounded-2xl border border-[#EBEBEB] bg-white p-5 md:p-6 shadow-[0_1px_6px_rgba(0,0,0,0.04)] hover:border-[#8B7CF6]/40 hover:shadow-md transition-all"
-              >
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-                  {/* Left: Queue Number Ticket Badge & Main Info */}
-                  <div className="flex items-start gap-4 sm:gap-5">
-                    <div className="bg-[#F5F3FF] border border-[#8B7CF6]/20 rounded-2xl p-3.5 text-center shrink-0 min-w-[90px] shadow-xs">
-                      <span className="text-[10px] font-bold text-[#8B7CF6] uppercase block">
-                        Số thứ tự
-                      </span>
-                      <div className="text-2xl sm:text-3xl font-black text-[#8B7CF6] tracking-tight leading-none my-1">
-                        {flow.ticketNo}
-                      </div>
-                      <span className="text-[9.5px] font-semibold text-neutral-400 block">
-                        Phòng khám
-                      </span>
-                    </div>
+            {flows.map((flow) => {
+              const flowBookingId =
+                flow.bookingId ||
+                (flow.raw as any)?.booking_id ||
+                (flow.raw as any)?.booking?.booking_id;
+              const flowPendingOrders = filterOrdersByBooking(
+                pendingOrders,
+                flowBookingId,
+              );
 
-                    <div className="space-y-1.5 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="text-[16px] font-bold text-[#1F2937] truncate">
-                          {flow.specialty}
-                        </h4>
-                        <span
-                          className={cn(
-                            "text-[11px] font-bold px-2.5 py-0.5 rounded-full border",
-                            flow.statusBadgeClass,
-                          )}
-                        >
-                          {flow.statusLabel}
+              return (
+                <div
+                  key={flow.flowId}
+                  className="rounded-2xl border border-[#EBEBEB] bg-white p-5 md:p-6 shadow-[0_1px_6px_rgba(0,0,0,0.04)] hover:border-[#8B7CF6]/40 hover:shadow-md transition-all"
+                >
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+                    {/* Left: Queue Number Ticket Badge & Main Info */}
+                    <div className="flex items-start gap-4 sm:gap-5">
+                      <div className="bg-[#F5F3FF] border border-[#8B7CF6]/20 rounded-2xl p-3.5 text-center shrink-0 min-w-[90px] shadow-xs">
+                        <span className="text-[10px] font-bold text-[#8B7CF6] uppercase block">
+                          Số thứ tự
+                        </span>
+                        <div className="text-2xl sm:text-3xl font-black text-[#8B7CF6] tracking-tight leading-none my-1">
+                          {flow.ticketNo}
+                        </div>
+                        <span className="text-[9.5px] font-semibold text-neutral-400 block">
+                          Phòng khám
                         </span>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px] text-[#6B7280]">
-                        <div className="flex items-center gap-1.5">
-                          <Stethoscope className="w-3.5 h-3.5 text-[#8B7CF6]" />
-                          <span className="font-semibold text-[#374151]">
-                            {flow.doctorLabel}
+                      <div className="space-y-1.5 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="text-[16px] font-bold text-[#1F2937] truncate">
+                            {flow.specialty}
+                          </h4>
+                          <span
+                            className={cn(
+                              "text-[11px] font-bold px-2.5 py-0.5 rounded-full border",
+                              flow.statusBadgeClass,
+                            )}
+                          >
+                            {flow.statusLabel}
                           </span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <MapPin className="w-3.5 h-3.5 text-[#8B7CF6]" />
-                          <span>{flow.roomLabel}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-[#8B7CF6]" />
-                          <span>{flow.slotTimeLabel}</span>
-                        </div>
-                      </div>
-
-                      {flow.steps.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                          {flow.steps.map((st, i) => (
-                            <span
-                              key={st.stepId || i}
-                              className={cn(
-                                "inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md border",
-                                st.stepStatus === "COMPLETED" ||
-                                  st.stepStatus === "DONE"
-                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                  : st.stepStatus === "IN_PROGRESS" ||
-                                      st.stepStatus === "PROCESSING"
-                                    ? "bg-blue-50 text-blue-700 border-blue-200"
-                                    : "bg-neutral-50 text-neutral-600 border-neutral-200",
-                              )}
-                            >
-                              {st.stepStatus === "COMPLETED" ||
-                              st.stepStatus === "DONE" ? (
-                                <Check className="w-3 h-3" />
-                              ) : null}
-                              {st.stepName}
+                          {flowPendingOrders.length > 0 && (
+                            <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                              Có {flowPendingOrders.length} chỉ định cần thanh toán
                             </span>
-                          ))}
+                          )}
                         </div>
+
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px] text-[#6B7280]">
+                          <div className="flex items-center gap-1.5">
+                            <Stethoscope className="w-3.5 h-3.5 text-[#8B7CF6]" />
+                            <span className="font-semibold text-[#374151]">
+                              {flow.doctorLabel}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <MapPin className="w-3.5 h-3.5 text-[#8B7CF6]" />
+                            <span>{flow.roomLabel}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-[#8B7CF6]" />
+                            <span>{flow.slotTimeLabel}</span>
+                          </div>
+                        </div>
+
+                        {flow.steps.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                            {flow.steps.map((st, i) => (
+                              <span
+                                key={st.stepId || i}
+                                className={cn(
+                                  "inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md border",
+                                  st.stepStatus === "COMPLETED" ||
+                                    st.stepStatus === "DONE"
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                    : st.stepStatus === "IN_PROGRESS" ||
+                                        st.stepStatus === "PROCESSING"
+                                      ? "bg-blue-50 text-blue-700 border-blue-200"
+                                      : "bg-neutral-50 text-neutral-600 border-neutral-200",
+                                )}
+                              >
+                                {st.stepStatus === "COMPLETED" ||
+                                  st.stepStatus === "DONE" ? (
+                                  <Check className="w-3 h-3" />
+                                ) : null}
+                                {st.stepName}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Right: Actions */}
+                    <div className="flex flex-wrap items-center gap-2 self-end lg:self-center shrink-0">
+                      {flowPendingOrders.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedBookingFilter(flowBookingId || "TODAY");
+                            setIsOrdersModalOpen(true);
+                            void loadPendingOrders();
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[13px] font-bold shadow-sm transition-all cursor-pointer"
+                        >
+                          <Receipt className="w-4 h-4" />
+                          <span>Thu tiền chỉ định ({flowPendingOrders.length})</span>
+                        </button>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedFlow(flow)}
+                        className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#8B7CF6] hover:bg-[#7C6FE0] text-white text-[13px] font-bold shadow-sm transition-all cursor-pointer"
+                      >
+                        <Printer className="w-4 h-4" />
+                        Xem & In phiếu
+                      </button>
                     </div>
                   </div>
-
-                  {/* Right: Actions */}
-                  <div className="flex items-center gap-2 self-end lg:self-center shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedFlow(flow)}
-                      className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#8B7CF6] hover:bg-[#7C6FE0] text-white text-[13px] font-bold shadow-sm transition-all cursor-pointer"
-                    >
-                      <Printer className="w-4 h-4" />
-                      Xem & In phiếu
-                    </button>
-                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -824,35 +998,80 @@ export function PatientActiveFlowsView({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
           <div className="relative w-full max-w-3xl max-h-[90vh] rounded-3xl bg-white shadow-2xl border border-neutral-150 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
             {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-neutral-100 flex items-center justify-between bg-white shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-[#EDE9FE] flex items-center justify-center text-[#8B7CF6]">
-                  <Receipt className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-[16px] font-bold text-neutral-800">
-                      Các mục cần thanh toán
-                    </h3>
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                      {pendingOrders.length} chỉ định chờ
-                    </span>
+            <div className="px-6 py-4 border-b border-neutral-100 bg-white shrink-0 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-[#EDE9FE] flex items-center justify-center text-[#8B7CF6]">
+                    <Receipt className="w-5 h-5" />
                   </div>
-                  <p className="text-[12px] text-neutral-500">
-                    Bệnh nhân:{" "}
-                    <strong className="text-neutral-800">{patient.name}</strong>{" "}
-                    • CCCD:{" "}
-                    <span className="font-mono">{patient.citizenId}</span>
-                  </p>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-[16px] font-bold text-neutral-800">
+                        Các mục cần thanh toán
+                      </h3>
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                        {displayedOrdersInModal.length} chỉ định chờ
+                      </span>
+                    </div>
+                    <p className="text-[12px] text-neutral-500">
+                      Bệnh nhân:{" "}
+                      <strong className="text-neutral-800">{patient.name}</strong>{" "}
+                      • CCCD:{" "}
+                      <span className="font-mono">{patient.citizenId}</span>
+                    </p>
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setIsOrdersModalOpen(false)}
+                  className="w-9 h-9 rounded-xl border border-neutral-200 text-neutral-400 hover:text-neutral-700 hover:bg-neutral-50 flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsOrdersModalOpen(false)}
-                className="w-9 h-9 rounded-xl border border-neutral-200 text-neutral-400 hover:text-neutral-700 hover:bg-neutral-50 flex items-center justify-center transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+
+              {/* Booking filter tabs (nếu có nhiều ca khám) */}
+              {flows.length > 1 && (
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                  {todayBookingId && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedBookingFilter("TODAY")}
+                      className={cn(
+                        "px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer whitespace-nowrap border shrink-0",
+                        selectedBookingFilter === "TODAY"
+                          ? "bg-[#8B7CF6] text-white border-[#8B7CF6] shadow-xs"
+                          : "bg-neutral-50 text-neutral-600 border-neutral-200 hover:bg-neutral-100",
+                      )}
+                    >
+                      Ca khám hôm nay ({todayUnpaidOrders.length})
+                    </button>
+                  )}
+                  {flows.map((fl) => {
+                    const fBookingId =
+                      fl.bookingId ||
+                      (fl.raw as any)?.booking_id ||
+                      (fl.raw as any)?.booking?.booking_id;
+                    if (!fBookingId || fBookingId === todayBookingId) return null;
+                    const fUnpaid = filterOrdersByBooking(pendingOrders, fBookingId);
+                    return (
+                      <button
+                        key={fl.flowId}
+                        type="button"
+                        onClick={() => setSelectedBookingFilter(fBookingId)}
+                        className={cn(
+                          "px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer whitespace-nowrap border shrink-0",
+                          selectedBookingFilter === fBookingId
+                            ? "bg-[#8B7CF6] text-white border-[#8B7CF6] shadow-xs"
+                            : "bg-neutral-50 text-neutral-600 border-neutral-200 hover:bg-neutral-100",
+                        )}
+                      >
+                        STT {fl.ticketNo} - {fl.specialty} ({fUnpaid.length})
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Modal Body */}
@@ -864,7 +1083,7 @@ export function PatientActiveFlowsView({
                     Đang tải danh sách chỉ định chờ thanh toán...
                   </span>
                 </div>
-              ) : pendingOrders.length === 0 ? (
+              ) : displayedOrdersInModal.length === 0 ? (
                 <div className="py-16 rounded-2xl border border-neutral-200/80 bg-white p-8 text-center space-y-2">
                   <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center mx-auto text-emerald-600 mb-2">
                     <CheckCircle2 className="w-6 h-6" />
@@ -873,25 +1092,29 @@ export function PatientActiveFlowsView({
                     Không có chỉ định nào chờ thanh toán
                   </h4>
                   <p className="text-[12.5px] text-neutral-500 max-w-sm mx-auto">
-                    Tất cả các dịch vụ hoặc chỉ định khám của bệnh nhân đã được
-                    thanh toán đầy đủ hoặc chưa phát sinh.
+                    {selectedBookingFilter === "TODAY"
+                      ? "Ca khám hôm nay của bệnh nhân không có chỉ định nào đang chờ thanh toán."
+                      : "Tất cả các dịch vụ hoặc chỉ định khám của bệnh nhân đã được thanh toán đầy đủ hoặc chưa phát sinh."}
                   </p>
                 </div>
               ) : (
-                pendingOrders.map((order: any, idx: number) => {
+                displayedOrdersInModal.map((order: any, idx: number) => {
                   const details = Array.isArray(order.serviceOrderDetails)
                     ? order.serviceOrderDetails
                     : [];
-                  const total =
-                    order.total_price ||
-                    details.reduce(
-                      (sum: number, d: any) =>
-                        sum +
-                        (d.price_at_order || d.service?.price || 0) *
-                          (d.quantity || 1),
-                      0,
-                    );
-                  const qrData = order.qr_code;
+                  const pendingDetails = details.filter(
+                    (d: any) => (d.status || "PENDING").toUpperCase() === "PENDING",
+                  );
+                  const displayDetails =
+                    pendingDetails.length > 0 ? pendingDetails : details;
+                  const calculatedTotal = displayDetails.reduce(
+                    (sum: number, d: any) =>
+                      sum +
+                      (d.price_at_order ?? d.service?.price ?? 0) *
+                        (d.quantity || 1),
+                    0,
+                  );
+                  const total = calculatedTotal > 0 ? calculatedTotal : (order.total_price || 0);
 
                   return (
                     <div
@@ -901,13 +1124,18 @@ export function PatientActiveFlowsView({
                       {/* Order Header */}
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-neutral-100">
                         <div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <h4 className="text-[14px] font-bold text-neutral-800">
                               {order.name || "Chỉ định cận lâm sàng / Dịch vụ"}
                             </h4>
                             <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
                               Chờ thanh toán
                             </span>
+                            {order.booking_id && (
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600 border border-neutral-200">
+                                Booking: {order.booking_id.slice(0, 8)}...
+                              </span>
+                            )}
                           </div>
                           {order.created_at && (
                             <p className="text-[11.5px] text-neutral-400 mt-0.5">
@@ -922,7 +1150,7 @@ export function PatientActiveFlowsView({
 
                         <div className="text-right">
                           <span className="text-[11px] text-neutral-400 block">
-                            Tổng tiền chỉ định
+                            Tổng tiền cần thu
                           </span>
                           <span className="text-[16px] font-black text-[#8B7CF6]">
                             {Number(total).toLocaleString("vi-VN")} đ
@@ -931,7 +1159,7 @@ export function PatientActiveFlowsView({
                       </div>
 
                       {/* Services Table / Details */}
-                      {details.length > 0 && (
+                      {displayDetails.length > 0 && (
                         <div className="rounded-xl border border-neutral-150 overflow-hidden text-[12px]">
                           <table className="w-full text-left">
                             <thead className="bg-neutral-50 text-neutral-500 font-semibold border-b border-neutral-150">
@@ -944,7 +1172,7 @@ export function PatientActiveFlowsView({
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-neutral-100">
-                              {details.map((d: any, dIdx: number) => {
+                              {displayDetails.map((d: any, dIdx: number) => {
                                 const sPrice =
                                   d.price_at_order ?? d.service?.price ?? 0;
                                 return (
@@ -985,7 +1213,10 @@ export function PatientActiveFlowsView({
                           type="button"
                           onClick={() => {
                             setPaymentFeedback(null);
-                            setConfirmingCashOrder(order);
+                            setConfirmingCashOrder({
+                              ...order,
+                              total_price: total,
+                            });
                           }}
                           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#8B7CF6] hover:bg-[#7C6FE0] text-white text-[12.5px] font-bold shadow-xs transition-all cursor-pointer"
                         >

@@ -307,17 +307,6 @@ export function useWorkflowMutations(args: UseWorkflowMutationsArgs) {
             return;
         }
 
-        const previousStepId = (() => {
-            for (let i = orderedFlowSteps.length - 1; i >= 0; i--) {
-                const live = asRecord(orderedFlowSteps[i]);
-                const status = String(live?.step_status || '').toUpperCase();
-                if (status === 'CANCELLED') continue;
-                const id = typeof live?.step_id === 'string' ? live.step_id : '';
-                if (id) return id;
-            }
-            return '';
-        })();
-
         setIsActionLoading(true);
         try {
             await serviceOrderService.createOrder(
@@ -330,7 +319,7 @@ export function useWorkflowMutations(args: UseWorkflowMutationsArgs) {
             setSelectedRoomId('');
             setSelectedStaffId('');
             setSelectedServiceCode('');
-            let flowObj = await reloadFlow();
+            const flowObj = await reloadFlow();
 
             try {
                 const resolvedPatientId = (patient?.patientId || '').trim();
@@ -347,40 +336,6 @@ export function useWorkflowMutations(args: UseWorkflowMutationsArgs) {
                 // ignore
             }
 
-            if (previousStepId && flowObj) {
-                const liveRaw = Array.isArray(flowObj.steps) ? (flowObj.steps as unknown[]) : [];
-                const liveOrdered = orderFlowStepsForTimeline(liveRaw);
-                const existingIds = new Set(
-                    orderedFlowSteps
-                        .map((s) => {
-                            const rec = asRecord(s);
-                            return typeof rec?.step_id === 'string' ? rec.step_id : '';
-                        })
-                        .filter(Boolean)
-                );
-                const newStep = [...liveOrdered].reverse().find((item) => {
-                    const live = asRecord(item);
-                    const id = typeof live?.step_id === 'string' ? live.step_id : '';
-                    const status = String(live?.step_status || '').toUpperCase();
-                    return Boolean(id && !existingIds.has(id) && status !== 'CANCELLED');
-                });
-                const newStepId = (() => {
-                    const live = asRecord(newStep);
-                    return typeof live?.step_id === 'string' ? live.step_id : '';
-                })();
-
-                if (newStepId && newStepId !== previousStepId) {
-                    try {
-                        await clinicalService.createStepDependency(
-                            { waiting_step_id: newStepId, required_step_id: previousStepId },
-                            accessToken
-                        );
-                        flowObj = await reloadFlow();
-                    } catch (depErr) {
-                        console.warn('Failed to link new step dependency', depErr);
-                    }
-                }
-            }
             onFlowChanged?.(flowObj);
         } catch (err) {
             console.error('Failed to add service order:', err);

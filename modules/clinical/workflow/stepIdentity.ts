@@ -108,6 +108,31 @@ export function formatFlowStepLabel(rawName: string, opts?: { forcePayment?: boo
     return raw;
 }
 
+export const RETURN_RESULT_SERVICE_CODES = [
+    'DOC_KET_QUA_CAN_LAM_SANG',
+    'DOC_QUA_KET_CAN_LAM_SANG',
+] as const;
+
+export function isReturnResultServiceCode(code?: string | null): boolean {
+    const normalized = (code || '').trim().toUpperCase();
+    if (!normalized) return false;
+    return (RETURN_RESULT_SERVICE_CODES as readonly string[]).includes(normalized);
+}
+
+export function isReturnResultStepName(name: string): boolean {
+    const n = normalizeStepLabel(name);
+    return n.includes('đọc kết quả') || n.includes('doc ket qua');
+}
+
+export function isReturnResultStep(step: {
+    service_code?: string | null;
+    step_name?: string | null;
+    serviceCode?: string | null;
+}): boolean {
+    if (isReturnResultServiceCode(step.service_code || step.serviceCode)) return true;
+    return isReturnResultStepName(String(step.step_name || ''));
+}
+
 export function isProtectedBaseStep(step: Record<string, unknown>): boolean {
     const name = String(step.step_name || '');
     return isDefaultBookingStepName(name) || isDefaultExamStepName(name);

@@ -32,6 +32,7 @@ import { QUEUE_TYPE_MAP } from '@/modules/kiosk/utils/flowHelpers';
 import PatientDetailsModal from '../modals/PatientDetailsModal';
 import OverrideConfirmModal from '../modals/OverrideConfirmModal';
 import RefuseConfirmModal from '../modals/RefuseConfirmModal';
+import CompleteConfirmModal from '../modals/CompleteConfirmModal';
 
 export default function LabWorklistView() {
     const [dragOverIndex, setDragOverIndex] = React.useState<number | null>(null);
@@ -69,6 +70,10 @@ export default function LabWorklistView() {
         isRefusing,
         handleOpenRefuseConfirm,
         handleConfirmRefuse,
+        completeConfirmData,
+        setCompleteConfirmData,
+        handleOpenCompleteConfirm,
+        handleConfirmComplete,
     } = useLab();
 
     if (!mounted || !accessToken) {
@@ -219,10 +224,7 @@ export default function LabWorklistView() {
                                             )}
 
                                             {activeListTab === 'completed' && (
-                                                <>
-                                                    <TableHead className="text-[11.5px] font-extrabold text-neutral-500 py-3.5">KẾT QUẢ ĐO</TableHead>
-                                                    <TableHead className="text-[11.5px] font-extrabold text-neutral-500 py-3.5">KẾT LUẬN / GHI CHÚ</TableHead>
-                                                </>
+                                                <TableHead className="text-[11.5px] font-extrabold text-neutral-500 py-3.5">GIỜ HOÀN THÀNH</TableHead>
                                             )}
 
                                             {activeListTab === 'missing' && (
@@ -288,8 +290,10 @@ export default function LabWorklistView() {
                                                                             key={detail.service_order_detail_id || idx}
                                                                             className={cn(
                                                                                 "text-[10px] font-bold px-2 py-0.5 rounded-full border",
-                                                                                detail.status === 'PAID'
-                                                                                    ? "bg-emerald-50/50 border-emerald-100 text-emerald-700"
+                                                                                detail.status === 'COMPLETED'
+                                                                                    ? "bg-emerald-50/70 border-emerald-200 text-emerald-700"
+                                                                                    : detail.status === 'PAID'
+                                                                                    ? "bg-blue-50/50 border-blue-100 text-blue-700"
                                                                                     : "bg-amber-50/50 border-amber-100 text-amber-700"
                                                                             )}
                                                                         >
@@ -340,14 +344,16 @@ export default function LabWorklistView() {
                                                     )}
 
                                                     {activeListTab === 'completed' && (
-                                                        <>
-                                                            <TableCell className="py-3.5 text-sm font-black text-emerald-700">
-                                                                {patient.resultValue || '—'}
-                                                            </TableCell>
-                                                            <TableCell className="py-3.5 text-xs text-neutral-500 font-semibold max-w-60 truncate" title={patient.resultNotes}>
-                                                                {patient.resultNotes || '—'}
-                                                            </TableCell>
-                                                        </>
+                                                        <TableCell className="py-3.5 text-xs text-neutral-600 font-semibold">
+                                                            {patient.finished_at ? (() => {
+                                                                try {
+                                                                    const d = new Date(patient.finished_at);
+                                                                    return isNaN(d.getTime()) ? '—' : d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                                                                } catch {
+                                                                    return '—';
+                                                                }
+                                                            })() : (patient.resultValue || '—')}
+                                                        </TableCell>
                                                     )}
 
                                                     {/* Actions */}
@@ -364,7 +370,7 @@ export default function LabWorklistView() {
                                                                         Từ chối
                                                                     </Button>
                                                                     <Button
-                                                                        onClick={() => handleCompleteQueue(patient.queue_id)}
+                                                                        onClick={() => handleOpenCompleteConfirm(patient)}
                                                                         disabled={isCompleting}
                                                                         isLoading={isCompleting}
                                                                         className="h-8 px-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11.5px] font-extrabold shadow-xs shrink-0 cursor-pointer gap-1.5 border-0"
@@ -387,7 +393,7 @@ export default function LabWorklistView() {
                                                                 onClick={() => handleOpenViewModal(patient)}
                                                                 startIcon={<Eye className="w-3.5 h-3.5" />}
                                                                 className="h-8 px-3.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11.5px] font-bold shadow-xs shrink-0 cursor-pointer gap-1.5 border-0"
-                                                            >
+                                                                >
                                                                 Xem chi tiết
                                                             </Button>
                                                         </div>
@@ -411,6 +417,7 @@ export default function LabWorklistView() {
                 onCompleteOrderDetail={handleCompleteOrderDetail}
                 isCompletingDetail={isCompletingDetail}
                 onRefuseQueue={handleOpenRefuseConfirm}
+                onCompleteQueue={handleOpenCompleteConfirm}
             />
 
             <OverrideConfirmModal
@@ -427,6 +434,14 @@ export default function LabWorklistView() {
                 data={refuseConfirmData}
                 onConfirm={handleConfirmRefuse}
                 isLoading={isRefusing}
+            />
+
+            <CompleteConfirmModal
+                isOpen={completeConfirmData !== null}
+                onClose={() => setCompleteConfirmData(null)}
+                data={completeConfirmData}
+                onConfirm={handleConfirmComplete}
+                isLoading={isCompleting}
             />
         </EMRWorkspaceLayout>
     );

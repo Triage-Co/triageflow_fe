@@ -3,6 +3,8 @@ import {
     isDefaultExamStepName,
     isExamPaymentStepName,
     isPaymentStepName,
+    isReturnResultServiceCode,
+    isReturnResultStepName,
     normalizeStepLabel,
     stripPaymentPrefix,
 } from './stepIdentity';
@@ -96,6 +98,9 @@ export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
         isExamPayment: boolean;
         isBooking: boolean;
         isExam: boolean;
+        isReturn: boolean;
+        isCls: boolean;
+        isDispensing: boolean;
     };
 
     const templateLikeRank = (nameLower: string): number => {
@@ -141,6 +146,13 @@ export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
         const unlabeledPayment = Boolean(liveStepId && unlabeledPaymentIds.has(liveStepId));
         const isPayment = nameIsPayment || typedPayment || unlabeledPayment;
         const isExamPayment = isExamPaymentStepName(stepName);
+        const serviceCode = pickLiveServiceCode(rec);
+        const isReturn =
+            isReturnResultServiceCode(serviceCode) || isReturnResultStepName(stepName);
+        const isCls = ['LAB_TEST', 'IMAGING', 'PROCEDURE', 'FUNCTIONAL_EXPLORATION'].includes(
+            stepType
+        );
+        const isDispensing = stepType === 'DISPENSING' || roomType === 'PHARMACY';
 
         return {
             item,
@@ -154,13 +166,24 @@ export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
             templateStepId,
             stepName,
             stepNameLower,
-            serviceCode: pickLiveServiceCode(rec),
+            serviceCode,
             isPayment: isPayment || isExamPayment,
             isExamPayment,
             isBooking: isDefaultBookingStepName(stepName),
             isExam: isDefaultExamStepName(stepName),
+            isReturn,
+            isCls,
+            isDispensing,
         };
     });
+
+    const restKindRank = (r: Row): number => {
+        if (r.isPayment) return 0;
+        if (r.isCls) return 1;
+        if (r.isReturn) return 2;
+        if (r.isDispensing) return 3;
+        return 4;
+    };
 
     const sortStable = (a: Row, b: Row) => {
         if (a.orderNum != null && b.orderNum != null && a.orderNum !== b.orderNum) {
@@ -168,6 +191,9 @@ export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
         }
         if (a.orderNum != null && b.orderNum == null) return -1;
         if (b.orderNum != null && a.orderNum == null) return 1;
+        const ka = restKindRank(a);
+        const kb = restKindRank(b);
+        if (ka !== kb) return ka - kb;
         const ra = templateLikeRank(a.stepNameLower);
         const rb = templateLikeRank(b.stepNameLower);
         if (ra !== rb) return ra - rb;
@@ -213,13 +239,10 @@ export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
                     }
                     return true;
                 })
-                .sort((a, b) => {
-                    if (a.index !== b.index) return a.index - b.index;
-                    return sortStable(a, b);
-                });
+                .sort(sortStable);
 
             if (ready.length === 0) {
-                const rest = block.filter((r) => pending.has(r.index)).sort((a, b) => a.index - b.index);
+                const rest = block.filter((r) => pending.has(r.index)).sort(sortStable);
                 ordered.push(...rest);
                 break;
             }
@@ -239,7 +262,12 @@ export function orderFlowStepsForTimeline(steps: unknown[]): unknown[] {
     const exam = rows.filter((r) => r.isExam && !r.isBooking).sort((a, b) => a.index - b.index);
     const restRaw = rows
         .filter((r) => !r.isBooking && !r.isExam && !r.isExamPayment)
-        .sort((a, b) => a.index - b.index);
+        .sort((a, b) => {
+            const ka = restKindRank(a);
+            const kb = restKindRank(b);
+            if (ka !== kb) return ka - kb;
+            return a.index - b.index;
+        });
 
     return [...booking, ...examPay, ...exam, ...orderRestBlock(restRaw)].map((r) => r.item);
 }

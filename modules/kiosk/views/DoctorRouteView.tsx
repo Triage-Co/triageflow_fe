@@ -710,9 +710,7 @@ export const DoctorRouteView: React.FC = () => {
                       {selectedDetailStep.subtitle && (
                         <p>Chuyên khoa: <span className="text-[#1E2939]">{selectedDetailStep.subtitle}</span></p>
                       )}
-                      {typeof selectedDetailStep.rawStep?.staff?.experience_years === 'number' && (
-                        <p>Kinh nghiệm: <span className="text-[#1E2939]">{selectedDetailStep.rawStep.staff.experience_years} năm</span></p>
-                      )}
+
                       {selectedDetailStep.rawStep?.staff?.license_number && (
                         <p>GP hành nghề: <span className="text-[#1E2939] font-mono">{selectedDetailStep.rawStep.staff.license_number}</span></p>
                       )}

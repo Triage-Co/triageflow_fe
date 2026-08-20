@@ -3,7 +3,7 @@ import type { Gender } from '@/shared/types/auth.types';
 export interface CccdScanResult {
     citizen_id: string;
     full_name: string;
-    dob: string;
+    dob: string; // YYYY-MM-DD
     gender: Gender;
     address: string;
     ekyc_verified?: boolean;
@@ -24,16 +24,16 @@ export interface QrParseError {
     message: string;
 }
 
-function parseGender(raw: string): Gender {
-    const v = raw.trim().toLowerCase();
+export function parseGender(raw: string): Gender {
+    const v = (raw || '').trim().toLowerCase();
     if (v === 'nữ' || v === 'nu' || v === 'female' || v === 'f') return 'FEMALE';
     if (v === 'nam' || v === 'male' || v === 'm') return 'MALE';
     return 'OTHER';
 }
 
-/** Chuyển dd/mm/yyyy, ddmmyyyy, yyyy-mm-dd → yyyy-mm-dd (input date) */
-function parseDob(raw: string): string | null {
-    const trimmed = raw.trim();
+/** Chuyển dd/mm/yyyy, ddmmyyyy, yyyy-mm-dd → yyyy-mm-dd (chuẩn HTML date input) */
+export function parseDob(raw: string): string | null {
+    const trimmed = (raw || '').trim();
     if (!trimmed) return null;
 
     if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
@@ -53,8 +53,8 @@ function parseDob(raw: string): string | null {
     return null;
 }
 
-function normalizeName(name: string): string {
-    return name
+export function normalizeName(name: string): string {
+    return (name || '')
         .trim()
         .split(/\s+/)
         .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
@@ -64,24 +64,40 @@ function normalizeName(name: string): string {
 /** Định dạng pipe-delimited chuẩn CCCD gắn chip (TT 16/2024/TT-BCA) */
 function parsePipeFormat(raw: string): CccdScanResult | null {
     const parts = raw.split('|');
-    if (parts.length < 5) return null;
+    if (parts.length < 3) return null;
 
-    const citizen_id = parts[0]?.trim();
-    const nameIdx = parts[2]?.trim() ? 2 : 1;
-    const full_name = parts[nameIdx]?.trim();
-    const dobRaw = parts[nameIdx + 1]?.trim();
-    const genderRaw = parts[nameIdx + 2]?.trim();
-    const address = parts[nameIdx + 3]?.trim() ?? '';
-
+    const rawCitizenId = parts[0]?.trim() || '';
+    const citizen_id = rawCitizenId.replace(/\D/g, '');
     if (!citizen_id || citizen_id.length < 9) return null;
-    const dob = parseDob(dobRaw ?? '');
-    if (!full_name || !dob) return null;
+
+    // Xác định chỉ số của Name & Dob
+    // Trường hợp 1: Có cột CMND cũ -> parts[1] là 9 số/rỗng, parts[2] là Tên, parts[3] là Dob
+    // Trường hợp 2: Không có cột CMND cũ -> parts[1] là Tên, parts[2] là Dob
+    let nameIdx = 2;
+    let dobIdx = 3;
+    let genderIdx = 4;
+    let addressIdx = 5;
+
+    // Nếu parts[1] không phải số CMND mà là chữ và parts[2] là ngày sinh (8 số hoặc dd/mm/yyyy)
+    if (parts[1] && isNaN(Number(parts[1])) && parts[2] && (parts[2].length === 8 || parts[2].includes('/'))) {
+        nameIdx = 1;
+        dobIdx = 2;
+        genderIdx = 3;
+        addressIdx = 4;
+    }
+
+    const full_name = parts[nameIdx]?.trim() || '';
+    const dobRaw = parts[dobIdx]?.trim() || '';
+    const genderRaw = parts[genderIdx]?.trim() || '';
+    const address = parts[addressIdx]?.trim() ?? '';
+
+    const dob = parseDob(dobRaw) || '';
 
     return {
         citizen_id,
         full_name: normalizeName(full_name),
         dob,
-        gender: parseGender(genderRaw ?? ''),
+        gender: parseGender(genderRaw),
         address,
     };
 }
@@ -97,7 +113,8 @@ function parseJsonFormat(raw: string): CccdScanResult | null {
                 data.soDinhDanh ??
                 data.id ??
                 '',
-        ).trim();
+        ).replace(/\D/g, '').trim();
+
         const full_name = String(
             data.full_name ?? data.fullName ?? data.name ?? data.hoTen ?? '',
         ).trim();
@@ -107,8 +124,8 @@ function parseJsonFormat(raw: string): CccdScanResult | null {
             data.address ?? data.place_of_residence ?? data.diaChi ?? data.noiCuTru ?? '',
         ).trim();
 
-        const dob = parseDob(dobRaw);
-        if (!citizen_id || citizen_id.length < 9 || !full_name || !dob) return null;
+        const dob = parseDob(dobRaw) || '';
+        if (!citizen_id || citizen_id.length < 9) return null;
 
         return {
             citizen_id,
@@ -123,7 +140,7 @@ function parseJsonFormat(raw: string): CccdScanResult | null {
 }
 
 export function parseCccdQr(raw: string): { ok: true; data: CccdScanResult } | { ok: false; error: QrParseError } {
-    const trimmed = raw.trim();
+    const trimmed = (raw || '').trim();
     if (!trimmed) {
         return {
             ok: false,
@@ -138,8 +155,20 @@ export function parseCccdQr(raw: string): { ok: true; data: CccdScanResult } | {
     } else if (trimmed.includes('|')) {
         result = parsePipeFormat(trimmed);
     } else {
-        // Thử JSON không có prefix hoặc chuỗi base64 đơn giản
-        result = parseJsonFormat(trimmed) ?? parsePipeFormat(trimmed.replace(/\|/g, '|'));
+        // Thử JSON hoặc chuỗi số 12 chữ số thuần
+        result = parseJsonFormat(trimmed) ?? parsePipeFormat(trimmed);
+        if (!result) {
+            const cleanDigits = trimmed.replace(/\D/g, '');
+            if (cleanDigits.length === 12 || cleanDigits.length === 9) {
+                result = {
+                    citizen_id: cleanDigits,
+                    full_name: '',
+                    dob: '',
+                    gender: 'FEMALE',
+                    address: '',
+                };
+            }
+        }
     }
 
     if (!result) {
@@ -157,13 +186,6 @@ export function parseCccdQr(raw: string): { ok: true; data: CccdScanResult } | {
         return {
             ok: false,
             error: { code: 'MISSING_CCCD', message: 'Không tìm thấy số CCCD trong mã QR.' },
-        };
-    }
-
-    if (!result.full_name) {
-        return {
-            ok: false,
-            error: { code: 'MISSING_NAME', message: 'Không tìm thấy họ tên trong mã QR.' },
         };
     }
 

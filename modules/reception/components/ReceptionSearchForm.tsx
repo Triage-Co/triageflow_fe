@@ -254,9 +254,7 @@ export function ReceptionSearchForm() {
 
     function handleQrSuccess(data: CccdScanResult) {
         setQuery(data.citizen_id);
-        if (data.ekyc_verified) {
-            setError(null);
-        }
+        setError(null);
         runSearch(data.citizen_id);
     }
 

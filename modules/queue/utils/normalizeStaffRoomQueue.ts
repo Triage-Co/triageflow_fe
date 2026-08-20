@@ -1,4 +1,5 @@
 import type {
+    FinishedEntry,
     MissingEntry,
     RoomQueueData,
     Serving,
@@ -137,6 +138,51 @@ function normalizeMissing(raw: unknown): MissingEntry | null {
     };
 }
 
+function normalizeFinished(raw: unknown): FinishedEntry | null {
+    const f = asRecord(raw);
+    if (!f) return null;
+    const queueId = asString(f.queue_id);
+    if (!queueId) return null;
+    const patientRaw = asRecord(f.patient);
+    const stepRaw = asRecord(f.step);
+
+    const patientName = patientRaw
+        ? asString(patientRaw.full_name || patientRaw.patient_name)
+        : asString(f.patient_name || f.full_name);
+
+    return {
+        queue_id: queueId,
+        queue_number: asString(f.queue_number),
+        queue_type: asString(f.queue_type, 'APPOINTMENT'),
+        status: asString(f.status, 'FINISHED'),
+        serving_started_at: f.serving_started_at != null ? asString(f.serving_started_at) : null,
+        finished_at: f.finished_at != null ? asString(f.finished_at) : null,
+        duration_minutes: asNumber(f.duration_minutes),
+        refusal_reason: f.refusal_reason != null ? asString(f.refusal_reason) : null,
+        patient_name: patientName,
+        patient: patientRaw
+            ? {
+                  patient_id: asString(patientRaw.patient_id || patientRaw.id),
+                  full_name: patientName,
+                  dob: patientRaw.dob != null ? asString(patientRaw.dob) : null,
+                  gender: asString(patientRaw.gender),
+                  phone: patientRaw.phone != null ? asString(patientRaw.phone) : undefined,
+                  citizen_id: patientRaw.citizen_id != null ? asString(patientRaw.citizen_id) : undefined,
+              }
+            : null,
+        step: stepRaw
+            ? {
+                  step_id: asString(stepRaw.step_id || stepRaw.id),
+                  step_name: asString(stepRaw.step_name || stepRaw.name),
+                  step_type: asString(stepRaw.step_type),
+                  step_status: asString(stepRaw.step_status || stepRaw.status),
+                  service_code: stepRaw.service_code != null ? asString(stepRaw.service_code) : null,
+              }
+            : null,
+        service_order: normalizeServiceOrder(f.service_order),
+    };
+}
+
 /**
  * Normalize staff room queue payload (GET /queue/room or WS body with serving/waiting).
  * Preserves service_order.details — do not use TV normalize for staff UI.
@@ -148,15 +194,16 @@ export function normalizeStaffRoomQueue(raw: unknown): RoomQueueData | null {
         ? envelope.data
         : envelope) as Record<string, unknown>;
 
-    // Staff payloads must expose waiting/serving/missing.
+    // Staff payloads must expose waiting/serving/missing/finished.
     // Do NOT treat `room_id` alone as staff — TV broadcasts also carry room_id and
     // would otherwise normalize to empty waiting[] and wipe a good REST load.
     const hasStaffShape =
-        'waiting' in body || 'serving' in body || 'missing' in body;
+        'waiting' in body || 'serving' in body || 'missing' in body || 'finished' in body;
     if (!hasStaffShape) return null;
 
     const waitingRaw = Array.isArray(body.waiting) ? body.waiting : [];
     const missingRaw = Array.isArray(body.missing) ? body.missing : [];
+    const finishedRaw = Array.isArray(body.finished) ? body.finished : [];
 
     return {
         room_id: asString(body.room_id),
@@ -168,6 +215,9 @@ export function normalizeStaffRoomQueue(raw: unknown): RoomQueueData | null {
         missing: missingRaw
             .map(normalizeMissing)
             .filter((x): x is MissingEntry => x != null),
+        finished: finishedRaw
+            .map(normalizeFinished)
+            .filter((x): x is FinishedEntry => x != null),
     };
 }
 
@@ -225,6 +275,11 @@ export function extractStaffQueueFromCallNext(
         return withRoom;
     }
 
+    const finishedRaw = Array.isArray(body?.finished) ? body!.finished : [];
+    const normalizedFinished = finishedRaw
+        .map(normalizeFinished)
+        .filter((x): x is FinishedEntry => x != null);
+
     if (servingFromTv) {
         const waitingRaw = Array.isArray(body?.waiting)
             ? body!.waiting
@@ -242,6 +297,7 @@ export function extractStaffQueueFromCallNext(
             missing: missingRaw
                 .map(normalizeMissing)
                 .filter((x): x is MissingEntry => x != null),
+            finished: normalizedFinished,
         };
     }
 
@@ -261,6 +317,7 @@ export function extractStaffQueueFromCallNext(
                       .map(normalizeMissing)
                       .filter((x): x is MissingEntry => x != null)
                 : [],
+            finished: normalizedFinished,
         };
     }
 

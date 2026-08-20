@@ -5,17 +5,12 @@ import { useKioskStore } from '../store/kioskStore';
 import { useAuthStore } from '../store/authStore';
 import {
   ArrowLeft,
-  ShieldCheck,
-  QrCode,
-  Keyboard,
   Camera,
   RefreshCw,
   AlertCircle,
   CheckCircle2,
   Loader2,
-  Smartphone,
-  Laptop,
-  Sparkles,
+  Keyboard,
 } from 'lucide-react';
 import { NumericKeypad } from '../components/NumericKeypad';
 import { useFlowStore } from '../store/flowStore';
@@ -50,12 +45,28 @@ export const QRScannerModal: React.FC = () => {
 
   const loginCitizen = useAuthStore((state) => state.loginCitizen);
 
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const manualInputRef = useRef<HTMLInputElement | null>(null);
   const isProcessingRef = useRef<boolean>(false);
   const scannerRef = useRef<any>(null);
   const isScannerRunningRef = useRef<boolean>(false);
   const processingLoopRef = useRef<number | null>(null);
   const offscreenCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // State refs để tránh re-trigger useEffect / useCallback
+  const showManualInputRef = useRef<boolean>(false);
+  const selectedCameraIdRef = useRef<string>('');
+  const startCameraRef = useRef<((id: string) => Promise<void>) | null>(null);
+  const stopCameraRef = useRef<(() => Promise<void>) | null>(null);
+  const initCamerasRef = useRef<(() => Promise<void>) | null>(null);
+  const processSubmissionRef = useRef<((val: string) => Promise<void>) | null>(null);
+
+  useEffect(() => {
+    showManualInputRef.current = showManualInput;
+  }, [showManualInput]);
+
+  useEffect(() => {
+    selectedCameraIdRef.current = selectedCameraId;
+  }, [selectedCameraId]);
 
   // Âm thanh 'bíp' khi nhận diện thành công
   const playBeepSound = () => {
@@ -77,7 +88,7 @@ export const QRScannerModal: React.FC = () => {
     }
   };
 
-  // Helper trích xuất 12 số CCCD từ bất kỳ dạng đầu vào nào (QR CCCD đầy đủ, QR 12 số, hoặc text)
+  // Helper trích xuất 12 số CCCD từ bất kỳ dạng đầu vào nào
   const extractCitizenId = (rawInput: string): string => {
     const text = (rawInput || '').trim();
     if (text.includes('|')) {
@@ -104,12 +115,16 @@ export const QRScannerModal: React.FC = () => {
     }
   }, []);
 
+  useEffect(() => {
+    stopCameraRef.current = stopCamera;
+  }, [stopCamera]);
+
   // Xử lý xác thực khi lấy được số CCCD
   const processCitizenIdSubmission = useCallback(async (rawInput: string) => {
     const cleanId = extractCitizenId(rawInput);
     if (!cleanId || cleanId.length !== 12 || isProcessingRef.current) {
       if (cleanId && cleanId.length > 0 && cleanId.length !== 12) {
-        setError(`Mã nhận diện (${cleanId}) chưa đủ 12 chữ số CCCD`);
+        setError(`Mã CCCD (${cleanId}) phải gồm đúng 12 chữ số`);
       }
       return;
     }
@@ -122,20 +137,7 @@ export const QRScannerModal: React.FC = () => {
     // Dừng camera ngay khi nhận diện thành công
     await stopCamera();
 
-    // Khóa các sự kiện phím tắt / in ấn
-    if (typeof window !== 'undefined') {
-      const originalPrint = window.print;
-      window.print = () => {
-        console.warn('🔒 Lệnh in bị chặn trong quá trình xác thực.');
-      };
-      setTimeout(() => {
-        window.print = originalPrint;
-      }, 5000);
-
-      (document.activeElement as HTMLElement)?.blur();
-    }
-
-    setLoading(true, 'Đang xác thực mã CCCD...');
+    setLoading(true, 'Đang xác thực thông tin CCCD...');
 
     try {
       const isSuccess = await loginCitizen(cleanId);
@@ -162,20 +164,42 @@ export const QRScannerModal: React.FC = () => {
 
         navigateToView(target);
       } else {
-        setError('Xác thực CCCD thất bại. Vui lòng kiểm tra lại!');
+        setError(`Không tìm thấy Bệnh nhân với CCCD/CMND: ${cleanId} trong hệ thống, vui lòng liên hệ lễ tân để được hỗ trợ.`);
         isProcessingRef.current = false;
         setScanSuccessId(null);
+
+        // Khởi động lại camera nếu đang ở chế độ camera
+        if (!showManualInputRef.current && selectedCameraIdRef.current) {
+          setTimeout(() => {
+            if (!showManualInputRef.current) {
+              startCameraRef.current?.(selectedCameraIdRef.current);
+            }
+          }, 800);
+        }
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
       setLoading(false);
-      setError('Lỗi kết nối máy chủ khi xác thực');
+      const errMsg = e?.message || `Không tìm thấy Bệnh nhân với CCCD: ${cleanId} trong hệ thống. Vui lòng liên hệ lễ tân.`;
+      setError(errMsg);
       isProcessingRef.current = false;
       setScanSuccessId(null);
+
+      if (!showManualInputRef.current && selectedCameraIdRef.current) {
+        setTimeout(() => {
+          if (!showManualInputRef.current) {
+            startCameraRef.current?.(selectedCameraIdRef.current);
+          }
+        }, 800);
+      }
     }
   }, [closeModal, loginCitizen, navigateToView, setLoading, showToast, stopCamera, targetViewAfterScan]);
 
-  // Bộ lõi giải mã đa tầng siêu nhạy (Triple-Engine: Native BarcodeDetector + Multi-Scale jsQR + Html5Qrcode)
+  useEffect(() => {
+    processSubmissionRef.current = processCitizenIdSubmission;
+  }, [processCitizenIdSubmission]);
+
+  // Bộ lõi giải mã đa tầng siêu nhạy
   const startAdvancedDecodingLoop = useCallback(() => {
     if (typeof window === 'undefined') return;
 
@@ -198,9 +222,8 @@ export const QRScannerModal: React.FC = () => {
       offscreenCanvasRef.current = document.createElement('canvas');
     }
 
-    // Chạy loop quét liên tục mỗi 100ms
     processingLoopRef.current = window.setInterval(async () => {
-      if (!isScannerRunningRef.current || isProcessingRef.current) return;
+      if (!isScannerRunningRef.current || isProcessingRef.current || showManualInputRef.current) return;
 
       const video = document.querySelector('#kiosk-cccd-reader video') as HTMLVideoElement | null;
       if (!video || video.readyState < 2 || video.paused || video.videoWidth === 0) return;
@@ -208,33 +231,33 @@ export const QRScannerModal: React.FC = () => {
       const canvas = offscreenCanvasRef.current;
       if (!canvas) return;
 
-      // 1. ENGINE 1: Native BarcodeDetector (Chrome/Edge Hardware Accelerated)
+      // 1. ENGINE 1: Native BarcodeDetector
       if (barcodeDetector) {
         try {
           const rawCodes = await barcodeDetector.detect(video);
           if (rawCodes && rawCodes.length > 0 && rawCodes[0].rawValue) {
-            processCitizenIdSubmission(rawCodes[0].rawValue);
+            processSubmissionRef.current?.(rawCodes[0].rawValue);
             return;
           }
         } catch {
-          // bỏ qua lỗi frame
+          // Bỏ qua lỗi frame
         }
       }
 
-      // 2. ENGINE 2: jsQR Engine với Multi-Scale & Digital Zoom (Phóng to vùng giữa & Tăng nét)
+      // 2. ENGINE 2: jsQR Engine với Multi-Scale & Digital Zoom
       try {
         const jsQrResult = scanWithJsQREngine(video, canvas);
         if (jsQrResult && !isProcessingRef.current) {
-          processCitizenIdSubmission(jsQrResult);
+          processSubmissionRef.current?.(jsQrResult);
           return;
         }
       } catch {
-        // bỏ qua lỗi jsQR
+        // Bỏ qua lỗi jsQR
       }
     }, 100);
-  }, [processCitizenIdSubmission]);
+  }, []);
 
-  // Chức năng Snapshot tĩnh (Chụp & Quét ngay ở độ phân giải tối đa)
+  // Chức năng Snapshot tĩnh (Chụp & Quét ngay)
   const handleManualSnapshotScan = async () => {
     if (isSnapshotScanning || isProcessingRef.current) return;
 
@@ -247,26 +270,23 @@ export const QRScannerModal: React.FC = () => {
     try {
       const canvas = offscreenCanvasRef.current || document.createElement('canvas');
 
-      // Thử Engine 2 (jsQR Multi-Scale & Digital Zoom)
       const jsQrText = scanWithJsQREngine(video, canvas);
       if (jsQrText) {
-        processCitizenIdSubmission(jsQrText);
+        processSubmissionRef.current?.(jsQrText);
         setIsSnapshotScanning(false);
         return;
       }
 
-      // Thử Engine 1 (BarcodeDetector)
       if ('BarcodeDetector' in window) {
         const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
         const results = await detector.detect(canvas).catch(() => []);
         if (results.length > 0 && results[0].rawValue) {
-          processCitizenIdSubmission(results[0].rawValue);
+          processSubmissionRef.current?.(results[0].rawValue);
           setIsSnapshotScanning(false);
           return;
         }
       }
 
-      // Thử Engine 3 (Html5Qrcode.scanFile)
       if (scannerRef.current) {
         canvas.toBlob(async (blob) => {
           if (blob) {
@@ -274,7 +294,7 @@ export const QRScannerModal: React.FC = () => {
             try {
               const text = await scannerRef.current.scanFile(file, false);
               if (text) {
-                processCitizenIdSubmission(text);
+                processSubmissionRef.current?.(text);
                 setIsSnapshotScanning(false);
                 return;
               }
@@ -299,7 +319,7 @@ export const QRScannerModal: React.FC = () => {
 
   // Khởi chạy camera với cameraId cụ thể
   const startCamera = useCallback(async (cameraId: string) => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || showManualInputRef.current) return;
 
     try {
       setIsCameraLoading(true);
@@ -332,13 +352,13 @@ export const QRScannerModal: React.FC = () => {
             deviceId: cameraId ? { exact: cameraId } : undefined,
             width: { min: 640, ideal: 1920, max: 3840 },
             height: { min: 480, ideal: 1080, max: 2160 },
-            aspectRatio: { ideal: 1.7777777778 }, // 16:9 ngang
+            aspectRatio: { ideal: 1.7777777778 },
             advanced: [{ focusMode: 'continuous' } as any],
           },
         },
         (decodedText: string) => {
-          if (!isProcessingRef.current) {
-            processCitizenIdSubmission(decodedText);
+          if (!isProcessingRef.current && !showManualInputRef.current) {
+            processSubmissionRef.current?.(decodedText);
           }
         },
         () => {
@@ -349,7 +369,6 @@ export const QRScannerModal: React.FC = () => {
       isScannerRunningRef.current = true;
       setIsCameraLoading(false);
 
-      // Kích hoạt bộ lõi giải mã đa tầng
       startAdvancedDecodingLoop();
     } catch (err: any) {
       console.error('Lỗi khi mở camera:', err);
@@ -365,10 +384,16 @@ export const QRScannerModal: React.FC = () => {
         setCameraError('Không thể mở Camera. Vui lòng kiểm tra lại thiết bị hoặc dùng nhập tay.');
       }
     }
-  }, [processCitizenIdSubmission, startAdvancedDecodingLoop, stopCamera]);
+  }, [startAdvancedDecodingLoop, stopCamera]);
+
+  useEffect(() => {
+    startCameraRef.current = startCamera;
+  }, [startCamera]);
 
   // Khởi tạo danh sách camera khi mở modal
   const initCameras = useCallback(async () => {
+    if (showManualInputRef.current) return;
+
     try {
       setIsCameraLoading(true);
       setCameraError(null);
@@ -396,6 +421,7 @@ export const QRScannerModal: React.FC = () => {
 
       const preferredCam = formattedCameras.find((c) => c.isPhoneOrExternal) || formattedCameras[0];
       setSelectedCameraId(preferredCam.id);
+      selectedCameraIdRef.current = preferredCam.id;
 
       await startCamera(preferredCam.id);
     } catch (err: any) {
@@ -405,7 +431,11 @@ export const QRScannerModal: React.FC = () => {
     }
   }, [startCamera]);
 
-  // Quản lý mở/đóng Modal & Focus input cho máy quét USB
+  useEffect(() => {
+    initCamerasRef.current = initCameras;
+  }, [initCameras]);
+
+  // Quản lý mở/đóng Modal duy nhất theo activeModal (không phụ thuộc vào hàm con)
   useEffect(() => {
     if (activeModal === 'scan_cccd') {
       isProcessingRef.current = false;
@@ -413,33 +443,55 @@ export const QRScannerModal: React.FC = () => {
       setCccdInput('');
       setScanSuccessId(null);
       setShowManualInput(false);
+      showManualInputRef.current = false;
 
-      initCameras();
-
-      const timer = setTimeout(() => {
-        inputRef.current?.focus();
-      }, 200);
-      return () => clearTimeout(timer);
+      // Khởi động camera khi mở modal
+      initCamerasRef.current?.();
     } else {
-      stopCamera();
+      stopCameraRef.current?.();
     }
 
     return () => {
-      stopCamera();
+      stopCameraRef.current?.();
     };
-  }, [activeModal, initCameras, stopCamera]);
+  }, [activeModal]);
+
+  // Tự động focus vào input khi mở chế độ bàn phím
+  useEffect(() => {
+    if (showManualInput) {
+      isProcessingRef.current = false;
+      const timer = setTimeout(() => {
+        manualInputRef.current?.focus();
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [showManualInput]);
+
+  // Chuyển sang chế độ nhập bàn phím
+  const handleSwitchToManualMode = async () => {
+    setError('');
+    await stopCamera();
+    setShowManualInput(true);
+    showManualInputRef.current = true;
+  };
+
+  // Chuyển sang chế độ Camera
+  const handleSwitchToCameraMode = async () => {
+    setError('');
+    setShowManualInput(false);
+    showManualInputRef.current = false;
+    if (selectedCameraIdRef.current) {
+      await startCamera(selectedCameraIdRef.current);
+    } else {
+      await initCameras();
+    }
+  };
 
   // Xử lý khi người dùng đổi camera
   const handleSwitchCamera = async (newCameraId: string) => {
     setSelectedCameraId(newCameraId);
+    selectedCameraIdRef.current = newCameraId;
     await startCamera(newCameraId);
-  };
-
-  // Click vào vùng modal để giữ focus cho máy quét USB Barcode
-  const handleContainerClick = () => {
-    if (!showManualInput) {
-      inputRef.current?.focus();
-    }
   };
 
   const handleManualSubmit = () => {
@@ -464,7 +516,6 @@ export const QRScannerModal: React.FC = () => {
 
   return (
     <div
-      onClick={handleContainerClick}
       className="fixed inset-0 z-50 bg-[#1E2939]/70 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-in fade-in-0 duration-300 select-none"
     >
       <div className="bg-white w-full max-w-xl rounded-[36px] shadow-2xl overflow-hidden border border-neutral-100/50 flex flex-col max-h-[94vh] animate-in zoom-in-95 duration-300">
@@ -493,7 +544,7 @@ export const QRScannerModal: React.FC = () => {
           {!showManualInput ? (
             /* CAMERA SCANNER VIEW */
             <div className="w-full flex flex-col items-center space-y-3.5">
-
+              
               {/* Live Camera Viewfinder Box (16:9 Landscape Widescreen) */}
               <div className="relative w-full aspect-video max-w-lg rounded-3xl bg-slate-950 overflow-hidden shadow-2xl border-2 border-slate-800 flex items-center justify-center">
 
@@ -548,10 +599,6 @@ export const QRScannerModal: React.FC = () => {
                     </div>
                   </div>
                 )}
-
-                {/* Status Pill on Camera */}
-                <div className="absolute bottom-3 left-3 right-3 z-20 flex items-center justify-between pointer-events-none">
-                </div>
               </div>
 
               {/* Action Toolbar: Snapshot Button + Instructions */}
@@ -568,74 +615,96 @@ export const QRScannerModal: React.FC = () => {
               </div>
 
               <p className="text-xs text-neutral-400 font-semibold leading-relaxed max-w-sm">
-                Đưa mã QR CCCD cách camera khoảng <strong className="text-neutral-700">10 – 20 cm</strong>. Máy tự động phóng to &amp; quét mã liên tục.
+                Đưa mã QR CCCD cách camera khoảng <strong className="text-neutral-700">10 – 20 cm</strong>. Bạn cũng có thể chọn nhập bằng bàn phím bên dưới.
               </p>
 
               {/* Switch to Manual Input */}
               <div className="w-full max-w-sm pt-1 border-t border-neutral-100 flex flex-col items-center">
                 <button
                   type="button"
-                  onClick={() => {
-                    stopCamera();
-                    setShowManualInput(true);
-                    setError('');
-                  }}
+                  onClick={handleSwitchToManualMode}
                   className="flex items-center gap-2 text-xs sm:text-sm font-extrabold text-[#155DFC] hover:text-blue-700 bg-blue-50/80 hover:bg-blue-100 px-5 py-2.5 rounded-full transition-all cursor-pointer shadow-xs active:scale-95"
                 >
                   <Keyboard className="w-4 h-4" />
-                  <span>Nhập số CCCD bằng bàn phím</span>
+                  <span>Chạm để nhập số CCCD bằng bàn phím</span>
                 </button>
               </div>
             </div>
           ) : (
-            /* MANUAL INPUT MODE (TOUCH NUMERIC KEYPAD) */
+            /* MANUAL INPUT MODE (INTERACTIVE INPUT & TOUCH NUMERIC KEYPAD) */
             <div className="w-full max-w-md space-y-4 animate-in fade-in-50 duration-200">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-black uppercase tracking-wider text-neutral-500">
-                  Bàn phím số cảm ứng
+                  Nhập số căn cước công dân
                 </span>
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowManualInput(false);
-                    setError('');
-                    initCameras();
-                  }}
+                  onClick={handleSwitchToCameraMode}
                   className="text-xs font-bold text-[#155DFC] hover:underline cursor-pointer flex items-center gap-1.5"
                 >
                   <Camera className="w-3.5 h-3.5" /> Dùng Camera quét QR
                 </button>
               </div>
 
-              {/* Digits Display */}
-              <div className="bg-neutral-50 border-2 border-blue-200 rounded-2xl p-3.5 text-center shadow-inner space-y-1">
-                <span className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider block">
-                  Số CCCD ({cccdInput.length}/12)
-                </span>
-                <div className="text-2xl sm:text-3xl font-black font-mono tracking-widest text-[#155DFC] min-h-[36px] flex items-center justify-center">
-                  {cccdInput ? (
-                    cccdInput
-                  ) : (
-                    <span className="text-neutral-300 font-normal text-base tracking-normal">
-                      Chạm số bên dưới để nhập...
+              {/* Interactive Real Input Field */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-[11px] uppercase font-bold text-neutral-400 tracking-wider">
+                    Số CCCD / CMND ({cccdInput.length}/12)
+                  </span>
+                  {cccdInput.length === 12 && (
+                    <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Đủ 12 chữ số
                     </span>
                   )}
                 </div>
+
+                <div className="relative">
+                  <input
+                    ref={manualInputRef}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={12}
+                    value={cccdInput}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, '').slice(0, 12);
+                      setCccdInput(digits);
+                      isProcessingRef.current = false;
+                      if (error) setError('');
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (cccdInput.length === 12) {
+                          handleManualSubmit();
+                        }
+                      }
+                    }}
+                    placeholder="Nhập 12 số CCCD..."
+                    className="w-full bg-neutral-50 hover:bg-white focus:bg-white border-2 border-blue-300 focus:border-blue-600 rounded-2xl py-3.5 px-4 text-2xl sm:text-3xl font-black font-mono text-center tracking-widest text-[#155DFC] placeholder:text-neutral-300 placeholder:text-base placeholder:tracking-normal placeholder:font-sans outline-none shadow-inner transition-all select-text"
+                    autoFocus
+                  />
+                </div>
               </div>
 
-              {/* Numeric Keypad */}
+              {/* Touch Numeric Keypad */}
               <NumericKeypad
                 onKeyPress={(num) => {
                   if (cccdInput.length < 12) {
                     setCccdInput((prev) => prev + num);
+                    isProcessingRef.current = false;
                     setError('');
                   }
                 }}
                 onDelete={() => {
                   setCccdInput((prev) => prev.slice(0, -1));
+                  isProcessingRef.current = false;
+                  setError('');
                 }}
                 onClear={() => {
                   setCccdInput('');
+                  isProcessingRef.current = false;
                   setError('');
                 }}
                 onSubmit={handleManualSubmit}
@@ -646,40 +715,27 @@ export const QRScannerModal: React.FC = () => {
             </div>
           )}
 
-          {/* Error Message Box */}
+          {/* Backend Validation / Error Message Box */}
           {error && (
-            <div className="flex items-center gap-2 bg-rose-50 text-rose-700 border border-rose-200 px-4 py-2.5 rounded-2xl text-xs font-bold max-w-sm animate-in fade-in duration-200">
-              <ShieldCheck className="w-4 h-4 text-rose-500 shrink-0" />
-              <span>{error}</span>
+            <div className="w-full max-w-lg bg-amber-50 border-2 border-amber-300 text-amber-950 p-4 rounded-2xl shadow-md text-left flex items-start gap-3.5 animate-in fade-in duration-300">
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="flex-1 space-y-1">
+                <p className="text-xs font-black uppercase tracking-wider text-amber-900">
+                  Thông báo từ hệ thống
+                </p>
+                <p className="text-xs sm:text-sm font-semibold text-amber-900 leading-relaxed">
+                  {error}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setError('')}
+                className="text-amber-700 hover:text-amber-950 text-xs font-bold px-2.5 py-1.5 bg-amber-100 hover:bg-amber-200 rounded-xl transition-colors cursor-pointer shrink-0 font-mono text-xs"
+              >
+                ✕ Đóng
+              </button>
             </div>
           )}
-
-          {/* Invisible Auto-Focus Input for USB Barcode Scanners */}
-          <input
-            ref={inputRef}
-            type="text"
-            value={cccdInput}
-            onChange={(e) => {
-              const val = e.target.value;
-              const extracted = extractCitizenId(val);
-              if (extracted.length === 12) {
-                processCitizenIdSubmission(val);
-              } else {
-                setCccdInput(val.replace(/\D/g, '').slice(0, 12));
-              }
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                if (cccdInput.length === 12) {
-                  handleManualSubmit();
-                }
-              }
-            }}
-            className="opacity-0 absolute -z-10 pointer-events-none"
-            tabIndex={-1}
-            autoFocus
-          />
         </div>
       </div>
     </div>

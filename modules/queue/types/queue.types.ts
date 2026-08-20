@@ -168,12 +168,41 @@ export interface MissingEntry {
     step_id?: string;
 }
 
+export interface FinishedEntry {
+    queue_id: string;
+    queue_number: string;
+    queue_type: string;
+    status: string;
+    serving_started_at: string | null;
+    finished_at: string | null;
+    duration_minutes: number;
+    refusal_reason: string | null;
+    patient_name?: string;
+    patient?: {
+        patient_id: string;
+        full_name: string;
+        dob?: string | null;
+        gender?: string;
+        phone?: string;
+        citizen_id?: string;
+    } | null;
+    step?: {
+        step_id: string;
+        step_name: string;
+        step_type: string;
+        step_status: string;
+        service_code?: string | null;
+    } | null;
+    service_order?: ServingServiceOrder | null;
+}
+
 export interface RoomQueueData {
     room_id: string;
     expected_service_minutes: number;
     serving: Serving | null;
     waiting: WaitingEntry[];
     missing: MissingEntry[];
+    finished: FinishedEntry[];
 }
 
 export interface QueueOverrideBody {
