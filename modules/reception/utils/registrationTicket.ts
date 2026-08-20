@@ -1,7 +1,6 @@
 import type { RegistrationResult } from "@/modules/reception/types/reception.types";
 
 function buildTicketHtml(result: RegistrationResult): string {
-  // Thu nhỏ QR code xuống 110x110 cho vừa giấy 56mm
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=${encodeURIComponent(result.qrPayload)}`;
   const now = new Date();
   const pad = (n: number) => n.toString().padStart(2, "0");
@@ -97,7 +96,8 @@ body {
         <tr><td class="label">KHOA KHÁM:</td><td class="value">${result.specialty.toUpperCase()}</td></tr>
         <tr><td class="label">BÁC SĨ:</td><td class="value">${result.doctorLabel}</td></tr>
         <tr><td class="label">PHÒNG KHÁM:</td><td class="value">${result.roomLabel}</td></tr>
-        <tr><td class="label">NGÀY & GIỜ:</td><td class="value">${result.appointmentDate || result.slotTimeLabel || "—"}</td></tr>
+        <tr><td class="label">NGÀY KHÁM:</td><td class="value">${result.appointmentDate || (result.slotTimeLabel || "—").split(", ")[0]}</td></tr>
+        <tr><td class="label">GIỜ KHÁM:</td><td class="value">${(result.slotTimeLabel || "").includes(", ") ? (result.slotTimeLabel || "").split(", ")[1] : "—"}</td></tr>
     </table>
     
     <div class="dashed-line"></div>
