@@ -147,13 +147,15 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
             ...maleSymptomDataset
         };
 
+        const normalizedRegion = regionId.toLowerCase().replace(/[-_]/g, '');
         const foundKey = Object.keys(allDatasets).find((key) =>
             key.toLowerCase() === regionId.toLowerCase() ||
+            key.toLowerCase() === normalizedRegion ||
             allDatasets[key].nameVn.toLowerCase() === regionId.toLowerCase() ||
             allDatasets[key].nameEn.toLowerCase() === regionId.toLowerCase()
         );
 
-        const englishPhrase = foundKey ? foundKey : regionId;
+        const englishPhrase = foundKey ? allDatasets[foundKey].nameEn : regionId.replace(/[-_]/g, ' ');
 
         const patientAge = calculateAgeFromDob(dob);
 

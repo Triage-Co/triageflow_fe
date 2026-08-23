@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { authService } from '../services/authService';
 import { CCCDInfo } from '../types/kiosk.types';
 import { CCCDParsedResult } from '../utils/cccdParser';
-import { getUserFromToken } from '@/shared/utils/jwt';
+import { decodeJwtPayload } from '@/shared/utils/jwt';
 
 interface AuthStoreState {
   authToken?: string;
@@ -38,19 +38,24 @@ export const useAuthStore = create<AuthStoreState>((set) => ({
       const resCitizenId = resData?.citizen_id || (response as any)?.citizen_id || citizenId;
 
       if (token && patientId) {
-        // Decode token để lấy thông tin fullName
-        const decodedUser = getUserFromToken(token);
-        const nameFromToken = decodedUser?.fullName || '';
+        const payload = decodeJwtPayload(token);
+        const patientData = (payload?.patient as any) || {};
+
+        const rawGender = String(patientData?.gender || '').toLowerCase();
+        const detectedGender: 'male' | 'female' =
+          rawGender === 'female' || rawGender === 'nu' || rawGender === 'nữ' ? 'female' : 'male';
+        const { useKioskStore } = await import('./kioskStore');
+        useKioskStore.getState().setGender(detectedGender);
 
         set({
           authToken: token,
           patientId: patientId,
           citizenId: resCitizenId,
           patientInfo: {
-            idNumber: citizenId,
-            fullName: nameFromToken,
-            dob: '',
-            gender: '',
+            idNumber: patientData?.citizen_id || citizenId,
+            fullName: patientData?.full_name || '',
+            dob: patientData?.dob || '',
+            gender: detectedGender,
             address: '',
           },
         });
@@ -72,15 +77,24 @@ export const useAuthStore = create<AuthStoreState>((set) => ({
       const resCitizenId = resData?.citizen_id || (response as any)?.citizen_id || parsedCCCD.citizenId;
 
       if (token && patientId) {
+        const payload = decodeJwtPayload(token);
+        const patientData = (payload?.patient as any) || {};
+
+        const rawGender = String(parsedCCCD.gender || patientData?.gender || '').toLowerCase();
+        const detectedGender: 'male' | 'female' =
+          rawGender === 'female' || rawGender === 'nu' || rawGender === 'nữ' ? 'female' : 'male';
+        const { useKioskStore } = await import('./kioskStore');
+        useKioskStore.getState().setGender(detectedGender);
+
         set({
           authToken: token,
           patientId: patientId,
           citizenId: resCitizenId,
           patientInfo: {
-            idNumber: parsedCCCD.citizenId,
-            fullName: parsedCCCD.fullName || '',
-            dob: parsedCCCD.dob || '',
-            gender: parsedCCCD.gender || '',
+            idNumber: parsedCCCD.citizenId || patientData?.citizen_id || '',
+            fullName: parsedCCCD.fullName || patientData?.full_name || '',
+            dob: parsedCCCD.dob || patientData?.dob || '',
+            gender: detectedGender,
             address: parsedCCCD.address || '',
           },
         });

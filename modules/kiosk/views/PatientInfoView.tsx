@@ -13,6 +13,7 @@ import {
 import { useAuthStore } from '../store/authStore';
 import { useFlowStore } from '../store/flowStore';
 import { stripRoomName, QUEUE_TYPE_MAP } from '../utils/flowHelpers';
+import { printKioskTicket } from '../utils/kioskTicketPrinter';
 import { cn } from '@/lib/utils';
 
 export const PatientInfoView: React.FC = () => {
@@ -33,6 +34,7 @@ export const PatientInfoView: React.FC = () => {
   const specialtyName = activeTicket?.clinicName || selectedDoctor?.specialty || '';
   const doctorName = activeTicket?.doctorName || selectedDoctor?.name || '';
   const patientName = activeTicket?.patientName || patientInfo?.fullName || '';
+  const citizenIdVal = patientInfo?.idNumber || (patientInfo as any)?.citizenId || patientId || '---';
   const currentCallingNo = activeTicket?.currentCallingNo || ticketNo;
   const waitingCount = activeTicket?.waitingCount ?? 3;
   const startTime = activeTicket?.startTime || '';
@@ -43,11 +45,11 @@ export const PatientInfoView: React.FC = () => {
   const ticketCode = activeTicket?.ticketCode || '';
   const queueType = activeTicket?.queueType || '';
   const queueTypeLabel = QUEUE_TYPE_MAP[queueType] || (activeTicket ? QUEUE_TYPE_MAP.NEW : '');
-  const qrTicketUrl = ticketCode
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(ticketCode)}`
-    : (ticketNo && ticketNo !== '---'
-      ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(ticketNo)}`
-      : '');
+  const qrPayload = ticketCode || ticketNo || 'TRIAGEFLOW-TICKET';
+  const qrTicketUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(qrPayload)}`;
+
+  const currentDateStr = new Date().toLocaleDateString('vi-VN');
+  const currentTimeStr = activeTicket?.createdAt || new Date().toLocaleTimeString('vi-VN');
 
   const handleOpenPrintModal = () => {
     if (!ticketNo || ticketNo === '---') {
@@ -60,113 +62,36 @@ export const PatientInfoView: React.FC = () => {
   const handleConfirmPrint = () => {
     showToast('Đang phát lệnh in phiếu khám bệnh...', 'info');
     setTimeout(() => {
-      window.print();
+      printKioskTicket({
+        ticketNo: String(ticketNo || '---'),
+        fullName: String(patientName || '---'),
+        citizenId: String(citizenIdVal),
+        specialty: String(specialtyName || '---'),
+        doctorLabel: String(doctorName || '---'),
+        roomLabel: String(roomName || '---'),
+        appointmentDate: currentDateStr,
+        slotTimeLabel: startTime ? `${currentDateStr}, ${startTime}` : `${currentDateStr}, ${currentTimeStr}`,
+        qrPayload: qrPayload,
+      });
     }, 200);
   };
 
-  const currentDateStr = new Date().toLocaleDateString('vi-VN');
-  const currentTimeStr = activeTicket?.createdAt || new Date().toLocaleTimeString('vi-VN');
-
   return (
     <div className="w-full h-full min-h-0 p-4 sm:p-6 lg:p-8 z-10 select-none flex flex-col justify-between gap-4 max-w-7xl mx-auto overflow-hidden">
-      {/* CSS dành riêng khi gọi window.print(): Phóng to to rõ & Căn đúng chính giữa trang giấy */}
-      <style>{`
-        @media print {
-          @page {
-            margin: 10mm;
-            size: auto;
-          }
-          html, body {
-            width: 100% !important;
-            height: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            background: white !important;
-            overflow: visible !important;
-          }
-          body * {
-            visibility: hidden !important;
-          }
-          #print-thermal-ticket, #print-thermal-ticket * {
-            visibility: visible !important;
-          }
-          #print-thermal-ticket {
-            position: fixed !important;
-            left: 50% !important;
-            top: 50% !important;
-            transform: translate(-50%, -50%) !important;
-            width: 85% !important;
-            max-width: 120mm !important;
-            margin: 0 auto !important;
-            padding: 8mm !important;
-            background: white !important;
-            color: black !important;
-            font-family: monospace, sans-serif !important;
-            box-sizing: border-box !important;
-            border: 2px solid black !important;
-            border-radius: 8px !important;
-          }
-        }
-      `}</style>
-
-      {/* Printable Thermal Ticket Layout (Hidden on Screen, Centered and Enlarged on Print) */}
-      <div id="print-thermal-ticket" className="hidden print:block text-black font-mono w-full p-6 text-center bg-white border-2 border-black">
-        <div className="text-center space-y-1.5 mb-3">
-          <h1 className="text-lg font-black uppercase tracking-wider">
-            {specialtyName ? `KHOA KHÁM BỆNH (${specialtyName.toUpperCase()})` : 'KHOA KHÁM BỆNH'}
-          </h1>
-        </div>
-
-        <div className="text-center space-y-1.5 my-4 text-base font-bold">
-          {roomName && (
-            <p className="text-xl font-black">Phòng: {roomName}</p>
-          )}
-          {specialtyName && (
-            <p className="text-base font-bold">{specialtyName}</p>
-          )}
-          {doctorName && (
-            <p className="text-sm">Bác sĩ: {doctorName}</p>
-          )}
-        </div>
-
-        {/* Ticket STT Number (Super Large Bold Centered) */}
-        <div className="my-5 py-4 border-y-2 border-black border-dashed">
-          <span className="text-base font-bold block">Số thứ tự:</span>
-          <span className="text-5xl font-black tracking-widest block my-2">{ticketNo}</span>
-        </div>
-
-        {startTime && (
-          <div className="text-left text-xs space-y-1 my-3 font-bold">
-            <p>Giờ khám dự kiến: {startTime}</p>
-          </div>
-        )}
-
-        {/* Notice */}
-        <p className="text-xs font-bold my-3 text-center">
-          Vui lòng giữ phiếu khám và chờ đến lượt!
-        </p>
-
-        {/* Dashed Line */}
-        <div className="border-t-2 border-dashed border-black my-3" />
-
-        {/* Footer Date & Time */}
-        <div className="flex justify-between text-xs font-bold mt-3">
-          <span>Ngày: {currentDateStr}</span>
-          <span>Giờ: {currentTimeStr}</span>
-        </div>
-      </div>
-
       {/* Interactive Print Preview Modal on Kiosk Screen */}
       {isPrintModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 select-none animate-in fade-in duration-200">
-          <div className="bg-white rounded-[32px] p-6 lg:p-8 max-w-lg w-full shadow-2xl border border-neutral-200 flex flex-col space-y-6 transform animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-[32px] p-6 lg:p-8 max-w-lg w-full shadow-2xl border border-neutral-200 flex flex-col space-y-5 transform animate-in zoom-in-95 duration-200 max-h-[92vh]">
             {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-neutral-100 pb-4">
+            <div className="flex items-center justify-between border-b border-neutral-100 pb-3 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-blue-50 text-[#155DFC] flex items-center justify-center">
                   <Printer className="w-5 h-5" />
                 </div>
-                <h3 className="text-xl font-black text-[#1E2939]">Xem trước phiếu khám</h3>
+                <div>
+                  <h3 className="text-lg font-black text-[#1E2939]">Xem trước phiếu khám</h3>
+                  <p className="text-xs text-neutral-500 font-medium">Định dạng in nhiệt chuẩn máy in POS 56mm / 80mm</p>
+                </div>
               </div>
 
               <button
@@ -177,50 +102,99 @@ export const PatientInfoView: React.FC = () => {
               </button>
             </div>
 
-            {/* Thermal Ticket Card Preview */}
-            <div className="bg-[#F8FAFC] border-2 border-dashed border-neutral-300 rounded-2xl p-6 font-mono text-center space-y-4 shadow-inner">
-              <div className="space-y-1">
-                <h4 className="font-black text-[#1E2939] text-base uppercase">
-                  {specialtyName ? `KHOA KHÁM BỆNH (${specialtyName.toUpperCase()})` : 'KHOA KHÁM BỆNH'}
-                </h4>
-              </div>
-
-              {patientName && (
-                <div className="text-left text-xs font-bold text-neutral-700 border-b border-neutral-200 pb-1.5 space-y-0.5">
-                  <p>Bệnh nhân: {patientName}</p>
-                  <p className="text-[11px] text-neutral-500">Mã bệnh nhân: {patientInfo?.idNumber || patientId || '---'}</p>
+            {/* Thermal Ticket Card Preview - Exact Match with Reception */}
+            <div className="overflow-y-auto px-1 py-1 shrink min-h-0">
+              <div className="w-full max-w-sm mx-auto bg-white border border-black p-4 font-mono text-black text-center shadow-md select-text">
+                <div className="font-bold text-sm uppercase tracking-wide">BỆNH VIỆN</div>
+                <div className="font-bold text-xs uppercase leading-tight my-1">
+                  HỆ THỐNG QUẢN LÝ KHÁM BỆNH<br />TRIAGEFLOW OPD
                 </div>
-              )}
+                <div className="font-bold text-[11px] uppercase tracking-wide my-1">--- PHIẾU ĐĂNG KÝ KHÁM ---</div>
 
-              <div className="space-y-1 text-sm font-bold text-neutral-700">
-                {roomName && roomName !== '---' && <p className="text-lg font-black text-[#1E2939]">Phòng: {roomName}</p>}
-                {specialtyName && <p>{specialtyName}</p>}
-                {doctorName && <p className="text-xs text-neutral-500">Bác sĩ: {doctorName}</p>}
-              </div>
+                <div className="border-t border-dashed border-black my-2.5 w-full" />
 
-              <div className="py-3 border-y-2 border-neutral-400 border-dashed bg-white rounded-xl shadow-sm">
-                <span className="text-xs font-bold text-neutral-500 block uppercase">Số thứ tự</span>
-                <span className="text-4xl font-black text-[#155DFC] tracking-wider block my-1">{ticketNo}</span>
-              </div>
-
-              {startTime && (
-                <div className="text-left text-xs space-y-1 font-bold text-neutral-600">
-                  <p>Giờ khám dự kiến: {startTime}</p>
+                {/* Ticket Number Box */}
+                <div className="border border-black py-2 px-1 my-2 w-[98%] mx-auto">
+                  <div className="text-xs font-bold uppercase tracking-wider mb-0.5">Số thứ tự khám</div>
+                  <div className="text-5xl font-black tracking-widest leading-none my-1">{ticketNo}</div>
                 </div>
-              )}
 
-              <p className="text-xs font-bold text-neutral-500">
-                Vui lòng giữ phiếu khám và chờ đến lượt!
-              </p>
+                <div className="border-t border-dashed border-black my-2.5 w-full" />
 
-              <div className="border-t border-dashed border-neutral-300 pt-3 flex justify-between text-[11px] font-bold text-neutral-500">
-                <span>Ngày: {currentDateStr}</span>
-                <span>Giờ: {currentTimeStr}</span>
+                {/* Patient Info Table */}
+                <table className="w-full text-xs font-bold text-left border-collapse">
+                  <tbody>
+                    <tr>
+                      <td className="w-2/5 py-0.5 text-left text-neutral-800">HỌ VÀ TÊN:</td>
+                      <td className="w-3/5 py-0.5 text-right font-black break-words">{patientName ? patientName.toUpperCase() : '---'}</td>
+                    </tr>
+                    <tr>
+                      <td className="w-2/5 py-0.5 text-left text-neutral-800">CCCD/CMND:</td>
+                      <td className="w-3/5 py-0.5 text-right font-black break-words">{citizenIdVal}</td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                <div className="border-t border-dashed border-black my-2.5 w-full" />
+
+                {/* Examination Info Table */}
+                <table className="w-full text-xs font-bold text-left border-collapse">
+                  <tbody>
+                    <tr>
+                      <td className="w-2/5 py-0.5 text-left text-neutral-800">KHOA KHÁM:</td>
+                      <td className="w-3/5 py-0.5 text-right font-black break-words">{specialtyName ? specialtyName.toUpperCase() : '---'}</td>
+                    </tr>
+                    <tr>
+                      <td className="w-2/5 py-0.5 text-left text-neutral-800">BÁC SĨ:</td>
+                      <td className="w-3/5 py-0.5 text-right font-black break-words">{doctorName || '---'}</td>
+                    </tr>
+                    <tr>
+                      <td className="w-2/5 py-0.5 text-left text-neutral-800">PHÒNG KHÁM:</td>
+                      <td className="w-3/5 py-0.5 text-right font-black break-words">{roomName || '---'}</td>
+                    </tr>
+                    <tr>
+                      <td className="w-2/5 py-0.5 text-left text-neutral-800">NGÀY KHÁM:</td>
+                      <td className="w-3/5 py-0.5 text-right font-black break-words">{currentDateStr}</td>
+                    </tr>
+                    <tr>
+                      <td className="w-2/5 py-0.5 text-left text-neutral-800">GIỜ KHÁM:</td>
+                      <td className="w-3/5 py-0.5 text-right font-black break-words">{startTime || currentTimeStr}</td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                <div className="border-t border-dashed border-black my-2.5 w-full" />
+
+                {/* QR Code */}
+                <div className="my-2.5 text-center">
+                  <img
+                    src={qrTicketUrl}
+                    alt="Mã QR Phiếu khám"
+                    className="w-36 h-36 mx-auto border border-black p-1 block mb-1.5 bg-white"
+                    style={{ imageRendering: 'pixelated' }}
+                  />
+                  <div className="text-[11px] font-bold uppercase tracking-tight leading-tight">
+                    Quét mã QR để theo dõi thứ tự & bản đồ chỉ đường
+                  </div>
+                </div>
+
+                <div className="border-t border-solid border-black my-2 w-full" />
+
+                {/* Footer Notes */}
+                <div className="text-[10px] font-bold uppercase leading-tight mb-1">
+                  VUI LÒNG GIỮ PHIẾU NÀY TRONG SUỐT QUÁ TRÌNH KHÁM
+                </div>
+                <div className="text-[10px] font-bold uppercase leading-tight mb-1">
+                  CHÚC QUÝ KHÁCH NHIỀU SỨC KHỎE!
+                </div>
+                <div className="text-[9px] font-bold mt-2 text-neutral-700">
+                  In lúc: {currentTimeStr} {currentDateStr}
+                </div>
               </div>
             </div>
 
             {/* Modal Actions */}
-            <div className="flex items-center justify-end gap-3 pt-2">
+            <div className="flex items-center justify-end gap-3 pt-2 shrink-0 border-t border-neutral-100">
               <button
                 onClick={() => setIsPrintModalOpen(false)}
                 className="px-5 py-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-2xl text-xs lg:text-sm font-extrabold transition-all cursor-pointer"

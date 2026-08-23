@@ -1,4 +1,4 @@
-import { Cross } from 'lucide-react';
+import Image from 'next/image';
 
 export function AuthBrandPanel() {
     return (
@@ -10,10 +10,16 @@ export function AuthBrandPanel() {
 
             <div className="relative z-10 flex flex-col items-center text-center px-12 max-w-120">
                 {/* Logo circle */}
-                <div className="mb-8 flex items-center justify-center w-28 h-28 rounded-full border-2 border-white/40 bg-white/10 shadow-xl">
-                    <div className="flex items-center justify-center w-16 h-16 rounded-full bg-white/20">
-                        <Cross className="w-8 h-8 text-white" strokeWidth={2.5} />
-                    </div>
+                <div className="mb-8 flex items-center justify-center w-28 h-28 rounded-full border-2 border-white/40 bg-white shadow-xl backdrop-blur-sm">
+                    <Image
+                        src="/logo.png?v=2"
+                        alt="TriageFlow Logo"
+                        width={56}
+                        height={56}
+                        className="w-full h-full object-contain"
+                        unoptimized
+                        priority
+                    />
                 </div>
 
                 {/* Brand name */}
@@ -23,7 +29,7 @@ export function AuthBrandPanel() {
 
                 {/* Tagline */}
                 <p className="text-brand-200 text-base leading-relaxed font-light max-w-xs">
-                    AI Intelligent Triage and Patient Flow Coordination System
+                    Hệ thống phân loại bệnh nhân thông minh và điều phối luồng bệnh nhân
                 </p>
 
                 {/* Feature badges */}

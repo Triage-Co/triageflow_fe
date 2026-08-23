@@ -26,14 +26,36 @@ import { PendingBillsView } from './PendingBillsView';
 import { PackageSelectView } from './PackageSelectView';
 import { PackageDetailView } from './PackageDetailView';
 import { PackageSlotSelectView } from './PackageSlotSelectView';
+import { KioskSettingsView } from './KioskSettingsView';
+import { AdminPinModal } from '../modals/AdminPinModal';
 
 export const KioskRoot: React.FC = () => {
   const currentView = useKioskStore((state) => state.currentView);
+  const navigateToView = useKioskStore((state) => state.navigateToView);
   const initialize = useKioskStore((state) => state.initialize);
+
+  const [isAdminPinModalOpen, setIsAdminPinModalOpen] = React.useState(false);
+  const tapCountRef = React.useRef(0);
+  const lastTapTimeRef = React.useRef(0);
 
   useEffect(() => {
     initialize();
   }, [initialize]);
+
+  const handleLogoSecretTap = () => {
+    const now = Date.now();
+    if (now - lastTapTimeRef.current > 2500) {
+      tapCountRef.current = 1;
+    } else {
+      tapCountRef.current += 1;
+    }
+    lastTapTimeRef.current = now;
+
+    if (tapCountRef.current >= 5) {
+      tapCountRef.current = 0;
+      setIsAdminPinModalOpen(true);
+    }
+  };
 
   return (
     <div
@@ -55,14 +77,19 @@ export const KioskRoot: React.FC = () => {
       {/* Header Branding - Chỉ hiển thị tại trang chủ */}
       {currentView === 'home' && (
         <header className="w-full pt-8 pb-2 flex flex-col items-center text-center z-10 shrink-0">
-          <div className="flex items-center gap-3.5 mb-1">
+          <div
+            onClick={handleLogoSecretTap}
+            className="flex items-center gap-3.5 mb-1 cursor-pointer active:scale-98 transition-transform"
+            title="Chạm 5 lần để mở Cài đặt Kiosk"
+          >
             <div className="w-13 h-13 rounded-2xl bg-white p-1 flex items-center justify-center shadow-lg shadow-blue-500/15 border border-white/80 shrink-0">
               <Image
-                src="/logo.png"
+                src="/logo.png?v=2"
                 alt="TriageFlow Logo"
                 width={52}
                 height={52}
                 className="w-full h-full object-contain rounded-xl"
+                unoptimized
                 priority
               />
             </div>
@@ -92,12 +119,24 @@ export const KioskRoot: React.FC = () => {
         {currentView === 'package_select' && <PackageSelectView />}
         {currentView === 'package_detail' && <PackageDetailView />}
         {currentView === 'package_slot_select' && <PackageSlotSelectView />}
+        {currentView === 'settings' && <KioskSettingsView />}
       </main>
+
       {/* Top Header Control Buttons (Fullscreen & Session Reset) */}
       <div className="fixed top-4 right-4 sm:top-6 sm:right-6 z-40 flex items-center gap-2 animate-in fade-in duration-300">
         <KioskFullscreenButton />
         <KioskSessionResetButton />
       </div>
+
+      {/* Admin PIN Authentication Modal */}
+      <AdminPinModal
+        isOpen={isAdminPinModalOpen}
+        onClose={() => setIsAdminPinModalOpen(false)}
+        onSuccess={() => {
+          setIsAdminPinModalOpen(false);
+          navigateToView('settings');
+        }}
+      />
 
       {/* Global Modals, Virtual Keyboard & Inactivity Timeout */}
       <QRScannerModal />

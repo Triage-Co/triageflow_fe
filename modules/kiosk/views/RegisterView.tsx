@@ -74,7 +74,7 @@ export const RegisterView: React.FC = () => {
       </div>
 
       {/* Main Content Layout */}
-      <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 flex-1 min-h-0 items-stretch overflow-hidden">
+      <div className="flex flex-col md:flex-row gap-4 sm:gap-6 flex-1 min-h-0 items-stretch overflow-y-auto md:overflow-hidden pr-0.5 custom-scrollbar">
         {/* Left Stepper Sidebar */}
         {!isDirect && <RegisterStepper currentStep={aiRegisterStep} />}
 

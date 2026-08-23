@@ -292,8 +292,8 @@ export function DoctorSlotPicker({
                         {!departmentId
                             ? 'Chọn chuyên khoa trước để xem danh sách bác sĩ.'
                             : isLoadingDoctors
-                              ? 'Đang tải bác sĩ theo chuyên khoa...'
-                              : 'Chưa có bác sĩ trực cho chuyên khoa này hôm nay.'}
+                                ? 'Đang tải bác sĩ theo chuyên khoa...'
+                                : 'Chưa có bác sĩ trực cho chuyên khoa này hôm nay.'}
                     </p>
                 )}
             </div>
@@ -436,10 +436,10 @@ export function DoctorSlotPicker({
                                                         isSelected
                                                             ? 'border-[#16A34A] bg-[#16A34A] text-white shadow-[0_4px_12px_rgba(22,163,74,0.3)]'
                                                             : isPast
-                                                              ? 'border-neutral-200 bg-neutral-100 text-neutral-400 opacity-60'
-                                                              : isFull
-                                                                ? 'border-[#FCA5A5] bg-[#FEE2E2] text-[#B91C1C]'
-                                                                : 'border-[#E5E7EB] bg-white text-[#374151] hover:border-[#86EFAC] hover:bg-[#F0FDF4]',
+                                                                ? 'border-neutral-200 bg-neutral-100 text-neutral-400 opacity-60'
+                                                                : isFull
+                                                                    ? 'border-[#FCA5A5] bg-[#FEE2E2] text-[#B91C1C]'
+                                                                    : 'border-[#E5E7EB] bg-white text-[#374151] hover:border-[#86EFAC] hover:bg-[#F0FDF4]',
                                                     )}
                                                 >
                                                     <span className="text-[13px] font-bold block">
@@ -452,10 +452,10 @@ export function DoctorSlotPicker({
                                                                 isSelected
                                                                     ? 'text-white/80'
                                                                     : isPast
-                                                                      ? 'text-neutral-400'
-                                                                      : isFull
-                                                                        ? 'text-[#DC2626]'
-                                                                        : 'text-[#9CA3AF]',
+                                                                        ? 'text-neutral-400'
+                                                                        : isFull
+                                                                            ? 'text-[#DC2626]'
+                                                                            : 'text-[#9CA3AF]',
                                                             )}
                                                         >
                                                             đến {slot.end_time.slice(0, 5)}
@@ -467,19 +467,19 @@ export function DoctorSlotPicker({
                                                             isSelected
                                                                 ? 'text-white'
                                                                 : isPast
-                                                                  ? 'text-neutral-400'
-                                                                  : isFull
-                                                                    ? 'text-[#B91C1C]'
-                                                                    : 'text-[#16A34A]',
+                                                                    ? 'text-neutral-400'
+                                                                    : isFull
+                                                                        ? 'text-[#B91C1C]'
+                                                                        : 'text-[#16A34A]',
                                                         )}
                                                     >
                                                         {isPast
                                                             ? 'Đã qua'
                                                             : isFull
-                                                              ? 'Đã đầy'
-                                                              : slot.capacity !== undefined
-                                                                ? `Còn ${slot.capacity} chỗ`
-                                                                : 'Còn chỗ'}
+                                                                ? 'Đã đầy'
+                                                                : slot.capacity !== undefined
+                                                                    ? `Còn ${slot.capacity} chỗ`
+                                                                    : 'Còn chỗ'}
                                                     </span>
                                                     {isSelected && (
                                                         <Check
