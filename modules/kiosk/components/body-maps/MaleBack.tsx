@@ -199,7 +199,6 @@ const containerStyle: CSSProperties = {
     position: 'relative',
     width: '100%',
     height: '100%',
-    minHeight: '520px',
     margin: '0 auto',
     display: 'flex',
     alignItems: 'center',

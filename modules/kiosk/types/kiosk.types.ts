@@ -12,7 +12,8 @@ export type ActiveView =
   | 'pending_bills'
   | 'package_select'
   | 'package_detail'
-  | 'package_slot_select';
+  | 'package_slot_select'
+  | 'settings';
 
 export type ActiveModal =
   | null

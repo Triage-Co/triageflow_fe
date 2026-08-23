@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, Cross, AlertCircle, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
 import { authService } from '@/modules/auth/services/authService';
 import { useAuthStore } from '@/store/authStore';
 import { labService } from '@/modules/lab/services/labService';
@@ -208,8 +209,16 @@ export function LoginForm() {
     return (
         <div className="w-full max-w-100 mx-auto">
             <div className="mb-8">
-                <div className="inline-flex items-center justify-center w-11 h-11 rounded-xl bg-brand-500 mb-5 shadow-md">
-                    <Cross className="w-5 h-5 text-white" strokeWidth={2.5} />
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-white p-2 mb-5 shadow-md border border-neutral-100">
+                    <Image
+                        src="/logo.png?v=2"
+                        alt="TriageFlow Logo"
+                        width={40}
+                        height={40}
+                        className="w-full h-full object-contain"
+                        unoptimized
+                        priority
+                    />
                 </div>
                 <h2 className="text-[28px] font-bold text-neutral-900 tracking-tight leading-snug">
                     Clinical Hub Login

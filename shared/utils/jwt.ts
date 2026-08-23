@@ -4,7 +4,7 @@ import type { AuthUser } from '@/shared/types/auth.types';
  * Decode a JWT token payload without verifying signature.
  * Works in the browser using built-in atob().
  */
-function decodeJwtPayload(token: string): Record<string, unknown> | null {
+export function decodeJwtPayload(token: string): Record<string, unknown> | null {
     try {
         const parts = token.split('.');
         if (parts.length !== 3) return null;

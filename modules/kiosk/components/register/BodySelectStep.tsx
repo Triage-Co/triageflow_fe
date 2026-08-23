@@ -27,12 +27,12 @@ export const BodySelectStep: React.FC = () => {
 
   return (
     <>
-      <div className="flex-1 min-h-0 flex flex-col self-stretch overflow-hidden">
+      <div className="flex-1 min-h-[420px] sm:min-h-[480px] md:min-h-0 flex flex-col self-stretch overflow-hidden">
         <BodyMapSelector onRegionClick={handleOpenRegionModal} />
       </div>
 
       {/* Right Sidebar Area */}
-      <div className="w-full lg:w-80 shrink-0 flex flex-col justify-between gap-3 sm:gap-4 h-full min-h-0">
+      <div className="w-full md:w-72 lg:w-80 shrink-0 flex flex-col justify-between gap-3 sm:gap-4 h-auto md:h-full min-h-0 pb-2 md:pb-0">
         <div className="bg-white rounded-[28px] sm:rounded-[36px] p-5 sm:p-6 shadow-sm border border-neutral-100/80 flex-1 min-h-0 flex flex-col space-y-3">
           <h3 className="font-extrabold text-[#1E2939] text-sm sm:text-base shrink-0">
             Triệu chứng đã chọn ({selectedSymptoms.length})

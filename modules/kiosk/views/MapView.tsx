@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useKioskStore } from '../store/kioskStore';
+import { useKioskConfigStore } from '../store/kioskConfigStore';
 import { useFlowStore } from '../store/flowStore';
 import { FloorMap } from '@/modules/navigation/components/FloorMap';
 import { useBuildingMap } from '@/modules/navigation/hooks/useWayfinding';
@@ -38,12 +39,14 @@ export const MapView: React.FC = () => {
   const targetRoomCode = targetRoom?.roomCode || mapNavigationRoomId || null;
   const targetAreaId = targetRoom?.areaId || null;
 
-  const KIOSK_RECEPTION_A_ID = 'ce336956-b026-4979-8094-2c7bf7a5a53a';
+  const DEFAULT_FALLBACK_ID = 'ce336956-b026-4979-8094-2c7bf7a5a53a';
+  const configuredStartRoomId = useKioskConfigStore((state) => state.startRoomId) || DEFAULT_FALLBACK_ID;
 
-  // Tự động thiết lập điểm xuất phát là Sảnh Tiếp Đón A và điểm đích dựa trên phiếu khám
+  // Tự động thiết lập điểm xuất phát từ cấu hình Kiosk và điểm đích dựa trên phiếu khám
   useEffect(() => {
     console.log('MapView Auto-Routing Debug:', {
       mapNavigationRoomId,
+      configuredStartRoomId,
       rawMap: !!rawMap
     });
 
@@ -51,9 +54,9 @@ export const MapView: React.FC = () => {
       let foundStart: RoomOption | null = null;
       let foundTarget: RoomOption | null = null;
 
-      // Tìm Sảnh Tiếp Đón A mặc định
+      // Tìm vị trí Kiosk đã cấu hình (hoặc fallback Sảnh A)
       for (const floor of rawMap.floors) {
-        const room = floor.rooms.find((r) => r.id === KIOSK_RECEPTION_A_ID);
+        const room = floor.rooms.find((r) => r.id === configuredStartRoomId);
         if (room) {
           foundStart = {
             id: room.id,
@@ -64,6 +67,24 @@ export const MapView: React.FC = () => {
             areaId: room.areaId,
           };
           break;
+        }
+      }
+
+      // Nếu không tìm thấy ID đã cấu hình, thử tìm fallback Sảnh A
+      if (!foundStart && configuredStartRoomId !== DEFAULT_FALLBACK_ID) {
+        for (const floor of rawMap.floors) {
+          const room = floor.rooms.find((r) => r.id === DEFAULT_FALLBACK_ID);
+          if (room) {
+            foundStart = {
+              id: room.id,
+              roomCode: room.roomCode,
+              roomLabel: room.roomLabel,
+              floorNumber: floor.floorNumber,
+              type: (room as any).type || '',
+              areaId: room.areaId,
+            };
+            break;
+          }
         }
       }
 
@@ -223,7 +244,7 @@ export const MapView: React.FC = () => {
 
       {/* Top Right Floating Action: Reset Button */}
       {(startRoom || targetRoom) && (
-        <div className="absolute top-6 right-6 z-20 pointer-events-auto">
+        <div className="absolute top-6 right-35 z-20 pointer-events-auto">
           <button
             onClick={handleReset}
             className="flex items-center gap-2 px-5 py-2.5 bg-white/95 backdrop-blur-md rounded-full text-xs font-extrabold text-rose-600 hover:text-rose-700 shadow-md border border-slate-200 hover:bg-rose-50/50 transition-all cursor-pointer active:scale-95"
@@ -255,8 +276,8 @@ export const MapView: React.FC = () => {
               setModalType('start');
             }}
             className={`w-full text-left px-4 py-3 rounded-2xl border text-xs font-semibold flex items-center justify-between transition-all cursor-pointer ${activeField === 'start'
-                ? 'ring-2 ring-blue-500 border-transparent bg-blue-50/20'
-                : 'border-slate-200'
+              ? 'ring-2 ring-blue-500 border-transparent bg-blue-50/20'
+              : 'border-slate-200'
               } ${startRoom
                 ? 'bg-emerald-50/50 border-emerald-200 text-emerald-800 font-bold'
                 : 'bg-slate-50/60 hover:bg-slate-100/50 text-slate-400'
@@ -280,8 +301,8 @@ export const MapView: React.FC = () => {
               setModalType('target');
             }}
             className={`w-full text-left px-4 py-3 rounded-2xl border text-xs font-semibold flex items-center justify-between transition-all cursor-pointer ${activeField === 'target'
-                ? 'ring-2 ring-blue-500 border-transparent bg-blue-50/20'
-                : 'border-slate-200'
+              ? 'ring-2 ring-blue-500 border-transparent bg-blue-50/20'
+              : 'border-slate-200'
               } ${targetRoom
                 ? 'bg-rose-50/50 border-rose-200 text-rose-800 font-bold'
                 : 'bg-slate-50/60 hover:bg-slate-100/50 text-slate-400'
