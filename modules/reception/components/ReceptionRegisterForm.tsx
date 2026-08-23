@@ -71,6 +71,7 @@ import {
   translateSpecialtyDisplayName,
 } from "@/modules/reception/constants/registerDepartments";
 import { mapActiveFlowsList } from "@/modules/reception/utils/receptionFlowMapper";
+import { isValidPhone } from "@/shared/utils/validators";
 
 import type { Gender } from "@/shared/types/auth.types";
 
@@ -159,8 +160,67 @@ function getWaitTimeLabel(triageSession: SymptomTriageSession): string {
   return "10–15 phút";
 }
 
-const inputClass =
-  "block w-full rounded-lg border border-[#E5E7EB] bg-white px-3.5 py-2.5 text-[13px] text-[#1F2937] placeholder-[#9CA3AF] outline-none transition focus:border-[#8B7CF6] focus:ring-2 focus:ring-[#8B7CF6]/15 disabled:opacity-50 disabled:bg-[#F9FAFB]";
+function validateStep1Field(field: keyof FormState, value: string): string | null {
+  const str = (value || "").trim();
+  switch (field) {
+    case "full_name":
+      if (!str) return "Vui lòng nhập họ và tên.";
+      if (str.length < 2) return "Họ và tên phải có ít nhất 2 ký tự.";
+      return null;
+
+    case "citizen_id": {
+      const clean = str.replace(/\D/g, "");
+      if (!clean) return "Vui lòng nhập số CCCD/CMND.";
+      if (clean.length !== 9 && clean.length !== 12) {
+        return "Số CCCD/CMND không hợp lệ (gồm 12 số CCCD hoặc 9 số CMND).";
+      }
+      return null;
+    }
+
+    case "dob": {
+      if (!str) return "Vui lòng chọn ngày sinh.";
+      const dobDate = new Date(str);
+      const today = new Date();
+      today.setHours(23, 59, 59, 999);
+      if (isNaN(dobDate.getTime())) return "Ngày sinh không hợp lệ.";
+      if (dobDate > today) return "Ngày sinh không được lớn hơn ngày hiện tại.";
+      const age = today.getFullYear() - dobDate.getFullYear();
+      if (age > 130) return "Năm sinh không hợp lệ.";
+      return null;
+    }
+
+    case "phone": {
+      if (!str) return null; // Tùy chọn
+      const cleanPhone = str.replace(/[\s.-]/g, "");
+      if (!isValidPhone(cleanPhone)) {
+        return "Số điện thoại không hợp lệ (gồm 10 số, VD: 0912345678).";
+      }
+      return null;
+    }
+
+    case "insurance_id": {
+      if (!str) return null; // Tùy chọn
+      if (str.length < 10 || str.length > 15) {
+        return "Mã BHYT không hợp lệ (từ 10 đến 15 ký tự).";
+      }
+      return null;
+    }
+
+    default:
+      return null;
+  }
+}
+
+function getInputClass(hasError?: boolean) {
+  return cn(
+    "block w-full rounded-lg border bg-white px-3.5 py-2.5 text-[13px] text-[#1F2937] placeholder-[#9CA3AF] outline-none transition disabled:opacity-50 disabled:bg-[#F9FAFB]",
+    hasError
+      ? "border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+      : "border-[#E5E7EB] focus:border-[#8B7CF6] focus:ring-2 focus:ring-[#8B7CF6]/15",
+  );
+}
+
+const inputClass = getInputClass(false);
 
 function RequiredLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -287,6 +347,12 @@ export function ReceptionRegisterForm() {
     useState<RegistrationResult | null>(null);
   const [triageSession, setTriageSession] =
     useState<SymptomTriageSession>(EMPTY_TRIAGE_SESSION);
+  const [touched, setTouched] = useState<
+    Partial<Record<keyof FormState, boolean>>
+  >({});
+  const [fieldErrors, setFieldErrors] = useState<
+    Partial<Record<keyof FormState, string>>
+  >({});
   const prefillRef = useRef<RegisterPrefill | null>(null);
   const prefillHydratedRef = useRef(false);
   const patientPromiseRef = useRef<Promise<string | undefined> | null>(null);
@@ -359,12 +425,54 @@ export function ReceptionRegisterForm() {
 
   function update<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [field]: value }));
+    if (touched[field]) {
+      const err = validateStep1Field(field, String(value ?? ""));
+      setFieldErrors((prev) => ({ ...prev, [field]: err || undefined }));
+    }
   }
 
+  function handleBlur(field: keyof FormState) {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+    const err = validateStep1Field(field, String(form[field] ?? ""));
+    setFieldErrors((prev) => ({ ...prev, [field]: err || undefined }));
+  }
+
+  function validateAllStep1(): boolean {
+    const fieldsToValidate: (keyof FormState)[] = [
+      "full_name",
+      "citizen_id",
+      "dob",
+      "phone",
+      "insurance_id",
+    ];
+    const newTouched: Partial<Record<keyof FormState, boolean>> = { ...touched };
+    const newErrors: Partial<Record<keyof FormState, string>> = {};
+    let hasError = false;
+
+    fieldsToValidate.forEach((f) => {
+      newTouched[f] = true;
+      const err = validateStep1Field(f, String(form[f] ?? ""));
+      if (err) {
+        newErrors[f] = err;
+        hasError = true;
+      }
+    });
+
+    setTouched(newTouched);
+    setFieldErrors((prev) => ({ ...prev, ...newErrors }));
+    return !hasError;
+  }
+
+  const cleanCccd = form.citizen_id.replace(/\D/g, "");
   const step1Valid =
-    form.full_name.trim().length > 0 &&
-    form.citizen_id.length >= 9 &&
-    form.dob.length > 0;
+    form.full_name.trim().length >= 2 &&
+    (cleanCccd.length === 9 || cleanCccd.length === 12) &&
+    form.dob.length > 0 &&
+    (!form.phone.trim() ||
+      isValidPhone(form.phone.trim().replace(/[\s.-]/g, ""))) &&
+    (!form.insurance_id.trim() ||
+      (form.insurance_id.trim().length >= 10 &&
+        form.insurance_id.trim().length <= 15));
 
   const step2Valid = Boolean(
     bookingMode &&
@@ -466,8 +574,10 @@ export function ReceptionRegisterForm() {
   }
 
   function handleCitizenBlur() {
-    if (form.citizen_id.length >= 9 && !isLookingUp) {
-      void lookupPatientByCitizen(form.citizen_id);
+    handleBlur("citizen_id");
+    const cleanId = form.citizen_id.replace(/\D/g, "");
+    if ((cleanId.length === 9 || cleanId.length === 12) && !isLookingUp) {
+      void lookupPatientByCitizen(cleanId);
     }
   }
 
@@ -479,8 +589,9 @@ export function ReceptionRegisterForm() {
   function handleNext() {
     setError(null);
     if (step === 1) {
-      if (!step1Valid) {
-        setError("Vui lòng điền đầy đủ thông tin bắt buộc.");
+      const isValid = validateAllStep1();
+      if (!isValid) {
+        setError("Vui lòng kiểm tra lại các thông tin bắt buộc chưa hợp lệ.");
         return;
       }
       const cleanEmail =
@@ -582,6 +693,8 @@ export function ReceptionRegisterForm() {
 
   function handleReset() {
     setError(null);
+    setTouched({});
+    setFieldErrors({});
     setForm(INITIAL);
     setBookingMode(null);
     setTriageSession(EMPTY_TRIAGE_SESSION);
@@ -1043,6 +1156,7 @@ export function ReceptionRegisterForm() {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Họ và tên */}
                     <div className="space-y-1.5">
                       <RequiredLabel>Họ và tên</RequiredLabel>
                       <input
@@ -1050,14 +1164,26 @@ export function ReceptionRegisterForm() {
                         placeholder="Nhập họ và tên"
                         value={form.full_name}
                         onChange={(e) => update("full_name", e.target.value)}
-                        className={inputClass}
+                        onBlur={() => handleBlur("full_name")}
+                        className={getInputClass(
+                          Boolean(touched.full_name && fieldErrors.full_name),
+                        )}
                       />
+                      {touched.full_name && fieldErrors.full_name && (
+                        <p className="text-[12px] text-red-500 flex items-center gap-1 mt-1 font-medium">
+                          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                          {fieldErrors.full_name}
+                        </p>
+                      )}
                     </div>
+
+                    {/* Số CCCD */}
                     <div className="space-y-1.5">
-                      <RequiredLabel>Số CCCD</RequiredLabel>
+                      <RequiredLabel>Số CCCD / CMND</RequiredLabel>
                       <input
                         type="text"
-                        placeholder="012345678901"
+                        maxLength={12}
+                        placeholder="012345678901 (12 số hoặc 9 số CMND)"
                         value={form.citizen_id}
                         onChange={(e) => {
                           const cleanVal = e.target.value.replace(/\D/g, "");
@@ -1065,18 +1191,40 @@ export function ReceptionRegisterForm() {
                           setLookupBanner(null);
                         }}
                         onBlur={handleCitizenBlur}
-                        className={inputClass}
+                        className={getInputClass(
+                          Boolean(touched.citizen_id && fieldErrors.citizen_id),
+                        )}
                       />
+                      {touched.citizen_id && fieldErrors.citizen_id && (
+                        <p className="text-[12px] text-red-500 flex items-center gap-1 mt-1 font-medium">
+                          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                          {fieldErrors.citizen_id}
+                        </p>
+                      )}
                     </div>
+
+                    {/* Ngày sinh */}
                     <div className="space-y-1.5">
                       <RequiredLabel>Ngày sinh</RequiredLabel>
                       <input
                         type="date"
+                        max={new Date().toISOString().split("T")[0]}
                         value={form.dob}
                         onChange={(e) => update("dob", e.target.value)}
-                        className={inputClass}
+                        onBlur={() => handleBlur("dob")}
+                        className={getInputClass(
+                          Boolean(touched.dob && fieldErrors.dob),
+                        )}
                       />
+                      {touched.dob && fieldErrors.dob && (
+                        <p className="text-[12px] text-red-500 flex items-center gap-1 mt-1 font-medium">
+                          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                          {fieldErrors.dob}
+                        </p>
+                      )}
                     </div>
+
+                    {/* Giới tính */}
                     <div className="space-y-1.5">
                       <RequiredLabel>Giới tính</RequiredLabel>
                       <select
@@ -1084,13 +1232,15 @@ export function ReceptionRegisterForm() {
                         onChange={(e) =>
                           update("gender", e.target.value as Gender)
                         }
-                        className={inputClass}
+                        className={getInputClass(false)}
                       >
                         <option value="FEMALE">Nữ</option>
                         <option value="MALE">Nam</option>
                         <option value="OTHER">Khác</option>
                       </select>
                     </div>
+
+                    {/* Số điện thoại (tùy chọn) */}
                     <div className="space-y-1.5">
                       <label className="block text-[13px] font-medium text-[#374151]">
                         Số điện thoại{" "}
@@ -1100,12 +1250,24 @@ export function ReceptionRegisterForm() {
                       </label>
                       <input
                         type="tel"
+                        maxLength={11}
                         placeholder="0912345678"
                         value={form.phone}
                         onChange={(e) => update("phone", e.target.value)}
-                        className={inputClass}
+                        onBlur={() => handleBlur("phone")}
+                        className={getInputClass(
+                          Boolean(touched.phone && fieldErrors.phone),
+                        )}
                       />
+                      {touched.phone && fieldErrors.phone && (
+                        <p className="text-[12px] text-red-500 flex items-center gap-1 mt-1 font-medium">
+                          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                          {fieldErrors.phone}
+                        </p>
+                      )}
                     </div>
+
+                    {/* Mã BHYT (tùy chọn) */}
                     <div className="space-y-1.5">
                       <label className="block text-[13px] font-medium text-[#374151]">
                         Mã BHYT{" "}
@@ -1115,11 +1277,25 @@ export function ReceptionRegisterForm() {
                       </label>
                       <input
                         type="text"
+                        maxLength={15}
                         placeholder="AB1234567890"
                         value={form.insurance_id}
-                        onChange={(e) => update("insurance_id", e.target.value)}
-                        className={inputClass}
+                        onChange={(e) =>
+                          update("insurance_id", e.target.value.toUpperCase())
+                        }
+                        onBlur={() => handleBlur("insurance_id")}
+                        className={getInputClass(
+                          Boolean(
+                            touched.insurance_id && fieldErrors.insurance_id,
+                          ),
+                        )}
                       />
+                      {touched.insurance_id && fieldErrors.insurance_id && (
+                        <p className="text-[12px] text-red-500 flex items-center gap-1 mt-1 font-medium">
+                          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                          {fieldErrors.insurance_id}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
