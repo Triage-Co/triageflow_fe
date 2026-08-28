@@ -38,6 +38,7 @@ const ROLE_CONFIG: Record<string, { label: string; bg: string; text: string; bor
     LAB_STAFF: { label: 'Kỹ thuật viên XN', bg: 'bg-pink-50', text: 'text-pink-600', border: 'border-pink-100' },
     LAB_TECHNICIAN: { label: 'Kỹ thuật viên XN', bg: 'bg-pink-50', text: 'text-pink-600', border: 'border-pink-100' },
     PHARMACY_STAFF: { label: 'Dược sĩ', bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-100' },
+    PHARMACIST: { label: 'Dược sĩ', bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-100' },
     CASHIER: { label: 'Thu ngân', bg: 'bg-cyan-50', text: 'text-cyan-600', border: 'border-cyan-100' },
     ADMIN: { label: 'Quản trị viên', bg: 'bg-rose-50', text: 'text-rose-600', border: 'border-rose-100' },
 };
@@ -606,7 +607,7 @@ export function AdminRoomDetailPage() {
                                 <option value="">— Chọn nhân viên —</option>
                                 {eligibleStaffs.map((st) => {
                                     const rKey = (st.account?.role || '').toUpperCase().replace(/^ROLE_/, '');
-                                    const roleLabel = rKey === 'DOCTOR' ? 'Bác sĩ' : rKey === 'NURSE' ? 'Y tá' : rKey;
+                                    const roleLabel = ROLE_CONFIG[rKey]?.label || rKey;
                                     const specName = getStaffSpecialtyName(st.staff_id);
                                     return (
                                         <option key={st.staff_id} value={st.staff_id}>
@@ -702,7 +703,7 @@ export function AdminRoomDetailPage() {
                                 <option value="">— Chọn nhân viên —</option>
                                 {eligibleStaffs.map((st) => {
                                     const rKey = (st.account?.role || '').toUpperCase().replace(/^ROLE_/, '');
-                                    const roleLabel = rKey === 'DOCTOR' ? 'Bác sĩ' : rKey === 'NURSE' ? 'Y tá' : rKey;
+                                    const roleLabel = ROLE_CONFIG[rKey]?.label || rKey;
                                     const specName = getStaffSpecialtyName(st.staff_id);
                                     return (
                                         <option key={st.staff_id} value={st.staff_id}>
