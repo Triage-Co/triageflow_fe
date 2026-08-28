@@ -1,8 +1,19 @@
 import { apiClient } from "@/shared/services/apiClient";
-import { LoginCitizenRequest, LoginCitizenResponse } from "../types/kiosk.types";
+import {
+  SendCitizenOtpRequest,
+  VerifyCitizenOtpRequest,
+  VerifyCitizenOtpResponse,
+} from "../types/kiosk.types";
 
 export const authService = {
-    loginKiosk: (body: LoginCitizenRequest) => {
-        return apiClient.post<LoginCitizenResponse['data']>('/api/auth/login/citizen-id', body);
-    }
-}
+  sendCitizenOtp: (body: SendCitizenOtpRequest) => {
+    return apiClient.post<null>('/api/auth/login/citizen-id/otp', body);
+  },
+
+  verifyCitizenOtp: (body: VerifyCitizenOtpRequest) => {
+    return apiClient.post<VerifyCitizenOtpResponse['data']>(
+      '/api/auth/login/citizen-id/otp/verify',
+      body,
+    );
+  },
+};

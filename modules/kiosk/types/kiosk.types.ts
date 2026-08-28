@@ -106,10 +106,22 @@ export interface ToastItem {
 }
 
 // AUTH DTOs
-export interface LoginCitizenRequest {
+export interface SendCitizenOtpRequest {
   citizen_id: string;
 }
-export interface LoginCitizenResponse {
+
+export interface SendCitizenOtpResponse {
+  code: number;
+  status: string;
+  message: string;
+}
+
+export interface VerifyCitizenOtpRequest {
+  citizen_id: string;
+  otp: string;
+}
+
+export interface VerifyCitizenOtpResponse {
   code: number;
   status: string;
   message: string;
