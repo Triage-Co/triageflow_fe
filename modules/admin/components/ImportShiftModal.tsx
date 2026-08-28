@@ -8,6 +8,7 @@ import type { Staff } from '../types/staff.types';
 import type { BulkWeeklyResult, Shift } from '../types/shift.types';
 import { shiftService } from '../services/shiftService';
 import { getErrorMessage } from '../utils/errorMessage';
+import { loadShiftsForDateRange, shiftDateKey } from '../utils/shiftValidation';
 import {
     downloadShiftImportTemplate,
     parseShiftImportFile,
@@ -59,7 +60,15 @@ export function ImportShiftModal({
         setIsParsing(true);
         try {
             const parsed = await parseShiftImportFile(file);
-            setRows(resolveShiftImportRows(parsed, staffs, rooms, specialties, shifts));
+            const dates = parsed
+                .map((row) => shiftDateKey(row.date))
+                .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+                .sort();
+            let existing = shifts;
+            if (accessToken && dates.length > 0) {
+                existing = await loadShiftsForDateRange(accessToken, dates[0], dates[dates.length - 1]);
+            }
+            setRows(resolveShiftImportRows(parsed, staffs, rooms, specialties, existing));
         } catch (err) {
             setFormError(err instanceof Error ? err.message : 'Không đọc được file.');
         } finally {

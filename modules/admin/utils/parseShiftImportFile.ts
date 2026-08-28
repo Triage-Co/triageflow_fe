@@ -1,7 +1,7 @@
 import type { HospitalRoom, Specialty } from '../types/room.types';
 import type { Staff } from '../types/staff.types';
 import type { Shift } from '../types/shift.types';
-import { validateShiftAssignment } from './shiftValidation';
+import { shiftDateKey, validateShiftAssignment } from './shiftValidation';
 
 export const SHIFT_IMPORT_MAX_ROWS = 600;
 
@@ -262,7 +262,7 @@ export function resolveShiftImportRows(
         const overlapping = previewShifts.find(
             (s) =>
                 s.staff_id === staff!.staff_id &&
-                s.date.split('T')[0] === row.date &&
+                shiftDateKey(s.date) === row.date &&
                 timesOverlap(s.start_time, s.end_time, row.start_time, row.end_time)
         );
         if (overlapping) {

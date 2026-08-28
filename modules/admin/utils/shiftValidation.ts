@@ -61,18 +61,67 @@ export function addCalendarDays(dateStr: string, days: number): string {
     return date.toISOString().split('T')[0];
 }
 
+/** Calendar date `yyyy-MM-dd` in Asia/Ho_Chi_Minh (handles both `yyyy-MM-dd` and ISO timestamptz). */
+export function shiftDateKey(dateValue: string, timeZone = 'Asia/Ho_Chi_Minh'): string {
+    if (!dateValue) return '';
+    const trimmed = dateValue.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+
+    const date = new Date(trimmed);
+    if (Number.isNaN(date.getTime())) {
+        return trimmed.split('T')[0] ?? '';
+    }
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).format(date);
+}
+
 export async function loadShiftsForRoomDate(
     token: string,
     roomId: string,
     date: string
 ): Promise<Shift[]> {
-    const dateKey = date.split('T')[0];
+    const dateKey = shiftDateKey(date);
     const res = await shiftService.getShifts(token, {
         room_id: roomId,
         date: dateKey,
         limit: 500,
     });
     return res.data || [];
+}
+
+/** All shifts in `[from, to]` (yyyy-MM-dd), paging past the table's 7-row view. */
+export async function loadShiftsForDateRange(
+    token: string,
+    from: string,
+    to: string
+): Promise<Shift[]> {
+    const all: Shift[] = [];
+    const limit = 500;
+    let page = 1;
+    const fromKey = shiftDateKey(from);
+    const toKey = shiftDateKey(to);
+    const rangeFrom = fromKey <= toKey ? fromKey : toKey;
+    const rangeTo = fromKey <= toKey ? toKey : fromKey;
+
+    while (page <= 20) {
+        const res = await shiftService.getShifts(token, {
+            from: rangeFrom,
+            to: rangeTo,
+            page,
+            limit,
+        });
+        const batch = res.data || [];
+        all.push(...batch);
+        const total = res.meta?.total ?? all.length;
+        if (batch.length < limit || all.length >= total) break;
+        page += 1;
+    }
+
+    return all;
 }
 
 interface ShiftValidationParams {
@@ -124,12 +173,12 @@ export function validateShiftAssignment({
         }
 
         // 2. Only 1 Doctor per Room validation — callers should pass room_id + date scoped shifts
-        const targetDateKey = date.split('T')[0];
+        const targetDateKey = shiftDateKey(date);
         const existingShiftsOnDate = shifts.filter(
             (s) =>
                 s.room_id === roomId &&
                 s.date &&
-                s.date.split('T')[0] === targetDateKey &&
+                shiftDateKey(s.date) === targetDateKey &&
                 s.shift_id !== excludeShiftId &&
                 !isPastOrCompletedShift(s)
         );
