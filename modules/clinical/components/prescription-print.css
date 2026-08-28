@@ -3,14 +3,16 @@
  */
 
 @page {
-  size: A5 portrait;
-  margin: 15mm;
+  size: 148mm 210mm;
+  margin: 0;
 }
 
 .prescription-print-root {
+  width: 148mm;
+  height: 210mm;
   font-family: "Times New Roman", "Noto Serif", Georgia, serif;
   color: #111;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.35;
 }
 
@@ -28,6 +30,7 @@
     position: absolute;
     left: 0;
     top: 0;
-    width: 100%;
+    width: 148mm;
+    height: 210mm;
   }
 }
