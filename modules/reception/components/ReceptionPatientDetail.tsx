@@ -39,7 +39,7 @@ interface ReceptionPatientDetailProps {
 export function ReceptionPatientDetailView({ patient, isLoading, error }: ReceptionPatientDetailProps) {
     if (isLoading) {
         return (
-            <div className="flex-1 flex flex-col overflow-hidden bg-[#F5F2FF] py-6">
+            <div className="flex-1 flex flex-col overflow-hidden bg-transparent py-6">
                 <div className="flex-1 flex items-center justify-center bg-white rounded-tl-[48px] rounded-bl-[48px]">
                     <div className="flex flex-col items-center gap-3 text-neutral-400">
                         <Loader2 className="w-8 h-8 animate-spin text-[#8B7CF6]" />
@@ -52,7 +52,7 @@ export function ReceptionPatientDetailView({ patient, isLoading, error }: Recept
 
     if (error || !patient) {
         return (
-            <div className="flex-1 flex flex-col overflow-hidden bg-[#F5F2FF] py-6">
+            <div className="flex-1 flex flex-col overflow-hidden bg-transparent py-6">
                 <div className="flex-1 bg-white rounded-tl-[48px] rounded-bl-[48px] p-6">
                     <Link href="/reception" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#8B7CF6] mb-6">
                         <ChevronLeft className="w-4 h-4" />
@@ -71,7 +71,7 @@ export function ReceptionPatientDetailView({ patient, isLoading, error }: Recept
     }
 
     return (
-        <div className="flex-1 flex flex-col overflow-hidden bg-[#F5F2FF] py-6">
+        <div className="flex-1 flex flex-col overflow-hidden bg-transparent py-6">
             <div className="flex-1 flex flex-col min-h-0 bg-white rounded-tl-[48px] rounded-bl-[48px] overflow-hidden shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
                 <div className="flex-1 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden px-5 py-5 md:px-6 md:py-6">
                     <Link
