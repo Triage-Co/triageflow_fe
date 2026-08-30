@@ -91,6 +91,7 @@ export interface Prescription {
     pickup_date?: string | null;
     called_at?: string | null;
     missed_at?: string | null;
+    display_screen_id?: string | null;
     created_at: string;
     updated_at: string;
     prescriptionDetails: PrescriptionDetail[];

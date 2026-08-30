@@ -2,7 +2,11 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Prescription, PrescriptionStatusEnum } from '@/shared/types/prescription.types';
 import { pharmacyService } from '../services/pharmacyService';
 
-export function usePharmacyQueue(refreshKey: number = 0, onSelect?: (prescription: Prescription) => void) {
+export function usePharmacyQueue(
+    refreshKey: number = 0,
+    onSelect?: (prescription: Prescription) => void,
+    scanMode: 'select' | 'dispense' = 'select'
+) {
     const [selectedDate, setSelectedDate] = useState<string>(() => {
         const today = new Date();
         return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
@@ -13,6 +17,7 @@ export function usePharmacyQueue(refreshKey: number = 0, onSelect?: (prescriptio
     const [searchQuery, setSearchQuery] = useState('');
     const [actingId, setActingId] = useState<string | null>(null);
     const [actionError, setActionError] = useState<string | null>(null);
+    const [scanNotice, setScanNotice] = useState<string | null>(null);
 
     const fetchQueue = useCallback(async (isSilent = false, dateToFetch = selectedDate) => {
         if (!isSilent) setLoading(true);
@@ -39,7 +44,7 @@ export function usePharmacyQueue(refreshKey: number = 0, onSelect?: (prescriptio
         if (!codeToScan) return;
         if (codeToScan.startsWith('{')) {
             try {
-                const parsed = JSON.parse(codeToScan);
+                const parsed = JSON.parse(codeToScan) as { code?: string; prescription_code?: string };
                 codeToScan = parsed.code || parsed.prescription_code || codeToScan;
             } catch {
                 // Ignore JSON parse error
@@ -47,12 +52,32 @@ export function usePharmacyQueue(refreshKey: number = 0, onSelect?: (prescriptio
         }
 
         const prescription = await pharmacyService.scanPrescription(codeToScan);
-        if (prescription) {
-            onSelect?.(prescription);
-            await fetchQueue(true);
-            return prescription;
+        if (!prescription) return;
+        setScanNotice(null);
+
+        if (scanMode === 'dispense') {
+            if (prescription.status === 'PREPARED') {
+                const updated = await pharmacyService.dispensePrescription(prescription.prescription_id);
+                onSelect?.(updated);
+                await fetchQueue(true);
+                setScanNotice(`Đã giao thuốc ${updated.pickup_number || updated.prescription_code}`);
+                return { ...updated, message: `Đã giao thuốc ${updated.pickup_number || updated.prescription_code}` };
+            }
+            if (prescription.status === 'DISPENSED') {
+                setScanNotice(`Đơn ${prescription.prescription_code} đã được giao thuốc trước đó.`);
+                throw new Error(`Đơn ${prescription.prescription_code} đã được giao thuốc trước đó.`);
+            }
+            if (prescription.status === 'PROCESSING') {
+                onSelect?.(prescription);
+                await fetchQueue(true);
+                return prescription;
+            }
         }
-    }, [onSelect, fetchQueue]);
+
+        onSelect?.(prescription);
+        await fetchQueue(true);
+        return prescription;
+    }, [fetchQueue, onSelect, scanMode]);
 
     const handleMiss = async (prescription: Prescription) => {
         setActingId(prescription.prescription_id);
@@ -123,6 +148,7 @@ export function usePharmacyQueue(refreshKey: number = 0, onSelect?: (prescriptio
         handleMiss,
         handleRecall,
         actingId,
-        actionError
+        actionError,
+        scanNotice
     };
 }
