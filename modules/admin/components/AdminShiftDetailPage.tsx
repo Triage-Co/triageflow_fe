@@ -32,21 +32,17 @@ function PageShell({
 }) {
     return (
         <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-[#EEEDFC] via-[#F9ECF2] to-[#E6E9FC] pt-6 pb-5">
-                <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-tl-[16px] rounded-bl-[48px] shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
-                    <div className="flex-1 overflow-y-auto p-6">
-                        <div className="flex items-center gap-3 mb-8">
-                            <button
-                                onClick={onBack}
-                                className="w-9 h-9 flex items-center justify-center rounded-xl border border-[#EBEBEB] bg-white hover:bg-neutral-50 text-[#7B7B7B] hover:text-[#8B7CF6] transition cursor-pointer"
-                            >
-                                <ArrowLeft className="w-4 h-4" />
-                            </button>
-                            <h1 className="text-[22px] font-bold text-[#2D2D2D] tracking-tight">Chi tiết ca trực</h1>
-                        </div>
-                        {children}
-                    </div>
+            <div className="flex-1 overflow-y-auto p-6">
+                <div className="flex items-center gap-3 mb-8">
+                    <button
+                        onClick={onBack}
+                        className="w-9 h-9 flex items-center justify-center rounded-xl border border-[#EBEBEB] bg-white hover:bg-neutral-50 text-[#7B7B7B] hover:text-[#8B7CF6] transition cursor-pointer"
+                    >
+                        <ArrowLeft className="w-4 h-4" />
+                    </button>
+                    <h1 className="text-[22px] font-bold text-[#2D2D2D] tracking-tight">Chi tiết ca trực</h1>
                 </div>
+                {children}
             </div>
         </div>
     );

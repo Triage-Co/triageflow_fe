@@ -12,7 +12,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     return (
         <AppShell user={displayUser}>
-            {children}
+            <div className="flex-1 flex flex-col overflow-hidden pt-6 pb-5 relative">
+                <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-tl-[16px] rounded-bl-[48px] shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
+                    {children}
+                </div>
+            </div>
         </AppShell>
     );
 }

@@ -81,7 +81,7 @@ export function AdminStaffDetailPage() {
 
     if (isFetchingDetail) {
         return (
-            <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-[#EEEDFC] via-[#F9ECF2] to-[#E6E9FC]">
+            <div className="flex-1 flex items-center justify-center bg-transparent">
                 <Loader2 className="w-8 h-8 animate-spin text-[#8B7CF6]" />
             </div>
         );
@@ -90,31 +90,27 @@ export function AdminStaffDetailPage() {
     if (!staff) {
         return (
             <div className="flex-1 flex flex-col overflow-hidden relative">
-                <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-[#EEEDFC] via-[#F9ECF2] to-[#E6E9FC] pt-6 pb-5">
-                    <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-tl-[16px] rounded-bl-[48px] shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
-                        <div className="flex-1 overflow-y-auto p-6">
-                            <div className="flex items-center gap-3 mb-8">
-                                <button
-                                    onClick={() => router.push('/admin/staff')}
-                                    className="w-9 h-9 flex items-center justify-center rounded-xl border border-[#EBEBEB] bg-white hover:bg-neutral-50 text-[#7B7B7B] hover:text-[#8B7CF6] transition cursor-pointer animate-fade-in"
-                                >
-                                    <ArrowLeft className="w-4 h-4" />
-                                </button>
-                                <h1 className="text-[22px] font-bold text-[#2D2D2D] tracking-tight">
-                                    Chi tiết tài khoản nhân viên
-                                </h1>
-                            </div>
-                            <div className="flex flex-col items-center justify-center py-16 gap-3">
-                                <AlertCircle className="w-8 h-8 text-neutral-400" />
-                                <p className="text-[14px] text-[#ADADAD] font-semibold">Không tìm thấy thông tin nhân viên.</p>
-                                <button
-                                    onClick={() => router.push('/admin/staff')}
-                                    className="px-4 py-2 bg-[#8B7CF6] text-white rounded-xl text-xs font-bold hover:bg-[#7a6ae5] transition cursor-pointer"
-                                >
-                                    Quay lại danh sách
-                                </button>
-                            </div>
-                        </div>
+                <div className="flex-1 overflow-y-auto p-6">
+                    <div className="flex items-center gap-3 mb-8">
+                        <button
+                            onClick={() => router.push('/admin/staff')}
+                            className="w-9 h-9 flex items-center justify-center rounded-xl border border-[#EBEBEB] bg-white hover:bg-neutral-50 text-[#7B7B7B] hover:text-[#8B7CF6] transition cursor-pointer animate-fade-in"
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                        </button>
+                        <h1 className="text-[22px] font-bold text-[#2D2D2D] tracking-tight">
+                            Chi tiết tài khoản nhân viên
+                        </h1>
+                    </div>
+                    <div className="flex flex-col items-center justify-center py-16 gap-3">
+                        <AlertCircle className="w-8 h-8 text-neutral-400" />
+                        <p className="text-[14px] text-[#ADADAD] font-semibold">Không tìm thấy thông tin nhân viên.</p>
+                        <button
+                            onClick={() => router.push('/admin/staff')}
+                            className="px-4 py-2 bg-[#8B7CF6] text-white rounded-xl text-xs font-bold hover:bg-[#7a6ae5] transition cursor-pointer"
+                        >
+                            Quay lại danh sách
+                        </button>
                     </div>
                 </div>
             </div>
@@ -126,9 +122,7 @@ export function AdminStaffDetailPage() {
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden relative">
-            <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-[#EEEDFC] via-[#F9ECF2] to-[#E6E9FC] pt-6 pb-5">
-                <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-tl-[16px] rounded-bl-[48px] shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
-                    <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-6">
                         {/* ── Back + Title ── */}
                         <div className="flex items-center gap-3 mb-8">
                             <button
@@ -277,8 +271,6 @@ export function AdminStaffDetailPage() {
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
         </div>
     );
 }

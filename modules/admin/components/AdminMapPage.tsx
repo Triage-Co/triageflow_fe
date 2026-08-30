@@ -1568,29 +1568,25 @@ export function AdminMapPage() {
 
   return (
     <>
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-[#EEEDFC] via-[#F9ECF2] to-[#E6E9FC] pt-6 pb-5">
-          <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-tl-[16px] rounded-bl-[48px] shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
-            <div className="px-6 pt-6 pb-3 shrink-0">
-              <h1 className="text-[22px] font-bold text-[#2D2D2D] tracking-tight">
-                Cấu hình bản đồ
-              </h1>
-              <p className="text-[13px] text-[#7B7B7B] mt-1 font-medium">
-                Xem sơ đồ 3D, dẫn đường, chỉnh geometry (phòng/tường/cửa), debug
-                MPRSS, và chỉnh sửa corridor node.
-              </p>
-            </div>
+      <div className="flex-1 flex flex-col overflow-hidden relative">
+        <div className="px-6 pt-6 pb-3 shrink-0">
+          <h1 className="text-[22px] font-bold text-[#2D2D2D] tracking-tight">
+            Cấu hình bản đồ
+          </h1>
+          <p className="text-[13px] text-[#7B7B7B] mt-1 font-medium">
+            Xem sơ đồ 3D, dẫn đường, chỉnh geometry (phòng/tường/cửa), debug
+            MPRSS, và chỉnh sửa corridor node.
+          </p>
+        </div>
 
-            <div className="flex-1 min-h-0 px-6 pb-6">
-              <div className="h-full rounded-2xl border border-[#EBEBEB] overflow-hidden relative">
-                {!isFullscreen && pageBody}
-                {isFullscreen && (
-                  <div className="w-full h-full flex items-center justify-center bg-slate-50 text-[13px] font-semibold text-[#7B7B7B]">
-                    Đang xem toàn màn hình — nhấn Esc hoặc nút thoát để quay lại.
-                  </div>
-                )}
+        <div className="flex-1 min-h-0 px-6 pb-6">
+          <div className="h-full rounded-2xl border border-[#EBEBEB] overflow-hidden relative">
+            {!isFullscreen && pageBody}
+            {isFullscreen && (
+              <div className="w-full h-full flex items-center justify-center bg-slate-50 text-[13px] font-semibold text-[#7B7B7B]">
+                Đang xem toàn màn hình — nhấn Esc hoặc nút thoát để quay lại.
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
