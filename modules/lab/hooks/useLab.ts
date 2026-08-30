@@ -160,16 +160,22 @@ export function useLab() {
                 }
             }
 
+            const isCalled =
+                serving.status === 'CALLED' ||
+                (!serving.serving_started_at && String(activeStep?.step_status).toUpperCase() === 'PENDING');
+
             return [{
                 queue_id: serving.queue_id,
                 queue_number: serving.queue_number,
                 patient_name: serving.patient?.full_name || 'Bệnh nhân',
-                enqueued_at: serving.serving_started_at,
+                enqueued_at: serving.serving_started_at || undefined,
                 queue_type: activeStep?.step_name || 'Xét nghiệm phòng Lab',
                 patient: serving.patient,
                 step: activeStep,
-                serving_started_at: serving.serving_started_at,
+                serving_started_at: serving.serving_started_at || undefined,
                 service_order: serving.service_order,
+                initialStatus: isCalled ? 'CALLED' : 'SERVING',
+                localStatus: isCalled ? 'CALLED' : 'SERVING',
             }];
         })() : [];
         const initialWaiting = queueData?.waiting ?? [];
@@ -198,11 +204,11 @@ export function useLab() {
         const missingList: QueuePatientItem[] = [];
         const completedList: QueuePatientItem[] = [];
 
-        const allRawPatients = [
-            ...initialServing.map(p => ({ ...p, initialStatus: 'SERVING' })),
-            ...initialWaiting.map(p => ({ ...p, initialStatus: 'WAITING' })),
-            ...initialMissing.map(p => ({ ...p, initialStatus: 'MISSING' })),
-            ...initialFinished.map(p => ({ ...p, initialStatus: 'COMPLETED' })),
+        const allRawPatients: QueuePatientItem[] = [
+            ...initialServing,
+            ...initialWaiting.map((p) => ({ ...p, initialStatus: 'WAITING' as const })),
+            ...initialMissing.map((p) => ({ ...p, initialStatus: 'MISSING' as const })),
+            ...initialFinished.map((p) => ({ ...p, initialStatus: 'COMPLETED' as const })),
         ];
 
         allRawPatients.forEach((patient) => {
@@ -213,7 +219,7 @@ export function useLab() {
                 localStatus: override.localStatus || (patient.initialStatus as any)
             };
 
-            if (mergedPatient.localStatus === 'SERVING') {
+            if (mergedPatient.localStatus === 'SERVING' || mergedPatient.localStatus === 'CALLED') {
                 servingList.push(mergedPatient);
             } else if (mergedPatient.localStatus === 'WAITING') {
                 waitingList.push(mergedPatient);
@@ -461,6 +467,34 @@ export function useLab() {
         }
     };
 
+    const handleScanTicket = async (ticketCode?: string, queueId?: string) => {
+        if (!activeShift?.room_id) {
+            showToast('Chưa xác định phòng xét nghiệm của ca trực.', 'error');
+            return;
+        }
+        try {
+            const res = await labService.scanQueue({
+                ticket_code: ticketCode,
+                queue_id: queueId,
+                room_id: activeShift.room_id,
+                staff_id: activeShift.staff_id,
+            });
+            const msg = res?.message || 'Đã xử lý vé khám / bắt đầu thực hiện thành công.';
+            showToast(msg, 'success');
+            await handleRefresh();
+            return res;
+        } catch (e: any) {
+            console.error('[useLab] Error scanning queue ticket:', e);
+            const errMsg = e?.response?.data?.message || e?.message || 'Có lỗi xảy ra khi quét vé xét nghiệm.';
+            showToast(errMsg, 'error');
+            throw e;
+        }
+    };
+
+    const handleStartServing = async (queueId: string) => {
+        return handleScanTicket(undefined, queueId);
+    };
+
     return {
         mounted,
         accessToken,
@@ -499,5 +533,7 @@ export function useLab() {
         setCompleteConfirmData,
         handleOpenCompleteConfirm,
         handleConfirmComplete,
+        handleScanTicket,
+        handleStartServing,
     };
 }

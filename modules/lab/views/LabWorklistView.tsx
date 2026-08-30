@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
     Search,
     Eye,
@@ -14,7 +14,9 @@ import {
     User,
     Compass,
     Volume2,
-    UserX
+    UserX,
+    QrCode,
+    Play,
 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 import { cn } from '@/lib/utils';
@@ -33,9 +35,11 @@ import PatientDetailsModal from '../modals/PatientDetailsModal';
 import OverrideConfirmModal from '../modals/OverrideConfirmModal';
 import RefuseConfirmModal from '../modals/RefuseConfirmModal';
 import CompleteConfirmModal from '../modals/CompleteConfirmModal';
+import { StaffQRScanModal } from '@/shared/components/modals/StaffQRScanModal';
 
 export default function LabWorklistView() {
     const [dragOverIndex, setDragOverIndex] = React.useState<number | null>(null);
+    const [isScanModalOpen, setIsScanModalOpen] = React.useState(false);
     const {
         mounted,
         accessToken,
@@ -74,6 +78,8 @@ export default function LabWorklistView() {
         setCompleteConfirmData,
         handleOpenCompleteConfirm,
         handleConfirmComplete,
+        handleScanTicket,
+        handleStartServing,
     } = useLab();
 
     if (!mounted || !accessToken) {
@@ -98,35 +104,43 @@ export default function LabWorklistView() {
                                 <div
                                     key={toast.id}
                                     className={cn(
-                                        "flex items-start gap-3 p-4 rounded-2xl shadow-lg border text-sm font-semibold animate-in fade-in-0 slide-in-from-top-5 duration-300 backdrop-blur-md select-none",
-                                        toast.type === 'success' && "bg-emerald-50/95 border-emerald-100/80 text-emerald-800",
-                                        toast.type === 'error' && "bg-rose-50/95 border-rose-100/80 text-rose-800",
-                                        toast.type === 'info' && "bg-indigo-50/95 border-indigo-100/80 text-indigo-800"
+                                        "p-4 rounded-2xl shadow-lg border text-xs font-bold flex items-center gap-2.5 animate-in slide-in-from-top-2 duration-200",
+                                        toast.type === 'success' ? "bg-emerald-50 text-emerald-800 border-emerald-200/80" :
+                                            toast.type === 'error' ? "bg-rose-50 text-rose-800 border-rose-200/80" :
+                                                "bg-blue-50 text-blue-800 border-blue-200/80"
                                     )}
                                 >
-                                    {toast.type === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />}
-                                    {toast.type === 'error' && <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />}
-                                    {toast.type === 'info' && <Loader2 className="w-5 h-5 text-indigo-500 shrink-0 mt-0.5 animate-spin" />}
-                                    <span className="flex-1 leading-snug">{toast.message}</span>
+                                    {toast.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />}
+                                    {toast.type === 'error' && <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />}
+                                    <span>{toast.message}</span>
                                 </div>
                             ))}
                         </div>
 
-                        {/* Title Row */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                        {/* Header Panel */}
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-neutral-100">
                             <div>
-                                <h1 className="text-[20px] font-extrabold text-[#2D2D2D] tracking-tight">
-                                    Quản lý hàng chờ xét nghiệm
-                                </h1>
-
+                                <div className="flex items-center gap-2.5">
+                                    <h1 className="text-xl font-black text-neutral-800 tracking-tight">
+                                        Tiếp Nhận & Xét Nghiệm
+                                    </h1>
+                                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black tracking-wide uppercase bg-[#8B7CF6]/10 text-[#8B7CF6] border border-[#8B7CF6]/20">
+                                        KỸ THUẬT VIÊN
+                                    </span>
+                                </div>
+                                <p className="text-xs text-neutral-450 mt-1 font-medium">
+                                    {activeShift?.room?.room_name || 'Phòng xét nghiệm'} · Ca trực: {activeShift ? `${activeShift.start_time} - ${activeShift.end_time}` : 'Chưa xếp ca'}
+                                </p>
                             </div>
-                            <div className="flex items-center">
+
+                            <div className="flex items-center gap-2.5">
                                 <Button
                                     variant="outline"
                                     onClick={handleRefresh}
-                                    disabled={isLoadingQueue || !activeShift}
-                                    startIcon={<RefreshCw className={cn("w-3.5 h-3.5", isLoadingQueue && "animate-spin")} />}
-                                    className="h-10 rounded-xl px-4 text-neutral-600 font-bold bg-white text-xs border-neutral-200 gap-1.5"
+                                    disabled={isLoadingQueue}
+                                    isLoading={isLoadingQueue}
+                                    startIcon={isLoadingQueue ? undefined : <RefreshCw className="w-3.5 h-3.5 text-neutral-500" />}
+                                    className="h-9 px-4 rounded-xl border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-700 font-extrabold text-xs shadow-xs cursor-pointer"
                                 >
                                     Làm mới hàng chờ
                                 </Button>
@@ -134,7 +148,7 @@ export default function LabWorklistView() {
                         </div>
 
                         {/* Search & Tabs Layout */}
-                        <div className="flex flex-col gap-4.5 mb-6">
+                        <div className="flex flex-col gap-4.5 mb-6 mt-6">
                             {/* Search Box */}
                             <div className="w-full md:max-w-md">
                                 <div className="relative">
@@ -181,7 +195,16 @@ export default function LabWorklistView() {
                                         </button>
                                     ))}
                                 </div>
-                                <div className="shrink-0 flex justify-end pb-1 sm:pb-0">
+                                <div className="shrink-0 flex items-center gap-2 pb-1 sm:pb-0">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => setIsScanModalOpen(true)}
+                                        disabled={!activeShift}
+                                        startIcon={<QrCode className="w-4 h-4 text-purple-600" />}
+                                        className="h-9 rounded-xl px-4 border border-purple-200 bg-purple-50/60 hover:bg-purple-100 text-purple-700 font-extrabold text-xs shadow-xs flex items-center gap-1.5 cursor-pointer"
+                                    >
+                                        Quét mã QR
+                                    </Button>
                                     <Button
                                         onClick={handleCallNext}
                                         disabled={isCallingNext || !activeShift}
@@ -236,7 +259,8 @@ export default function LabWorklistView() {
                                     </TableHeader>
                                     <TableBody>
                                         {currentList.map((patient, index) => {
-                                            const isDraggable = activeListTab === 'waiting' && patient.localStatus !== 'SERVING';
+                                            const isDraggable = activeListTab === 'waiting' && patient.localStatus !== 'SERVING' && (patient.localStatus as any) !== 'CALLED';
+                                            const isCalled = (patient.localStatus as any) === 'CALLED';
                                             return (
                                                 <TableRow
                                                     key={patient.queue_id}
@@ -247,7 +271,7 @@ export default function LabWorklistView() {
                                                         }
                                                     }}
                                                     onDragOver={(e) => {
-                                                        if (activeListTab === 'waiting' && patient.localStatus !== 'SERVING') {
+                                                        if (activeListTab === 'waiting' && patient.localStatus !== 'SERVING' && !isCalled) {
                                                             e.preventDefault();
                                                             setDragOverIndex(index);
                                                         }
@@ -259,7 +283,7 @@ export default function LabWorklistView() {
                                                             const draggedIdxStr = e.dataTransfer.getData('text/plain');
                                                             if (draggedIdxStr) {
                                                                 const draggedIdx = parseInt(draggedIdxStr, 10);
-                                                                if (draggedIdx !== index && patient.localStatus !== 'SERVING') {
+                                                                if (draggedIdx !== index && patient.localStatus !== 'SERVING' && !isCalled) {
                                                                     handleOpenOverrideConfirm(draggedIdx, index);
                                                                 }
                                                             }
@@ -267,7 +291,9 @@ export default function LabWorklistView() {
                                                     }}
                                                     className={cn(
                                                         "group transition-colors duration-150 border-b border-neutral-50 last:border-b-0",
-                                                        patient.localStatus === 'SERVING'
+                                                        isCalled
+                                                            ? "bg-amber-50/40 hover:bg-amber-50/70"
+                                                            : patient.localStatus === 'SERVING'
                                                             ? "bg-blue-50/30 hover:bg-blue-100/50"
                                                             : "hover:bg-[#8B7CF6]/5",
                                                         isDraggable ? "cursor-grab active:cursor-grabbing" : "",
@@ -319,7 +345,11 @@ export default function LabWorklistView() {
                                                                 })() : '—'}
                                                             </TableCell>
                                                             <TableCell className="py-3.5 text-xs font-bold text-[#8B7CF6]">
-                                                                {patient.localStatus === 'SERVING' ? (
+                                                                {isCalled ? (
+                                                                    <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full border border-amber-300 bg-amber-100 text-amber-900 uppercase tracking-wider animate-pulse">
+                                                                        Đang gọi vào phòng
+                                                                    </span>
+                                                                ) : patient.localStatus === 'SERVING' ? (
                                                                     <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full border border-blue-200 bg-blue-50 text-blue-600 uppercase tracking-wider">
                                                                         Đang xét nghiệm
                                                                     </span>
@@ -359,7 +389,26 @@ export default function LabWorklistView() {
                                                     {/* Actions */}
                                                     <TableCell className="text-right pr-8 py-3.5">
                                                         <div className="flex items-center justify-end gap-2">
-                                                            {patient.localStatus === 'SERVING' && (
+                                                            {isCalled && (
+                                                                <>
+                                                                    <Button
+                                                                        type="button"
+                                                                        onClick={() => handleOpenRefuseConfirm(patient)}
+                                                                        disabled={isRefusing}
+                                                                        className="h-8 px-3 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-[11.5px] font-extrabold shadow-3xs shrink-0 cursor-pointer"
+                                                                    >
+                                                                        Vắng mặt
+                                                                    </Button>
+                                                                    <Button
+                                                                        onClick={() => handleStartServing(patient.queue_id)}
+                                                                        className="h-8 px-3.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11.5px] font-extrabold shadow-xs shrink-0 cursor-pointer gap-1 border-0"
+                                                                    >
+                                                                        <Play className="w-3 h-3 fill-current" />
+                                                                        Bắt đầu thực hiện
+                                                                    </Button>
+                                                                </>
+                                                            )}
+                                                            {!isCalled && patient.localStatus === 'SERVING' && (
                                                                 <>
                                                                     <Button
                                                                         type="button"
@@ -393,7 +442,7 @@ export default function LabWorklistView() {
                                                                 onClick={() => handleOpenViewModal(patient)}
                                                                 startIcon={<Eye className="w-3.5 h-3.5" />}
                                                                 className="h-8 px-3.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11.5px] font-bold shadow-xs shrink-0 cursor-pointer gap-1.5 border-0"
-                                                                >
+                                                            >
                                                                 Xem chi tiết
                                                             </Button>
                                                         </div>
@@ -442,6 +491,19 @@ export default function LabWorklistView() {
                 data={completeConfirmData}
                 onConfirm={handleConfirmComplete}
                 isLoading={isCompleting}
+            />
+
+            {/* Modal Quét mã QR */}
+            <StaffQRScanModal
+                isOpen={isScanModalOpen}
+                onClose={() => setIsScanModalOpen(false)}
+                title="Quét mã QR phiếu xét nghiệm"
+                subtitle={activeShift?.room?.room_name}
+                inputLabel="Mã vé / Mã QR phiếu chỉ định"
+                inputPlaceholder="VD: TK-20260830-XXXX..."
+                onScanSuccess={async (ticketCode) => {
+                    return handleScanTicket(ticketCode);
+                }}
             />
         </EMRWorkspaceLayout>
     );

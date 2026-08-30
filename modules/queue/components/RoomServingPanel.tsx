@@ -15,6 +15,7 @@ import { ACTIVE_SOD_STATUSES } from '../types/queue.types';
 export interface RoomServingPanelProps {
     serving: Serving | null;
     isActing?: boolean;
+    onStartServing?: () => void | Promise<void>;
     onCompleteDetail?: (detailId: string) => void | Promise<void>;
     onRefuseDetail?: (detailId: string) => void | Promise<void>;
     onCompleteServiceOrder?: () => void | Promise<void>;
@@ -86,6 +87,7 @@ function getStatusBadge(s: string | undefined | null) {
 export function RoomServingPanel({
     serving,
     isActing = false,
+    onStartServing,
     onCompleteDetail,
     onRefuseDetail,
     onCompleteServiceOrder,
@@ -115,6 +117,10 @@ export function RoomServingPanel({
         );
     }
 
+    const isCalled =
+        serving.status === 'CALLED' ||
+        (!serving.serving_started_at && String(serving.step?.step_status).toUpperCase() === 'PENDING');
+
     const so = serving.service_order;
     const activeDetails =
         so?.details.filter((d) => ACTIVE_SOD_STATUSES.has(String(d.status).toUpperCase())) ?? [];
@@ -122,7 +128,10 @@ export function RoomServingPanel({
     return (
         <div
             className={cn(
-                'flex flex-col justify-between rounded-2xl border border-emerald-200/60 bg-gradient-to-b from-emerald-50/20 via-white to-white p-5 shadow-sm relative',
+                'flex flex-col justify-between rounded-2xl border p-5 shadow-sm relative transition-colors',
+                isCalled
+                    ? 'border-amber-300/80 bg-gradient-to-b from-amber-50/40 via-white to-white'
+                    : 'border-emerald-200/60 bg-gradient-to-b from-emerald-50/20 via-white to-white',
                 className,
             )}
         >
@@ -130,15 +139,29 @@ export function RoomServingPanel({
                 {/* Header section with badge & EMR button */}
                 <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
-                        <div className="flex h-13 w-13 shrink-0 flex-col items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm shadow-emerald-200">
+                        <div
+                            className={cn(
+                                'flex h-13 w-13 shrink-0 flex-col items-center justify-center rounded-2xl text-white shadow-sm',
+                                isCalled
+                                    ? 'bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-200'
+                                    : 'bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-200',
+                            )}
+                        >
                             <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">STT</span>
                             <span className="text-xl font-black leading-none">{serving.queue_number}</span>
                         </div>
                         <div>
-                            <div className="inline-flex items-center gap-1.5 rounded-md bg-emerald-100/70 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
-                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                ĐANG PHỤC VỤ
-                            </div>
+                            {isCalled ? (
+                                <div className="inline-flex items-center gap-1.5 rounded-md bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-900 border border-amber-300">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping" />
+                                    ĐANG GỌI VÀO PHÒNG
+                                </div>
+                            ) : (
+                                <div className="inline-flex items-center gap-1.5 rounded-md bg-emerald-100/70 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                    ĐANG PHỤC VỤ
+                                </div>
+                            )}
                             <h2 className="mt-1 text-lg font-extrabold text-neutral-900 tracking-tight">
                                 {serving.patient?.full_name || 'Bệnh nhân'}
                             </h2>
@@ -150,7 +173,7 @@ export function RoomServingPanel({
                     {onOpenEmr && (
                         <Button
                             variant="outline"
-                            className="h-8.5 rounded-xl border-neutral-200 text-xs font-bold text-neutral-700 hover:bg-neutral-50 hover:text-indigo-600 hover:border-indigo-200 shadow-xs"
+                            className="h-8.5 rounded-xl border-neutral-200 text-xs font-bold text-neutral-700 hover:bg-neutral-50 hover:text-indigo-600 hover:border-indigo-200 shadow-xs cursor-pointer"
                             onClick={() => onOpenEmr(serving.queue_id)}
                             disabled={isActing}
                             startIcon={<ExternalLink className="h-3.5 w-3.5" />}
@@ -176,7 +199,9 @@ export function RoomServingPanel({
                                 {formatStepType(serving.step.step_type)}
                             </span>
                             {(() => {
-                                const badge = getStatusBadge(serving.step.step_status);
+                                const badge = isCalled
+                                    ? { label: 'Chờ vào phòng', className: 'bg-amber-100 text-amber-800 border-amber-300' }
+                                    : getStatusBadge(serving.step.step_status);
                                 return (
                                     <span className={cn('rounded-md border px-2 py-0.5 text-[11px] font-bold shadow-2xs', badge.className)}>
                                         {badge.label}
@@ -190,31 +215,65 @@ export function RoomServingPanel({
 
             {/* Bottom Actions */}
             <div className="mt-5 flex flex-wrap gap-2.5 border-t border-neutral-100/90 pt-4">
-                <Button
-                    className="h-10 flex-1 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs sm:text-sm font-bold shadow-sm shadow-emerald-200 hover:from-emerald-700 hover:to-teal-700 active:scale-[0.99] transition-all"
-                    disabled={isActing || !onCompleteStep}
-                    onClick={() => setIsConfirmOpen(true)}
-                    startIcon={
-                        isActing ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                            <CheckCircle2 className="h-4 w-4" />
-                        )
-                    }
-                >
-                    Hoàn thành bước
-                </Button>
-                {onMiss && (
-                    <Button
-                        variant="outline"
-                        className="h-10 rounded-xl border-neutral-200 text-xs sm:text-sm font-bold text-neutral-600 hover:bg-neutral-50 shadow-xs"
-                        disabled={isActing}
-                        onClick={() => setIsMissConfirmOpen(true)}
-                    >
-                        Vắng mặt
-                    </Button>
+                {isCalled ? (
+                    <>
+                        {onStartServing && (
+                            <Button
+                                className="h-10 flex-1 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white text-xs sm:text-sm font-bold shadow-sm shadow-indigo-200 active:scale-[0.99] transition-all cursor-pointer"
+                                disabled={isActing}
+                                onClick={() => void onStartServing()}
+                                startIcon={
+                                    isActing ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <CheckCircle2 className="h-4 w-4" />
+                                    )
+                                }
+                            >
+                                Bắt đầu khám
+                            </Button>
+                        )}
+                        {onMiss && (
+                            <Button
+                                variant="outline"
+                                className="h-10 rounded-xl border-neutral-200 text-xs sm:text-sm font-bold text-neutral-600 hover:bg-neutral-50 shadow-xs cursor-pointer"
+                                disabled={isActing}
+                                onClick={() => setIsMissConfirmOpen(true)}
+                            >
+                                Vắng mặt
+                            </Button>
+                        )}
+                    </>
+                ) : (
+                    <>
+                        <Button
+                            className="h-10 flex-1 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs sm:text-sm font-bold shadow-sm shadow-emerald-200 hover:from-emerald-700 hover:to-teal-700 active:scale-[0.99] transition-all cursor-pointer"
+                            disabled={isActing || !onCompleteStep}
+                            onClick={() => setIsConfirmOpen(true)}
+                            startIcon={
+                                isActing ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    <CheckCircle2 className="h-4 w-4" />
+                                )
+                            }
+                        >
+                            Hoàn thành phiên khám
+                        </Button>
+                        {onMiss && (
+                            <Button
+                                variant="outline"
+                                className="h-10 rounded-xl border-neutral-200 text-xs sm:text-sm font-bold text-neutral-600 hover:bg-neutral-50 shadow-xs cursor-pointer"
+                                disabled={isActing}
+                                onClick={() => setIsMissConfirmOpen(true)}
+                            >
+                                Vắng mặt
+                            </Button>
+                        )}
+                    </>
                 )}
             </div>
+
 
             {/* Confirmation Modal */}
             {isConfirmOpen && (
@@ -235,10 +294,10 @@ export function RoomServingPanel({
                                 </div>
                                 <div>
                                     <h3 className="text-base font-extrabold text-neutral-900">
-                                        Xác nhận hoàn thành bước khám
+                                        Xác nhận hoàn thành phiên khám
                                     </h3>
                                     <p className="text-xs text-neutral-500 font-medium mt-0.5">
-                                        Hoàn tất lượt khám cho bệnh nhân
+                                        Hoàn tất phiên khám cho bệnh nhân
                                     </p>
                                 </div>
                             </div>
@@ -277,7 +336,7 @@ export function RoomServingPanel({
                             </div>
 
                             <p className="text-xs text-neutral-600 leading-relaxed font-medium">
-                                Bạn có chắc chắn muốn hoàn thành bước khám này không? Lượt phục vụ sẽ kết thúc và bệnh nhân sẽ được chuyển sang danh sách <strong className="text-emerald-700 font-bold">Đã khám</strong>.
+                                Bạn có chắc chắn muốn Hoàn thành phiên khám này không ?<strong className="text-emerald-700 font-bold">Đã khám</strong>.
                             </p>
                         </div>
 

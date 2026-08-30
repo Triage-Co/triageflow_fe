@@ -30,6 +30,7 @@ interface PatientDetailsModalProps {
 
 const STATUS_MAP = {
     WAITING: { label: 'Đang Chờ', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+    CALLED: { label: 'Đang Gọi Vào Phòng', color: 'bg-amber-100 text-amber-900 border-amber-300' },
     SERVING: { label: 'Đang Phục Vụ', color: 'bg-indigo-50 text-[#8B7CF6] border-indigo-200' },
     MISSING: { label: 'Lỡ Lượt', color: 'bg-rose-50 text-rose-700 border-rose-200' },
     COMPLETED: { label: 'Đã Hoàn Thành', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },

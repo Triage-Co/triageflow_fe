@@ -68,6 +68,20 @@ export const labService = {
     },
 
     /**
+     * POST /api/queue/scan
+     * Quét mã QR vé khám / phiếu chỉ định hoặc bắt đầu thực hiện thủ công (CALLED -> SERVING hoặc MISSING -> QUEUED).
+     */
+    async scanQueue(data: {
+        ticket_code?: string;
+        queue_id?: string;
+        room_id: string;
+        staff_id?: string;
+    }): Promise<any> {
+        const res = await apiClient.post<any>('/api/queue/scan', data);
+        return res.data;
+    },
+
+    /**
      * POST /api/queue/{queueId}/refuse
      * Từ chối lượt SERVING tại phòng (Step DECLINED, đóng queue, sync SO).
      */

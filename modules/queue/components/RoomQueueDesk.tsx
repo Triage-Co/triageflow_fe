@@ -1,10 +1,10 @@
-'use client';
-
-import { Loader2, PhoneCall, RefreshCw, Wifi, WifiOff } from 'lucide-react';
+import { useState } from 'react';
+import { Loader2, PhoneCall, QrCode, RefreshCw, Wifi, WifiOff } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 import { cn } from '@/lib/utils';
 import { RoomServingPanel } from './RoomServingPanel';
 import { RoomWaitingList } from './RoomWaitingList';
+import { StaffQRScanModal } from '@/shared/components/modals/StaffQRScanModal';
 import type { UseRoomQueueReturn } from '../hooks/useRoomQueue';
 
 export interface RoomQueueDeskProps {
@@ -16,7 +16,7 @@ export interface RoomQueueDeskProps {
 }
 
 /**
- * Shared staff desk: call-next + serving 3-level + waiting/missing lists.
+ * Shared staff desk: call-next + serving 3-level + waiting/missing lists + QR scan check-in.
  */
 export function RoomQueueDesk({
     title,
@@ -25,6 +25,8 @@ export function RoomQueueDesk({
     onOpenEmr,
     className,
 }: RoomQueueDeskProps) {
+    const [isScanModalOpen, setIsScanModalOpen] = useState(false);
+
     const {
         queue,
         isLoading,
@@ -42,6 +44,8 @@ export function RoomQueueDesk({
         missQueue,
         recall,
         override,
+        scanTicket,
+        startServing,
         isActing,
     } = roomQueue;
 
@@ -78,7 +82,7 @@ export function RoomQueueDesk({
                     </span>
                     <Button
                         variant="outline"
-                        className="h-9 rounded-xl border-neutral-200 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 shadow-xs"
+                        className="h-9 rounded-xl border-neutral-200 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 shadow-xs cursor-pointer"
                         disabled={isLoading || isActing}
                         onClick={() => void refresh()}
                         startIcon={
@@ -90,7 +94,16 @@ export function RoomQueueDesk({
                         Làm mới
                     </Button>
                     <Button
-                        className="h-9 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white text-xs font-bold shadow-sm shadow-indigo-200 transition-all active:scale-[0.99]"
+                        variant="outline"
+                        className="h-9 rounded-xl border-indigo-200 bg-indigo-50/60 hover:bg-indigo-100/80 text-indigo-700 text-xs font-bold shadow-xs transition-all cursor-pointer"
+                        disabled={isActing || isLoading}
+                        onClick={() => setIsScanModalOpen(true)}
+                        startIcon={<QrCode className="h-3.5 w-3.5 text-indigo-600" />}
+                    >
+                        Quét mã QR
+                    </Button>
+                    <Button
+                        className="h-9 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white text-xs font-bold shadow-sm shadow-indigo-200 transition-all active:scale-[0.99] cursor-pointer"
                         disabled={isActing || isLoading}
                         onClick={() => void callNext().catch(() => undefined)}
                         startIcon={
@@ -117,6 +130,7 @@ export function RoomQueueDesk({
                     serving={queue?.serving ?? null}
                     isActing={isActing}
                     onOpenEmr={onOpenEmr}
+                    onStartServing={() => void startServing().catch(() => undefined)}
                     onCompleteDetail={(id) => void completeDetail(id).catch(() => undefined)}
                     onRefuseDetail={(id) => void refuseDetail(id).catch(() => undefined)}
                     onCompleteServiceOrder={() =>
@@ -142,6 +156,20 @@ export function RoomQueueDesk({
                     }
                 />
             </div>
+
+            {/* Modal Quét mã QR */}
+            <StaffQRScanModal
+                isOpen={isScanModalOpen}
+                onClose={() => setIsScanModalOpen(false)}
+                title="Quét mã QR vé khám"
+                subtitle={roomLabel}
+                inputLabel="Mã vé khám / Mã QR phiếu"
+                inputPlaceholder="VD: TK-20260830-XXXX..."
+                onScanSuccess={async (ticketCode) => {
+                    return scanTicket({ ticket_code: ticketCode });
+                }}
+            />
         </div>
     );
 }
+

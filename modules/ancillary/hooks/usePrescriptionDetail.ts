@@ -73,7 +73,7 @@ export function usePrescriptionDetail(
         }
     }, [activeRx, onStatusChange]);
 
-    // 2. Action: Xác nhận soạn xong thuốc
+    // 2. Action: Xác nhận soạn xong thuốc -> Tự động gọi số lên TV
     const handlePrepare = useCallback(async () => {
         if (!activeRx) return;
         setActionLoading(true);
@@ -82,10 +82,18 @@ export function usePrescriptionDetail(
         try {
             const updated = await pharmacyService.preparePrescription(activeRx.prescription_id);
             setCurrentPrescription(updated);
+
+            // Tự động gọi API call-next để đẩy số lên màn hình TV sảnh chờ
+            try {
+                await pharmacyService.callNextPharmacy();
+            } catch (callNextErr) {
+                console.warn('[handlePrepare] Auto callNext warning:', callNextErr);
+            }
+
             setSuccessMessage(
                 updated.pickup_number
-                    ? `Đã xác nhận soạn xong thuốc (số ${updated.pickup_number}). Bấm Call next để đưa số lên TV.`
-                    : 'Đã xác nhận soạn xong thuốc! Hệ thống đã tự động gửi thông báo đến ứng dụng Bệnh nhân.'
+                    ? `Đã xác nhận soạn xong thuốc (Số nhận: ${updated.pickup_number}). Hệ thống đã tự động gọi số lên TV sảnh chờ và gửi thông báo cho bệnh nhân.`
+                    : 'Đã xác nhận soạn xong thuốc! Hệ thống đã tự động gọi số lên TV sảnh chờ và gửi thông báo đến ứng dụng Bệnh nhân.'
             );
             onStatusChange?.(updated);
         } catch (err: any) {
