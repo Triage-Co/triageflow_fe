@@ -7,13 +7,16 @@ export interface PharmacyDisplayRoom {
 export interface PharmacyCallingNumber {
     prescription_id: string;
     pickup_number: string;
+    display_screen_id?: string | null;
 }
 
 export interface PharmacyDisplayPayload {
     kind: 'pharmacy';
     room: PharmacyDisplayRoom;
     calling_numbers: PharmacyCallingNumber[];
+    missed_numbers?: PharmacyCallingNumber[];
     ready_unshown_count: number;
+    removed_ids?: string[];
 }
 
 export function isPharmacyNumberOnTv(input: {
