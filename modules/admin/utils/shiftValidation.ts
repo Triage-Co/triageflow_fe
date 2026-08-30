@@ -199,22 +199,61 @@ export function validateShiftAssignment({
     return null;
 }
 
-/** Filter staff list to only include Doctors matching room's specialty and all Nurses */
+function normalizeStaffRoleKey(role?: string | null): string {
+    return (role || '').toUpperCase().replace(/^ROLE_/, '');
+}
+
+/** Filter staff eligible for shift assignment based on room type and specialty rules. */
 export function filterEligibleStaffForRoom(
     staffs: Staff[],
     room?: HospitalRoom | null
 ): Staff[] {
     if (!room) {
         return staffs.filter((st) => {
-            const roleKey = (st.account?.role || '').toUpperCase().replace(/^ROLE_/, '');
+            const roleKey = normalizeStaffRoleKey(st.account?.role);
             return roleKey === 'DOCTOR' || roleKey === 'NURSE';
         });
     }
 
+    const roomType = (room.room_type || '').toUpperCase();
     const roomSpecialtyId = room.specialty_id || room.specialty?.specialty_id || '';
 
+    if (roomType === 'PHARMACY') {
+        return staffs.filter((st) => {
+            const roleKey = normalizeStaffRoleKey(st.account?.role);
+            return (
+                roleKey === 'NURSE' ||
+                roleKey === 'PHARMACIST' ||
+                roleKey === 'PHARMACY_STAFF'
+            );
+        });
+    }
+
+    if (
+        roomType === 'LABORATORY' ||
+        roomType === 'IMAGING_ROOM' ||
+        roomType === 'FUNCTIONAL_EXPLORATION'
+    ) {
+        return staffs.filter((st) => {
+            const roleKey = normalizeStaffRoleKey(st.account?.role);
+            return (
+                roleKey === 'NURSE' ||
+                roleKey === 'LAB_STAFF' ||
+                roleKey === 'LAB_TECHNICIAN'
+            );
+        });
+    }
+
+    if (roomType === 'RECEPTION' || roomType === 'CASHIER') {
+        return staffs.filter((st) => {
+            const roleKey = normalizeStaffRoleKey(st.account?.role);
+            return roleKey === 'RECEPTIONIST' || roleKey === 'CASHIER' || roleKey === 'NURSE';
+        });
+    }
+
+    // Phòng khám / thủ thuật: bác sĩ cùng chuyên khoa + y tá
     return staffs.filter((st) => {
-        const roleKey = (st.account?.role || '').toUpperCase().replace(/^ROLE_/, '');
+        const roleKey = normalizeStaffRoleKey(st.account?.role);
         if (roleKey === 'NURSE') return true;
         if (roleKey === 'DOCTOR') {
             return !!roomSpecialtyId && st.specialty_id === roomSpecialtyId;

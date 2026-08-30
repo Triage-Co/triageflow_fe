@@ -2,36 +2,71 @@
 
 import { QRCodeSVG } from 'qrcode.react';
 import type { Patient } from '@/modules/clinical/types/clinical.types';
-import type { Prescription } from '@/shared/types/prescription.types';
+import type {
+    Medicine,
+    Prescription,
+    PrescriptionDetail,
+} from '@/shared/types/prescription.types';
 
 export const PRESCRIPTION_PRINT_CSS = `
-@page { size: A5 portrait; margin: 15mm; }
-* { box-sizing: border-box; }
-body {
+@page {
+  size: 148mm 210mm;
   margin: 0;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 148mm;
+  height: 210mm;
+}
+body {
   font-family: "Times New Roman", "Noto Serif", Georgia, serif;
   color: #111;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.35;
+  background: #fff;
 }
-.sheet { width: 100%; }
-.header { text-align: center; margin-bottom: 12px; }
-.header h1 { margin: 0; font-size: 16px; letter-spacing: 0.02em; }
-.header h2 { margin: 4px 0 0; font-size: 14px; font-weight: 700; }
-.meta { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
-.meta-left { flex: 1; }
-.meta p { margin: 2px 0; }
-.qr-box { text-align: center; width: 110px; }
-.qr-box p { margin: 4px 0 0; font-size: 10px; }
-table { width: 100%; border-collapse: collapse; margin: 10px 0; }
-th, td { border: 1px solid #333; padding: 4px 6px; vertical-align: top; }
-th { background: #f3f3f3; font-size: 11px; }
-.footer { margin-top: 14px; display: flex; justify-content: space-between; }
-.sign { text-align: center; min-width: 160px; }
-.sign .space { height: 48px; }
-.note { margin-top: 8px; }
+.sheet {
+  width: 148mm;
+  height: 210mm;
+  max-width: 148mm;
+  max-height: 210mm;
+  padding: 10mm 12mm;
+  overflow: hidden;
+  page-break-after: avoid;
+  page-break-inside: avoid;
+}
+.header { text-align: center; margin-bottom: 8px; }
+.header h1 { margin: 0; font-size: 14px; letter-spacing: 0.02em; }
+.header h2 { margin: 3px 0 0; font-size: 12px; font-weight: 700; }
+.meta { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.meta-left { flex: 1; min-width: 0; }
+.meta p { margin: 2px 0; font-size: 10px; }
+.qr-box { text-align: center; width: 88px; flex-shrink: 0; }
+.qr-box svg { width: 72px; height: 72px; }
+.qr-box p { margin: 3px 0 0; font-size: 8px; line-height: 1.2; }
+table { width: 100%; border-collapse: collapse; margin: 6px 0; }
+th, td { border: 1px solid #333; padding: 3px 4px; vertical-align: top; font-size: 10px; }
+th { background: #f3f3f3; font-size: 9px; }
+.footer { margin-top: 8px; display: flex; justify-content: flex-end; }
+.sign { text-align: center; min-width: 130px; font-size: 10px; }
+.sign .space { height: 36px; }
+.note { margin-top: 6px; font-size: 10px; }
+.revisit { font-size: 10px; margin: 4px 0; }
 @media print {
-  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body {
+    width: 148mm;
+    height: 210mm;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .sheet {
+    width: 148mm;
+    height: 210mm;
+    margin: 0;
+    padding: 10mm 12mm;
+  }
 }
 `;
 
@@ -63,9 +98,104 @@ function formatDate(iso?: string): string {
     return d.toLocaleDateString('vi-VN');
 }
 
+function formatDoctorSignatureName(name?: string | null): string {
+    if (!name || name.trim() === '' || name === '—') return '—';
+    const trimmed = name.trim();
+    if (/^bs\.?\s/i.test(trimmed)) return trimmed;
+    return `Bs ${trimmed}`;
+}
+
 function qrValue(prescription: Prescription): string {
     if (prescription.qr_code) return prescription.qr_code;
     return prescription.prescription_code;
+}
+
+export interface DraftPrescriptionPrintItem {
+    medicine: Medicine;
+    quantity: number;
+    dosage_instruction: string;
+    note?: string;
+}
+
+export interface DraftPrescriptionPrintInput {
+    patient: Patient;
+    draftItems: DraftPrescriptionPrintItem[];
+    diagnosisNote: string;
+    visitSessionId?: string | null;
+    prescribedByName?: string;
+    existingPrescription?: Prescription | null;
+}
+
+/** Build a printable prescription snapshot from saved rx or unsaved draft rows. */
+export function buildPrescriptionForPrint(input: DraftPrescriptionPrintInput): Prescription {
+    const {
+        patient,
+        draftItems,
+        diagnosisNote,
+        visitSessionId,
+        prescribedByName,
+        existingPrescription,
+    } = input;
+
+    const details: PrescriptionDetail[] = draftItems.map((item, index) => ({
+        prescription_detail_id: `draft-${index}`,
+        medicine_id: item.medicine.medicine_id,
+        quantity: item.quantity,
+        dosage_instruction: item.dosage_instruction,
+        note: item.note,
+        unit_price: item.medicine.unit_price || 0,
+        sub_total: (item.medicine.unit_price || 0) * (Number(item.quantity) || 0),
+        medicine: {
+            medicine_code: item.medicine.medicine_code,
+            medicine_name: item.medicine.medicine_name,
+            unit: item.medicine.unit,
+            active_ingredient: item.medicine.active_ingredient,
+            usage_route: item.medicine.usage_route,
+        },
+    }));
+
+    const totalAmount = details.reduce((sum, row) => sum + row.sub_total, 0);
+    const sessionId = visitSessionId || existingPrescription?.visit_session_id || '';
+
+    if (existingPrescription) {
+        return {
+            ...existingPrescription,
+            diagnosis_note: diagnosisNote,
+            total_amount: totalAmount,
+            prescriptionDetails: details,
+            prescribed_by_name:
+                existingPrescription.prescribed_by_name || prescribedByName || undefined,
+        };
+    }
+
+    return {
+        prescription_id: 'draft',
+        prescription_code: 'TẠM THỜI',
+        qr_code: sessionId || 'DRAFT',
+        service_order_id: '',
+        visit_session_id: sessionId,
+        prescribed_by: '',
+        prescribed_by_name: prescribedByName,
+        diagnosis_note: diagnosisNote,
+        total_amount: totalAmount,
+        status: 'PENDING',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        prescriptionDetails: details,
+        visitSession: sessionId
+            ? {
+                  visit_session_id: sessionId,
+                  diagnosis:
+                      patient.shortDiagnosis || patient.medicalRecord?.diagnosis || undefined,
+                  patient: {
+                      patient_id: patient.patientId || patient.id,
+                      full_name: patient.name,
+                      citizen_id: patient.code,
+                      gender: patient.gender,
+                  },
+              }
+            : undefined,
+    };
 }
 
 export interface PrescriptionPrintViewProps {
@@ -77,7 +207,6 @@ export interface PrescriptionPrintViewProps {
 export function PrescriptionPrintView({ prescription, patient }: PrescriptionPrintViewProps) {
     const vsPatient = prescription.visitSession?.patient;
     const doctorName = prescription.doctor?.full_name || prescription.prescribed_by_name || '—';
-    const license = prescription.doctor?.license_number || '—';
     const patientName = vsPatient?.full_name || patient.name;
     const citizenId = vsPatient?.citizen_id || patient.code;
     const age = calcAge(vsPatient?.dob, patient.age);
@@ -89,7 +218,7 @@ export function PrescriptionPrintView({ prescription, patient }: PrescriptionPri
         '—';
 
     return (
-        <div className="sheet bg-white text-[#111] p-4 max-w-[148mm] mx-auto border border-[#ddd] rounded-lg">
+        <div className="sheet bg-white text-[#111] w-[148mm] h-[210mm] max-w-[148mm] max-h-[210mm] box-border p-[10mm_12mm] mx-auto border border-[#ddd] shadow-sm overflow-hidden">
             <div className="header text-center mb-3">
                 <h1 className="text-base font-bold tracking-wide m-0">BỆNH VIỆN TRIAGEFLOW OPD</h1>
                 <h2 className="text-sm font-bold mt-1 m-0">ĐƠN THUỐC NGOẠI TRÚ</h2>
@@ -141,9 +270,8 @@ export function PrescriptionPrintView({ prescription, patient }: PrescriptionPri
             <div className="flex justify-end mt-4">
                 <div className="text-center text-xs min-w-[160px]">
                     <p className="m-0 font-semibold">Bác sĩ kê đơn</p>
-                    <p className="m-0">{doctorName}</p>
-                    <p className="m-0">MSN: {license}</p>
                     <div className="h-12" />
+                    <p className="m-0">{formatDoctorSignatureName(doctorName)}</p>
                     <p className="m-0 italic">(Ký, ghi rõ họ tên)</p>
                 </div>
             </div>
@@ -155,7 +283,6 @@ export function PrescriptionPrintView({ prescription, patient }: PrescriptionPri
 export function printPrescription(prescription: Prescription, patient: Patient): void {
     const vsPatient = prescription.visitSession?.patient;
     const doctorName = prescription.doctor?.full_name || prescription.prescribed_by_name || '—';
-    const license = prescription.doctor?.license_number || '—';
     const patientName = vsPatient?.full_name || patient.name;
     const citizenId = vsPatient?.citizen_id || patient.code;
     const age = calcAge(vsPatient?.dob, patient.age);
@@ -223,14 +350,13 @@ export function printPrescription(prescription: Prescription, patient: Patient):
       <tbody>${rows}</tbody>
     </table>
     <p class="note"><strong>Lời dặn:</strong> ${escapeHtml(prescription.diagnosis_note || '—')}</p>
-    <p>Tái khám: ___/___/______</p>
+    <p class="revisit">Tái khám: ___/___/______</p>
     <div class="footer">
       <div></div>
       <div class="sign">
         <p><strong>Bác sĩ kê đơn</strong></p>
-        <p>${escapeHtml(doctorName)}</p>
-        <p>MSN: ${escapeHtml(license)}</p>
         <div class="space"></div>
+        <p>${escapeHtml(formatDoctorSignatureName(doctorName))}</p>
         <p><em>(Ký, ghi rõ họ tên)</em></p>
       </div>
     </div>
@@ -251,9 +377,10 @@ export function printPrescription(prescription: Prescription, patient: Patient):
 </body>
 </html>`;
 
-    const win = window.open('', '_blank', 'noopener,noreferrer,width=800,height=900');
+    // Không dùng noopener — Edge/Chrome trả về null và không ghi được document (reception ticket cùng pattern).
+    const win = window.open('', '_blank', 'width=560,height=840');
     if (!win) {
-        throw new Error('Trình duyệt chặn cửa sổ in. Vui lòng cho phép popup.');
+        throw new Error('Trình duyệt chặn cửa sổ in. Vui lòng cho phép popup cho trang này.');
     }
     win.document.open();
     win.document.write(html);

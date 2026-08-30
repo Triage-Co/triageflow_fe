@@ -16,7 +16,10 @@ import type { Patient } from '@/modules/clinical/types/clinical.types';
 import { clinicalService } from '@/modules/clinical/services/clinicalService';
 import { doctorPrescriptionService } from '@/modules/clinical/services/doctorPrescriptionService';
 import { MedicineSlideOverPanel } from '@/modules/clinical/components/MedicineSlideOverPanel';
-import { printPrescription } from '@/modules/clinical/components/PrescriptionPrintView';
+import {
+    buildPrescriptionForPrint,
+    printPrescription,
+} from '@/modules/clinical/components/PrescriptionPrintView';
 import { useAuthStore } from '@/store/authStore';
 import type {
     CreatePrescriptionDetailDto,
@@ -139,6 +142,8 @@ export function EmrPrescriptionTab({
     refreshKey = 0,
 }: EmrPrescriptionTabProps) {
     const accessToken = useAuthStore((s) => s.accessToken);
+    const authUser = useAuthStore((s) => s.user);
+    const authProfile = useAuthStore((s) => s.profile);
 
     const [mode, setMode] = useState<TabMode>('loading');
     const [resolvedSessionId, setResolvedSessionId] = useState<string | null>(null);
@@ -352,10 +357,27 @@ export function EmrPrescriptionTab({
         }
     };
 
+    const doctorDisplayName =
+        authProfile?.user_name || authUser?.fullName || prescription?.prescribed_by_name;
+
     const handlePrint = () => {
-        if (!prescription) return;
+        if (draftItems.length === 0) {
+            setError('Thêm ít nhất một loại thuốc trước khi in đơn');
+            return;
+        }
+
         try {
-            printPrescription(prescription, patient);
+            const printable = buildPrescriptionForPrint({
+                patient,
+                draftItems,
+                diagnosisNote,
+                visitSessionId: resolvedSessionId,
+                prescribedByName: doctorDisplayName,
+                existingPrescription:
+                    prescription && mode !== 'empty' ? prescription : null,
+            });
+            printPrescription(printable, patient);
+            setError(null);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Không thể mở bản in');
         }
@@ -619,19 +641,30 @@ export function EmrPrescriptionTab({
 
                         <div className="flex flex-wrap justify-end gap-2">
                             {mode === 'empty' && (
-                                <button
-                                    type="button"
-                                    disabled={submitting || draftItems.length === 0}
-                                    onClick={() => void handleCreate()}
-                                    className="inline-flex items-center gap-1.5 rounded-xl bg-[#8B7CF6] px-4 py-2 text-xs font-bold text-white hover:bg-[#7A6BE8] disabled:opacity-50 cursor-pointer"
-                                >
-                                    {submitting ? (
-                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                    ) : (
-                                        <Save className="h-3.5 w-3.5" />
-                                    )}
-                                    Lưu đơn thuốc
-                                </button>
+                                <>
+                                    <button
+                                        type="button"
+                                        disabled={draftItems.length === 0}
+                                        onClick={handlePrint}
+                                        className="inline-flex items-center gap-1.5 rounded-xl border border-[#E8E7F5] bg-white px-4 py-2 text-xs font-bold text-[#555] hover:bg-[#F5F5F8] disabled:opacity-50 cursor-pointer"
+                                    >
+                                        <Printer className="h-3.5 w-3.5" />
+                                        In đơn thuốc
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={submitting || draftItems.length === 0}
+                                        onClick={() => void handleCreate()}
+                                        className="inline-flex items-center gap-1.5 rounded-xl bg-[#8B7CF6] px-4 py-2 text-xs font-bold text-white hover:bg-[#7A6BE8] disabled:opacity-50 cursor-pointer"
+                                    >
+                                        {submitting ? (
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        ) : (
+                                            <Save className="h-3.5 w-3.5" />
+                                        )}
+                                        Lưu đơn thuốc
+                                    </button>
+                                </>
                             )}
 
                             {mode === 'view-editable' && (
@@ -679,6 +712,15 @@ export function EmrPrescriptionTab({
                                         className="rounded-xl border border-[#E8E7F5] bg-white px-4 py-2 text-xs font-bold text-[#555] hover:bg-[#F5F5F8] cursor-pointer"
                                     >
                                         Hủy
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={draftItems.length === 0}
+                                        onClick={handlePrint}
+                                        className="inline-flex items-center gap-1.5 rounded-xl border border-[#E8E7F5] bg-white px-4 py-2 text-xs font-bold text-[#555] hover:bg-[#F5F5F8] disabled:opacity-50 cursor-pointer"
+                                    >
+                                        <Printer className="h-3.5 w-3.5" />
+                                        In đơn thuốc
                                     </button>
                                     <button
                                         type="button"

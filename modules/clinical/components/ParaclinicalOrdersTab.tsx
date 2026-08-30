@@ -13,6 +13,7 @@ import {
     X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { printServiceOrderIndications } from '@/modules/clinical/components/ServiceOrderIndicationPrintView';
 import type { Patient } from '@/modules/clinical/types/clinical.types';
 import type { CatalogService } from '@/modules/admin/types/service.types';
 import { getServiceId } from '@/modules/admin/types/service.types';
@@ -832,6 +833,48 @@ export function ParaclinicalOrdersTab({
         [draftOrders, savedOrders]
     );
 
+    const doctorDisplayName =
+        authProfile?.user_name ||
+        authUser?.fullName ||
+        savedOrders.find((o) => o.assign_doctor_name)?.assign_doctor_name;
+
+    const handlePrintIndications = () => {
+        const printable = savedOrders.filter((o) => !o.is_draft);
+        if (printable.length === 0) {
+            setError('Chưa có chỉ định đã lưu để in. Hãy lưu chỉ định trước.');
+            return;
+        }
+
+        const documentSubtitle =
+            primaryKind === 'PROCEDURE'
+                ? 'YÊU CẦU THỦ THUẬT'
+                : primaryKind === 'PRESCRIPTION'
+                  ? 'YÊU CẦU CẤP PHÁT'
+                  : 'YÊU CẦU CẬN LÂM SÀNG';
+
+        try {
+            printServiceOrderIndications({
+                patient,
+                items: printable.map((o) => ({
+                    name: o.name,
+                    group_label: o.group_label,
+                    room_name: o.room_name,
+                })),
+                documentSubtitle,
+                diagnosis:
+                    patient.shortDiagnosis ||
+                    patient.medicalRecord?.diagnosis ||
+                    undefined,
+                doctorName: doctorDisplayName,
+            });
+            setError(null);
+        } catch (err) {
+            setError(
+                err instanceof Error ? err.message : 'Không thể mở bản in chỉ định.'
+            );
+        }
+    };
+
     const loadPendingOrders = useCallback(async (opts?: { silent?: boolean }) => {
         if (!accessToken) {
             setRawOrders([]);
@@ -1449,6 +1492,7 @@ export function ParaclinicalOrdersTab({
                             type="button"
                             title="In chỉ định"
                             disabled={savedOrders.length === 0}
+                            onClick={handlePrintIndications}
                             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-neutral-200 bg-white text-[12px] font-bold text-neutral-700 hover:bg-neutral-50 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             <Printer className="w-3.5 h-3.5" />
