@@ -15,6 +15,7 @@ interface AuthStoreState {
   pendingParsedCCCD?: CCCDParsedResult | null;
   isRequestingOtp: boolean;
   isVerifyingOtp: boolean;
+  isDirectLoggingIn: boolean;
 
   // Actions
   sendOtp: (
@@ -22,6 +23,10 @@ interface AuthStoreState {
     parsedCCCD?: CCCDParsedResult | null,
   ) => Promise<{ success: boolean; message: string }>;
   verifyOtp: (otp: string) => Promise<{ success: boolean; message: string }>;
+  loginDirect: (
+    citizenId: string,
+    parsedCCCD?: CCCDParsedResult | null,
+  ) => Promise<{ success: boolean; message: string }>;
   resendOtp: () => Promise<{ success: boolean; message: string }>;
   clearPendingOtp: () => void;
   clearAuth: () => void;
@@ -36,6 +41,7 @@ const initialState = {
   pendingParsedCCCD: null,
   isRequestingOtp: false,
   isVerifyingOtp: false,
+  isDirectLoggingIn: false,
 };
 
 export const useAuthStore = create<AuthStoreState>((set, get) => ({
@@ -47,11 +53,83 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       pendingParsedCCCD: null,
       isRequestingOtp: false,
       isVerifyingOtp: false,
+      isDirectLoggingIn: false,
     });
   },
 
   clearAuth: () => {
     set(initialState);
+  },
+
+  loginDirect: async (citizenId: string, parsedCCCD?: CCCDParsedResult | null) => {
+    const cleanCitizenId = citizenId.trim();
+    set({ isDirectLoggingIn: true });
+
+    try {
+      const response = await authService.loginCitizenIdDirect({
+        citizen_id: cleanCitizenId,
+      });
+
+      const resData: any = (response as any)?.data || response;
+      const token = resData?.token || (response as any)?.token;
+      const patientId = resData?.patient_id || (response as any)?.patient_id;
+      const resCitizenId = resData?.citizen_id || (response as any)?.citizen_id || cleanCitizenId;
+
+      if (token && patientId) {
+        const payload = decodeJwtPayload(token);
+        const patientData = (payload?.patient as any) || {};
+
+        const rawGender = String(
+          parsedCCCD?.gender || patientData?.gender || '',
+        ).toLowerCase();
+        const detectedGender: 'male' | 'female' =
+          rawGender === 'female' || rawGender === 'nu' || rawGender === 'nữ' ? 'female' : 'male';
+
+        const { useKioskStore } = await import('./kioskStore');
+        useKioskStore.getState().setGender(detectedGender);
+
+        set({
+          authToken: token,
+          patientId: patientId,
+          citizenId: resCitizenId,
+          patientInfo: {
+            idNumber:
+              parsedCCCD?.citizenId ||
+              patientData?.citizen_id ||
+              resCitizenId,
+            fullName:
+              parsedCCCD?.fullName ||
+              patientData?.full_name ||
+              '',
+            dob: parsedCCCD?.dob || patientData?.dob || '',
+            gender: detectedGender,
+            address: parsedCCCD?.address || '',
+          },
+          pendingCitizenId: undefined,
+          pendingParsedCCCD: null,
+          isDirectLoggingIn: false,
+        });
+
+        return {
+          success: true,
+          message: response?.message || 'Đăng nhập thành công',
+        };
+      }
+
+      set({ isDirectLoggingIn: false });
+      return {
+        success: false,
+        message: 'Dữ liệu đăng nhập không hợp lệ từ máy chủ.',
+      };
+    } catch (error: any) {
+      console.error('Lỗi khi đăng nhập trực tiếp CCCD:', error);
+      set({ isDirectLoggingIn: false });
+      const errorMessage =
+        error?.detail ||
+        error?.message ||
+        'Không tìm thấy thông tin bệnh nhân tương ứng với số CCCD này.';
+      return { success: false, message: errorMessage };
+    }
   },
 
   sendOtp: async (citizenId: string, parsedCCCD?: CCCDParsedResult | null) => {

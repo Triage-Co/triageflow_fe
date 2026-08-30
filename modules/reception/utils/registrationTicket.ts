@@ -104,7 +104,6 @@ body {
     
     <div class="qr-container">
         <img class="qr-image" src="${qrUrl}" alt="QR" />
-        <div class="qr-desc">Quét mã QR để theo dõi thứ tự & bản đồ chỉ đường</div>
     </div>
     
     <div class="solid-line"></div>

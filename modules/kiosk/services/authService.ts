@@ -16,4 +16,11 @@ export const authService = {
       body,
     );
   },
-};
+
+  loginCitizenIdDirect: (body: { citizen_id: string }) => {
+    return apiClient.post<VerifyCitizenOtpResponse['data']>(
+      '/api/auth/login/citizen-id',
+      body,
+    );
+  },
+};

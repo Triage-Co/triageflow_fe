@@ -9,6 +9,7 @@ export interface KioskLocationConfig {
   startRoomCode: string;
   floorNumber: number;
   adminPin: string;
+  enableOtp: boolean;
 }
 
 interface KioskConfigStoreState extends KioskLocationConfig {
@@ -20,6 +21,7 @@ interface KioskConfigStoreState extends KioskLocationConfig {
   }, kioskName?: string) => void;
   setKioskName: (name: string) => void;
   setAdminPin: (pin: string) => void;
+  setEnableOtp: (enableOtp: boolean) => void;
   resetConfig: () => void;
 }
 
@@ -31,6 +33,7 @@ const DEFAULT_CONFIG: KioskLocationConfig = {
   startRoomCode: 'SDA',
   floorNumber: 1,
   adminPin: '123456',
+  enableOtp: true,
 };
 
 export const useKioskConfigStore = create<KioskConfigStoreState>()(
@@ -50,6 +53,8 @@ export const useKioskConfigStore = create<KioskConfigStoreState>()(
       setKioskName: (kioskName) => set({ kioskName }),
 
       setAdminPin: (adminPin) => set({ adminPin }),
+
+      setEnableOtp: (enableOtp) => set({ enableOtp }),
 
       resetConfig: () => set({ ...DEFAULT_CONFIG }),
     }),

@@ -173,9 +173,6 @@ export const PatientInfoView: React.FC = () => {
                     className="w-36 h-36 mx-auto border border-black p-1 block mb-1.5 bg-white"
                     style={{ imageRendering: 'pixelated' }}
                   />
-                  <div className="text-[11px] font-bold uppercase tracking-tight leading-tight">
-                    Quét mã QR để theo dõi thứ tự & bản đồ chỉ đường
-                  </div>
                 </div>
 
                 <div className="border-t border-solid border-black my-2 w-full" />

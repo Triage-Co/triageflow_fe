@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { triageService } from '../services/triageService';
-import { getSymptomsForBodyPart } from '../utils/symptomMapper';
+import { getSymptomsForBodyPart, PART_KEY_MAPPING } from '../utils/symptomMapper';
 import { commonSymptomDataset } from '../data/commonSymptoms';
 import { femaleSymptomDataset } from '../data/femaleSymptoms';
 import { maleSymptomDataset } from '../data/maleSymptoms';
@@ -147,15 +147,22 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
             ...maleSymptomDataset
         };
 
-        const normalizedRegion = regionId.toLowerCase().replace(/[-_]/g, '');
-        const foundKey = Object.keys(allDatasets).find((key) =>
-            key.toLowerCase() === regionId.toLowerCase() ||
-            key.toLowerCase() === normalizedRegion ||
-            allDatasets[key].nameVn.toLowerCase() === regionId.toLowerCase() ||
-            allDatasets[key].nameEn.toLowerCase() === regionId.toLowerCase()
-        );
+        const mappedKeys = PART_KEY_MAPPING[regionId];
+        const primaryKey = mappedKeys?.[0];
 
-        const englishPhrase = foundKey ? allDatasets[foundKey].nameEn : regionId.replace(/[-_]/g, ' ');
+        let englishPhrase = '';
+        if (primaryKey && allDatasets[primaryKey]) {
+            englishPhrase = allDatasets[primaryKey].nameEn;
+        } else {
+            const normalizedRegion = regionId.toLowerCase().replace(/[-_]/g, '');
+            const foundKey = Object.keys(allDatasets).find((key) =>
+                key.toLowerCase() === regionId.toLowerCase() ||
+                key.toLowerCase() === normalizedRegion ||
+                allDatasets[key].nameVn?.toLowerCase() === regionId.toLowerCase() ||
+                allDatasets[key].nameEn?.toLowerCase() === regionId.toLowerCase()
+            );
+            englishPhrase = foundKey ? allDatasets[foundKey].nameEn : regionId.replace(/[-_]/g, ' ');
+        }
 
         const patientAge = calculateAgeFromDob(dob);
 

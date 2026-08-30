@@ -694,7 +694,7 @@ export const DoctorRouteView: React.FC = () => {
               )}
 
               {/* Doctor info */}
-              {(selectedDetailStep.subtitle || selectedDetailStep.rawStep?.staff?.full_name || selectedDetailStep.rawStep?.staff_info?.full_name) && (
+              {(selectedDetailStep.doctorName || selectedDetailStep.rawStep?.staff?.full_name || selectedDetailStep.rawStep?.staff_info?.full_name) && (
                 <div className="flex items-start gap-3">
                   <div className="w-9 h-9 rounded-xl bg-blue-50 text-[#155DFC] flex items-center justify-center shrink-0">
                     <User className="w-5 h-5" />
@@ -702,17 +702,17 @@ export const DoctorRouteView: React.FC = () => {
                   <div className="space-y-1">
                     <span className="text-xs font-bold text-neutral-400 block uppercase tracking-wider">Bác sĩ phụ trách</span>
                     <span className="font-extrabold text-[#1E2939] text-base">
-                      {selectedDetailStep.rawStep?.staff?.full_name || selectedDetailStep.rawStep?.staff_info?.full_name || selectedDetailStep.subtitle}
+                      {selectedDetailStep.doctorName || selectedDetailStep.rawStep?.staff_info?.full_name || selectedDetailStep.rawStep?.staff?.full_name}
                     </span>
                     
                     {/* Additional staff details like license, experience */}
                     <div className="space-y-1 text-xs text-neutral-500 font-semibold pt-1.5 border-t border-neutral-100">
-                      {selectedDetailStep.subtitle && (
-                        <p>Chuyên khoa: <span className="text-[#1E2939]">{selectedDetailStep.subtitle}</span></p>
+                      {(selectedDetailStep.specialtyName || selectedDetailStep.rawStep?.specialty_info?.specialty_name || selectedDetailStep.rawStep?.specialty?.specialty_name) && (
+                        <p>Chuyên khoa: <span className="text-[#1E2939]">{selectedDetailStep.specialtyName || selectedDetailStep.rawStep?.specialty_info?.specialty_name || selectedDetailStep.rawStep?.specialty?.specialty_name}</span></p>
                       )}
 
-                      {selectedDetailStep.rawStep?.staff?.license_number && (
-                        <p>GP hành nghề: <span className="text-[#1E2939] font-mono">{selectedDetailStep.rawStep.staff.license_number}</span></p>
+                      {(selectedDetailStep.rawStep?.staff_info?.license_number || selectedDetailStep.rawStep?.staff?.license_number) && (
+                        <p>GP hành nghề: <span className="text-[#1E2939] font-mono">{selectedDetailStep.rawStep?.staff_info?.license_number || selectedDetailStep.rawStep?.staff?.license_number}</span></p>
                       )}
                     </div>
                   </div>
