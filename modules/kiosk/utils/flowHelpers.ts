@@ -294,7 +294,9 @@ export const mapApiToRouteSteps = (detailedSteps: any[]): RouteStepItem[] => {
     return {
       id: index + 1,
       title: stepName || specialtyName || roomName || `Bước ${index + 1}`,
-      subtitle: staffName || specialtyName || '',
+      subtitle: staffName ? `BS. ${staffName}` : (specialtyName || ''),
+      doctorName: staffName || undefined,
+      specialtyName: specialtyName || undefined,
       room: roomName || undefined,
       location: undefined,
       queueNo: queueNoStr,

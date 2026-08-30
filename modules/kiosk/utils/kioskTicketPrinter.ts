@@ -1,25 +1,25 @@
 export interface KioskPrintTicketData {
-  ticketNo: string;
-  fullName: string;
-  citizenId: string;
-  specialty: string;
-  doctorLabel?: string;
-  roomLabel?: string;
-  appointmentDate?: string;
-  slotTimeLabel?: string;
-  qrPayload?: string;
+    ticketNo: string;
+    fullName: string;
+    citizenId: string;
+    specialty: string;
+    doctorLabel?: string;
+    roomLabel?: string;
+    appointmentDate?: string;
+    slotTimeLabel?: string;
+    qrPayload?: string;
 }
 
 export function buildKioskTicketHtml(data: KioskPrintTicketData): string {
-  const qrData = data.qrPayload || data.ticketNo || 'TRIAGEFLOW-TICKET';
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(qrData)}`;
-  const now = new Date();
-  const pad = (n: number) => n.toString().padStart(2, '0');
-  const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-  const dateStr = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
-  const printTime = `${timeStr} ${dateStr}`;
+    const qrData = data.qrPayload || data.ticketNo || 'TRIAGEFLOW-TICKET';
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(qrData)}`;
+    const now = new Date();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    const dateStr = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+    const printTime = `${timeStr} ${dateStr}`;
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Vé khám ${data.ticketNo}</title>
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Vé khám ${data.ticketNo}</title>
 <style>
 @page { margin: 0; }
 
@@ -113,7 +113,6 @@ body {
     
     <div class="qr-container">
         <img class="qr-image" src="${qrUrl}" alt="QR" />
-        <div class="qr-desc">Quét mã QR để theo dõi thứ tự & bản đồ chỉ đường</div>
     </div>
     
     <div class="solid-line"></div>
@@ -126,9 +125,9 @@ body {
 }
 
 export function printKioskTicket(data: KioskPrintTicketData): void {
-  const html = buildKioskTicketHtml(data);
-  const win = window.open('', '_blank', 'width=480,height=720');
-  if (!win) return;
-  win.document.write(html);
-  win.document.close();
+    const html = buildKioskTicketHtml(data);
+    const win = window.open('', '_blank', 'width=480,height=720');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
 }

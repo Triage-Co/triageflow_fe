@@ -18,6 +18,7 @@ import { NumericKeypad } from '../components/NumericKeypad';
 import { useFlowStore } from '../store/flowStore';
 import { scanWithJsQREngine } from '../utils/qrImageEnhancer';
 import { parseCCCDQrCode } from '../utils/cccdParser';
+import { useKioskConfigStore } from '../store/kioskConfigStore';
 
 interface CameraDevice {
   id: string;
@@ -58,6 +59,7 @@ export const QRScannerModal: React.FC = () => {
 
   const sendOtp = useAuthStore((state) => state.sendOtp);
   const verifyOtp = useAuthStore((state) => state.verifyOtp);
+  const loginDirect = useAuthStore((state) => state.loginDirect);
   const resendOtpAction = useAuthStore((state) => state.resendOtp);
   const clearPendingOtp = useAuthStore((state) => state.clearPendingOtp);
   const isRequestingOtp = useAuthStore((state) => state.isRequestingOtp);
@@ -175,10 +177,55 @@ export const QRScannerModal: React.FC = () => {
     // Dừng camera ngay khi nhận diện thành công
     await stopCamera();
 
-    setLoading(true, 'Đang gửi mã xác thực OTP đến số điện thoại...');
-
     try {
       const parsedCCCD = rawInput.includes('|') ? parseCCCDQrCode(rawInput) : null;
+      const enableOtp = useKioskConfigStore.getState().enableOtp;
+
+      // NẾU TẮT OTP: Đăng nhập trực tiếp bằng CCCD
+      if (!enableOtp) {
+        setLoading(true, 'Đang xác thực thông tin thẻ CCCD...');
+        const res = await loginDirect(cleanId, parsedCCCD);
+        setLoading(false);
+
+        if (res.success) {
+          showToast('Đăng nhập thành công!', 'success');
+          const authState = useAuthStore.getState();
+          const patientId = authState.patientId || authState.citizenId;
+          const target = targetViewAfterScan ?? 'register';
+
+          closeModal();
+
+          if (target === 'pending_bills') {
+            if (patientId) {
+              await useFlowStore.getState().fetchPendingPaymentSteps(patientId);
+            }
+            return;
+          }
+
+          if (patientId && (target === 'patient_info' || target === 'queue' || target === 'doctor_route')) {
+            await useFlowStore.getState().fetchActiveTicketForPatient(patientId);
+          }
+
+          navigateToView(target);
+          return;
+        } else {
+          setError(res.message || `Không tìm thấy Bệnh nhân với CCCD: ${cleanId} trong hệ thống.`);
+          isProcessingRef.current = false;
+          setScanSuccessId(null);
+
+          if (!showManualInputRef.current && selectedCameraIdRef.current) {
+            setTimeout(() => {
+              if (!showManualInputRef.current) {
+                startCameraRef.current?.(selectedCameraIdRef.current);
+              }
+            }, 800);
+          }
+          return;
+        }
+      }
+
+      // NẾU BẬT OTP: Gửi mã OTP 2 bước bình thường
+      setLoading(true, 'Đang gửi mã xác thực OTP đến số điện thoại...');
       const res = await sendOtp(cleanId, parsedCCCD);
       setLoading(false);
 
@@ -207,7 +254,7 @@ export const QRScannerModal: React.FC = () => {
     } catch (e: any) {
       console.error(e);
       setLoading(false);
-      const errMsg = e?.message || `Không thể gửi OTP cho CCCD: ${cleanId}. Vui lòng thử lại.`;
+      const errMsg = e?.message || `Không thể xác thực cho CCCD: ${cleanId}. Vui lòng thử lại.`;
       setError(errMsg);
       isProcessingRef.current = false;
       setScanSuccessId(null);
@@ -220,7 +267,7 @@ export const QRScannerModal: React.FC = () => {
         }, 800);
       }
     }
-  }, [sendOtp, setLoading, showToast, stopCamera]);
+  }, [sendOtp, loginDirect, setLoading, showToast, stopCamera, targetViewAfterScan, closeModal, navigateToView]);
 
   useEffect(() => {
     processSubmissionRef.current = processCitizenIdSubmission;

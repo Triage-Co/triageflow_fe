@@ -2,6 +2,8 @@ export interface RouteStepItem {
   id: number;
   title: string;
   subtitle: string;
+  doctorName?: string;
+  specialtyName?: string;
   room?: string;
   location?: string;
   queueNo?: string;

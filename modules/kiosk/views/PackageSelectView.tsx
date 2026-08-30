@@ -5,7 +5,6 @@ import { ArrowLeft, ChevronRight, BriefcaseMedical, Loader2 } from 'lucide-react
 
 export const PackageSelectView: React.FC = () => {
   const navigateToView = useKioskStore((state) => state.navigateToView);
-  const goHome = useKioskStore((state) => state.goHome);
   const { packages, isFetchingPackages, fetchPackages, selectPackage } = usePackageBookingStore();
 
   useEffect(() => {
@@ -19,7 +18,7 @@ export const PackageSelectView: React.FC = () => {
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigateToView('booking_mode')}
-            className="flex items-center gap-2 px-4 py-2 sm:px-6 sm:py-2.5 bg-white hover:bg-neutral-50 active:scale-95 rounded-2xl text-xs sm:text-sm font-bold text-neutral-800 shadow-md border border-neutral-100 transition-all cursor-pointer shrink-0"
+            className="flex items-center gap-2 px-4 py-2 sm:px-6 sm:py-2.5 bg-white hover:bg-neutral-50 active:scale-95 rounded-2xl text-xs sm:text-sm font-bold text-neutral-800 shadow-sm border border-neutral-100 transition-all cursor-pointer shrink-0"
           >
             <ArrowLeft className="w-4 h-4 text-neutral-600" /> Quay lại
           </button>
@@ -37,12 +36,12 @@ export const PackageSelectView: React.FC = () => {
       {/* Main Content Area */}
       <div className="flex-1 min-h-0 overflow-y-auto pr-1">
         {isFetchingPackages ? (
-          <div className="flex flex-col items-center justify-center space-y-4">
-            <Loader2 className="w-12 h-12 text-teal-600 animate-spin" />
+          <div className="flex flex-col items-center justify-center space-y-4 h-64">
+            <Loader2 className="w-12 h-12 text-[#155DFC] animate-spin" />
             <p className="text-sm font-extrabold text-neutral-500">Đang tải danh sách gói khám...</p>
           </div>
         ) : packages.length === 0 ? (
-          <div className="text-center space-y-3 bg-white/80 p-8 rounded-3xl border border-neutral-200/50 shadow-lg max-w-md">
+          <div className="text-center space-y-3 bg-white p-8 rounded-[28px] sm:rounded-[36px] border border-neutral-100/80 shadow-sm max-w-md mx-auto my-12">
             <div className="text-4xl">📦</div>
             <h3 className="text-lg font-black text-neutral-800">Không tìm thấy gói khám nào</h3>
             <p className="text-xs text-neutral-400 font-semibold">Hiện tại hệ thống chưa cập nhật gói khám dịch vụ. Vui lòng quay lại sau.</p>
@@ -53,27 +52,27 @@ export const PackageSelectView: React.FC = () => {
               <button
                 key={pkg.package_id}
                 onClick={() => selectPackage(pkg.package_id)}
-                className="group relative bg-white/95 backdrop-blur-xl hover:bg-gradient-to-br hover:from-white hover:to-teal-50/30 rounded-[32px] p-6 border border-neutral-200/80 hover:border-teal-300 shadow-lg hover:shadow-xl hover:shadow-teal-500/5 transition-all duration-300 flex flex-col justify-between text-left cursor-pointer active:scale-[0.98] overflow-hidden min-h-[220px]"
+                className="group relative bg-white hover:bg-gradient-to-br hover:from-white hover:to-blue-50/40 rounded-[28px] sm:rounded-[36px] p-6 border border-neutral-100/90 hover:border-blue-300 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between text-left cursor-pointer active:scale-[0.98] overflow-hidden min-h-[220px]"
               >
                 <div className="space-y-3 w-full">
                   <div className="flex justify-between items-start gap-2">
-                    <h3 className="text-lg sm:text-xl font-black text-[#1E2939] group-hover:text-teal-600 transition-colors leading-snug break-words">
+                    <h3 className="text-lg sm:text-xl font-black text-[#1E2939] group-hover:text-[#155DFC] transition-colors leading-snug break-words">
                       {pkg.package_name}
                     </h3>
                   </div>
-                  <p className="text-xs sm:text-sm text-neutral-400 font-semibold leading-relaxed line-clamp-3">
+                  <p className="text-xs sm:text-sm text-neutral-500 font-medium leading-relaxed line-clamp-3">
                     {pkg.description || 'Chưa có mô tả cụ thể cho gói khám này.'}
                   </p>
                 </div>
 
-                <div className="flex items-center justify-between pt-4 border-t border-neutral-100 w-full group-hover:border-teal-100 transition-colors mt-6">
+                <div className="flex items-center justify-between pt-4 border-t border-neutral-100 w-full group-hover:border-blue-100 transition-colors mt-6">
                   <div>
                     <span className="text-[10px] text-neutral-400 uppercase tracking-wider block font-extrabold">Giá trọn gói</span>
-                    <span className="text-xl font-black text-teal-600">
+                    <span className="text-xl sm:text-2xl font-black text-[#155DFC]">
                       {pkg.price ? pkg.price.toLocaleString('vi-VN') + ' đ' : 'Miễn phí'}
                     </span>
                   </div>
-                  <div className="w-9 h-9 rounded-xl bg-neutral-50 group-hover:bg-teal-600 group-hover:text-white flex items-center justify-center transition-all text-neutral-600">
+                  <div className="w-10 h-10 rounded-2xl bg-neutral-50 group-hover:bg-[#155DFC] group-hover:text-white flex items-center justify-center transition-all text-neutral-600 shadow-2xs">
                     <ChevronRight className="w-5 h-5" />
                   </div>
                 </div>
