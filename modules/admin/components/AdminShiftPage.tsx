@@ -43,6 +43,7 @@ const ROLE_CONFIG: Record<string, { label: string; bg: string; text: string; bor
     RECEPTIONIST: { label: 'Lễ tân', bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-100' },
     LAB_STAFF: { label: 'Kỹ thuật viên XN', bg: 'bg-pink-50', text: 'text-pink-600', border: 'border-pink-100' },
     PHARMACY_STAFF: { label: 'Dược sĩ', bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-100' },
+    PHARMACIST: { label: 'Dược sĩ', bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-100' },
     CASHIER: { label: 'Thu ngân', bg: 'bg-cyan-50', text: 'text-cyan-600', border: 'border-cyan-100' },
     ADMIN: { label: 'Quản trị viên', bg: 'bg-rose-50', text: 'text-rose-600', border: 'border-rose-100' },
 };
@@ -783,7 +784,7 @@ export function AdminShiftPage() {
                                     rooms.find((r) => r.room_id === createForm.room_id)
                                 ).map((staff) => {
                                     const rKey = (staff.account?.role || '').toUpperCase().replace(/^ROLE_/, '');
-                                    const roleLabel = rKey === 'DOCTOR' ? 'Bác sĩ' : rKey === 'NURSE' ? 'Y tá' : rKey;
+                                    const roleLabel = ROLE_CONFIG[rKey]?.label || rKey;
                                     return (
                                         <option key={staff.staff_id} value={staff.staff_id}>
                                             {staff.full_name} — {roleLabel}
@@ -906,7 +907,7 @@ export function AdminShiftPage() {
                                     rooms.find((r) => r.room_id === editForm.room_id)
                                 ).map((staff) => {
                                     const rKey = (staff.account?.role || '').toUpperCase().replace(/^ROLE_/, '');
-                                    const roleLabel = rKey === 'DOCTOR' ? 'Bác sĩ' : rKey === 'NURSE' ? 'Y tá' : rKey;
+                                    const roleLabel = ROLE_CONFIG[rKey]?.label || rKey;
                                     return (
                                         <option key={staff.staff_id} value={staff.staff_id}>
                                             {staff.full_name} — {roleLabel}
