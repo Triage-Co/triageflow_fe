@@ -26,6 +26,7 @@ import {
     QrCode,
     Package,
     Sparkles,
+    Monitor,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { authService } from '@/shared/services/authService';
@@ -104,6 +105,7 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
         { label: 'Gói khám', href: '/admin/exam-packages', icon: Package },
         { label: 'Danh mục thuốc', href: '/admin/medicines', icon: Pill },
         { label: 'Cấu hình AI', href: '/admin/ai-config', icon: Sparkles },
+        { label: 'Màn hình kiosk & TV', href: '/admin/displays', icon: Monitor },
         { label: 'Phòng khám', href: '/admin/rooms', icon: Home },
         { label: 'Ca trực', href: '/admin/shift', icon: CalendarDays },
         { label: 'Người dùng', href: '/admin/users', icon: Users },
