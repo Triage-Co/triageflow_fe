@@ -2,10 +2,17 @@ export type DisplayScreenKind = 'KIOSK' | 'TV_CLINIC' | 'TV_PHARMACY' | 'TV_PAYM
 
 export type DisplayScreenStatus = 'ENABLED' | 'DISABLED';
 
+export interface DisplayScreenSpecialty {
+  specialty_id: string;
+  specialty_code: string;
+  specialty_name: string;
+}
+
 export interface DisplayScreenRoom {
   room_id: string;
   room_name: string;
   room_type?: string;
+  specialty?: DisplayScreenSpecialty | null;
 }
 
 export interface KioskScreenSettings {
