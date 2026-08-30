@@ -28,6 +28,7 @@ function unwrapPayload(value: unknown): PharmacyDisplayPayload | null {
 
 interface UsePharmacyDisplaySocketOptions {
     roomId?: string;
+    displayScreenId?: string;
 }
 
 interface UsePharmacyDisplaySocketReturn {

@@ -1,3 +1,4 @@
+import { usePharmacyCounterStore } from '@/modules/display/store/pharmacyCounterStore';
 import { useState, useEffect, useCallback } from 'react';
 import { Prescription } from '@/shared/types/prescription.types';
 import { pharmacyService } from '../services/pharmacyService';
@@ -80,24 +81,27 @@ export function usePrescriptionDetail(
         setError(null);
         setSuccessMessage(null);
         try {
-            const updated = await pharmacyService.preparePrescription(activeRx.prescription_id);
-            setCurrentPrescription(updated);
-
-            // Tự động gọi API call-next để đẩy số lên màn hình TV sảnh chờ
-            try {
-                await pharmacyService.callNextPharmacy();
-            } catch (callNextErr) {
-                console.warn('[handlePrepare] Auto callNext warning:', callNextErr);
+            const counterId = usePharmacyCounterStore.getState().display_screen_id;
+            if (!counterId) {
+                setError('Chưa chọn quầy TV nhà thuốc. Hãy chọn quầy trên thanh công cụ trước khi soạn thuốc.');
+                setActionLoading(false);
+                return;
             }
+            const updated = await pharmacyService.preparePrescription(
+                activeRx.prescription_id,
+                counterId
+            );
+            setCurrentPrescription(updated);
 
             setSuccessMessage(
                 updated.pickup_number
-                    ? `Đã xác nhận soạn xong thuốc (Số nhận: ${updated.pickup_number}). Hệ thống đã tự động gọi số lên TV sảnh chờ và gửi thông báo cho bệnh nhân.`
-                    : 'Đã xác nhận soạn xong thuốc! Hệ thống đã tự động gọi số lên TV sảnh chờ và gửi thông báo đến ứng dụng Bệnh nhân.'
+                    ? `Đã xác nhận soạn xong thuốc (Số nhận: ${updated.pickup_number}). Số đã được gọi lên TV quầy đã chọn.`
+                    : 'Đã xác nhận soạn xong thuốc! Số đã được gọi lên TV quầy đã chọn và gửi thông báo đến ứng dụng Bệnh nhân.'
             );
             onStatusChange?.(updated);
-        } catch (err: any) {
-            setError(err?.message || 'Không thể cập nhật trạng thái soạn xong');
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Không thể cập nhật trạng thái soạn xong';
+            setError(message);
         } finally {
             setActionLoading(false);
         }

@@ -79,7 +79,8 @@ export function normalizePrescription(item: any): Prescription {
         pickup_number: item.pickup_number ?? null,
         pickup_date: item.pickup_date ?? null,
         called_at: item.called_at ?? null,
-        missed_at: item.missed_at ?? null
+        missed_at: item.missed_at ?? null,
+        display_screen_id: item.display_screen_id ?? null
     };
 }
 
@@ -165,8 +166,11 @@ export const pharmacyService = {
     },
 
 
-    async preparePrescription(prescriptionId: string): Promise<Prescription> {
-        const res = await apiClient.patch<any>(`/api/prescription/${prescriptionId}/prepare`, {});
+    async preparePrescription(prescriptionId: string, displayScreenId?: string): Promise<Prescription> {
+        const res = await apiClient.patch<any>(
+            `/api/prescription/${prescriptionId}/prepare`,
+            displayScreenId ? { display_screen_id: displayScreenId } : {}
+        );
         const data: any = res?.data || res;
         return normalizePrescription(data);
     },
@@ -195,12 +199,22 @@ export const pharmacyService = {
             kind: 'pharmacy',
             room: data?.room || { room_id: roomId || '', room_name: 'Nhà thuốc' },
             calling_numbers: Array.isArray(data?.calling_numbers) ? data.calling_numbers : [],
-            ready_unshown_count: Number(data?.ready_unshown_count || 0)
+            missed_numbers: Array.isArray(data?.missed_numbers) ? data.missed_numbers : [],
+            ready_unshown_count: Number(data?.ready_unshown_count || 0),
+            removed_ids: Array.isArray(data?.removed_ids) ? data.removed_ids : undefined
         };
     },
 
-    async callNextPharmacy(roomId?: string): Promise<PharmacyDisplayPayload & { called_count?: number }> {
-        const res = await apiClient.post<any>('/api/prescription/call-next', roomId ? { room_id: roomId } : {});
+    async callNextPharmacy(options?: {
+        roomId?: string;
+        displayScreenId?: string;
+        prescriptionId?: string;
+    }): Promise<PharmacyDisplayPayload & { called_count?: number }> {
+        const body: Record<string, string> = {};
+        if (options?.roomId) body.room_id = options.roomId;
+        if (options?.displayScreenId) body.display_screen_id = options.displayScreenId;
+        if (options?.prescriptionId) body.prescription_id = options.prescriptionId;
+        const res = await apiClient.post<any>('/api/prescription/call-next', body);
         const data: any = res?.data || res;
         return data;
     },

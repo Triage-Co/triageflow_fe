@@ -156,13 +156,13 @@ export const SymptomSelectorModal: React.FC<SymptomSelectorModalProps> = ({
                     // SỬA: Truyền nguyên vẹn Object symptom thay vì chuỗi nhãn văn bản tiếng Việt
                     onClick={() => handleToggleSymptom(symptom)}
                     className={cn(
-                      "p-4 rounded-2xl border text-left flex items-start justify-between gap-3 transition-all cursor-pointer select-none",
+                      "p-4 rounded-2xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer select-none",
                       isSelected
                         ? "bg-blue-50/80 border-[#2563EB] ring-2 ring-blue-300/40 shadow-sm"
                         : "bg-white border-neutral-200/90 hover:border-blue-300 hover:bg-blue-50/30"
                     )}
                   >
-                    <div className="space-y-1 pr-2 flex-1">
+                    <div className="pr-2 flex-1 my-auto">
                       <p className={cn("text-sm font-extrabold leading-snug", isSelected ? "text-[#1E2939]" : "text-neutral-800")}>
                         {symptom.labelVn}
                       </p>
@@ -170,7 +170,7 @@ export const SymptomSelectorModal: React.FC<SymptomSelectorModalProps> = ({
 
                     <div
                       className={cn(
-                        "w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 transition-all",
+                        "w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-all",
                         isSelected
                           ? "bg-[#2563EB] text-white shadow-sm"
                           : "border-2 border-neutral-300 bg-white"

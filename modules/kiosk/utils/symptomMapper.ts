@@ -10,7 +10,7 @@ export interface SymptomItem {
 }
 
 // Key mapping table from Body Map IDs or Vietnamese Names to Dataset keys
-const PART_KEY_MAPPING: Record<string, string[]> = {
+export const PART_KEY_MAPPING: Record<string, string[]> = {
   // Head & Face
   head: ["head"],
   "Đầu": ["head"],
@@ -22,14 +22,24 @@ const PART_KEY_MAPPING: Record<string, string[]> = {
   nose: ["nose"],
   "Mũi": ["nose"],
   "oral-cavity": ["mouth"],
+  "oral cavity": ["mouth"],
+  oralCavity: ["mouth"],
   "Khoang miệng": ["mouth"],
   "Miệng": ["mouth"],
 
   // Neck & Throat
   "neck-or-throat": ["neckThroat"],
+  "neck or throat": ["neckThroat"],
+  neckOrThroat: ["neckThroat"],
+  neckThroat: ["neckThroat"],
   "Cổ / Họng": ["neckThroat"],
   "Cổ": ["neckThroat"],
+  "Họng": ["neckThroat"],
   "nape-of-neck": ["napeOfNeck", "neckThroat"],
+  "nape of neck": ["napeOfNeck", "neckThroat"],
+  "nap-of-neck": ["napeOfNeck", "neckThroat"],
+  "nap of neck": ["napeOfNeck", "neckThroat"],
+  napeOfNeck: ["napeOfNeck", "neckThroat"],
   "Gáy": ["napeOfNeck", "neckThroat"],
   "Gáy & Cổ": ["napeOfNeck", "neckThroat"],
 
@@ -40,16 +50,25 @@ const PART_KEY_MAPPING: Record<string, string[]> = {
   breast: ["breast", "chest"],
   "Bầu ngực": ["breast", "chest"],
   "upper-abdomen": ["upperAbdomen"],
+  "upper abdomen": ["upperAbdomen"],
+  upperAbdomen: ["upperAbdomen"],
   "Bụng trên": ["upperAbdomen"],
   "middle-abdomen": ["midAbdomen"],
+  "middle abdomen": ["midAbdomen"],
+  midAbdomen: ["midAbdomen"],
+  middleAbdomen: ["midAbdomen"],
   "Bụng giữa": ["midAbdomen"],
   "Bụng": ["upperAbdomen", "midAbdomen", "lowerAbdomen"],
   "Bụng & Vùng Chậu": ["midAbdomen", "lowerAbdomen"],
   "lower-abdomen": ["lowerAbdomen"],
+  "lower abdomen": ["lowerAbdomen"],
+  lowerAbdomen: ["lowerAbdomen"],
   "Bụng dưới": ["lowerAbdomen"],
 
   // Arms & Hands
   "upper-arm": ["upperArm"],
+  "upper arm": ["upperArm"],
+  upperArm: ["upperArm"],
   "Bắp tay": ["upperArm"],
   "Lưng trên & Vai": ["back", "upperArm"],
   "Cánh tay trái": ["upperArm", "forearm"],
@@ -59,6 +78,8 @@ const PART_KEY_MAPPING: Record<string, string[]> = {
   forearm: ["forearm"],
   "Cẳng tay": ["forearm"],
   elbow: ["elbow"],
+  "Khuỷu tay": ["elbow"],
+  "Khớp khuỷu": ["elbow"],
   "Cùi chỏ": ["elbow"],
   hand: ["hand"],
   "Bàn tay": ["hand"],
@@ -66,6 +87,7 @@ const PART_KEY_MAPPING: Record<string, string[]> = {
   // Genitals & Pelvis
   genitals: ["maleSpecificGenitals", "femaleGenitals"],
   "Bộ phận sinh dục": ["maleSpecificGenitals", "femaleGenitals"],
+  "Sinh dục": ["maleSpecificGenitals", "femaleGenitals"],
   "Vùng Mông": ["buttocks", "anus"],
 
   // Lower Limbs
@@ -77,8 +99,12 @@ const PART_KEY_MAPPING: Record<string, string[]> = {
   "Bắp chân phải (Sau)": ["lowerLeg"],
   knee: ["knee"],
   "Đầu gối": ["knee"],
+  "Khớp gối": ["knee"],
   "lower-leg": ["lowerLeg"],
+  "lower leg": ["lowerLeg"],
+  lowerLeg: ["lowerLeg"],
   "Cẳng chân": ["lowerLeg"],
+  "Bắp chân": ["lowerLeg"],
   foot: ["foot"],
   "Bàn chân": ["foot"],
 
@@ -87,6 +113,9 @@ const PART_KEY_MAPPING: Record<string, string[]> = {
   "Lưng": ["back"],
   "Lưng trên": ["back"],
   "lower-back": ["lowerBack"],
+  "lower back": ["lowerBack"],
+  lowerBack: ["lowerBack"],
+  "Lưng dưới": ["lowerBack"],
   "Thắt lưng": ["lowerBack"],
   "Lưng dưới & Thắt lưng": ["lowerBack"],
   buttocks: ["buttocks"],

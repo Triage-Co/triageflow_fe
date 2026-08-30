@@ -36,8 +36,9 @@ export function PharmacyQueue({
         handleMiss,
         handleRecall,
         actingId,
-        actionError
-    } = usePharmacyQueue(refreshKey, onSelectPrescription);
+        actionError,
+        scanNotice
+    } = usePharmacyQueue(refreshKey, onSelectPrescription, 'dispense');
 
     return (
         <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-3xl p-5 shadow-sm flex flex-col h-full overflow-hidden">
@@ -77,6 +78,9 @@ export function PharmacyQueue({
                 />
                 {actionError && (
                     <p className="text-[11px] font-medium text-rose-600">{actionError}</p>
+                )}
+                {scanNotice && (
+                    <p className="text-[11px] font-medium text-emerald-700">{scanNotice}</p>
                 )}
             </div>
 

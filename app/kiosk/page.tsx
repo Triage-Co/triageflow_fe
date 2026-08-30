@@ -1,5 +1,5 @@
 import React from 'react';
-import { KioskRoot } from '@/modules/kiosk/views/KioskRoot';
+import { KioskEntryClient } from '@/modules/kiosk/views/KioskEntryClient';
 
 export const metadata = {
   title: 'Kiosk - TriageFlowOPD',
@@ -17,5 +17,5 @@ export const metadata = {
 };
 
 export default function KioskPage() {
-  return <KioskRoot />;
+  return <KioskEntryClient />;
 }

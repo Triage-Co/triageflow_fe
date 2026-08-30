@@ -6,5 +6,5 @@ interface PageProps {
 
 export default async function PharmacyDisplayRoomPage({ params }: PageProps) {
     const { roomId } = await params;
-    return <PharmacyWaitingScreen roomId={roomId} />;
+    return <PharmacyWaitingScreen screenId={roomId} />;
 }
