@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     Pill,
     Plus,
@@ -12,7 +12,9 @@ import {
     Building2,
     DollarSign,
     Tag,
-    FileText
+    FileText,
+    ChevronLeft,
+    ChevronRight
 } from 'lucide-react';
 import { Medicine, CreateMedicineDto } from '@/shared/types/prescription.types';
 import { medicineService } from '../services/medicineService';
@@ -25,6 +27,8 @@ interface MedicineCatalogModalProps {
     isPage?: boolean;
 }
 
+const ITEMS_PER_PAGE = 6; // 3 cột x 2 hàng
+
 export function MedicineCatalogModal({
     isOpen = true,
     onClose,
@@ -35,6 +39,7 @@ export function MedicineCatalogModal({
     const [medicines, setMedicines] = useState<Medicine[]>([]);
     const [loading, setLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
     const [error, setError] = useState<string | null>(null);
     const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -60,6 +65,7 @@ export function MedicineCatalogModal({
                 is_active: true
             });
             setMedicines(list);
+            setCurrentPage(1);
         } catch (err: any) {
             setError(err?.message || 'Không thể tải danh sách thuốc');
         } finally {
@@ -77,6 +83,13 @@ export function MedicineCatalogModal({
         e.preventDefault();
         fetchMedicines(searchQuery);
     };
+
+    const totalPages = Math.max(1, Math.ceil(medicines.length / ITEMS_PER_PAGE));
+
+    const paginatedMedicines = useMemo(() => {
+        const start = (currentPage - 1) * ITEMS_PER_PAGE;
+        return medicines.slice(start, start + ITEMS_PER_PAGE);
+    }, [medicines, currentPage]);
 
     const handleCreateSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -232,46 +245,114 @@ export function MedicineCatalogModal({
                                 </p>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                                {medicines.map((med) => (
-                                    <div
-                                        key={med.medicine_id}
-                                        onClick={() => onSelectMedicine && onSelectMedicine(med)}
-                                        className={`p-5 bg-white dark:bg-neutral-800/60 rounded-3xl border border-neutral-200/80 dark:border-neutral-700/80 hover:border-indigo-500 hover:shadow-md transition-all space-y-3 ${
-                                            onSelectMedicine ? 'cursor-pointer' : ''
-                                        }`}
-                                    >
-                                        <div className="flex items-start justify-between gap-2">
-                                            <div>
-                                                <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 uppercase font-mono">
-                                                    {med.medicine_code}
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                                    {paginatedMedicines.map((med) => (
+                                        <div
+                                            key={med.medicine_id}
+                                            onClick={() => onSelectMedicine && onSelectMedicine(med)}
+                                            className={`p-5 bg-white dark:bg-neutral-800/60 rounded-3xl border border-neutral-200/80 dark:border-neutral-700/80 hover:border-indigo-500 hover:shadow-md transition-all space-y-3 ${
+                                                onSelectMedicine ? 'cursor-pointer' : ''
+                                            }`}
+                                        >
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div>
+                                                    <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 uppercase font-mono">
+                                                        {med.medicine_code}
+                                                    </span>
+                                                    <h4 className="text-base font-extrabold text-neutral-900 dark:text-white mt-2 leading-tight">
+                                                        {med.medicine_name}
+                                                    </h4>
+                                                </div>
+                                                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-1 rounded-xl shrink-0">
+                                                    {med.unit_price?.toLocaleString('vi-VN')} đ / {med.unit}
                                                 </span>
-                                                <h4 className="text-base font-extrabold text-neutral-900 dark:text-white mt-2 leading-tight">
-                                                    {med.medicine_name}
-                                                </h4>
                                             </div>
-                                            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-1 rounded-xl shrink-0">
-                                                {med.unit_price?.toLocaleString('vi-VN')} đ / {med.unit}
-                                            </span>
-                                        </div>
 
-                                        <div className="space-y-1.5 text-xs text-neutral-600 dark:text-neutral-300 font-medium pt-1">
-                                            <p className="flex items-center gap-1.5">
-                                                <Tag className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                                                <span>Hoạt chất: <strong>{med.active_ingredient}</strong></span>
-                                            </p>
-                                            <p className="flex items-center gap-1.5">
-                                                <Building2 className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                                                <span>Đường dùng: {med.usage_route} {med.manufacturer ? `· NSX: ${med.manufacturer}` : ''}</span>
-                                            </p>
-                                            {med.description && (
-                                                <p className="text-[11px] text-neutral-400 line-clamp-2 mt-2 pt-2 border-t border-neutral-100 dark:border-neutral-700/50">
-                                                    {med.description}
+                                            <div className="space-y-1.5 text-xs text-neutral-600 dark:text-neutral-300 font-medium pt-1">
+                                                <p className="flex items-center gap-1.5">
+                                                    <Tag className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                                                    <span>Hoạt chất: <strong>{med.active_ingredient}</strong></span>
                                                 </p>
-                                            )}
+                                                <p className="flex items-center gap-1.5">
+                                                    <Building2 className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                                                    <span>Đường dùng: {med.usage_route} {med.manufacturer ? `· NSX: ${med.manufacturer}` : ''}</span>
+                                                </p>
+                                                {med.description && (
+                                                    <p className="text-[11px] text-neutral-400 line-clamp-2 mt-2 pt-2 border-t border-neutral-100 dark:border-neutral-700/50">
+                                                        {med.description}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Pagination Controls */}
+                                {totalPages > 1 && (
+                                    <div className="pt-4 border-t border-neutral-100 dark:border-neutral-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+                                        <p className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                                            Hiển thị <span className="font-bold text-neutral-800 dark:text-neutral-200">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span> - <span className="font-bold text-neutral-800 dark:text-neutral-200">{Math.min(currentPage * ITEMS_PER_PAGE, medicines.length)}</span> trong tổng số <span className="font-bold text-neutral-800 dark:text-neutral-200">{medicines.length}</span> loại thuốc
+                                        </p>
+
+                                        <div className="flex items-center gap-1.5">
+                                            <button
+                                                type="button"
+                                                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                                                disabled={currentPage === 1}
+                                                className="p-2 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                                title="Trang trước"
+                                            >
+                                                <ChevronLeft className="w-4 h-4" />
+                                            </button>
+
+                                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => {
+                                                if (
+                                                    pageNum === 1 ||
+                                                    pageNum === totalPages ||
+                                                    (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
+                                                ) {
+                                                    return (
+                                                        <button
+                                                            key={pageNum}
+                                                            type="button"
+                                                            onClick={() => setCurrentPage(pageNum)}
+                                                            className={cn(
+                                                                "w-8 h-8 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                                                                currentPage === pageNum
+                                                                    ? "bg-indigo-600 text-white shadow-xs"
+                                                                    : "bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700"
+                                                            )}
+                                                        >
+                                                            {pageNum}
+                                                        </button>
+                                                    );
+                                                }
+                                                if (
+                                                    (pageNum === 2 && currentPage > 3) ||
+                                                    (pageNum === totalPages - 1 && currentPage < totalPages - 2)
+                                                ) {
+                                                    return (
+                                                        <span key={pageNum} className="px-1 text-xs text-neutral-400">
+                                                            ...
+                                                        </span>
+                                                    );
+                                                }
+                                                return null;
+                                            })}
+
+                                            <button
+                                                type="button"
+                                                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                                                disabled={currentPage === totalPages}
+                                                className="p-2 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                                title="Trang sau"
+                                            >
+                                                <ChevronRight className="w-4 h-4" />
+                                            </button>
                                         </div>
                                     </div>
-                                ))}
+                                )}
                             </div>
                         )}
                     </div>

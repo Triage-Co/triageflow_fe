@@ -53,6 +53,8 @@ export interface UseRoomQueueReturn {
     missQueue: (queueId: string) => Promise<void>;
     recall: (queueId: string) => Promise<void>;
     override: (queueId: string, body: QueueOverrideBody) => Promise<void>;
+    scanTicket: (dto: { ticket_code?: string; queue_id?: string }) => Promise<any>;
+    startServing: (queueId?: string) => Promise<any>;
     isActing: boolean;
 }
 
@@ -347,6 +349,34 @@ export function useRoomQueue({
         [accessToken, withActing, refresh],
     );
 
+    const scanTicket = useCallback(
+        async (dto: { ticket_code?: string; queue_id?: string }) => {
+            if (!roomId) throw new Error('Chưa chọn phòng khám');
+            return withActing(async () => {
+                const res = await queueService.scanTicket(
+                    {
+                        ...dto,
+                        room_id: roomId,
+                        staff_id: resolvedStaffId,
+                    },
+                    accessToken || undefined,
+                );
+                await refresh();
+                return res;
+            });
+        },
+        [roomId, resolvedStaffId, accessToken, withActing, refresh],
+    );
+
+    const startServing = useCallback(
+        async (queueId?: string) => {
+            const targetQueueId = queueId || queue?.serving?.queue_id;
+            if (!targetQueueId) throw new Error('Không có lượt chờ để bắt đầu khám');
+            return scanTicket({ queue_id: targetQueueId });
+        },
+        [queue?.serving?.queue_id, scanTicket],
+    );
+
     return {
         queue,
         isLoading,
@@ -364,6 +394,8 @@ export function useRoomQueue({
         missQueue,
         recall,
         override,
+        scanTicket,
+        startServing,
         isActing,
     };
 }

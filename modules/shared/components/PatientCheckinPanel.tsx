@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { pharmacyService } from '@/modules/ancillary/services/pharmacyService';
+import { StaffQRScanModal } from '@/shared/components/modals/StaffQRScanModal';
 
 interface MedicineDetailItem {
     name: string;
@@ -63,6 +64,7 @@ export function PatientCheckinPanel({
 }: PatientCheckinPanelProps) {
     const [searchCode, setSearchCode] = useState('');
     const [isScanning, setIsScanning] = useState(false);
+    const [isCameraScanOpen, setIsCameraScanOpen] = useState(false);
     const [selectedPatientForModal, setSelectedPatientForModal] = useState<PatientRecord | null>(null);
     const [toastMessage, setToastMessage] = useState<string | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -108,17 +110,18 @@ export function PatientCheckinPanel({
         };
     };
 
-    const handleStartScan = async () => {
-        if (!searchCode.trim()) {
-            setErrorMessage('Vui lòng nhập mã đơn thuốc (ví dụ: RX-...) vào ô tìm kiếm bên dưới để tra cứu.');
-            return;
-        }
-        await handleManualSearch();
-    };
-
-    const handleManualSearch = async () => {
-        const query = searchCode.trim();
+    const handleProcessCode = async (rawCode: string) => {
+        let query = (rawCode || '').trim();
         if (!query) return;
+
+        if (query.startsWith('{')) {
+            try {
+                const parsed = JSON.parse(query);
+                query = parsed.code || parsed.prescription_code || query;
+            } catch {
+                // Ignore JSON parse error
+            }
+        }
 
         setIsScanning(true);
         setErrorMessage(null);
@@ -127,9 +130,11 @@ export function PatientCheckinPanel({
             if (rx && (rx.prescription_code || rx.prescription_id)) {
                 const record = mapPrescriptionToRecord(rx, 0);
                 setSelectedPatientForModal(record);
+                setSearchCode(query);
+                return rx;
             } else {
                 setSelectedPatientForModal(null);
-                setErrorMessage(`Không tìm thấy đơn thuốc tương ứng với mã "${query}"`);
+                throw new Error(`Không tìm thấy đơn thuốc tương ứng với mã "${query}"`);
             }
         } catch (e: any) {
             console.error('[PatientCheckinPanel] Scan error:', e);
@@ -140,8 +145,18 @@ export function PatientCheckinPanel({
                 `Không tìm thấy đơn thuốc hoặc mã "${query}" không hợp lệ.`;
             setErrorMessage(msg);
             setSelectedPatientForModal(null);
+            throw e;
         } finally {
             setIsScanning(false);
+        }
+    };
+
+    const handleManualSearch = async () => {
+        if (!searchCode.trim()) return;
+        try {
+            await handleProcessCode(searchCode);
+        } catch {
+            // Handled inside handleProcessCode
         }
     };
 
@@ -183,26 +198,29 @@ export function PatientCheckinPanel({
                     {/* Top Left Card: QR Scanner Container */}
                     <div className="bg-[#9382F6] rounded-[28px] p-6 text-white flex flex-col items-center justify-center text-center shadow-lg shadow-purple-500/20 space-y-5">
                         {/* White Dotted Card holding QR */}
-                        <div className="bg-white rounded-[22px] p-5 text-slate-800 flex flex-col items-center justify-center border-2 border-dashed border-purple-200 shadow-md w-48 h-48 relative overflow-hidden shrink-0">
+                        <div
+                            onClick={() => setIsCameraScanOpen(true)}
+                            className="bg-white rounded-[22px] p-5 text-slate-800 flex flex-col items-center justify-center border-2 border-dashed border-purple-200 shadow-md w-48 h-48 relative overflow-hidden shrink-0 cursor-pointer hover:border-purple-400 transition"
+                        >
                             {isScanning && (
                                 <div className="absolute inset-x-0 h-1 bg-[#7C6CF5] shadow-[0_0_15px_#7C6CF5] animate-bounce top-1/3 z-20" />
                             )}
                             <QrCode className={`w-24 h-24 text-[#7C6CF5] ${isScanning ? 'animate-pulse' : ''}`} />
                             <span className="text-xs font-bold text-slate-500 mt-2">
-                                {isScanning ? 'Đang đọc mã QR...' : 'Sẵn sàng quét'}
+                                {isScanning ? 'Đang đọc mã QR...' : 'Bấm để mở Camera'}
                             </span>
                         </div>
 
                         {/* Scan Button */}
                         <button
-                            onClick={handleStartScan}
+                            onClick={() => setIsCameraScanOpen(true)}
                             disabled={isScanning}
                             className="w-full bg-[#6B57E6] hover:bg-[#5b47d6] text-white py-3.5 rounded-[16px] font-bold text-xs shadow-md transition active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                         >
                             {isScanning ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
                             ) : (
-                                <span>Bắt Đầu Quét QR</span>
+                                <span>Mở Camera Quét Mã QR</span>
                             )}
                         </button>
                     </div>
@@ -386,6 +404,18 @@ export function PatientCheckinPanel({
                     )}
                 </div>
             </div>
+
+            {/* Modal Quét mã QR */}
+            <StaffQRScanModal
+                isOpen={isCameraScanOpen}
+                onClose={() => setIsCameraScanOpen(false)}
+                title="Quét mã QR đơn thuốc"
+                subtitle="Tiếp nhận đơn thuốc tại quầy"
+                cameraOnly={true}
+                onScanSuccess={async (scannedCode) => {
+                    return handleProcessCode(scannedCode);
+                }}
+            />
         </div>
     );
 }

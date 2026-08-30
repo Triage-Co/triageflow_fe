@@ -42,7 +42,8 @@ export interface ServingStep {
 export interface ServingQueueItem {
     queue_id: string;
     queue_number: string;
-    serving_started_at: string;
+    status?: string;
+    serving_started_at?: string | null;
     patient: ServingPatient;
     step: ServingStep;
     service_order: any;
@@ -80,9 +81,10 @@ export interface QueuePatientItem {
     duration_minutes?: number;
     refusal_reason?: string | null;
     status?: string;
+    initialStatus?: string;
     
     // Local UI overrides/states
-    localStatus?: 'WAITING' | 'SERVING' | 'MISSING' | 'COMPLETED';
+    localStatus?: 'WAITING' | 'SERVING' | 'CALLED' | 'MISSING' | 'COMPLETED';
     resultValue?: string;
     resultNotes?: string;
     tubeType?: string;

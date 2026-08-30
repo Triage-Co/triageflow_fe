@@ -1,12 +1,13 @@
 'use client';
 
-import React from 'react';
-import { PhoneCall, Pill, RefreshCw } from 'lucide-react';
+import React, { useState } from 'react';
+import { Pill, RefreshCw } from 'lucide-react';
 import { Prescription } from '@/shared/types/prescription.types';
 import { usePharmacyQueue } from '../../hooks/usePharmacyQueue';
 import { QueueSearchBar } from './QueueSearchBar';
 import { QueueFilterTabs } from './QueueFilterTabs';
 import { QueueItemCard } from './QueueItemCard';
+import { StaffQRScanModal } from '@/shared/components/modals/StaffQRScanModal';
 
 interface PharmacyQueueProps {
     onSelectPrescription: (prescription: Prescription) => void;
@@ -19,6 +20,7 @@ export function PharmacyQueue({
     selectedPrescriptionId,
     refreshKey = 0
 }: PharmacyQueueProps) {
+    const [isScanModalOpen, setIsScanModalOpen] = useState(false);
     const {
         selectedDate,
         setSelectedDate,
@@ -29,18 +31,11 @@ export function PharmacyQueue({
         setActiveStatus,
         searchQuery,
         setSearchQuery,
-        scanInput,
-        setScanInput,
-        scanning,
-        scanError,
         fetchQueue,
-        handleScanSubmit,
-        readyUnshownCount,
-        handleCallNext,
+        handleScanCode,
         handleMiss,
         handleRecall,
         actingId,
-        callNextLoading,
         actionError
     } = usePharmacyQueue(refreshKey, onSelectPrescription);
 
@@ -61,29 +56,16 @@ export function PharmacyQueue({
                         </p>
                     </div>
                 </div>
-                <button
-                    type="button"
-                    onClick={() => void handleCallNext()}
-                    disabled={callNextLoading || readyUnshownCount === 0}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-[11px] font-black shadow-sm cursor-pointer"
-                >
-                    {callNextLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <PhoneCall className="w-3.5 h-3.5" />}
-                    Call next{readyUnshownCount > 0 ? ` (${readyUnshownCount})` : ''}
-                </button>
             </div>
 
-            {/* Search & Scan Controls */}
+            {/* Search & Filter Controls */}
             <div className="my-3 space-y-3 shrink-0">
                 <QueueSearchBar
                     selectedDate={selectedDate}
                     onDateChange={setSelectedDate}
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
-                    scanInput={scanInput}
-                    onScanInputChange={setScanInput}
-                    onScanSubmit={handleScanSubmit}
-                    scanning={scanning}
-                    scanError={scanError}
+                    onOpenScanModal={() => setIsScanModalOpen(true)}
                     loading={loading}
                     onRefresh={() => fetchQueue(false)}
                 />
@@ -124,6 +106,18 @@ export function PharmacyQueue({
                     ))
                 )}
             </div>
+
+            {/* Modal Quét mã QR */}
+            <StaffQRScanModal
+                isOpen={isScanModalOpen}
+                onClose={() => setIsScanModalOpen(false)}
+                title="Quét mã QR đơn thuốc"
+                subtitle="Quầy cấp phát thuốc"
+                cameraOnly={true}
+                onScanSuccess={async (scannedCode) => {
+                    return handleScanCode(scannedCode);
+                }}
+            />
         </div>
     );
 }

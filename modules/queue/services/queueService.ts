@@ -7,6 +7,7 @@ import type {
     QueueRefuseBody,
     QueueTransferBody,
     RoomQueueData,
+    ScanQueueDto,
     Serving,
 } from '../types/queue.types';
 import { normalizeQueueUpdatePayload } from '../utils/normalizeQueueUpdate';
@@ -15,7 +16,7 @@ import {
     normalizeStaffRoomQueue,
 } from '../utils/normalizeStaffRoomQueue';
 
-export type { CallNextResponse, CallPatientDto, CallNextRequestDto };
+export type { CallNextResponse, CallPatientDto, CallNextRequestDto, ScanQueueDto };
 
 function authHeaders(token?: string): Record<string, string> | undefined {
     if (!token) return undefined;
@@ -79,6 +80,17 @@ export const queueService = {
             staffQueue: staff,
             serving: servingFromRaw,
         };
+    },
+
+    /**
+     * POST /api/queue/scan — Quét mã QR hoặc bắt đầu khám thủ công (CALLED -> SERVING hoặc MISSING -> QUEUED)
+     */
+    async scanTicket(dto: ScanQueueDto, token?: string) {
+        const res = await apiClient.post<any>('/api/queue/scan', dto, {
+            headers: authHeaders(token),
+            suppressLogError: true,
+        });
+        return unwrapData(res) ?? res;
     },
 
     /**

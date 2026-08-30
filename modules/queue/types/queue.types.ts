@@ -134,9 +134,17 @@ export interface ServingServiceOrder {
     details: ServingServiceOrderDetail[];
 }
 
+export interface ScanQueueDto {
+    ticket_code?: string;
+    queue_id?: string;
+    room_id: string;
+    staff_id?: string;
+}
+
 export interface Serving {
     queue_id: string;
     queue_number: string;
+    status?: QueueStatus;
     serving_started_at: string | null;
     patient: ServingPatient | null;
     step: ServingStep | null;
