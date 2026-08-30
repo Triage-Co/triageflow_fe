@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import { useKioskStore } from '../store/kioskStore';
 import { useKioskConfigStore } from '../store/kioskConfigStore';
+import { displayScreenService } from '@/modules/display/services/displayScreenService';
+import { DisplaySiblingManager } from '@/modules/display/components/DisplaySiblingManager';
 import { FloorMap } from '@/modules/navigation/components/FloorMap';
 import { useBuildingMap } from '@/modules/navigation/hooks/useWayfinding';
 import { RoomPickerModal } from '../modals/RoomPickerModal';
@@ -10,19 +12,12 @@ import {
   ArrowLeft,
   MapPin,
   Save,
-  RotateCcw,
   Search,
   Monitor,
-  CheckCircle2,
-  Layers,
   Sparkles,
   Settings,
   ShieldCheck,
-  KeyRound,
   ChevronRight,
-  ToggleLeft,
-  ToggleRight,
-  Info,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -32,26 +27,25 @@ export const KioskSettingsView: React.FC = () => {
 
   // Active Admin Sub-view: 'menu' | 'basic' | 'location'
   const [adminTab, setAdminTab] = useState<'menu' | 'basic' | 'location'>('menu');
+  const [siblingOpen, setSiblingOpen] = useState(false);
 
   // Kiosk Config Store
   const kioskName = useKioskConfigStore((state) => state.kioskName);
   const kioskId = useKioskConfigStore((state) => state.kioskId);
+  const displayScreenId = useKioskConfigStore((state) => state.display_screen_id);
   const currentStartRoomId = useKioskConfigStore((state) => state.startRoomId);
   const currentStartRoomLabel = useKioskConfigStore((state) => state.startRoomLabel);
   const currentFloorNumber = useKioskConfigStore((state) => state.floorNumber);
-  const adminPin = useKioskConfigStore((state) => state.adminPin);
   const enableOtp = useKioskConfigStore((state) => state.enableOtp);
 
   const setKioskLocation = useKioskConfigStore((state) => state.setKioskLocation);
   const setKioskName = useKioskConfigStore((state) => state.setKioskName);
-  const setAdminPin = useKioskConfigStore((state) => state.setAdminPin);
   const setEnableOtp = useKioskConfigStore((state) => state.setEnableOtp);
-  const resetConfig = useKioskConfigStore((state) => state.resetConfig);
+  const hydrateFromScreen = useKioskConfigStore((state) => state.hydrateFromScreen);
 
   // Local state for Basic Settings
   const [localEnableOtp, setLocalEnableOtp] = useState<boolean>(enableOtp);
   const [editingName, setEditingName] = useState(kioskName);
-  const [editingPin, setEditingPin] = useState(adminPin);
 
   // Local state for Location Setup
   const [selectedFloor, setSelectedFloor] = useState<number>(currentFloorNumber || 1);
@@ -94,34 +88,70 @@ export const KioskSettingsView: React.FC = () => {
   };
 
   // Save Basic Settings
-  const handleSaveBasicSettings = () => {
+  const handleSaveBasicSettings = async () => {
     if (!editingName.trim()) {
       showToast('Tên Kiosk không được để trống!', 'error');
       return;
     }
-    if (!editingPin.trim() || editingPin.length < 4) {
-      showToast('Mã PIN quản trị phải có ít nhất 4 ký tự!', 'error');
+    if (!displayScreenId) {
+      showToast('Chưa gắn màn hình kiosk. Mở lại từ danh sách kiosk.', 'error');
       return;
     }
 
-    setKioskName(editingName.trim());
-    setAdminPin(editingPin.trim());
-    setEnableOtp(localEnableOtp);
-
-    showToast('Lưu Cài đặt cơ bản thành công!', 'success');
-    setAdminTab('menu');
+    try {
+      const updated = await displayScreenService.update(displayScreenId, {
+        name: editingName.trim(),
+        settings: { enable_otp: localEnableOtp },
+      });
+      setKioskName(editingName.trim());
+      setEnableOtp(localEnableOtp);
+      hydrateFromScreen(updated);
+      showToast('Lưu Cài đặt cơ bản thành công!', 'success');
+      setAdminTab('menu');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Không lưu được cài đặt', 'error');
+    }
   };
 
-  // Save Location Settings
-  const handleSaveLocationConfig = () => {
+  const handleSaveLocationConfig = async () => {
     if (!selectedRoom.id) {
       showToast('Vui lòng chọn vị trí phòng/sảnh cho Kiosk!', 'error');
       return;
     }
+    if (!displayScreenId) {
+      showToast('Chưa gắn màn hình kiosk. Mở lại từ danh sách kiosk.', 'error');
+      return;
+    }
 
-    setKioskLocation(selectedRoom, kioskName);
-    showToast('Lưu vị trí Kiosk thành công!', 'success');
-    setAdminTab('menu');
+    try {
+      let updated;
+      try {
+        updated = await displayScreenService.update(displayScreenId, {
+          room_id: selectedRoom.id,
+          settings: {
+            floor_number: selectedRoom.floorNumber,
+            start_room_code: selectedRoom.roomCode,
+            start_room_label: selectedRoom.roomLabel,
+            start_room_id: selectedRoom.id,
+          },
+        });
+      } catch {
+        updated = await displayScreenService.update(displayScreenId, {
+          settings: {
+            floor_number: selectedRoom.floorNumber,
+            start_room_code: selectedRoom.roomCode,
+            start_room_label: selectedRoom.roomLabel,
+            start_room_id: selectedRoom.id,
+          },
+        });
+      }
+      setKioskLocation(selectedRoom, kioskName);
+      hydrateFromScreen(updated);
+      showToast('Lưu vị trí Kiosk thành công!', 'success');
+      setAdminTab('menu');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Không lưu được vị trí', 'error');
+    }
   };
 
   // ==========================================
@@ -162,7 +192,6 @@ export const KioskSettingsView: React.FC = () => {
             onClick={() => {
               setLocalEnableOtp(enableOtp);
               setEditingName(kioskName);
-              setEditingPin(adminPin);
               setAdminTab('basic');
             }}
             className="group relative bg-white hover:bg-gradient-to-br hover:from-white hover:to-blue-50/40 rounded-[32px] p-7 sm:p-8 border border-neutral-100/90 hover:border-blue-300 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col justify-between text-left cursor-pointer active:scale-[0.98] min-h-[260px]"
@@ -182,7 +211,7 @@ export const KioskSettingsView: React.FC = () => {
                   Cài đặt cơ bản
                 </h3>
                 <p className="text-xs sm:text-sm text-neutral-500 font-medium leading-relaxed mt-1">
-                  Bật/tắt tính năng xác thực OTP, đổi tên Kiosk và cấu hình mã PIN quản trị viên.
+                  Bật/tắt tính năng xác thực OTP và đổi tên Kiosk. PIN toàn hệ thống đổi ở trang Admin.
                 </p>
               </div>
             </div>
@@ -236,9 +265,26 @@ export const KioskSettingsView: React.FC = () => {
         </div>
 
         {/* Footer Info */}
-        <div className="text-center text-xs font-semibold text-neutral-400 pb-2">
+        <div className="text-center text-xs font-semibold text-neutral-400 pb-2 flex flex-col items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSiblingOpen(true)}
+            className="px-4 py-2 rounded-xl bg-white border border-neutral-200 text-xs font-bold text-neutral-700 cursor-pointer"
+          >
+            Quản lý các kiosk khác
+          </button>
           Hệ thống Quản trị Kiosk TriageFlow • Thiết bị: {kioskId}
         </div>
+        {siblingOpen && (
+          <DisplaySiblingManager
+            kind="KIOSK"
+            currentScreenId={displayScreenId ?? undefined}
+            onClose={() => setSiblingOpen(false)}
+            onUpdated={(screen) => {
+              if (screen.display_screen_id === displayScreenId) hydrateFromScreen(screen);
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -329,23 +375,6 @@ export const KioskSettingsView: React.FC = () => {
               value={editingName}
               onChange={(e) => setEditingName(e.target.value)}
               placeholder="VD: Kiosk Sảnh Tiếp Đón A"
-              className="w-full px-4 py-3 bg-neutral-50 rounded-2xl border border-neutral-200 text-sm font-bold text-neutral-800 focus:outline-none focus:ring-2 focus:ring-[#155DFC] focus:bg-white transition-all"
-            />
-          </div>
-
-          {/* Item 3: Mã PIN Quản trị Kiosk */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-black text-neutral-600 uppercase tracking-wider flex items-center gap-1.5">
-                <KeyRound className="w-3.5 h-3.5 text-neutral-500" /> Mã PIN quản trị Kiosk
-              </label>
-              <span className="text-[11px] text-neutral-400 font-semibold">Dùng khi bấm 5 lần để vào cài đặt</span>
-            </div>
-            <input
-              type="text"
-              value={editingPin}
-              onChange={(e) => setEditingPin(e.target.value)}
-              placeholder="Nhập mã PIN (VD: 123456)"
               className="w-full px-4 py-3 bg-neutral-50 rounded-2xl border border-neutral-200 text-sm font-bold text-neutral-800 focus:outline-none focus:ring-2 focus:ring-[#155DFC] focus:bg-white transition-all"
             />
           </div>
