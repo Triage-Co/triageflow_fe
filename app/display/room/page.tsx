@@ -1,18 +1,13 @@
-import React from 'react';
-import { RoomWaitingScreen } from '@/modules/queue/components/RoomWaitingScreen';
-import { RoomSelector } from '@/modules/queue/components/RoomSelector';
+'use client';
 
-interface PageProps {
-    searchParams: Promise<{ roomId?: string; staffId?: string }>;
+import { DisplayScreenSelector } from '@/modules/display/components/DisplayScreenSelector';
+
+export default function RoomDisplayPage() {
+  return (
+    <DisplayScreenSelector
+      kind="TV_CLINIC"
+      title="Chọn TV phòng khám"
+      emptyHint="Chưa có TV phòng khám. Mở /display/room/{roomUuid} lần đầu sẽ tự tạo, hoặc chạm 5 lần để thêm."
+    />
+  );
 }
-
-export default async function RoomDisplayPage({ searchParams }: PageProps) {
-    const params = await searchParams;
-
-    if (params?.roomId) {
-        return <RoomWaitingScreen roomId={params.roomId} staffId={params.staffId} />;
-    }
-
-    return <RoomSelector />;
-}
-

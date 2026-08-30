@@ -44,11 +44,23 @@ export function RoomSelector() {
             .finally(() => setLoading(false));
     }, []);
 
-    const handleSelectRoom = (room: BackendRoom) => {
-        localStorage.setItem('tv_display_last_room_id', room.room_id);
+    const handleSelectRoom = async (room: BackendRoom) => {
         const isPharmacy = (room.room_type || '').toUpperCase() === 'PHARMACY';
-        localStorage.setItem('tv_display_last_kind', isPharmacy ? 'pharmacy' : 'clinic');
-        router.push(isPharmacy ? `/display/pharmacy/${room.room_id}` : `/display/room/${room.room_id}`);
+        if (isPharmacy) {
+            router.push('/display/pharmacy');
+            return;
+        }
+        try {
+            const { displayScreenService } = await import(
+                '@/modules/display/services/displayScreenService'
+            );
+            const screen = await displayScreenService.findOrCreateClinic(room.room_id);
+            localStorage.setItem('tv_display_last_room_id', screen.display_screen_id);
+            localStorage.setItem('tv_display_last_kind', 'clinic');
+            router.push(`/display/room/${screen.display_screen_id}`);
+        } catch {
+            router.push(`/display/room/${room.room_id}`);
+        }
     };
 
     const handleRejoinLastRoom = () => {

@@ -23,6 +23,7 @@ interface RoomWaitingScreenProps {
   roomId?: string;
   /** staff_id of the doctor assigned to this room — required for socket room join */
   staffId?: string;
+  onHeaderTap?: () => void;
 }
 
 const UI_LOG = "[TV Display][UI]";
@@ -30,6 +31,7 @@ const UI_LOG = "[TV Display][UI]";
 export function RoomWaitingScreen({
   roomId: initialRoomId,
   staffId: initialStaffId,
+  onHeaderTap,
 }: RoomWaitingScreenProps) {
   const authUser = useAuthStore((s) => s.user);
 
@@ -347,7 +349,11 @@ export function RoomWaitingScreen({
       </div>
 
       {/* ── 1. HEADER BANNER ── */}
-      <div className="shrink-0 bg-gradient-to-r from-[#6997E5] via-[#7AA6F0] to-[#6997E5] text-white px-6 sm:px-8 py-3 flex items-center justify-between shadow-md">
+      <div
+        className="shrink-0 bg-gradient-to-r from-[#6997E5] via-[#7AA6F0] to-[#6997E5] text-white px-6 sm:px-8 py-3 flex items-center justify-between shadow-md"
+        onClick={onHeaderTap}
+        title={onHeaderTap ? "Chạm 5 lần để cấu hình TV" : undefined}
+      >
         {/* Bên trái: Tên phòng */}
         <div className="text-left flex-1 min-w-0">
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight drop-shadow-sm leading-none uppercase">
