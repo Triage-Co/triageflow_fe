@@ -47,7 +47,6 @@ import type {
 import type { LngLat } from '@/modules/admin/utils/mapEditorGeometry';
 import type { HeatmapRoom } from '@/modules/admin/hooks/useQueueHeatmap';
 
-const EDITABLE_NODE_TYPES = new Set(['CORRIDOR', 'JUNCTION']);
 
 interface BuildingMapCanvasProps {
   floorData: FloorData3D;
@@ -248,6 +247,8 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   const onSelectEditableNodeRef = useRef(onSelectEditableNode);
   const onPlaceNodeRef = useRef(onPlaceNode);
   const selectedEditableNodeIdRef = useRef(selectedEditableNodeId);
+  const apiFloorRef = useRef(apiFloor);
+  const pendingAddsRef = useRef(pendingAdds);
 
   const debugStepsRef = useRef(debugSteps);
   const showNodesRef = useRef(showNodes);
@@ -279,6 +280,8 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   onSelectEditableNodeRef.current = onSelectEditableNode;
   onPlaceNodeRef.current = onPlaceNode;
   selectedEditableNodeIdRef.current = selectedEditableNodeId;
+  apiFloorRef.current = apiFloor;
+  pendingAddsRef.current = pendingAdds;
   topDownRef.current = topDown;
   geometryEditModeRef.current = geometryEditMode;
   onEditorPointerDownRef.current = onEditorPointerDown;
@@ -496,9 +499,11 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
 
         if (
           child instanceof THREE.Mesh &&
-          EDITABLE_NODE_TYPES.has(child.userData?.nodeType || '')
+          child.userData?.type === 'NODE' &&
+          !child.userData?.hitHelper
         ) {
           const mat = child.material as THREE.MeshStandardMaterial;
+          if (!mat?.color || !('emissive' in mat)) return;
           const original = child.userData.originalColor ?? 0x6366f1;
           if (selectedEditableNodeId && id === selectedEditableNodeId) {
             mat.color.set('#ec4899');
@@ -574,6 +579,27 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
     }
   }, [topDown, floorData.bounds]);
 
+  useEffect(() => {
+    const controls = controlsRef.current;
+    if (!controls) return;
+    if (topDown || geometryEditMode) {
+      controls.mouseButtons.LEFT = THREE.MOUSE.PAN;
+      controls.mouseButtons.RIGHT = THREE.MOUSE.PAN;
+      return;
+    }
+    if (nodeEditMode) {
+      // Left-drag pans; left-click selects. Right-drag still orbits.
+      controls.mouseButtons.LEFT = THREE.MOUSE.PAN;
+      controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
+      controls.enableRotate = true;
+      controls.enablePan = true;
+      return;
+    }
+    controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
+    controls.mouseButtons.RIGHT = THREE.MOUSE.PAN;
+    controls.enableRotate = true;
+  }, [nodeEditMode, geometryEditMode, topDown]);
+
   // Rebuild geometry editor overlay
   useEffect(() => {
     const group = editorOverlayRef.current;
@@ -634,14 +660,15 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
 
     const group = new THREE.Group();
     group.name = 'pendingAdds';
-    const geo = new THREE.SphereGeometry(0.32, 14, 14);
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x22c55e,
-      emissive: 0x16a34a,
-      emissiveIntensity: 0.7,
-    });
+    const geo = new THREE.SphereGeometry(0.4, 14, 14);
 
     pendingAdds.forEach((p) => {
+      const selected = p.tempId === selectedEditableNodeId;
+      const mat = new THREE.MeshStandardMaterial({
+        color: selected ? 0xec4899 : 0x22c55e,
+        emissive: selected ? 0xdb2777 : 0x16a34a,
+        emissiveIntensity: selected ? 0.9 : 0.7,
+      });
       const { x, z } = lngLatToLocal(
         p.coords[0],
         p.coords[1],
@@ -650,13 +677,23 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       );
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(x, 0.35, z);
-      mesh.userData = { tempId: p.tempId, type: 'PENDING_NODE' };
+      mesh.userData = {
+        tempId: p.tempId,
+        type: 'PENDING_NODE',
+        pickable: true,
+        editable: true,
+      };
       group.add(mesh);
     });
 
     scene.add(group);
     pendingPreviewRef.current = group;
-  }, [pendingAdds, floorData.centerShiftX, floorData.centerShiftZ]);
+  }, [
+    pendingAdds,
+    selectedEditableNodeId,
+    floorData.centerShiftX,
+    floorData.centerShiftZ,
+  ]);
 
   useEffect(() => {
     const groups = debugGroupsRef.current;
@@ -709,6 +746,24 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
     nodesGroup.visible = showNodesRef.current || nodeEditModeRef.current;
     scene.add(nodesGroup);
     nodesGroupRef.current = nodesGroup;
+
+    const selectedId = selectedEditableNodeIdRef.current;
+    if (selectedId) {
+      nodesGroup.children.forEach((child) => {
+        if (
+          child instanceof THREE.Mesh &&
+          child.userData?.type === 'NODE' &&
+          child.userData?.id === selectedId &&
+          !child.userData?.hitHelper
+        ) {
+          const mat = child.material as THREE.MeshStandardMaterial;
+          if (!mat?.color || !('emissive' in mat)) return;
+          mat.color.set('#ec4899');
+          mat.emissive.set('#db2777');
+          mat.emissiveIntensity = 0.9;
+        }
+      });
+    }
 
     const walkable = buildWalkableZoneMesh(
       apiFloor,
@@ -780,7 +835,7 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     rendererRef.current = renderer;
 
     const controls = new OrbitControls(
@@ -796,6 +851,11 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       controls.enableRotate = false;
       controls.minPolarAngle = 0;
       controls.maxPolarAngle = 0;
+      controls.mouseButtons.LEFT = THREE.MOUSE.PAN;
+      controls.mouseButtons.RIGHT = THREE.MOUSE.PAN;
+    } else if (nodeEditModeRef.current) {
+      controls.mouseButtons.LEFT = THREE.MOUSE.PAN;
+      controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
     }
     controlsRef.current = controls;
 
@@ -949,77 +1009,98 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
 
     // 7. Raycaster Click Interaction
     const raycaster = new THREE.Raycaster();
+    raycaster.params.Line = { threshold: 0.02 };
     const mouse = new THREE.Vector2();
+    const pointerGesture = { x: 0, y: 0, dragged: false, fromCanvas: false };
+    const ndc = new THREE.Vector3();
+    const SCREEN_PICK_PX = 36;
+
+    const setRayFromEvent = (event: PointerEvent | MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const w = Math.max(rect.width, 1);
+      const h = Math.max(rect.height, 1);
+      mouse.x = ((event.clientX - rect.left) / w) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / h) * 2 + 1;
+      const cam = activeCameraRef.current || camera;
+      cam.updateMatrixWorld();
+      raycaster.setFromCamera(mouse, cam);
+    };
+
+    const pickNearestOnScreen = (clientX: number, clientY: number): string | null => {
+      const cam = activeCameraRef.current || camera;
+      cam.updateMatrixWorld();
+      const rect = canvas.getBoundingClientRect();
+      const shiftX = floorData.centerShiftX ?? 0;
+      const shiftZ = floorData.centerShiftZ ?? 0;
+      let bestId: string | null = null;
+      let bestDist = SCREEN_PICK_PX * SCREEN_PICK_PX;
+      const removed = new Set(pendingRemovesRef.current);
+
+      const consider = (id: string, worldX: number, worldZ: number) => {
+        ndc.set(worldX, 0.35, worldZ).project(cam);
+        if (ndc.z > 1) return;
+        const sx = rect.left + (ndc.x * 0.5 + 0.5) * rect.width;
+        const sy = rect.top + (-ndc.y * 0.5 + 0.5) * rect.height;
+        const dx = sx - clientX;
+        const dy = sy - clientY;
+        const dist = dx * dx + dy * dy;
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestId = id;
+        }
+      };
+
+      const floor = apiFloorRef.current;
+      floor?.nodes?.forEach((node) => {
+        if (node.type !== 'CORRIDOR' && node.type !== 'JUNCTION') return;
+        if (removed.has(node.id) || !node.coordsGeom?.coordinates) return;
+        const [lng, lat] = node.coordsGeom.coordinates;
+        const pt = lngLatToLocal(lng, lat, shiftX, shiftZ);
+        consider(node.id, pt.x, pt.z);
+      });
+
+      pendingAddsRef.current.forEach((p) => {
+        const pt = lngLatToLocal(p.coords[0], p.coords[1], shiftX, shiftZ);
+        consider(p.tempId, pt.x, pt.z);
+      });
+
+      return bestId;
+    };
+
+    const pickEditableNodeId = (event: PointerEvent): string | null => {
+      setRayFromEvent(event);
+
+      const targets: THREE.Object3D[] = [];
+      if (pendingPreviewRef.current) targets.push(pendingPreviewRef.current);
+      if (nodesGroupRef.current) targets.push(nodesGroupRef.current);
+      if (targets.length > 0) {
+        const hits = raycaster.intersectObjects(targets, true);
+        for (const hit of hits) {
+          if (hit.object instanceof THREE.Line) continue;
+          const ud = hit.object.userData;
+          const id = (ud?.tempId as string) || (ud?.id as string);
+          if (!id) continue;
+          if (ud?.id && pendingRemovesRef.current.includes(ud.id)) continue;
+          if (
+            ud?.type === 'PENDING_NODE' ||
+            ud?.tempId ||
+            ud?.editable ||
+            ud?.nodeType === 'CORRIDOR' ||
+            ud?.nodeType === 'JUNCTION'
+          ) {
+            return id;
+          }
+        }
+      }
+
+      return pickNearestOnScreen(event.clientX, event.clientY);
+    };
 
     const handleCanvasClick = (event: MouseEvent) => {
-      if (geometryEditModeRef.current) return;
+      if (geometryEditModeRef.current || nodeEditModeRef.current) return;
 
-      const rect = canvas.getBoundingClientRect();
-      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      setRayFromEvent(event);
 
-      const cam = activeCameraRef.current || camera;
-      raycaster.setFromCamera(mouse, cam);
-
-      // Node edit: place new corridor node on floor plane / walkable
-      if (nodeEditModeRef.current && placingNodeRef.current) {
-        const targets: THREE.Object3D[] = [];
-        if (placementPlaneRef.current) targets.push(placementPlaneRef.current);
-        if (walkableMeshRef.current) targets.push(walkableMeshRef.current);
-        const hits = raycaster.intersectObjects(targets, true);
-        if (hits.length > 0) {
-          const pt = hits[0].point;
-          const { lng, lat } = localToLngLat(
-            pt.x,
-            pt.z,
-            floorData.centerShiftX ?? 0,
-            floorData.centerShiftZ ?? 0
-          );
-          onPlaceNodeRef.current?.([lng, lat]);
-        }
-        return;
-      }
-
-      // Node edit: select pending preview or CORRIDOR / JUNCTION
-      if (nodeEditModeRef.current) {
-        if (pendingPreviewRef.current) {
-          const pendingHits = raycaster.intersectObjects(
-            pendingPreviewRef.current.children,
-            false
-          );
-          if (pendingHits.length > 0) {
-            const tempId = pendingHits[0].object.userData?.tempId as
-              | string
-              | undefined;
-            if (tempId) {
-              onSelectEditableNodeRef.current?.(tempId);
-              return;
-            }
-          }
-        }
-
-        if (nodesGroupRef.current) {
-          const nodeHits = raycaster.intersectObjects(
-            nodesGroupRef.current.children,
-            false
-          );
-          for (const hit of nodeHits) {
-            const ud = hit.object.userData;
-            if (
-              ud?.type === 'NODE' &&
-              ud.editable &&
-              !pendingRemovesRef.current.includes(ud.id)
-            ) {
-              onSelectEditableNodeRef.current?.(ud.id as string);
-              return;
-            }
-          }
-        }
-        onSelectEditableNodeRef.current?.(null);
-        return;
-      }
-
-      // Watch / default: select room
       const intersects = raycaster.intersectObjects(roomMeshesGroup.children);
 
       if (intersects.length > 0) {
@@ -1071,6 +1152,11 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
     };
 
     const handlePointerDown = (event: PointerEvent) => {
+      pointerGesture.x = event.clientX;
+      pointerGesture.y = event.clientY;
+      pointerGesture.dragged = false;
+      pointerGesture.fromCanvas = true;
+
       if (!geometryEditModeRef.current) return;
       const payload = resolveEditorPointer(event);
       if (!payload) return;
@@ -1080,6 +1166,10 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
     };
 
     const handlePointerMove = (event: PointerEvent) => {
+      const dx = event.clientX - pointerGesture.x;
+      const dy = event.clientY - pointerGesture.y;
+      if (dx * dx + dy * dy > 144) pointerGesture.dragged = true;
+
       if (!geometryEditModeRef.current) return;
       if (!draggingEditorRef.current && !onEditorPointerMoveRef.current) return;
       const payload = resolveEditorPointer(event);
@@ -1088,14 +1178,46 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
     };
 
     const handlePointerUp = (event: PointerEvent) => {
-      if (!geometryEditModeRef.current) return;
-      const wasDragging = draggingEditorRef.current;
-      draggingEditorRef.current = false;
-      if (controlsRef.current) controlsRef.current.enabled = true;
-      if (!wasDragging && !onEditorPointerUpRef.current) return;
-      const payload = resolveEditorPointer(event);
-      if (!payload) return;
-      onEditorPointerUpRef.current?.(payload);
+      const startedOnCanvas = pointerGesture.fromCanvas;
+      pointerGesture.fromCanvas = false;
+
+      if (geometryEditModeRef.current) {
+        const wasDragging = draggingEditorRef.current;
+        draggingEditorRef.current = false;
+        if (controlsRef.current) controlsRef.current.enabled = true;
+        if (!wasDragging && !onEditorPointerUpRef.current) return;
+        const payload = resolveEditorPointer(event);
+        if (!payload) return;
+        onEditorPointerUpRef.current?.(payload);
+        return;
+      }
+
+      // Overlay buttons (Xóa / Lưu / Thêm) also fire window pointerup.
+      // Ignore those so they cannot deselect the node before the click handler runs.
+      if (!startedOnCanvas) return;
+      if (!nodeEditModeRef.current || pointerGesture.dragged) return;
+
+      setRayFromEvent(event);
+
+      if (placingNodeRef.current) {
+        const targets: THREE.Object3D[] = [];
+        if (placementPlaneRef.current) targets.push(placementPlaneRef.current);
+        if (walkableMeshRef.current) targets.push(walkableMeshRef.current);
+        const hits = raycaster.intersectObjects(targets, true);
+        if (hits.length > 0) {
+          const pt = hits[0].point;
+          const { lng, lat } = localToLngLat(
+            pt.x,
+            pt.z,
+            floorData.centerShiftX ?? 0,
+            floorData.centerShiftZ ?? 0
+          );
+          onPlaceNodeRef.current?.([lng, lat]);
+        }
+        return;
+      }
+
+      onSelectEditableNodeRef.current?.(pickEditableNodeId(event));
     };
 
     const handleCanvasMouseMove = (event: MouseEvent) => {
@@ -1210,10 +1332,17 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
     };
 
     window.addEventListener('resize', handleResize);
+    const resizeObserver =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => handleResize())
+        : null;
+    if (resizeObserver && container) resizeObserver.observe(container);
+    requestAnimationFrame(() => handleResize());
 
     return () => {
       cancelAnimationFrame(animationFrameId);
       window.removeEventListener('resize', handleResize);
+      resizeObserver?.disconnect();
       canvas.removeEventListener('click', handleCanvasClick);
       canvas.removeEventListener('mousemove', handleCanvasMouseMove);
       canvas.removeEventListener('pointerdown', handlePointerDown);
@@ -1257,7 +1386,13 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
     >
       <canvas
         ref={canvasRef}
-        className="w-full h-full block cursor-grab active:cursor-grabbing"
+        className={
+          nodeEditMode && placingNode
+            ? 'w-full h-full block cursor-crosshair'
+            : nodeEditMode
+              ? 'w-full h-full block cursor-pointer'
+              : 'w-full h-full block cursor-grab active:cursor-grabbing'
+        }
       />
 
       {markers.map((m) => {

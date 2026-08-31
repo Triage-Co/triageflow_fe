@@ -11,6 +11,11 @@ export const HARDCODED_BUILDING_ID = '17854b86-79d1-4c60-b776-784742c2597e';
 let cachedBuildingData: BuildingMapData | null = null;
 let buildingDataPromise: Promise<BuildingMapData> | null = null;
 
+export function clearFetchedBuildingMap() {
+  cachedBuildingData = null;
+  buildingDataPromise = null;
+}
+
 /**
  * Fetches the complete map detail data for the building.
  * Utilizes a Promise-based cache to avoid redundant network calls.
@@ -28,7 +33,11 @@ export async function fetchBuildingMap(
   }
 
   buildingDataPromise = apiClient
-    .get<BuildingMapData>(`/api/navigation/building/${buildingId}/map`)
+    .get<BuildingMapData>(
+      `/api/navigation/building/${buildingId}/map${
+        forceRefresh ? `?_=${Date.now()}` : ''
+      }`,
+    )
     .then((response) => {
       if (response.data) {
         cachedBuildingData = response.data;

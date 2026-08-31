@@ -24,6 +24,7 @@ import {
   Flame,
   ChevronDown,
   ChevronUp,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AutoRebalanceToggle } from './AutoRebalanceToggle';
@@ -55,6 +56,7 @@ import {
 } from '../hooks/useMapGeometryEditor';
 import {
   generateGraph,
+  rebuildGraphEdges,
   saveMapGeometry,
 } from '../services/mapEditorService';
 import {
@@ -142,6 +144,12 @@ export function AdminMapPage() {
   );
   const [showGenerateGraph, setShowGenerateGraph] = useState(false);
   const [generatingGraph, setGeneratingGraph] = useState(false);
+  const [graphError, setGraphError] = useState<string | null>(null);
+  const [lastGraphResult, setLastGraphResult] = useState<{
+    nodesCreated: number;
+    edgesCreated: number;
+  } | null>(null);
+  const [hoverPreview, setHoverPreview] = useState<LngLat | null>(null);
   const dragRef = useRef<{
     kind: 'vertex' | 'wall-endpoint';
     roomKey?: string;
@@ -265,11 +273,21 @@ export function AdminMapPage() {
         e.preventDefault();
         return;
       }
-      if (e.key === 'Escape' && isFullscreen) setIsFullscreen(false);
+      if (e.key === 'Escape' && isFullscreen) {
+        if (previewPoints.length > 0 || hoverPreview) return;
+        setIsFullscreen(false);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isFullscreen, savingNodes, savingGeometry, generatingGraph]);
+  }, [
+    isFullscreen,
+    savingNodes,
+    savingGeometry,
+    generatingGraph,
+    previewPoints.length,
+    hoverPreview,
+  ]);
 
   // Ctrl+Z / Ctrl+Shift+Z for geometry editor
   useEffect(() => {
@@ -291,6 +309,68 @@ export function AdminMapPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [geometryActive, geometryEditor]);
 
+  const handleDeleteGeometrySelection = useCallback(() => {
+    if (!geometrySelection) return;
+    if (geometrySelection.kind === 'room') {
+      geometryEditor.deleteRoom(geometrySelection.key);
+    } else if (geometrySelection.kind === 'vertex') {
+      geometryEditor.deleteVertex(
+        geometrySelection.roomKey,
+        geometrySelection.index,
+      );
+    } else {
+      geometryEditor.deleteBoundary(geometrySelection.key);
+    }
+    setGeometrySelection(null);
+  }, [geometrySelection, geometryEditor]);
+
+  useEffect(() => {
+    if (!geometryActive) return;
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+
+      if (e.key === 'Escape') {
+        if (previewPoints.length > 0 || hoverPreview) {
+          e.preventDefault();
+          setPreviewPoints([]);
+          setHoverPreview(null);
+        }
+        return;
+      }
+
+      if (
+        e.key === 'Enter' &&
+        geometryTool === 'draw-room' &&
+        previewPoints.length >= 3
+      ) {
+        e.preventDefault();
+        geometryEditor.addRoom(previewPoints);
+        setPreviewPoints([]);
+        setHoverPreview(null);
+        return;
+      }
+
+      if (
+        (e.key === 'Delete' || e.key === 'Backspace') &&
+        geometrySelection
+      ) {
+        e.preventDefault();
+        handleDeleteGeometrySelection();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [
+    geometryActive,
+    previewPoints,
+    hoverPreview,
+    geometryTool,
+    geometrySelection,
+    geometryEditor,
+    handleDeleteGeometrySelection,
+  ]);
+
   const clearRoute = useCallback(() => {
     setRouteResult(null);
     setRouteError(null);
@@ -309,10 +389,11 @@ export function AdminMapPage() {
       const ok = window.confirm(
         'Bạn có thay đổi chưa lưu. Thoát sẽ hủy các thay đổi?',
       );
-      if (!ok) return;
+      if (!ok) return false;
     }
     setNodeEditMode(false);
     resetNodeEditState();
+    return true;
   }, [isDirty, resetNodeEditState]);
 
   const confirmLeaveGeometry = useCallback(() => {
@@ -464,29 +545,84 @@ export function AdminMapPage() {
     }
   }, [activeFloor, mapRefreshKey]);
 
-  const handleGenerateGraph = async () => {
+  const handleRebuildGraph = async () => {
     if (!floorId || !accessToken) return;
+    if (isDirty) {
+      const discard = window.confirm(
+        'Bạn có thay đổi node chưa lưu. Tạo graph sẽ hủy chúng. Tiếp tục?',
+      );
+      if (!discard) return;
+      setNodeEditMode(false);
+      resetNodeEditState();
+    }
     const ok = window.confirm(
-      'Tạo lại graph sẽ XÓA toàn bộ node/edge hiện có của tầng (bao gồm corridor node chỉnh tay ở tab Nodes) rồi sinh lại từ geometry. Tiếp tục?',
+      'Tạo graph sẽ xóa các cạnh hiện có của tầng rồi nối lại từ các node đang có (không xóa/tạo node). Tiếp tục?',
     );
     if (!ok) return;
 
     setGeneratingGraph(true);
+    setGraphError(null);
     try {
-      await generateGraph(floorId, accessToken);
+      const result = await rebuildGraphEdges(floorId, accessToken);
       clearBuildingMapCache();
       setMapRefreshKey((k) => k + 1);
       setShowNodes(true);
       setShowGenerateGraph(false);
       setEditTab('nodes');
+      setLastGraphResult({
+        nodesCreated: result.nodesCreated,
+        edgesCreated: result.edgesCreated,
+      });
     } catch (err) {
-      if (err instanceof ApiError) {
-        setGeometrySaveError(err.message || 'Không thể tạo graph.');
-      } else {
-        setGeometrySaveError(
-          err instanceof Error ? err.message : 'Không thể tạo graph.',
-        );
-      }
+      const message =
+        err instanceof ApiError
+          ? err.message || 'Không thể tạo graph từ node hiện có.'
+          : err instanceof Error
+            ? err.message
+            : 'Không thể tạo graph từ node hiện có.';
+      setGraphError(message);
+    } finally {
+      setGeneratingGraph(false);
+    }
+  };
+
+  const handleAutoGenerateGraph = async () => {
+    if (!floorId || !accessToken) return;
+    if (isDirty) {
+      const discard = window.confirm(
+        'Bạn có thay đổi node chưa lưu. Auto tạo sẽ hủy chúng và sinh lại toàn bộ node/graph. Tiếp tục?',
+      );
+      if (!discard) return;
+      setNodeEditMode(false);
+      resetNodeEditState();
+    }
+    const ok = window.confirm(
+      'Auto tạo node và graph sẽ XÓA toàn bộ node/edge hiện có của tầng (bao gồm corridor node chỉnh tay) rồi sinh lại từ geometry. Tiếp tục?',
+    );
+    if (!ok) return;
+
+    setGeneratingGraph(true);
+    setGraphError(null);
+    try {
+      const result = await generateGraph(floorId, accessToken);
+      clearBuildingMapCache();
+      setMapRefreshKey((k) => k + 1);
+      setShowNodes(true);
+      setShowGenerateGraph(false);
+      setEditTab('nodes');
+      setLastGraphResult({
+        nodesCreated: result.nodesCreated,
+        edgesCreated: result.edgesCreated,
+      });
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.message || 'Không thể auto tạo node và graph.'
+          : err instanceof Error
+            ? err.message
+            : 'Không thể auto tạo node và graph.';
+      setGraphError(message);
+      if (editTab === 'geometry') setGeometrySaveError(message);
     } finally {
       setGeneratingGraph(false);
     }
@@ -611,6 +747,7 @@ export function AdminMapPage() {
         ) {
           geometryEditor.addRoom(previewPoints);
           setPreviewPoints([]);
+          setHoverPreview(null);
           return;
         }
         setPreviewPoints((prev) => [...prev, snapped]);
@@ -628,6 +765,7 @@ export function AdminMapPage() {
         } else {
           geometryEditor.addWall(previewPoints[0], snapped);
           setPreviewPoints([]);
+          setHoverPreview(null);
         }
         return;
       }
@@ -706,7 +844,12 @@ export function AdminMapPage() {
   const handleEditorPointerMove = useCallback(
     (e: EditorPointerEvent) => {
       if (geometryTool === 'draw-room' || geometryTool === 'draw-wall') {
-        // live preview cursor could be added later
+        const snapped = snapLngLat(
+          e.lngLat,
+          e.shiftKey,
+          previewPoints[previewPoints.length - 1] ?? null,
+        );
+        setHoverPreview(snapped);
         return;
       }
       const drag = dragRef.current;
@@ -736,7 +879,7 @@ export function AdminMapPage() {
         );
       }
     },
-    [geometryTool, geometryEditor, snapLngLat],
+    [geometryTool, geometryEditor, snapLngLat, previewPoints],
   );
 
   const handleEditorPointerUp = useCallback(() => {
@@ -745,18 +888,27 @@ export function AdminMapPage() {
 
   const drawHint = useMemo(() => {
     if (geometryTool === 'draw-room') {
-      if (previewPoints.length === 0) return 'Click để thêm đỉnh phòng. Click đỉnh đầu để đóng (≥3 đỉnh).';
-      return `${previewPoints.length} đỉnh · click đỉnh đầu để hoàn thành`;
+      if (previewPoints.length === 0)
+        return 'Click để thêm đỉnh phòng. Enter hoặc click đỉnh đầu để đóng (≥3 đỉnh). Esc hủy.';
+      return `${previewPoints.length} đỉnh · Enter hoặc click đỉnh đầu để hoàn thành · Esc hủy`;
     }
     if (geometryTool === 'draw-wall') {
       return previewPoints.length === 0
-        ? 'Click điểm đầu tường'
-        : 'Click điểm cuối tường';
+        ? 'Click điểm đầu tường · Esc hủy'
+        : 'Click điểm cuối tường · Esc hủy';
     }
     if (geometryTool === 'place-door') return 'Click lên một tường để đặt cửa';
     if (geometryTool === 'delete') return 'Click đối tượng để xóa';
     return null;
   }, [geometryTool, previewPoints.length]);
+
+  const livePreviewPoints = useMemo(() => {
+    if (!hoverPreview) return previewPoints;
+    if (geometryTool === 'draw-room' || geometryTool === 'draw-wall') {
+      return [...previewPoints, hoverPreview];
+    }
+    return previewPoints;
+  }, [previewPoints, hoverPreview, geometryTool]);
 
   const mapContent = (
     <FloorMap
@@ -819,7 +971,7 @@ export function AdminMapPage() {
             }
           : null
       }
-      editorPreviewPoints={previewPoints}
+      editorPreviewPoints={livePreviewPoints}
       editorErrorKeys={geometryEditor.clientErrors.map((e) => e.key)}
       onEditorPointerDown={handleEditorPointerDown}
       onEditorPointerMove={handleEditorPointerMove}
@@ -836,7 +988,7 @@ export function AdminMapPage() {
           type="button"
           onClick={() => {
             if (geometryActive && !confirmLeaveGeometry()) return;
-            if (nodeEditMode) exitNodeEditMode();
+            if (nodeEditMode && !exitNodeEditMode()) return;
             setMode('watch');
           }}
           className={cn(
@@ -847,7 +999,23 @@ export function AdminMapPage() {
           )}
         >
           <Eye className="w-3.5 h-3.5" />
-          Watch
+          Xem
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setMode('edit');
+            setEditTab((tab) => tab || 'geometry');
+          }}
+          className={cn(
+            'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-bold transition-colors cursor-pointer',
+            mode === 'edit'
+              ? 'bg-white text-[#2D2D2D] shadow-sm'
+              : 'text-[#7B7B7B] hover:text-[#2D2D2D]',
+          )}
+        >
+          <Pencil className="w-3.5 h-3.5" />
+          Sửa
         </button>
       </div>
 
@@ -914,7 +1082,7 @@ export function AdminMapPage() {
             : 'text-[#7B7B7B] hover:text-[#2D2D2D]',
         )}
       >
-        Geometry
+        Hình học
       </button>
       <button
         type="button"
@@ -922,6 +1090,7 @@ export function AdminMapPage() {
           if (editTab === 'geometry' && !confirmLeaveGeometry()) return;
           setEditTab('nodes');
           setPreviewPoints([]);
+          setHoverPreview(null);
           setGeometrySelection(null);
         }}
         className={cn(
@@ -931,7 +1100,7 @@ export function AdminMapPage() {
             : 'text-[#7B7B7B] hover:text-[#2D2D2D]',
         )}
       >
-        Nodes
+        Node
       </button>
     </div>
   );
@@ -1120,8 +1289,13 @@ export function AdminMapPage() {
         )}
       >
         <Plus className="w-3.5 h-3.5" />
-        {placingNode ? 'Đang thêm… (click map)' : 'Thêm node'}
+        {placingNode ? 'Đang thêm… (click vùng walkable)' : 'Thêm node'}
       </button>
+      {placingNode && (
+        <p className="text-[9px] font-semibold text-indigo-700 bg-indigo-50 rounded-lg px-2 py-1.5">
+          Click lên vùng đi được (walkable) để đặt corridor node.
+        </p>
+      )}
 
       {selectedEditableNodeId && (
         <div className="rounded-lg border border-[#EBEBEB] bg-[#F8F8FB] p-2 space-y-1.5">
@@ -1153,6 +1327,25 @@ export function AdminMapPage() {
           {saveError}
         </p>
       )}
+
+      <button
+        type="button"
+        disabled={!isDirty || savingNodes || !accessToken}
+        onClick={handleSaveCorridorEdits}
+        className={cn(
+          'flex items-center justify-center gap-1 w-full px-2.5 py-2 rounded-lg text-[11px] font-bold',
+          !isDirty || savingNodes || !accessToken
+            ? 'bg-[#C8C2F0] text-white cursor-not-allowed'
+            : 'bg-[#8B7CF6] text-white hover:bg-[#7A6BE8] cursor-pointer',
+        )}
+      >
+        {savingNodes ? (
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        ) : (
+          <Save className="w-3.5 h-3.5" />
+        )}
+        Lưu
+      </button>
     </div>
   );
 
@@ -1199,9 +1392,50 @@ export function AdminMapPage() {
           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[#EBEBEB] bg-white text-[11px] font-bold text-[#2D2D2D] hover:bg-[#F8F8FB] cursor-pointer"
         >
           <Waypoints className="w-3 h-3" />
-          Edit node
+          Sửa node
+        </button>
+
+        <button
+          type="button"
+          disabled={generatingGraph || !floorId || !accessToken}
+          onClick={handleRebuildGraph}
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-[11px] font-bold text-emerald-800 hover:bg-emerald-100 cursor-pointer disabled:opacity-50"
+        >
+          {generatingGraph ? (
+            <Loader2 className="w-3 h-3 animate-spin" />
+          ) : (
+            <Waypoints className="w-3 h-3" />
+          )}
+          Tạo graph
+        </button>
+
+        <button
+          type="button"
+          disabled={generatingGraph || !floorId || !accessToken}
+          onClick={handleAutoGenerateGraph}
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-violet-200 bg-violet-50 text-[11px] font-bold text-violet-800 hover:bg-violet-100 cursor-pointer disabled:opacity-50"
+        >
+          {generatingGraph ? (
+            <Loader2 className="w-3 h-3 animate-spin" />
+          ) : (
+            <Sparkles className="w-3 h-3" />
+          )}
+          Auto tạo node và graph
         </button>
       </div>
+
+      {lastGraphResult && (
+        <p className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 rounded-lg px-2 py-1.5">
+          {lastGraphResult.nodesCreated > 0
+            ? `Đã tạo ${lastGraphResult.nodesCreated} node · ${lastGraphResult.edgesCreated} cạnh`
+            : `Đã tạo ${lastGraphResult.edgesCreated} cạnh từ node hiện có`}
+        </p>
+      )}
+      {graphError && (
+        <p className="text-[10px] font-semibold text-rose-600 bg-rose-50 rounded-lg px-2 py-1.5">
+          {graphError}
+        </p>
+      )}
 
       <div className="flex flex-col gap-2 p-2.5 rounded-xl border border-[#EBEBEB] bg-white/95 backdrop-blur-md shadow-sm">
         <div className="flex items-center gap-2 min-w-0">
@@ -1271,6 +1505,7 @@ export function AdminMapPage() {
       onToolChange={(t) => {
         setGeometryTool(t);
         setPreviewPoints([]);
+        setHoverPreview(null);
         dragRef.current = null;
       }}
       selection={geometrySelection}
@@ -1282,23 +1517,15 @@ export function AdminMapPage() {
       onUndo={geometryEditor.undo}
       onRedo={geometryEditor.redo}
       onUpdateRoomProps={geometryEditor.updateRoomProps}
-      onDeleteSelection={() => {
-        if (!geometrySelection) return;
-        if (geometrySelection.kind === 'room') {
-          geometryEditor.deleteRoom(geometrySelection.key);
-        } else if (geometrySelection.kind === 'vertex') {
-          geometryEditor.deleteVertex(
-            geometrySelection.roomKey,
-            geometrySelection.index,
-          );
-        } else {
-          geometryEditor.deleteBoundary(geometrySelection.key);
-        }
-        setGeometrySelection(null);
-      }}
+      onDeleteSelection={handleDeleteGeometrySelection}
       clientErrors={geometryEditor.clientErrors}
       saveError={geometrySaveError}
       drawHint={drawHint}
+      onSave={handleSaveGeometry}
+      saving={savingGeometry}
+      saveDisabled={
+        !geometryEditor.isDirty || geometryEditor.clientErrors.length > 0
+      }
     />
   );
 
@@ -1457,7 +1684,7 @@ export function AdminMapPage() {
   );
 
   const saveFab = nodeEditMode ? (
-    <div className="absolute bottom-4 right-4 z-30 pointer-events-auto">
+    <div className="absolute bottom-4 right-4 z-40 pointer-events-auto">
       <button
         type="button"
         disabled={!isDirty || savingNodes}
@@ -1486,7 +1713,8 @@ export function AdminMapPage() {
       onSave={handleSaveGeometry}
       showGenerate={showGenerateGraph && !geometryEditor.isDirty}
       generating={generatingGraph}
-      onGenerate={handleGenerateGraph}
+      onGenerate={handleAutoGenerateGraph}
+      generateLabel="Auto tạo node và graph"
     />
   ) : null;
 
@@ -1511,7 +1739,7 @@ export function AdminMapPage() {
               ? 'Đang tạo navigation graph, xin đợi...'
               : savingGeometry
                 ? 'Đang lưu bản đồ, xin đợi...'
-                : 'Đang tạo đường đi cho bệnh nhân, xin đợi một chút...'}
+                : 'Đang lưu thay đổi node...'}
           </p>
           <p className="text-[12px] font-medium text-[#7B7B7B] mt-2 leading-relaxed">
             Bạn có thể đóng cửa sổ này và làm việc khác
@@ -1522,8 +1750,8 @@ export function AdminMapPage() {
     );
 
   const pageBody = (
-    <div className="relative flex-1 min-h-0 overflow-hidden">
-      {mapContent}
+    <div className="relative h-full min-h-0 overflow-hidden">
+      <div className="absolute inset-0 z-0">{mapContent}</div>
 
       <div className="absolute top-4 left-4 z-20 pointer-events-none">
         <div className="pointer-events-auto inline-flex flex-col gap-2">
