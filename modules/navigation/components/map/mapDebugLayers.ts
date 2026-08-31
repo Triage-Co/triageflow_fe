@@ -50,7 +50,10 @@ export function buildNodesGroup(
 
     const nodeColor = NODE_COLORS[node.type] || NODE_COLORS.Default;
 
-    const dotGeo = new THREE.CircleGeometry(0.4, 16);
+    const dotGeo = new THREE.CircleGeometry(
+      node.type === 'CORRIDOR' || node.type === 'JUNCTION' ? 0.55 : 0.4,
+      16,
+    );
     const dotMat = new THREE.MeshStandardMaterial({
       color: nodeColor,
       emissive: nodeColor,
@@ -63,7 +66,8 @@ export function buildNodesGroup(
     dotMesh.rotation.x = -Math.PI / 2;
     dotMesh.position.set(pt.x, 0.08, pt.z);
 
-    const radius = node.type === 'CORRIDOR' ? 0.25 : 0.3;
+    const radius =
+      node.type === 'CORRIDOR' || node.type === 'JUNCTION' ? 0.55 : 0.3;
     const nodeGeo = new THREE.SphereGeometry(radius, 16, 16);
     const nodeMat = new THREE.MeshStandardMaterial({
       color: nodeColor,
@@ -82,11 +86,25 @@ export function buildNodesGroup(
       editable: node.type === 'CORRIDOR' || node.type === 'JUNCTION',
       originalColor: nodeColor,
     };
-    nodeMesh.userData = userData;
-    dotMesh.userData = userData;
+    nodeMesh.userData = { ...userData, pickable: userData.editable };
+    // Disk is the visible target in top-down; must be pickable so clicks match highlight.
+    dotMesh.userData = { ...userData, pickable: userData.editable };
 
     group.add(dotMesh);
     group.add(nodeMesh);
+
+    if (userData.editable) {
+      const hitGeo = new THREE.SphereGeometry(1.6, 10, 10);
+      const hitMat = new THREE.MeshBasicMaterial({
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+      });
+      const hitMesh = new THREE.Mesh(hitGeo, hitMat);
+      hitMesh.position.set(pt.x, 0.3, pt.z);
+      hitMesh.userData = { ...userData, pickable: true, hitHelper: true };
+      group.add(hitMesh);
+    }
   });
 
   if (edges && edges.length > 0) {

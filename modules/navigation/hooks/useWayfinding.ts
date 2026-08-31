@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { fetchBuildingMap } from '../services/navigationService';
+import {
+  fetchBuildingMap,
+  clearFetchedBuildingMap,
+} from '../services/navigationService';
 import { floorToRoomData, FloorData3D } from '../utils/buildingToThree';
 import { BuildingMapData } from '../types/navigation.types';
 
@@ -9,6 +12,7 @@ let rawMapCache: BuildingMapData | null = null;
 export function clearBuildingMapCache() {
   floorCache.clear();
   rawMapCache = null;
+  clearFetchedBuildingMap();
 }
 
 export function useBuildingMap(floorNumber: number = 1, refreshKey: number = 0) {

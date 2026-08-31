@@ -1,4 +1,4 @@
-import { apiClient } from '@/shared/services/apiClient';
+import { apiClient, ApiError } from '@/shared/services/apiClient';
 
 export interface PointGeom {
   type: 'Point';
@@ -95,6 +95,54 @@ export async function saveMapGeometry(
   }
 
   return response.data;
+}
+
+function isMissingRouteError(err: unknown): boolean {
+  if (!(err instanceof ApiError)) return false;
+  if (err.statusCode === 404) return true;
+  return /cannot post/i.test(err.message);
+}
+
+export async function rebuildGraphEdges(
+  floorId: string,
+  token: string,
+): Promise<GenerateGraphResult> {
+  const headers = { Authorization: `Bearer ${token}` };
+
+  try {
+    const response = await apiClient.post<GenerateGraphResult>(
+      `/api/graph/${floorId}/rebuild-edges`,
+      {},
+      { headers, suppressLogError: true },
+    );
+    if (!response.data) {
+      throw new Error('Invalid graph rebuild-edges API response');
+    }
+    return response.data;
+  } catch (err) {
+    if (!isMissingRouteError(err)) throw err;
+
+    // Older BE builds do not have /rebuild-edges; corridor-edits with
+    // empty add/remove still rebuilds edges from existing nodes.
+    const fallback = await apiClient.post<{
+      edgesCreated: number;
+      durationMs: number;
+    }>(
+      `/api/graph/${floorId}/corridor-edits`,
+      { add: [], remove: [] },
+      { headers },
+    );
+
+    if (!fallback.data) {
+      throw new Error('Invalid graph corridor-edits API response');
+    }
+
+    return {
+      nodesCreated: 0,
+      edgesCreated: fallback.data.edgesCreated,
+      durationMs: fallback.data.durationMs,
+    };
+  }
 }
 
 export async function generateGraph(
