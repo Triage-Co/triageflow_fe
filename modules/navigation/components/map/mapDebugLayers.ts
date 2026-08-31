@@ -108,28 +108,50 @@ export function buildNodesGroup(
   });
 
   if (edges && edges.length > 0) {
-    const edgeMaterial = new THREE.LineBasicMaterial({
-      color: 0x818cf8,
-      transparent: true,
-      opacity: 0.75,
-    });
-    const seenEdgeKeys = new Set<string>();
+    const pairs = new Map<
+      string,
+      {
+        ids: string[];
+        p1: { x: number; z: number };
+        p2: { x: number; z: number };
+      }
+    >();
 
     edges.forEach((edge) => {
       const p1 = nodePosMap.get(edge.fromNodeId);
       const p2 = nodePosMap.get(edge.toNodeId);
       if (!p1 || !p2) return;
 
-      const edgeKey = [edge.fromNodeId, edge.toNodeId].sort().join('||');
-      if (seenEdgeKeys.has(edgeKey)) return;
-      seenEdgeKeys.add(edgeKey);
+      const pairKey = [edge.fromNodeId, edge.toNodeId].sort().join('||');
+      const existing = pairs.get(pairKey);
+      if (existing) {
+        if (!existing.ids.includes(edge.id)) existing.ids.push(edge.id);
+        return;
+      }
+      pairs.set(pairKey, { ids: [edge.id], p1, p2 });
+    });
 
+    pairs.forEach((pair, pairKey) => {
+      const edgeMaterial = new THREE.LineBasicMaterial({
+        color: 0x818cf8,
+        transparent: true,
+        opacity: 0.85,
+        linewidth: 1,
+      });
       const points = [
-        new THREE.Vector3(p1.x, 0.15, p1.z),
-        new THREE.Vector3(p2.x, 0.15, p2.z),
+        new THREE.Vector3(pair.p1.x, 0.18, pair.p1.z),
+        new THREE.Vector3(pair.p2.x, 0.18, pair.p2.z),
       ];
       const edgeGeo = new THREE.BufferGeometry().setFromPoints(points);
-      group.add(new THREE.Line(edgeGeo, edgeMaterial));
+      const line = new THREE.Line(edgeGeo, edgeMaterial);
+      line.userData = {
+        type: 'EDGE',
+        pairKey,
+        ids: pair.ids,
+        pickable: true,
+        originalColor: 0x818cf8,
+      };
+      group.add(line);
     });
   }
 
