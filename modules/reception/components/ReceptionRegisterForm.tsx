@@ -1255,7 +1255,6 @@ export function ReceptionRegisterForm() {
                       >
                         <option value="FEMALE">Nữ</option>
                         <option value="MALE">Nam</option>
-                        <option value="OTHER">Khác</option>
                       </select>
                     </div>
 

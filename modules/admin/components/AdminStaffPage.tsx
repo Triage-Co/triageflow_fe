@@ -1058,7 +1058,6 @@ export function AdminStaffPage() {
                             >
                                 <option value="MALE">Nam</option>
                                 <option value="FEMALE">Nữ</option>
-                                <option value="OTHER">Khác</option>
                             </select>
                         </div>
 
@@ -1273,7 +1272,6 @@ export function AdminStaffPage() {
                             >
                                 <option value="MALE">Nam</option>
                                 <option value="FEMALE">Nữ</option>
-                                <option value="OTHER">Khác</option>
                             </select>
                         </div>
 

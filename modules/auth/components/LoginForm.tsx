@@ -221,11 +221,8 @@ export function LoginForm() {
                     />
                 </div>
                 <h2 className="text-[28px] font-bold text-neutral-900 tracking-tight leading-snug">
-                    Clinical Hub Login
-                </h2>
-                <p className="mt-1.5 text-sm text-neutral-500">
                     Đăng nhập vào hệ thống TriageFlowOPD
-                </p>
+                </h2>
             </div>
 
             {error && (
