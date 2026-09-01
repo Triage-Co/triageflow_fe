@@ -1,5 +1,5 @@
 import { apiClient } from '@/shared/services/apiClient';
-import type { HospitalRoom, CreateRoomDto, UpdateRoomDto, Specialty } from '../types/room.types';
+import type { HospitalRoom, CreateRoomDto, UpdateRoomDto, Specialty, PhysicalRoomItem } from '../types/room.types';
 
 interface PaginatedMeta {
     total?: number;
@@ -19,6 +19,7 @@ function normalizeRoom(raw: unknown): HospitalRoom | null {
     const rec = asRecord(raw);
     if (!rec) return null;
     const specialty = asRecord(rec.specialty);
+    const physicalRoom = asRecord(rec.physical_room);
     const roomId = String(rec.room_id || rec.id || '').trim();
     const roomName = String(rec.room_name || rec.name || '').trim();
     if (!roomId && !roomName) return null;
@@ -27,6 +28,14 @@ function normalizeRoom(raw: unknown): HospitalRoom | null {
         room_name: roomName || roomId,
         physical_room_id:
             typeof rec.physical_room_id === 'string' ? rec.physical_room_id : null,
+        physical_room: physicalRoom
+            ? {
+                  id: String(physicalRoom.id || ''),
+                  floorId: String(physicalRoom.floorId || ''),
+                  roomCode: String(physicalRoom.roomCode || ''),
+                  roomLabel: String(physicalRoom.roomLabel || ''),
+              }
+            : null,
         specialty_id: String(
             rec.specialty_id || specialty?.specialty_id || ''
         ).trim(),
@@ -126,6 +135,12 @@ export const roomService = {
 
     getSpecialties: async (token: string) => {
         return apiClient.get<Specialty[]>('/api/specialty', {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+    },
+
+    getPhysicalRooms: async (token: string) => {
+        return apiClient.get<PhysicalRoomItem[]>('/api/physical-room', {
             headers: { Authorization: `Bearer ${token}` },
         });
     },

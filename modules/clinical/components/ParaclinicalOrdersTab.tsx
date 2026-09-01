@@ -559,7 +559,7 @@ function mapOrderToCards(
     rooms: Array<{
         room_id: string;
         room_name: string;
-        specialty_id?: string;
+        specialty_id?: string | null;
         physical_room_id?: string | null;
         specialty?: { specialty_id?: string; specialty_name?: string } | null;
     }>,
