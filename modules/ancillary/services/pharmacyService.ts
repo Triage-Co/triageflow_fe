@@ -2,7 +2,8 @@ import { apiClient } from '@/shared/services/apiClient';
 import {
     Prescription,
     CreatePrescriptionDto,
-    PrescriptionStatusEnum
+    PrescriptionStatusEnum,
+    type PrescriptionDetail,
 } from '@/shared/types/prescription.types';
 import type { PharmacyDisplayPayload } from '../types/pharmacy-display.types';
 
@@ -127,6 +128,24 @@ export function normalizePrescription(item: any): Prescription {
     };
 }
 
+function mergeDetailMedicine(
+    prev?: PrescriptionDetail['medicine'],
+    incoming?: PrescriptionDetail['medicine']
+): PrescriptionDetail['medicine'] {
+    return {
+        medicine_code:
+            incoming?.medicine_code?.trim() || prev?.medicine_code?.trim() || '',
+        medicine_name:
+            incoming?.medicine_name?.trim() ||
+            prev?.medicine_name?.trim() ||
+            'Thuốc kê đơn',
+        unit: incoming?.unit || prev?.unit || 'Viên',
+        active_ingredient:
+            incoming?.active_ingredient || prev?.active_ingredient || '',
+        usage_route: incoming?.usage_route || prev?.usage_route,
+    };
+}
+
 function mergePrescriptionDetails(
     previous: Prescription['prescriptionDetails'],
     incoming: Prescription['prescriptionDetails']
@@ -138,7 +157,7 @@ function mergePrescriptionDetails(
         previous.map((d, idx) => [d.prescription_detail_id || d.medicine_id || `idx-${idx}`, d])
     );
 
-    return incoming.map((detail, idx) => {
+    return incoming.map((detail, idx): PrescriptionDetail => {
         const key = detail.prescription_detail_id || detail.medicine_id || `idx-${idx}`;
         const prev =
             prevByKey.get(key) ||
@@ -146,25 +165,15 @@ function mergePrescriptionDetails(
         if (!prev) return detail;
 
         return {
-            ...prev,
-            ...detail,
+            prescription_detail_id:
+                detail.prescription_detail_id || prev.prescription_detail_id,
+            medicine_id: detail.medicine_id || prev.medicine_id,
+            quantity: detail.quantity ?? prev.quantity,
             dosage_instruction: detail.dosage_instruction || prev.dosage_instruction,
             note: detail.note ?? prev.note,
             unit_price: detail.unit_price ?? prev.unit_price,
             sub_total: detail.sub_total ?? prev.sub_total,
-            medicine: {
-                ...(prev.medicine || {}),
-                ...(detail.medicine || {}),
-                medicine_id: detail.medicine_id || prev.medicine_id,
-                medicine_name:
-                    detail.medicine?.medicine_name?.trim() ||
-                    prev.medicine?.medicine_name?.trim() ||
-                    'Thuốc kê đơn',
-                active_ingredient:
-                    detail.medicine?.active_ingredient || prev.medicine?.active_ingredient || '',
-                unit: detail.medicine?.unit || prev.medicine?.unit || 'Viên',
-                unit_price: detail.medicine?.unit_price ?? prev.medicine?.unit_price ?? 0,
-            },
+            medicine: mergeDetailMedicine(prev.medicine, detail.medicine),
         };
     });
 }
