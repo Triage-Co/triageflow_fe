@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { Patient } from '@/modules/clinical/types/clinical.types';
 import { ActionToolbar, type ToolbarTab } from './ActionToolbar';
+import { MedicalSection } from './MedicalSection';
 import { physicalExamEntries } from '@/modules/clinical/utils/physicalExam';
 
 interface MedicalRecordAreaProps {

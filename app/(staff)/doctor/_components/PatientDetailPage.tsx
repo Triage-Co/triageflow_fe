@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import type { Patient } from '@/modules/clinical/types/clinical.types';
 import { WorkflowDiagram } from './workflow/WorkflowDiagram';
 import { DoctorHeader } from './DoctorHeader';
+import { ClinicalProcessPanel } from './ClinicalProcessPanel';
 import { physicalExamEntries } from '@/modules/clinical/utils/physicalExam';
 
 type DetailTab = 'info' | 'process';
