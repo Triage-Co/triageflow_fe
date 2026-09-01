@@ -113,6 +113,7 @@ body {
     
     <div class="qr-container">
         <img class="qr-image" src="${qrUrl}" alt="QR" />
+        ${qrData && qrData !== 'TRIAGEFLOW-TICKET' ? `<div class="centered" style="font-size: 11px; font-weight: bold; margin-top: 4px;">Mã phiếu: ${qrData}</div>` : ''}
     </div>
     
     <div class="solid-line"></div>

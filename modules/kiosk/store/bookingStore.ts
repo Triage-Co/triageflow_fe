@@ -37,13 +37,35 @@ const initialState = {
 const handleBookingSuccess = (response: any, patientId: string) => {
   const flowStore = useFlowStore.getState();
   const kioskState = useKioskStore.getState();
+  const bookingState = useBookingStore.getState();
+  const authState = useAuthStore.getState();
 
   const resData = response.data || (response as any);
-  const stepId = resData.step_id;
-  const bookingId = resData.booking_id || resData.data?.booking_id;
-  const paymentData: BookingPaymentData = resData.payment?.data || resData.payment;
+  const dataBody = resData.data || resData;
+  const stepId = dataBody.step_id || resData.step_id;
+  const bookingId = dataBody.booking_id || resData.booking_id;
+  const paymentData: BookingPaymentData = dataBody.payment?.data || dataBody.payment || resData.payment?.data || resData.payment;
 
-  flowStore.setBookingPaymentState(stepId || '', bookingId || '', paymentData, patientId);
+  const doc = kioskState.selectedDoctor;
+  const slot = bookingState.availableSlots.find((s) => s.slot_id === bookingState.selectedSlotId);
+
+  const doctorName = (dataBody as any).doctor || doc?.name || 'Bác sĩ phụ trách';
+  const roomName = (dataBody as any).room || doc?.room || 'Phòng khám chuyên khoa';
+  const specialtyName = doc?.specialty || (kioskState as any).selectedSpecialty?.specialty_name || 'Khám chuyên khoa';
+  const slotTime = slot?.start_time || '';
+  const selectedDate = (slot as any)?.date || '';
+  const patientName = authState.patientInfo?.fullName || 'Bệnh nhân';
+  const ticketCode = (dataBody as any).ticket_code || (resData as any).ticket_code || '';
+
+  flowStore.setBookingPaymentState(stepId || '', bookingId || '', paymentData, patientId, {
+    doctorName,
+    roomName,
+    specialtyName,
+    slotTime,
+    selectedDate,
+    patientName,
+    ticketCode,
+  });
   kioskState.navigateToView('payment');
 };
 

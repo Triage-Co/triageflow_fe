@@ -154,7 +154,27 @@ export const usePackageBookingStore = create<PackageBookingStoreState>((set, get
         const dataBody = resData.data || resData;
         const bookingId = dataBody.booking_id;
         const paymentData = dataBody.payment?.data || dataBody.payment;
-        flowStore.setBookingPaymentState('', bookingId || '', paymentData, patientId);
+
+        const pkg = selectedPackageDetail;
+        const slot = get().slots.find((s) => s.slot_id === selectedSlotId);
+
+        const doctorName = (dataBody as any).doctor || 'Bác sĩ phụ trách';
+        const roomName = (dataBody as any).room || (slot as any)?.room_name || 'Phòng khám gói';
+        const specialtyName = pkg?.package_name || 'Gói khám sức khỏe';
+        const slotTime = slot?.start_time || '';
+        const selectedDate = get().selectedDate || '';
+        const patientName = authState.patientInfo?.fullName || 'Bệnh nhân';
+        const ticketCode = (dataBody as any).ticket_code || (resData as any).ticket_code || '';
+
+        flowStore.setBookingPaymentState((dataBody as any).step_id || '', bookingId || '', paymentData, patientId, {
+          doctorName,
+          roomName,
+          specialtyName,
+          slotTime,
+          selectedDate,
+          patientName,
+          ticketCode,
+        });
 
         kioskState.navigateToView('payment');
         kioskState.showToast('Đặt gói khám thành công! Vui lòng quét mã QR thanh toán.', 'success');

@@ -173,6 +173,11 @@ export const PatientInfoView: React.FC = () => {
                     className="w-36 h-36 mx-auto border border-black p-1 block mb-1.5 bg-white"
                     style={{ imageRendering: 'pixelated' }}
                   />
+                  {ticketCode && ticketCode !== '---' && (
+                    <div className="text-[11px] font-black tracking-wider text-black mt-1">
+                      Mã phiếu: {ticketCode}
+                    </div>
+                  )}
                 </div>
 
                 <div className="border-t border-solid border-black my-2 w-full" />

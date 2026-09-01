@@ -221,16 +221,41 @@ export const computeWaitMinutes = (startTimeStr: string | undefined): number => 
 
 export const mapApiToTicketData = (stepData: any, patientInfo: any, bookingId: string | null, ticketCode?: string): TicketData => {
   const queueObj = Array.isArray(stepData.queues) ? stepData.queues[0] : null;
-  const roomObj = stepData.room_info || stepData.room || stepData.flow?.booking?.slot?.shift?.room;
-  const specialtyObj = stepData.specialty_info || stepData.specialty || roomObj?.specialty;
-  const staffObj = stepData.staff_info || stepData.staff;
-  const slotObj = stepData.flow?.booking?.slot;
+  const flowObj = stepData.flow || {};
+  const bookingObj = flowObj.booking || stepData.booking || {};
+  const roomObj =
+    stepData.room_info ||
+    stepData.room ||
+    bookingObj.slot?.shift?.room ||
+    bookingObj.room ||
+    (typeof flowObj.room === 'string' ? { room_name: flowObj.room } : flowObj.room);
+  const specialtyObj =
+    stepData.specialty_info ||
+    stepData.specialty ||
+    roomObj?.specialty ||
+    (bookingObj.package ? { specialty_name: bookingObj.package.package_name } : undefined) ||
+    (flowObj.package_name ? { specialty_name: flowObj.package_name } : undefined);
+  const staffObj =
+    stepData.staff_info ||
+    stepData.staff ||
+    bookingObj.slot?.shift?.staff ||
+    (typeof flowObj.doctor === 'string' ? { full_name: flowObj.doctor } : flowObj.doctor);
+  const slotObj = bookingObj.slot || stepData.slot;
 
   const queueNumber = queueObj?.queue_number ?? stepData.queue_number ?? stepData.queueNo ?? '';
   const stepName = stepData.step_name ?? '';
   const isPaymentStep = stepName.toLowerCase().trim().startsWith('thanh toán');
 
-  const roomNumber = isPaymentStep ? '---' : (roomObj?.room_name ?? '');
+  const roomNumber = isPaymentStep
+    ? '---'
+    : (typeof roomObj === 'string' ? roomObj : (roomObj?.room_name ?? ''));
+  const clinicName = typeof specialtyObj === 'string'
+    ? specialtyObj
+    : (specialtyObj?.specialty_name ?? flowObj.package_name ?? (typeof bookingObj.package === 'string' ? bookingObj.package : bookingObj.package?.package_name) ?? '');
+  const doctorName = typeof staffObj === 'string'
+    ? staffObj
+    : (staffObj?.full_name ?? '');
+  const finalTicketCode = ticketCode || queueObj?.ticket_code || flowObj.ticket_code || stepData.ticket_code || '';
 
   return {
     ticketNumber: queueNumber,
@@ -239,10 +264,10 @@ export const mapApiToTicketData = (stepData: any, patientInfo: any, bookingId: s
     createdAt: stepData.created_at
       ? new Date(stepData.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
       : new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-    clinicName: specialtyObj?.specialty_name ?? '',
+    clinicName: clinicName,
     roomNumber: roomNumber,
     location: '',
-    doctorName: staffObj?.full_name ?? '',
+    doctorName: doctorName,
     status: stepData.step_status === 'COMPLETED'
       ? 'completed'
       : stepData.step_status === 'IN_PROGRESS'
@@ -256,7 +281,7 @@ export const mapApiToTicketData = (stepData: any, patientInfo: any, bookingId: s
     startTime: slotObj?.start_time ?? '',
     roomId: isPaymentStep ? undefined : (roomObj?.physical_room_id || roomObj?.room_id || stepData.room_id || undefined),
     stepName: stepName,
-    ticketCode: ticketCode || stepData.flow?.ticket_code || '',
+    ticketCode: finalTicketCode,
     queueType: queueObj?.queue_type ?? '',
     doctorExperience: staffObj?.experience_years,
     doctorLicense: staffObj?.license_number,
