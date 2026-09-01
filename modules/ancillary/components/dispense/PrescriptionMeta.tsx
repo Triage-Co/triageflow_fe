@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Stethoscope, Calendar, DollarSign, FileText } from 'lucide-react';
+import { Stethoscope, Calendar, FileText } from 'lucide-react';
 import { Prescription } from '@/shared/types/prescription.types';
 
 interface PrescriptionMetaProps {
@@ -12,7 +12,7 @@ export function PrescriptionMeta({ prescription }: PrescriptionMetaProps) {
     return (
         <div className="space-y-3 my-4">
             {/* Meta Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="p-3.5 bg-neutral-50 dark:bg-neutral-800/40 rounded-2xl border border-neutral-100 dark:border-neutral-800">
                     <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
                         <Stethoscope className="w-4 h-4 text-indigo-500" />
@@ -30,16 +30,6 @@ export function PrescriptionMeta({ prescription }: PrescriptionMetaProps) {
                     </div>
                     <p className="text-sm font-bold text-neutral-900 dark:text-white mt-1">
                         {prescription.created_at ? new Date(prescription.created_at).toLocaleString('vi-VN') : 'Mới khởi tạo'}
-                    </p>
-                </div>
-
-                <div className="p-3.5 bg-neutral-50 dark:bg-neutral-800/40 rounded-2xl border border-neutral-100 dark:border-neutral-800">
-                    <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
-                        <DollarSign className="w-4 h-4 text-emerald-500" />
-                        <span>Tổng tiền thanh toán:</span>
-                    </div>
-                    <p className="text-base font-extrabold text-emerald-600 dark:text-emerald-400 mt-0.5">
-                        {prescription.total_amount?.toLocaleString('vi-VN')} đ
                     </p>
                 </div>
             </div>
