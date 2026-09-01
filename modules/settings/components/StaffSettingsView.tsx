@@ -1,10 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     User,
     Lock,
-    Upload,
     Save,
     CheckCircle2,
     Loader2,
@@ -21,7 +20,6 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import type { Gender } from '@/shared/types/auth.types';
-import { uploadImageToCloudinary } from '@/shared/services/cloudinaryService';
 import { authService } from '@/modules/auth/services/authService';
 import { labService } from '@/modules/lab/services/labService';
 import type { ShiftInfo } from '@/modules/lab/types/lab.types';
@@ -66,8 +64,6 @@ export function getRoleDisplayName(role?: string): string {
 export default function StaffSettingsView() {
     const { profile, fetchProfile, updateProfile, accessToken, error } = useAuthStore();
 
-    const fileInputRef = useRef<HTMLInputElement>(null);
-
     // Ca trực state
     const [activeShift, setActiveShift] = useState<ShiftInfo | null>(null);
     const [isLoadingShifts, setIsLoadingShifts] = useState(false);
@@ -84,12 +80,10 @@ export default function StaffSettingsView() {
     const [userName, setUserName] = useState('');
     const [gender, setGender] = useState<Gender>('MALE');
     const [phone, setPhone] = useState('');
-    const [avatar, setAvatar] = useState<string | null>(null);
 
-    // Load & Upload state
+    // Load state
     const [isSaving, setIsSaving] = useState(false);
     const [saveToast, setSaveToast] = useState(false);
-    const [isUploading, setIsUploading] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     // ── Đổi mật khẩu state ──
@@ -146,32 +140,8 @@ export default function StaffSettingsView() {
             setUserName(profile.user_name || '');
             setGender(profile.gender || 'MALE');
             setPhone(profile.phone || '');
-            setAvatar(profile.avatar || null);
         }
     }, [profile]);
-
-    const handleAvatarClick = () => {
-        if (fileInputRef.current) {
-            fileInputRef.current.click();
-        }
-    };
-
-    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        setIsUploading(true);
-        setErrorMessage(null);
-        try {
-            const url = await uploadImageToCloudinary(file);
-            setAvatar(url);
-        } catch (err) {
-            console.error('[StaffSettingsView] Failed to upload image:', err);
-            setErrorMessage('Tải ảnh đại diện lên thất bại, vui lòng thử lại.');
-        } finally {
-            setIsUploading(false);
-        }
-    };
 
     const handleSave = async () => {
         if (!accessToken) return;
@@ -184,7 +154,6 @@ export default function StaffSettingsView() {
                     user_name: userName,
                     gender,
                     phone,
-                    avatar,
                 },
                 accessToken,
             );
@@ -347,45 +316,13 @@ export default function StaffSettingsView() {
                         <h3 className="font-bold text-slate-800 text-base">Thông tin nhân viên</h3>
                     </div>
 
-                    {/* Avatar Upload Box */}
-                    <div className="flex flex-col sm:flex-row items-center gap-6 p-4 rounded-[20px] bg-slate-50/60 border border-slate-100">
-                        <div className="w-20 h-20 rounded-full bg-white border-2 border-slate-200 flex items-center justify-center overflow-hidden shrink-0 shadow-sm relative group">
-                            {avatar ? (
-                                <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
+                    <div className="flex justify-center py-2">
+                        <div className="w-20 h-20 rounded-full bg-white border-2 border-slate-200 flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+                            {profile?.avatar ? (
+                                <img src={profile.avatar} alt="Avatar" className="w-full h-full object-cover" />
                             ) : (
                                 <User className="w-10 h-10 text-slate-300" />
                             )}
-                            {isUploading && (
-                                <div className="absolute inset-0 bg-black/45 flex items-center justify-center">
-                                    <Loader2 className="w-5 h-5 text-white animate-spin" />
-                                </div>
-                            )}
-                        </div>
-
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            className="hidden"
-                            accept="image/*"
-                            onChange={handleFileChange}
-                            disabled={isUploading}
-                        />
-
-                        <div
-                            onClick={handleAvatarClick}
-                            className="flex-1 w-full border-2 border-dashed border-slate-200 rounded-[18px] p-6 text-center hover:border-purple-300 transition cursor-pointer bg-white"
-                        >
-                            <div className="flex flex-col items-center gap-1.5">
-                                <div className="w-8 h-8 rounded-full bg-purple-50 text-[#8B7CF6] flex items-center justify-center">
-                                    <Upload className="w-4 h-4" />
-                                </div>
-                                <p className="text-xs font-bold text-slate-700">
-                                    Kéo thả ảnh vào đây <span className="text-slate-400 font-normal">hoặc</span> <span className="text-[#8B7CF6]">nhấp để chọn file</span>
-                                </p>
-                                <p className="text-[10px] text-slate-400 font-medium">
-                                    Định dạng JPG, PNG hoặc WebP. Tối đa 5MB. Khuyến nghị kích thước 200x200px.
-                                </p>
-                            </div>
                         </div>
                     </div>
 
@@ -645,7 +582,7 @@ export default function StaffSettingsView() {
                 <div className="flex justify-end pt-4">
                     <button
                         onClick={handleSave}
-                        disabled={isSaving || isUploading}
+                        disabled={isSaving}
                         className="px-8 py-3.5 rounded-[14px] bg-[#8B7CF6] hover:bg-[#7C6CF5] text-white font-bold text-xs shadow-lg shadow-purple-500/25 transition active:scale-[0.98] flex items-center gap-2 cursor-pointer disabled:opacity-50"
                     >
                         {isSaving ? (

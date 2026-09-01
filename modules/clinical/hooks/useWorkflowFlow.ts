@@ -14,7 +14,8 @@ import {
 } from '@/modules/clinical/services/serviceOrderService';
 import type { ServiceOrder } from '@/modules/clinical/types/serviceOrder.types';
 import { filterOrdersByBookingId } from '@/modules/clinical/types/serviceOrder.types';
-import { detectUnlabeledPaymentStepIds, orderFlowStepsForTimeline } from '@/modules/clinical/workflow/flowOrder';
+import { detectUnlabeledPaymentStepIds } from '@/modules/clinical/workflow/flowOrder';
+import { sortStepsTopologically } from '@/modules/clinical/workflow/sortStepsTopologically';
 
 interface UseWorkflowFlowArgs {
     accessToken: string | null;
@@ -40,7 +41,7 @@ export function useWorkflowFlow({
 
     const rawFlowSteps = useMemo(() => extractFlowSteps(flowData), [flowData]);
     const orderedFlowSteps = useMemo(
-        () => orderFlowStepsForTimeline(rawFlowSteps),
+        () => sortStepsTopologically(rawFlowSteps),
         [rawFlowSteps]
     );
     const unlabeledPaymentStepIds = useMemo(

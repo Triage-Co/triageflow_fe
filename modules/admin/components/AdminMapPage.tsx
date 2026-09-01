@@ -460,15 +460,6 @@ export function AdminMapPage() {
     ],
   );
 
-  const handleHoverRoom = useCallback(
-    (roomId: string | null) => {
-      if (heatmapEnabled && mode === 'watch' && roomId) {
-        setInspectedRoomId(roomId);
-      }
-    },
-    [heatmapEnabled, mode],
-  );
-
   const handlePlaceNode = useCallback((coords: [number, number]) => {
     setPendingAdds((prev) => [
       ...prev,
@@ -1015,8 +1006,15 @@ export function AdminMapPage() {
       startRoomId={mode === 'watch' && !heatmapEnabled ? startRoomId || null : null}
       targetRoomId={mode === 'watch' && !heatmapEnabled ? targetRoomId || null : null}
       routePath={mode === 'watch' && !heatmapEnabled ? routeResult?.path ?? null : null}
+      highlightedRoomId={
+        mode === 'watch' && heatmapEnabled ? inspectedRoomId : undefined
+      }
       onSelectRoom={handleSelectRoom}
-      onHoverRoom={handleHoverRoom}
+      onClearRoomSelect={
+        mode === 'watch' && heatmapEnabled ?
+          () => setInspectedRoomId(null)
+        : undefined
+      }
       showNodes={
         (mode === 'edit' && showNodes) || nodeEditMode || edgeEditMode
       }
