@@ -9,7 +9,10 @@ import {
 export const packageBookingService = {
 
   getAllPackages: async () => {
-    return kioskApiClient.get<ExamPackage[]>('/api/exam-package');
+    const response = await kioskApiClient.get<ExamPackage[]>('/api/exam-package');
+    const raw = response as any;
+    const list = Array.isArray(raw?.data) ? raw.data : Array.isArray(raw) ? raw : [];
+    return list.filter((pkg: ExamPackage) => pkg.is_active === true);
   },
 
   getPackageDetail: async (id: string) => {
