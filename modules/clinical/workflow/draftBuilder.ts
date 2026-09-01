@@ -91,7 +91,7 @@ export function buildDraftFromTemplateStep(
     rooms: Array<{
         room_id: string;
         room_name: string;
-        specialty_id?: string;
+        specialty_id?: string | null;
         specialty?: { specialty_name?: string };
     }>,
     serviceOptions: ServiceOption[],
