@@ -1,3 +1,7 @@
+'use client';
+
+import { RoleRouteGuard } from '@/shared/components/layout/RoleRouteGuard';
+
 export default function PatientLayout({ children }: { children: React.ReactNode }) {
-    return <>{children}</>;
+    return <RoleRouteGuard requirePatient>{children}</RoleRouteGuard>;
 }
