@@ -128,14 +128,23 @@ function normalizeMissing(raw: unknown): MissingEntry | null {
     const m = asRecord(raw);
     if (!m) return null;
     const queueId = asString(m.queue_id);
-    if (!queueId) return null;
+    const queueNumber = asString(m.queue_number);
+    if (!queueId && !queueNumber) return null;
     return {
-        queue_id: queueId,
-        queue_number: asString(m.queue_number),
+        queue_id: queueId || queueNumber,
+        queue_number: queueNumber,
         patient_name: asString(m.patient_name || m.full_name),
         missed_at: m.missed_at != null ? asString(m.missed_at) : null,
         step_id: m.step_id != null ? asString(m.step_id) : undefined,
     };
+}
+
+/** Parse `missing` array from staff / socket payloads. */
+export function normalizeMissingList(raw: unknown): MissingEntry[] {
+    if (!Array.isArray(raw)) return [];
+    return raw
+        .map(normalizeMissing)
+        .filter((x): x is MissingEntry => x != null);
 }
 
 function normalizeFinished(raw: unknown): FinishedEntry | null {

@@ -121,6 +121,8 @@ export function RoomWaitingScreen({
       upcoming_numbers: (socketData?.upcoming_patients ?? []).map(
         (p) => p.queue_number,
       ),
+      missing_count: socketData?.missing?.length ?? 0,
+      missing_numbers: (socketData?.missing ?? []).map((m) => m.queue_number),
       room_info: socketData?.room_info ?? null,
     });
   }, [socketData, isConnected, socketError]);
@@ -232,6 +234,7 @@ export function RoomWaitingScreen({
     },
     current_patient: null,
     upcoming_patients: [],
+    missing: [],
   };
 
   const room = {
@@ -257,6 +260,10 @@ export function RoomWaitingScreen({
       patientName: p.patient_name,
       position: idx + 1,
     }));
+
+  const displayMissed = (activeData.missing ?? [])
+    .map((m) => String(m.queue_number).trim())
+    .filter((n) => n && n !== "---");
 
   /** CALLING = vừa gọi vào phòng; IN_PROGRESS = đang khám */
   const currentStatusLabel =
@@ -286,6 +293,7 @@ export function RoomWaitingScreen({
         queueNumber: p.queueNumber,
         patientName: p.patientName,
       })),
+      missed: displayMissed,
     });
     // intentionally exclude clock-driven state
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -385,14 +393,34 @@ export function RoomWaitingScreen({
 
       {/* ── 2. BODY: CURRENT (left ~60%) | UPCOMING (right ~40%) ── */}
       <div className="flex-1 min-h-0 flex overflow-hidden">
-        {/* Left: current patient */}
+        {/* Left: current patient + missed turns */}
         <div className="w-[60%] min-w-0 flex flex-col border-r border-black/10">
-          <AnimatedQueueNumber
-            queueNumber={currentPatient?.queueNumber ?? "---"}
-            patientName={currentPatient?.patientName ?? "Chưa có bệnh nhân"}
-            statusLabel={currentStatusLabel}
-            status={currentPatient?.status ?? ""}
-          />
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            <AnimatedQueueNumber
+              queueNumber={currentPatient?.queueNumber ?? "---"}
+              patientName={currentPatient?.patientName ?? "Chưa có bệnh nhân"}
+              statusLabel={currentStatusLabel}
+              status={currentPatient?.status ?? ""}
+            />
+          </div>
+
+          <div className="shrink-0 border-t-2 border-black/15 bg-white/40 backdrop-blur-sm px-4 sm:px-6 py-3">
+            <span className="text-sm sm:text-base font-black tracking-[0.15em] text-black/70 uppercase block mb-2">
+              Đã lỡ lượt
+            </span>
+            {displayMissed.length > 0 && (
+              <div className="flex flex-wrap gap-2 sm:gap-3">
+                {displayMissed.map((num, idx) => (
+                  <span
+                    key={`${num}-${idx}`}
+                    className="font-mono font-black text-xl sm:text-2xl md:text-3xl text-red-900 bg-red-100/80 border border-red-300/60 px-3 sm:px-4 py-1 rounded-xl shadow-sm"
+                  >
+                    {num}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Right: upcoming queue (single column, max 7) */}

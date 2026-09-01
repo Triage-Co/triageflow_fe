@@ -35,12 +35,14 @@ export interface EditorPointerEvent {
 interface FloorMapProps {
   floorNumber?: number;
   refreshKey?: number;
+  highlightedRoomId?: string | null;
   highlightRoomCode?: string | null;
   highlightAreaId?: string | null;
   startRoomId?: string | null;
   targetRoomId?: string | null;
   routePath?: RoutePathNode[] | null;
   onSelectRoom?: (roomId: string) => void;
+  onClearRoomSelect?: () => void;
   showNodes?: boolean;
   showWalkable?: boolean;
   debugSteps?: CorridorDebugSteps | null;
@@ -80,12 +82,14 @@ interface FloorMapProps {
 export const FloorMap: React.FC<FloorMapProps> = ({
   floorNumber = 1,
   refreshKey = 0,
+  highlightedRoomId: highlightedRoomIdProp,
   highlightRoomCode,
   highlightAreaId,
   startRoomId,
   targetRoomId,
   routePath,
   onSelectRoom,
+  onClearRoomSelect,
   onHoverRoom,
   showNodes,
   showWalkable,
@@ -121,7 +125,9 @@ export const FloorMap: React.FC<FloorMapProps> = ({
   heatmapRooms,
 }) => {
   const { data, rawMap, loading, error } = useBuildingMap(floorNumber, refreshKey);
-  const highlightedRoomId = useNavigationStore((s) => s.highlightedRoomId);
+  const storeHighlightedRoomId = useNavigationStore((s) => s.highlightedRoomId);
+  const highlightedRoomId =
+    highlightedRoomIdProp !== undefined ? highlightedRoomIdProp : storeHighlightedRoomId;
 
   const apiFloor = useMemo(() => {
     if (!rawMap) return null;
@@ -165,6 +171,7 @@ export const FloorMap: React.FC<FloorMapProps> = ({
         targetRoomId={targetRoomId}
         routePath={routePath}
         onSelectRoom={onSelectRoom}
+        onClearRoomSelect={onClearRoomSelect}
         showNodes={showNodes || nodeEditMode || edgeEditMode}
         showWalkable={showWalkable || (nodeEditMode && placingNode)}
         debugSteps={debugSteps}

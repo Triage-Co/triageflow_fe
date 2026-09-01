@@ -17,6 +17,7 @@ import {
     XCircle,
 } from 'lucide-react';
 import { clinicalService } from '@/modules/clinical/services/clinicalService';
+import { ApiError } from '@/shared/services/apiClient';
 import { fetchGoogleTranslate, COMMON_MEDICAL_TERMS } from '@/modules/reception/services/googleTranslationService';
 import { commonSymptomDataset } from '@/modules/kiosk/data/commonSymptoms';
 import { useAuthStore } from '@/store/authStore';
@@ -64,6 +65,22 @@ try {
 }
 
 const textTranslationCache = new Map<string, string>();
+
+function isMissingTriageAnswerError(err: unknown): boolean {
+    const message =
+        err instanceof ApiError || err instanceof Error
+            ? err.message
+            : typeof err === 'string'
+              ? err
+              : '';
+    const normalized = message.toLowerCase();
+    if (!normalized) return false;
+    if (err instanceof ApiError && err.statusCode === 404) return true;
+    return (
+        normalized.includes('không tìm thấy câu trả lời') ||
+        (normalized.includes('không tìm thấy') && normalized.includes('triage'))
+    );
+}
 
 const DELIMITER = ' @@@ ';
 async function translateMedicalBatch(texts: string[]): Promise<Map<string, string>> {
@@ -269,6 +286,12 @@ export function TriageAnswerDetailModal({
                 setTranslatedTurns([]);
             }
         } catch (err: unknown) {
+            if (isMissingTriageAnswerError(err)) {
+                setData(null);
+                setTranslatedTurns([]);
+                setError(null);
+                return;
+            }
             console.error('Failed to fetch triage latest answer:', err);
             const msg = err instanceof Error ? err.message : 'Không thể tải dữ liệu khảo sát Triage';
             setError(msg);
@@ -356,10 +379,10 @@ export function TriageAnswerDetailModal({
                                 <HelpCircle className="w-6 h-6" />
                             </div>
                             <p className="text-[14px] font-bold text-neutral-800">
-                                Chưa có dữ liệu khảo sát Triage
+                                Chưa có câu trả lời từ AI
                             </p>
                             <p className="text-[12px] text-neutral-500 max-w-sm mt-1">
-                                Bệnh nhân này chưa có lịch sử trả lời câu hỏi Triage AI hoặc dữ liệu chưa được cập nhật.
+                                Bệnh nhân chưa hoàn thành khảo sát triage hoặc chưa có dữ liệu cập nhật.
                             </p>
                         </div>
                     )}

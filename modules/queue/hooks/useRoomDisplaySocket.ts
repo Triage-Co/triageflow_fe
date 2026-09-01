@@ -64,6 +64,8 @@ function summarizeQueuePayload(data: CallNextResponse) {
             : null,
         upcoming_count: data.upcoming_patients?.length ?? 0,
         upcoming_numbers: (data.upcoming_patients ?? []).map((p) => p.queue_number),
+        missing_count: data.missing?.length ?? 0,
+        missing_numbers: (data.missing ?? []).map((m) => m.queue_number),
     };
 }
 
@@ -73,7 +75,7 @@ function summarizeQueuePayload(data: CallNextResponse) {
  * Join: `joinRoomDisplay` { roomId, staffId? }
  * Listen: `onQueueUpdate`, `onRebalanceSuggestion`, `onRebalanceResolved`
  *
- * Payload: { room_info, current_patient, upcoming_patients }
+ * Payload: { room_info, current_patient, upcoming_patients, missing? }
  */
 export function useRoomDisplaySocket({
     roomId,

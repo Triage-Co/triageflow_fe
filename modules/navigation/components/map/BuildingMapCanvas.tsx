@@ -58,6 +58,7 @@ interface BuildingMapCanvasProps {
   targetRoomId?: string | null;
   routePath?: RoutePathNode[] | null;
   onSelectRoom?: (roomId: string) => void;
+  onClearRoomSelect?: () => void;
   showNodes?: boolean;
   showWalkable?: boolean;
   debugSteps?: CorridorDebugSteps | null;
@@ -175,6 +176,7 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   targetRoomId = null,
   routePath = null,
   onSelectRoom,
+  onClearRoomSelect,
   showNodes = false,
   showWalkable = false,
   debugSteps = null,
@@ -221,6 +223,7 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   const startRoomIdRef = useRef<string | null>(startRoomId);
   const targetRoomIdRef = useRef<string | null>(targetRoomId);
   const onSelectRoomRef = useRef(onSelectRoom);
+  const onClearRoomSelectRef = useRef(onClearRoomSelect);
   const onHoverRoomRef = useRef(onHoverRoom);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const pathMeshRef = useRef<THREE.Mesh | null>(null);
@@ -275,6 +278,7 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   startRoomIdRef.current = startRoomId;
   targetRoomIdRef.current = targetRoomId;
   onSelectRoomRef.current = onSelectRoom;
+  onClearRoomSelectRef.current = onClearRoomSelect;
   onHoverRoomRef.current = onHoverRoom;
   routePathRef.current = routePath;
   debugStepsRef.current = debugSteps;
@@ -1231,15 +1235,20 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       setRayFromEvent(event);
 
       const intersects = raycaster.intersectObjects(roomMeshesGroup.children);
+      const isHeatmap = heatmapEnabledRef.current;
 
       if (intersects.length > 0) {
         const hitObj = intersects[0].object;
         if (hitObj.userData && hitObj.userData.id) {
           const roomId = hitObj.userData.id as string;
-          setSelectedRoomId(roomId);
-          applyFloorColors(roomId);
+          if (!isHeatmap) {
+            setSelectedRoomId(roomId);
+            applyFloorColors(roomId);
+          }
           onSelectRoomRef.current?.(roomId);
         }
+      } else if (isHeatmap) {
+        onClearRoomSelectRef.current?.();
       }
     };
 
@@ -1363,6 +1372,9 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
         edgeEditModeRef.current
       )
         return;
+      // Heatmap: room info opens on click only, not hover.
+      if (heatmapEnabledRef.current || !onHoverRoomRef.current) return;
+
       const rect = canvas.getBoundingClientRect();
       mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;

@@ -273,7 +273,6 @@ export function RegisterForm() {
                         >
                             <option value="MALE">Nam</option>
                             <option value="FEMALE">Nữ</option>
-                            <option value="OTHER">Khác</option>
                         </select>
                     </div>
                     <div className="space-y-1">
