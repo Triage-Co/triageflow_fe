@@ -33,7 +33,7 @@ const getSpecialtyName = (room: HospitalRoom, specialties: Specialty[]): string 
     if (room.specialty?.specialty_code) return room.specialty.specialty_code;
     if (found?.specialty_code) return found.specialty_code;
     if (room.specialty_id) return `ID: ${room.specialty_id.slice(0, 8)}…`;
-    return 'Chưa xác định';
+    return 'Không thuộc chuyên khoa';
 };
 
 /** Trả về mã chuyên khoa từ nested specialty object, fallback lookup trong danh sách chuyên khoa */
@@ -41,7 +41,7 @@ const getSpecialtyCode = (room: HospitalRoom, specialties: Specialty[]): string 
     if (room.specialty?.specialty_code) return room.specialty.specialty_code;
     const found = specialties.find((s) => s.specialty_id === room.specialty_id);
     if (found?.specialty_code) return found.specialty_code;
-    return 'N/A';
+    return '—';
 };
 
 /* ─── Component ──────────────────────────────────────────────────────────── */
@@ -109,7 +109,7 @@ export function AdminRoomsPage() {
         setEditForm({
             room_name: room.room_name,
             room_type: room.room_type || DEFAULT_ROOM_TYPE,
-            specialty_id: room.specialty_id,
+            specialty_id: room.specialty_id || '',
             custom_specialty_id: '',
         });
         setEditError(null);
@@ -128,8 +128,8 @@ export function AdminRoomsPage() {
             ? createForm.custom_specialty_id.trim()
             : createForm.specialty_id;
 
-        if (!createForm.room_name.trim() || !specId) {
-            setCreateError('Vui lòng điền đầy đủ thông tin bắt buộc.');
+        if (!createForm.room_name.trim()) {
+            setCreateError('Vui lòng điền tên phòng khám.');
             return;
         }
 
@@ -138,9 +138,9 @@ export function AdminRoomsPage() {
         try {
             await createRoom(
                 {
-                    room_name: createForm.room_name,
+                    room_name: createForm.room_name.trim(),
                     room_type: createForm.room_type,
-                    specialty_id: specId,
+                    specialty_id: specId || undefined,
                 },
                 accessToken || ''
             );
@@ -148,7 +148,7 @@ export function AdminRoomsPage() {
             setCreateForm({
                 room_name: '',
                 room_type: DEFAULT_ROOM_TYPE,
-                specialty_id: specialties[0]?.specialty_id || '',
+                specialty_id: '',
                 custom_specialty_id: '',
             });
             // Refetch to sync updated relationship from database
@@ -169,8 +169,8 @@ export function AdminRoomsPage() {
             ? editForm.custom_specialty_id.trim()
             : editForm.specialty_id;
 
-        if (!editForm.room_name.trim() || !specId) {
-            setEditError('Vui lòng điền đầy đủ thông tin bắt buộc.');
+        if (!editForm.room_name.trim()) {
+            setEditError('Vui lòng điền tên phòng khám.');
             return;
         }
 
@@ -180,9 +180,9 @@ export function AdminRoomsPage() {
             await updateRoom(
                 editingRoom.room_id,
                 {
-                    room_name: editForm.room_name,
+                    room_name: editForm.room_name.trim(),
                     room_type: editForm.room_type,
-                    specialty_id: specId,
+                    specialty_id: specId || undefined,
                 },
                 accessToken || ''
             );
@@ -257,7 +257,7 @@ export function AdminRoomsPage() {
                                     setCreateForm({
                                         room_name: '',
                                         room_type: DEFAULT_ROOM_TYPE,
-                                        specialty_id: specialties[0]?.specialty_id || '',
+                                        specialty_id: '',
                                         custom_specialty_id: '',
                                     });
                                 }}
@@ -522,12 +522,13 @@ export function AdminRoomsPage() {
                             </select>
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-[11px] font-bold text-neutral-500 uppercase">Chuyên khoa phụ trách *</label>
+                            <label className="text-[11px] font-bold text-neutral-500 uppercase">Chuyên khoa phụ trách (Không bắt buộc)</label>
                             <select
                                 value={createForm.specialty_id}
                                 onChange={(e) => setCreateForm(prev => ({ ...prev, specialty_id: e.target.value }))}
                                 className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
                             >
+                                <option value="">-- Không thuộc chuyên khoa --</option>
                                 {specialties.map((sp) => (
                                     <option key={sp.specialty_id} value={sp.specialty_id}>
                                         {sp.specialty_name || sp.specialty_code}
@@ -616,12 +617,13 @@ export function AdminRoomsPage() {
                             </select>
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-[11px] font-bold text-neutral-500 uppercase">Chuyên khoa phụ trách *</label>
+                            <label className="text-[11px] font-bold text-neutral-500 uppercase">Chuyên khoa phụ trách (Không bắt buộc)</label>
                             <select
                                 value={editForm.specialty_id}
                                 onChange={(e) => setEditForm(prev => ({ ...prev, specialty_id: e.target.value }))}
                                 className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
                             >
+                                <option value="">-- Không thuộc chuyên khoa --</option>
                                 {specialties.map((sp) => (
                                     <option key={sp.specialty_id} value={sp.specialty_id}>
                                         {sp.specialty_name || sp.specialty_code}
