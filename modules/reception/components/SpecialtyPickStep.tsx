@@ -133,7 +133,7 @@ export function SpecialtyPickStep({
                         ))}
                     </div>
                 ) : filteredCatalog.length > 0 ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 max-h-[280px] overflow-y-auto pr-1">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 max-h-[480px] overflow-y-auto pr-1">
                         {filteredCatalog.map((item) => {
                             const isSelected = departmentId === item.specialty_id;
                             return (
