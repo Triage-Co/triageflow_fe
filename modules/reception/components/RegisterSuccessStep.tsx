@@ -5,7 +5,6 @@ import {
     Check,
     Clock,
     Download,
-    Headphones,
     Home,
     MapPin,
     Printer,
@@ -115,6 +114,10 @@ export function RegisterSuccessStep({ result, onRegisterNew }: RegisterSuccessSt
                                 <span className="text-neutral-500 font-medium">Ngày & Giờ khám</span>
                                 <span className="font-bold text-neutral-800">{result.slotTimeLabel || '—'}</span>
                             </div>
+                            <div className="flex justify-between items-center py-0.5 border-t border-neutral-200/50 pt-2.5">
+                                <span className="text-neutral-500 font-medium">Mã vé khám</span>
+                                <span className="font-bold text-neutral-800">{result.ticketCode || '—'}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -178,18 +181,6 @@ export function RegisterSuccessStep({ result, onRegisterNew }: RegisterSuccessSt
                     <UserRound className="w-4 h-4" />
                     Đăng ký bệnh nhân mới
                 </button>
-            </div>
-
-            <div className="rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] px-5 py-4 flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#DBEAFE] flex items-center justify-center shrink-0">
-                    <Headphones className="w-5 h-5 text-[#2563EB]" />
-                </div>
-                <div>
-                    <p className="text-[13px] text-[#1E40AF]">
-                        Cần hỗ trợ? Liên hệ với nhân viên để được hỗ trợ giải đáp
-                    </p>
-                    <p className="text-[18px] font-bold text-[#1D4ED8] mt-1">1900 1234</p>
-                </div>
             </div>
         </div>
     );

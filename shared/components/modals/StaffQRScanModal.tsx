@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 import { cn } from '@/lib/utils';
+import { sanitizeStaffScanErrorMessage } from '@/shared/utils/apiError';
 
 export interface StaffQRScanModalProps {
   isOpen: boolean;
@@ -81,11 +82,12 @@ export function StaffQRScanModal({
         onCloseRef.current();
       } catch (err: any) {
         console.error('[StaffQRScanModal] Lỗi khi xử lý mã quét:', err);
-        const errMsg =
+        const errMsg = sanitizeStaffScanErrorMessage(
           err?.response?.data?.message ||
-          err?.response?.data?.detail ||
-          err?.message ||
-          'Không thể xử lý mã này. Vui lòng kiểm tra lại.';
+            err?.response?.data?.detail ||
+            err?.message ||
+            'Không thể xử lý mã này. Vui lòng kiểm tra lại.',
+        );
         setError(errMsg);
         isProcessingRef.current = false;
         setIsProcessing(false);

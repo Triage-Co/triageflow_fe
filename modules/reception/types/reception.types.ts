@@ -164,6 +164,7 @@ export interface PatientSearchResult {
 export interface RegistrationResult {
   appointmentDate?: string;
   ticketNo: string;
+  ticketCode?: string;
   queueNumber?: string;
   bookingId?: string;
   stepId?: string;

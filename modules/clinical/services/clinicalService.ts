@@ -173,10 +173,6 @@ export function pickFirstTemplateId(raw: unknown): string | undefined {
     return extractTemplateIds(raw)[0];
 }
 
-export function extractWorkflowStepsFromResponse(raw: unknown, currentStepId?: string): WorkflowStep[] {
-    return extractWorkflowSteps(raw, currentStepId);
-}
-
 export interface BackendQueuePatient {
     queue_id: string;
     queue_number: string;
@@ -236,6 +232,44 @@ export interface BackendQueuePatient {
             };
         };
     };
+}
+
+/**
+ * Staff may open EMR only after the patient has been called into the room
+ * (CALLED / SERVING / FINISHED). Blocks PENDING / QUEUED / WAITING / MISSING.
+ */
+export function canStaffViewPatientEmr(
+    queueStatus?: string | null,
+    stepStatus?: string,
+): boolean {
+    const q = (queueStatus || '').toUpperCase();
+    const step = (stepStatus || '').toUpperCase();
+
+    if (
+        q === 'MISSING' ||
+        q === 'SKIPPED' ||
+        q === 'CANCELLED' ||
+        q === 'DECLINED'
+    ) {
+        return false;
+    }
+
+    if (
+        q === 'CALLED' ||
+        q === 'CALLING' ||
+        q === 'SERVING' ||
+        q === 'IN_PROGRESS' ||
+        q === 'FINISHED' ||
+        q === 'COMPLETED'
+    ) {
+        return true;
+    }
+
+    if (step === 'IN_PROGRESS' || step === 'PROCESSING' || step === 'ONGOING') {
+        return true;
+    }
+
+    return false;
 }
 
 export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient {

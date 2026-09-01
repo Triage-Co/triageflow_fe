@@ -871,6 +871,21 @@ export function ReceptionRegisterForm() {
           throw new Error("Không tạo được lịch khám.");
         }
 
+        let ticketCode: string | undefined;
+        if (bData) {
+          const dataBody = (bData as Record<string, unknown>)?.data ?? bData;
+          const flowObj =
+            (dataBody as Record<string, unknown>)?.flow ??
+            (bData as Record<string, unknown>)?.flow;
+          const codeFromBooking =
+            (flowObj as Record<string, unknown>)?.ticket_code ??
+            (dataBody as Record<string, unknown>)?.ticket_code ??
+            (bData as Record<string, unknown>)?.ticket_code;
+          if (codeFromBooking) {
+            ticketCode = String(codeFromBooking).trim();
+          }
+        }
+
         let roomLabel =
           selectedSpecialty?.room_name ||
           selectedSlot?.room_name ||
@@ -984,6 +999,9 @@ export function ReceptionRegisterForm() {
             if (matchedFlow.slotTimeLabel) {
               slotTimeLabel = matchedFlow.slotTimeLabel;
             }
+            if (matchedFlow.ticketCode) {
+              ticketCode = matchedFlow.ticketCode;
+            }
           }
         } catch {
           // ignore
@@ -998,6 +1016,7 @@ export function ReceptionRegisterForm() {
 
         setRegistrationResult({
           ticketNo,
+          ticketCode,
           appointmentDate: selectedSlot?.shift?.date
             ? String(selectedSlot.shift.date).slice(0, 10)
             : getTodayDateString(),

@@ -168,7 +168,7 @@ export function RoomWaitingList({
                                         </p>
                                         <p className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-neutral-400">
                                             <Clock className="h-3 w-3" />
-                                            ETA ~{w.eta_minutes ?? '—'}p
+                                            Thời gian chờ ~{w.eta_minutes ?? '—'}p
                                             {w.eta_time ? ` · ${formatEtaTime(w.eta_time)}` : ''}
                                         </p>
                                     </div>

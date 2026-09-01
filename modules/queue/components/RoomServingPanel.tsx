@@ -10,7 +10,7 @@ import {
 import { Button } from '@/shared/components/ui/Button';
 import { cn } from '@/lib/utils';
 import type { Serving } from '../types/queue.types';
-import { ACTIVE_SOD_STATUSES } from '../types/queue.types';
+import { canStaffViewPatientEmr } from '@/modules/clinical/services/clinicalService';
 
 export interface RoomServingPanelProps {
     serving: Serving | null;
@@ -45,44 +45,8 @@ function genderLabel(g: string): string {
     return g || '—';
 }
 
-const STEP_TYPE_VI: Record<string, string> = {
-    CLINICAL: 'Khám chuyên khoa',
-    EXAMINATION: 'Khám bệnh',
-    TRIAGE: 'Phân loại khám',
-    VITAL_SIGNS: 'Đo sinh hiệu',
-    LAB: 'Xét nghiệm',
-    TEST: 'Xét nghiệm',
-    IMAGING: 'Chẩn đoán hình ảnh',
-    XRAY: 'Chụp X-Quang',
-    ULTRASOUND: 'Siêu âm',
-    PROCEDURE: 'Thủ thuật',
-    PHARMACY: 'Cấp phát thuốc',
-    PAYMENT: 'Thu ngân / Viện phí',
-    REGISTRATION: 'Đăng ký tiếp đón',
-};
-
-function formatStepType(t: string | undefined | null): string {
-    if (!t) return 'Khám';
-    const key = String(t).toUpperCase();
-    return STEP_TYPE_VI[key] || t;
-}
-
-const STATUS_BADGE_MAP: Record<string, { label: string; className: string }> = {
-    IN_PROGRESS: { label: 'Đang thực hiện', className: 'bg-sky-50 text-sky-700 border-sky-200/80' },
-    WAITING: { label: 'Đang chờ', className: 'bg-amber-50 text-amber-700 border-amber-200/80' },
-    PENDING: { label: 'Chờ xử lý', className: 'bg-amber-50 text-amber-700 border-amber-200/80' },
-    COMPLETED: { label: 'Đã hoàn thành', className: 'bg-emerald-50 text-emerald-700 border-emerald-200/80' },
-    DONE: { label: 'Đã xong', className: 'bg-emerald-50 text-emerald-700 border-emerald-200/80' },
-    CANCELLED: { label: 'Đã hủy', className: 'bg-rose-50 text-rose-700 border-rose-200/80' },
-    REFUSED: { label: 'Đã từ chối', className: 'bg-rose-50 text-rose-700 border-rose-200/80' },
-    SKIPPED: { label: 'Bỏ qua', className: 'bg-neutral-100 text-neutral-600 border-neutral-200' },
-};
-
-function getStatusBadge(s: string | undefined | null) {
-    if (!s) return { label: '—', className: 'bg-neutral-100 text-neutral-600 border-neutral-200' };
-    const key = String(s).toUpperCase();
-    return STATUS_BADGE_MAP[key] || { label: s, className: 'bg-neutral-100 text-neutral-600 border-neutral-200' };
-}
+const BRAND_CALLED_GRADIENT = 'bg-[#8B7CF6] shadow-[#8B7CF6]/25';
+const BRAND_CALLED_SURFACE = 'border-[#8B7CF6]/30 bg-gradient-to-b from-[#8B7CF6]/10 via-white to-white';
 
 export function RoomServingPanel({
     serving,
@@ -121,16 +85,14 @@ export function RoomServingPanel({
         serving.status === 'CALLED' ||
         (!serving.serving_started_at && String(serving.step?.step_status).toUpperCase() === 'PENDING');
 
-    const so = serving.service_order;
-    const activeDetails =
-        so?.details.filter((d) => ACTIVE_SOD_STATUSES.has(String(d.status).toUpperCase())) ?? [];
+    const canOpenEmr = canStaffViewPatientEmr(serving.status, serving.step?.step_status);
 
     return (
         <div
             className={cn(
                 'flex flex-col justify-between rounded-2xl border p-5 shadow-sm relative transition-colors',
                 isCalled
-                    ? 'border-amber-300/80 bg-gradient-to-b from-amber-50/40 via-white to-white'
+                    ? BRAND_CALLED_SURFACE
                     : 'border-emerald-200/60 bg-gradient-to-b from-emerald-50/20 via-white to-white',
                 className,
             )}
@@ -143,7 +105,7 @@ export function RoomServingPanel({
                             className={cn(
                                 'flex h-13 w-13 shrink-0 flex-col items-center justify-center rounded-2xl text-white shadow-sm',
                                 isCalled
-                                    ? 'bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-200'
+                                    ? BRAND_CALLED_GRADIENT
                                     : 'bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-200',
                             )}
                         >
@@ -152,8 +114,8 @@ export function RoomServingPanel({
                         </div>
                         <div>
                             {isCalled ? (
-                                <div className="inline-flex items-center gap-1.5 rounded-md bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-900 border border-amber-300">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping" />
+                                <div className="inline-flex items-center gap-1.5 rounded-md bg-[#8B7CF6] px-2 py-0.5 text-[11px] font-bold text-white border border-[#8B7CF6]">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-white animate-ping" />
                                     ĐANG GỌI VÀO PHÒNG
                                 </div>
                             ) : (
@@ -170,7 +132,7 @@ export function RoomServingPanel({
                             </p>
                         </div>
                     </div>
-                    {onOpenEmr && (
+                    {onOpenEmr && canOpenEmr && (
                         <Button
                             variant="outline"
                             className="h-8.5 rounded-xl border-neutral-200 text-xs font-bold text-neutral-700 hover:bg-neutral-50 hover:text-indigo-600 hover:border-indigo-200 shadow-xs cursor-pointer"
@@ -182,35 +144,6 @@ export function RoomServingPanel({
                         </Button>
                     )}
                 </div>
-
-                {/* Step Info */}
-                {serving.step && (
-                    <div className="rounded-xl border border-neutral-200/70 bg-neutral-50/70 p-3.5">
-                        <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">
-                            Bước khám hiện tại
-                        </p>
-                        <div className="mt-1 flex flex-wrap items-center gap-2">
-                            <span className="text-sm font-bold text-neutral-800">
-                                {serving.step.step_name}
-                            </span>
-                        </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                            <span className="rounded-md bg-indigo-50 border border-indigo-200/70 px-2 py-0.5 text-[11px] font-bold text-indigo-700 shadow-2xs">
-                                {formatStepType(serving.step.step_type)}
-                            </span>
-                            {(() => {
-                                const badge = isCalled
-                                    ? { label: 'Chờ vào phòng', className: 'bg-amber-100 text-amber-800 border-amber-300' }
-                                    : getStatusBadge(serving.step.step_status);
-                                return (
-                                    <span className={cn('rounded-md border px-2 py-0.5 text-[11px] font-bold shadow-2xs', badge.className)}>
-                                        {badge.label}
-                                    </span>
-                                );
-                            })()}
-                        </div>
-                    </div>
-                )}
             </div>
 
             {/* Bottom Actions */}
@@ -219,7 +152,7 @@ export function RoomServingPanel({
                     <>
                         {onStartServing && (
                             <Button
-                                className="h-10 flex-1 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white text-xs sm:text-sm font-bold shadow-sm shadow-indigo-200 active:scale-[0.99] transition-all cursor-pointer"
+                                className="h-10 flex-1 rounded-xl bg-[#8B7CF6] hover:bg-[#7C6FE8] text-white text-xs sm:text-sm font-bold shadow-sm shadow-[#8B7CF6]/25 active:scale-[0.99] transition-all cursor-pointer"
                                 disabled={isActing}
                                 onClick={() => void onStartServing()}
                                 startIcon={
