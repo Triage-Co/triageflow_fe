@@ -38,7 +38,7 @@ import {
   rebuildEditorOverlay,
   type EditorHit,
 } from './mapEditorLayers';
-import type { PendingAddNode, EditorPointerEvent } from '../FloorMap';
+import type { PendingAddNode, EditorPointerEvent, SelectedGraphEdge } from '../FloorMap';
 import type {
   DraftBoundary,
   DraftRoom,
@@ -72,6 +72,10 @@ interface BuildingMapCanvasProps {
   selectedEditableNodeId?: string | null;
   onSelectEditableNode?: (nodeId: string | null) => void;
   onPlaceNode?: (coords: [number, number]) => void;
+  edgeEditMode?: boolean;
+  pendingEdgeRemoves?: string[];
+  selectedEdgePairKey?: string | null;
+  onSelectEdge?: (edge: SelectedGraphEdge | null) => void;
   topDown?: boolean;
   geometryEditMode?: boolean;
   geometryTool?: GeometryTool;
@@ -185,6 +189,10 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   selectedEditableNodeId = null,
   onSelectEditableNode,
   onPlaceNode,
+  edgeEditMode = false,
+  pendingEdgeRemoves = [],
+  selectedEdgePairKey = null,
+  onSelectEdge,
   topDown = false,
   geometryEditMode = false,
   geometryTool = 'select',
@@ -249,6 +257,10 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   const selectedEditableNodeIdRef = useRef(selectedEditableNodeId);
   const apiFloorRef = useRef(apiFloor);
   const pendingAddsRef = useRef(pendingAdds);
+  const edgeEditModeRef = useRef(edgeEditMode);
+  const pendingEdgeRemovesRef = useRef(pendingEdgeRemoves);
+  const selectedEdgePairKeyRef = useRef(selectedEdgePairKey);
+  const onSelectEdgeRef = useRef(onSelectEdge);
 
   const debugStepsRef = useRef(debugSteps);
   const showNodesRef = useRef(showNodes);
@@ -282,6 +294,10 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   selectedEditableNodeIdRef.current = selectedEditableNodeId;
   apiFloorRef.current = apiFloor;
   pendingAddsRef.current = pendingAdds;
+  edgeEditModeRef.current = edgeEditMode;
+  pendingEdgeRemovesRef.current = pendingEdgeRemoves;
+  selectedEdgePairKeyRef.current = selectedEdgePairKey;
+  onSelectEdgeRef.current = onSelectEdge;
   topDownRef.current = topDown;
   geometryEditModeRef.current = geometryEditMode;
   onEditorPointerDownRef.current = onEditorPointerDown;
@@ -490,12 +506,29 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   // Toggle overlay visibility without rebuilding scene
   useEffect(() => {
     if (nodesGroupRef.current) {
-      nodesGroupRef.current.visible = showNodes || nodeEditMode;
-      const removeSet = new Set(pendingRemoves);
+      nodesGroupRef.current.visible =
+        showNodes || nodeEditMode || edgeEditMode;
+      const removeNodeSet = new Set(pendingRemoves);
+      const removeEdgeSet = new Set(pendingEdgeRemoves);
       nodesGroupRef.current.children.forEach((child) => {
+        if (child.userData?.type === 'EDGE') {
+          const ids = (child.userData.ids as string[]) || [];
+          child.visible = !ids.some((edgeId) => removeEdgeSet.has(edgeId));
+          if (child instanceof THREE.Line) {
+            const mat = child.material as THREE.LineBasicMaterial;
+            const original = child.userData.originalColor ?? 0x818cf8;
+            const selected =
+              !!selectedEdgePairKey &&
+              child.userData.pairKey === selectedEdgePairKey;
+            mat.color.set(selected ? '#ec4899' : original);
+            mat.opacity = selected ? 1 : 0.85;
+          }
+          return;
+        }
+
         const id = child.userData?.id as string | undefined;
         if (!id) return;
-        child.visible = !removeSet.has(id);
+        child.visible = !removeNodeSet.has(id);
 
         if (
           child instanceof THREE.Mesh &&
@@ -517,7 +550,15 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
         }
       });
     }
-  }, [showNodes, nodeEditMode, pendingRemoves, selectedEditableNodeId]);
+  }, [
+    showNodes,
+    nodeEditMode,
+    edgeEditMode,
+    pendingRemoves,
+    pendingEdgeRemoves,
+    selectedEditableNodeId,
+    selectedEdgePairKey,
+  ]);
 
   useEffect(() => {
     if (walkableMeshRef.current) {
@@ -587,7 +628,7 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       controls.mouseButtons.RIGHT = THREE.MOUSE.PAN;
       return;
     }
-    if (nodeEditMode) {
+    if (nodeEditMode || edgeEditMode) {
       // Left-drag pans; left-click selects. Right-drag still orbits.
       controls.mouseButtons.LEFT = THREE.MOUSE.PAN;
       controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
@@ -598,7 +639,7 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
     controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
     controls.mouseButtons.RIGHT = THREE.MOUSE.PAN;
     controls.enableRotate = true;
-  }, [nodeEditMode, geometryEditMode, topDown]);
+  }, [nodeEditMode, edgeEditMode, geometryEditMode, topDown]);
 
   // Rebuild geometry editor overlay
   useEffect(() => {
@@ -743,7 +784,10 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       floorData.centerShiftX ?? 0,
       floorData.centerShiftZ ?? 0
     );
-    nodesGroup.visible = showNodesRef.current || nodeEditModeRef.current;
+    nodesGroup.visible =
+      showNodesRef.current ||
+      nodeEditModeRef.current ||
+      edgeEditModeRef.current;
     scene.add(nodesGroup);
     nodesGroupRef.current = nodesGroup;
 
@@ -764,6 +808,33 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
         }
       });
     }
+
+    const selectedPair = selectedEdgePairKeyRef.current;
+    if (selectedPair) {
+      nodesGroup.children.forEach((child) => {
+        if (
+          child instanceof THREE.Line &&
+          child.userData?.type === 'EDGE' &&
+          child.userData?.pairKey === selectedPair
+        ) {
+          const mat = child.material as THREE.LineBasicMaterial;
+          mat.color.set('#ec4899');
+          mat.opacity = 1;
+        }
+      });
+    }
+
+    const removeNodes = new Set(pendingRemovesRef.current);
+    const removeEdges = new Set(pendingEdgeRemovesRef.current);
+    nodesGroup.children.forEach((child) => {
+      if (child.userData?.type === 'EDGE') {
+        const ids = (child.userData.ids as string[]) || [];
+        child.visible = !ids.some((id) => removeEdges.has(id));
+        return;
+      }
+      const id = child.userData?.id as string | undefined;
+      if (id && removeNodes.has(id)) child.visible = false;
+    });
 
     const walkable = buildWalkableZoneMesh(
       apiFloor,
@@ -853,7 +924,7 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       controls.maxPolarAngle = 0;
       controls.mouseButtons.LEFT = THREE.MOUSE.PAN;
       controls.mouseButtons.RIGHT = THREE.MOUSE.PAN;
-    } else if (nodeEditModeRef.current) {
+    } else if (nodeEditModeRef.current || edgeEditModeRef.current) {
       controls.mouseButtons.LEFT = THREE.MOUSE.PAN;
       controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
     }
@@ -935,7 +1006,10 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
         floorData.centerShiftX ?? 0,
         floorData.centerShiftZ ?? 0
       );
-      nodesGroup.visible = showNodesRef.current || nodeEditModeRef.current;
+      nodesGroup.visible =
+      showNodesRef.current ||
+      nodeEditModeRef.current ||
+      edgeEditModeRef.current;
       scene.add(nodesGroup);
       nodesGroupRef.current = nodesGroup;
 
@@ -1096,8 +1170,63 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       return pickNearestOnScreen(event.clientX, event.clientY);
     };
 
+    const pickEditableEdge = (
+      event: PointerEvent,
+    ): SelectedGraphEdge | null => {
+      setRayFromEvent(event);
+      raycaster.params.Line = { threshold: 0.5 };
+      const group = nodesGroupRef.current;
+      if (!group) return null;
+      const removed = new Set(pendingEdgeRemovesRef.current);
+      const hits = raycaster.intersectObjects(group.children, false);
+      for (const hit of hits) {
+        const ud = hit.object.userData;
+        if (ud?.type !== 'EDGE') continue;
+        const ids = (ud.ids as string[]) || [];
+        if (ids.some((edgeId) => removed.has(edgeId))) continue;
+        if (!ud.pairKey || ids.length === 0) continue;
+        return { pairKey: ud.pairKey as string, ids };
+      }
+
+      const cam = activeCameraRef.current || camera;
+      cam.updateMatrixWorld();
+      const rect = canvas.getBoundingClientRect();
+      let best: SelectedGraphEdge | null = null;
+      let bestDist = 40 * 40;
+      const mid = new THREE.Vector3();
+      group.children.forEach((child) => {
+        const ud = child.userData;
+        if (ud?.type !== 'EDGE' || !(child instanceof THREE.Line)) return;
+        const ids = (ud.ids as string[]) || [];
+        if (ids.some((edgeId) => removed.has(edgeId))) return;
+        const pos = child.geometry.getAttribute('position');
+        if (!pos || pos.count < 2) return;
+        mid.set(
+          (pos.getX(0) + pos.getX(1)) / 2,
+          (pos.getY(0) + pos.getY(1)) / 2,
+          (pos.getZ(0) + pos.getZ(1)) / 2,
+        ).project(cam);
+        if (mid.z > 1) return;
+        const sx = rect.left + (mid.x * 0.5 + 0.5) * rect.width;
+        const sy = rect.top + (-mid.y * 0.5 + 0.5) * rect.height;
+        const dx = sx - event.clientX;
+        const dy = sy - event.clientY;
+        const dist = dx * dx + dy * dy;
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = { pairKey: ud.pairKey as string, ids };
+        }
+      });
+      return best;
+    };
+
     const handleCanvasClick = (event: MouseEvent) => {
-      if (geometryEditModeRef.current || nodeEditModeRef.current) return;
+      if (
+        geometryEditModeRef.current ||
+        nodeEditModeRef.current ||
+        edgeEditModeRef.current
+      )
+        return;
 
       setRayFromEvent(event);
 
@@ -1195,7 +1324,14 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       // Overlay buttons (Xóa / Lưu / Thêm) also fire window pointerup.
       // Ignore those so they cannot deselect the node before the click handler runs.
       if (!startedOnCanvas) return;
-      if (!nodeEditModeRef.current || pointerGesture.dragged) return;
+      if (pointerGesture.dragged) return;
+
+      if (edgeEditModeRef.current) {
+        onSelectEdgeRef.current?.(pickEditableEdge(event));
+        return;
+      }
+
+      if (!nodeEditModeRef.current) return;
 
       setRayFromEvent(event);
 
@@ -1221,7 +1357,12 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
     };
 
     const handleCanvasMouseMove = (event: MouseEvent) => {
-      if (geometryEditModeRef.current || nodeEditModeRef.current) return;
+      if (
+        geometryEditModeRef.current ||
+        nodeEditModeRef.current ||
+        edgeEditModeRef.current
+      )
+        return;
       const rect = canvas.getBoundingClientRect();
       mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -1389,7 +1530,7 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
         className={
           nodeEditMode && placingNode
             ? 'w-full h-full block cursor-crosshair'
-            : nodeEditMode
+            : nodeEditMode || edgeEditMode
               ? 'w-full h-full block cursor-pointer'
               : 'w-full h-full block cursor-grab active:cursor-grabbing'
         }

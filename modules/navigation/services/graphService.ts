@@ -28,12 +28,16 @@ export interface CorridorEditsResult {
   added: number;
   removed: number;
   edgesCreated: number;
-  nodesUsed: number;
+  durationMs: number;
+}
+
+export interface EdgeEditsResult {
+  removed: number;
   durationMs: number;
 }
 
 /**
- * Apply batched corridor/junction edits then rebuild edges (Admin).
+ * Apply batched corridor/junction node add/remove. Does not rebuild edges.
  */
 export async function saveCorridorEdits(
   floorId: string,
@@ -48,6 +52,24 @@ export async function saveCorridorEdits(
 
   if (!response.data) {
     throw new Error('Invalid corridor-edits API response');
+  }
+
+  return response.data;
+}
+
+export async function saveEdgeEdits(
+  floorId: string,
+  payload: { remove: string[] },
+  token: string,
+): Promise<EdgeEditsResult> {
+  const response = await apiClient.post<EdgeEditsResult>(
+    `/api/graph/${floorId}/edge-edits`,
+    payload,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+
+  if (!response.data) {
+    throw new Error('Invalid edge-edits API response');
   }
 
   return response.data;

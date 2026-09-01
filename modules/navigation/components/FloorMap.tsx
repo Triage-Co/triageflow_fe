@@ -21,6 +21,11 @@ export interface PendingAddNode {
   coords: [number, number];
 }
 
+export interface SelectedGraphEdge {
+  pairKey: string;
+  ids: string[];
+}
+
 export interface EditorPointerEvent {
   lngLat: LngLat;
   hit: EditorHit | null;
@@ -50,6 +55,10 @@ interface FloorMapProps {
   selectedEditableNodeId?: string | null;
   onSelectEditableNode?: (nodeId: string | null) => void;
   onPlaceNode?: (coords: [number, number]) => void;
+  edgeEditMode?: boolean;
+  pendingEdgeRemoves?: string[];
+  selectedEdgePairKey?: string | null;
+  onSelectEdge?: (edge: SelectedGraphEdge | null) => void;
   /** Geometry editor */
   topDown?: boolean;
   geometryEditMode?: boolean;
@@ -92,6 +101,10 @@ export const FloorMap: React.FC<FloorMapProps> = ({
   selectedEditableNodeId,
   onSelectEditableNode,
   onPlaceNode,
+  edgeEditMode,
+  pendingEdgeRemoves,
+  selectedEdgePairKey,
+  onSelectEdge,
   topDown,
   geometryEditMode,
   geometryTool,
@@ -152,7 +165,7 @@ export const FloorMap: React.FC<FloorMapProps> = ({
         targetRoomId={targetRoomId}
         routePath={routePath}
         onSelectRoom={onSelectRoom}
-        showNodes={showNodes || nodeEditMode}
+        showNodes={showNodes || nodeEditMode || edgeEditMode}
         showWalkable={showWalkable || (nodeEditMode && placingNode)}
         debugSteps={debugSteps}
         showDebugStep1={showDebugStep1}
@@ -166,6 +179,10 @@ export const FloorMap: React.FC<FloorMapProps> = ({
         selectedEditableNodeId={selectedEditableNodeId}
         onSelectEditableNode={onSelectEditableNode}
         onPlaceNode={onPlaceNode}
+        edgeEditMode={edgeEditMode}
+        pendingEdgeRemoves={pendingEdgeRemoves}
+        selectedEdgePairKey={selectedEdgePairKey}
+        onSelectEdge={onSelectEdge}
         topDown={topDown}
         geometryEditMode={geometryEditMode}
         geometryTool={geometryTool}
