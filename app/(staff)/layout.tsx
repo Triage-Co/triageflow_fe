@@ -1,6 +1,7 @@
 'use client';
 
 import { AppShell } from '@/shared/components/layout/AppShell';
+import { RoleRouteGuard } from '@/shared/components/layout/RoleRouteGuard';
 import { useAuthStore } from '@/modules/auth/store/authStore';
 
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
@@ -12,7 +13,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
     return (
         <AppShell user={displayUser} bare>
-            {children}
+            <RoleRouteGuard>{children}</RoleRouteGuard>
         </AppShell>
     );
 }

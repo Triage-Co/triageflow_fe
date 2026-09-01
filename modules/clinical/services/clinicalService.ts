@@ -9,6 +9,7 @@ import {
     normalizeStepType,
 } from '@/modules/admin/types/process.types';
 import { toLocalYmd } from '@/modules/clinical/utils/appointmentDate';
+import { buildPhysicalExamFromApi } from '@/modules/clinical/utils/physicalExam';
 
 // ── API Services & DTOs ──────────────────────────────────────────────────────
 import { apiClient } from '@/shared/services/apiClient';
@@ -52,13 +53,6 @@ export function mapTemplateStepsToAssignPayload(
 }
 
 
-
-const MOCK_PHYSICAL_EXAM = {
-    throat: 'Chưa cập nhật',
-    lungs: 'Chưa cập nhật',
-    heart: 'Chưa cập nhật',
-    abdomen: 'Chưa cập nhật',
-};
 
 function asRecord(value: unknown): Record<string, unknown> | null {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -402,10 +396,7 @@ export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient 
         pickNumber(vitalsRecord, ['temperature', 'temp']);
     const spO2 = pickNumber(vitalsRecord, ['spO2', 'spo2', 'oxygen_saturation']);
 
-    const throat = pickString(physicalExamRecord, ['throat']) ?? MOCK_PHYSICAL_EXAM.throat;
-    const lungs = pickString(physicalExamRecord, ['lungs', 'lung']) ?? MOCK_PHYSICAL_EXAM.lungs;
-    const heartExam = pickString(physicalExamRecord, ['heart']) ?? MOCK_PHYSICAL_EXAM.heart;
-    const abdomen = pickString(physicalExamRecord, ['abdomen', 'digestive']) ?? MOCK_PHYSICAL_EXAM.abdomen;
+    const physicalExam = buildPhysicalExamFromApi(physicalExamRecord);
 
     // Extract queue_number safely
     let qNum = item.queue_number;
@@ -460,12 +451,7 @@ export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient 
             visitReason: visitReasonFromApi || 'Chưa có lý do khám từ hệ thống',
             clinicalProgression: clinicalProgressionFromApi || '',
             medicalHistory: splitList(medicalHistoryFromApiRaw),
-            physicalExam: {
-                throat,
-                lungs,
-                heart: heartExam,
-                abdomen,
-            },
+            physicalExam,
         },
     };
 }

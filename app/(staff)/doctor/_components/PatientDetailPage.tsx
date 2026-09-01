@@ -7,6 +7,7 @@ import type { Patient } from '@/modules/clinical/types/clinical.types';
 import { WorkflowDiagram } from './workflow/WorkflowDiagram';
 import { DoctorHeader } from './DoctorHeader';
 import { ClinicalProcessPanel } from './ClinicalProcessPanel';
+import { physicalExamEntries } from '@/modules/clinical/utils/physicalExam';
 
 type DetailTab = 'info' | 'process';
 
@@ -35,13 +36,7 @@ export function PatientDetailPage({ patient, clinicName }: PatientDetailPageProp
     const medicalHistory = (record?.medicalHistory?.length ? record.medicalHistory : patient.medicalHistory) || [];
     const visitReason = record?.visitReason || patient.visitReason;
     const clinicalProgression = record?.clinicalProgression || '';
-    const physicalExam = record?.physicalExam;
-    const examRows = [
-        { label: 'Họng', value: physicalExam?.throat },
-        { label: 'Phổi', value: physicalExam?.lungs },
-        { label: 'Tim', value: physicalExam?.heart },
-        { label: 'Bụng', value: physicalExam?.abdomen },
-    ].filter((row) => Boolean(row.value?.trim()));
+    const examRows = physicalExamEntries(record?.physicalExam);
 
     const tabToggle = (
         <div className="bg-white rounded-[24px] border border-neutral-100 p-1.5 flex gap-1">
