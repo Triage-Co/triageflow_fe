@@ -288,7 +288,8 @@ export const receptionService = {
             ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
         });
         const list = (res as { data?: unknown }).data ?? res;
-        return Array.isArray(list) ? (list as import('@/modules/reception/types/reception.types').ExamPackage[]) : [];
+        const packages = Array.isArray(list) ? (list as import('@/modules/reception/types/reception.types').ExamPackage[]) : [];
+        return packages.filter((pkg) => pkg.is_active === true);
     },
 
     async getExamPackageDetail(id: string, token?: string) {

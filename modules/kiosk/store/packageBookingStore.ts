@@ -55,7 +55,10 @@ export const usePackageBookingStore = create<PackageBookingStoreState>((set, get
     try {
       const response = await packageBookingService.getAllPackages();
       const list = (response as any)?.data || response || [];
-      set({ packages: Array.isArray(list) ? list : [] });
+      const activeList = Array.isArray(list)
+        ? list.filter((pkg: ExamPackage) => pkg.is_active === true)
+        : [];
+      set({ packages: activeList });
     } catch (error: any) {
       console.error('Lỗi khi lấy danh sách gói khám:', error);
       kioskState.showToast(error?.message || 'Không thể tải danh sách gói khám!', 'error');
