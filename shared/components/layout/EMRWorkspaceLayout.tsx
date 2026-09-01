@@ -31,7 +31,6 @@ export function EMRWorkspaceLayout({ activeTabId, activeTabName, children }: EMR
         'setting',
         'settings',
         'pharmacy',
-        'pharmacy_checkin',
         'pharmacy_medicines'
     ];
 

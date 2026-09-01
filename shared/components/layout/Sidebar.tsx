@@ -23,7 +23,6 @@ import {
     User,
     Search,
     Stethoscope,
-    QrCode,
     Package,
     Sparkles,
     Monitor,
@@ -67,19 +66,16 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
         { label: 'Thông tin cá nhân', href: '/settings', icon: User },
     ],
     PHARMACY_STAFF: [
-        { label: 'Tiếp nhận đơn tại quầy', href: '/pharmacy/checkin', icon: QrCode },
         { label: 'Quản lý & Cấp phát đơn', href: '/pharmacy', icon: Pill },
         { label: 'Danh mục dược phẩm', href: '/pharmacy/medicines', icon: Package },
         { label: 'Thông tin cá nhân', href: '/settings', icon: User },
     ],
     PHARMACIST: [
-        { label: 'Tiếp nhận đơn tại quầy', href: '/pharmacy/checkin', icon: QrCode },
         { label: 'Quản lý & Cấp phát đơn', href: '/pharmacy', icon: Pill },
         { label: 'Danh mục dược phẩm', href: '/pharmacy/medicines', icon: Package },
         { label: 'Thông tin cá nhân', href: '/settings', icon: User },
     ],
     PHARMACY: [
-        { label: 'Tiếp nhận đơn tại quầy', href: '/pharmacy/checkin', icon: QrCode },
         { label: 'Quản lý & Cấp phát đơn', href: '/pharmacy', icon: Pill },
         { label: 'Danh mục dược phẩm', href: '/pharmacy/medicines', icon: Package },
         { label: 'Thông tin cá nhân', href: '/settings', icon: User },
