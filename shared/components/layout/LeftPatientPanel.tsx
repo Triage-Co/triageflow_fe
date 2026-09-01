@@ -2,14 +2,30 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { Patient } from '@/modules/clinical/types/clinical.types';
-import { Heart, Activity, Thermometer, Gauge, AlertTriangle, User, Pencil, Check, X } from 'lucide-react';
+import { Heart, Activity, Thermometer, Gauge, AlertTriangle, User, Pencil, Check, X, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WorkflowDiagram } from '@/app/(staff)/doctor/_components/workflow/WorkflowDiagram';
+import { TriageAnswerDetailModal } from './TriageAnswerDetailModal';
 import { clinicalService } from '@/modules/clinical/services/clinicalService';
 import { labService } from '@/modules/lab/services/labService';
+import { commonSymptomDataset } from '@/modules/kiosk/data/commonSymptoms';
 import { pickStaffShift } from '@/modules/clinical/utils/staffShift';
 import { useAuthStore } from '@/store/authStore';
 import { isClinicalEmrReadOnly } from '@/modules/clinical/utils/appointmentDate';
+
+// Build symptom lookup dictionary from Kiosk dataset
+const symptomLookup = new Map<string, string>();
+try {
+    Object.values(commonSymptomDataset).forEach((part) => {
+        part.symptoms?.forEach((sym) => {
+            if (sym.id) {
+                symptomLookup.set(sym.id, sym.labelVn || sym.labelEn);
+            }
+        });
+    });
+} catch {
+    // ignore
+}
 
 type SidePanelTab = 'process' | 'info';
 type EditingField = 'visitReason' | 'medicalHistory' | 'vitals' | null;
@@ -87,9 +103,12 @@ export function LeftPatientPanel({
     const [sessionData, setSessionData] = useState<VisitSessionData | null>(null);
     const [editingField, setEditingField] = useState<EditingField>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [isTriageModalOpen, setIsTriageModalOpen] = useState(false);
 
     const initialPatientId = patient.patientId || (patient as unknown as Record<string, unknown>).patient_id as string | undefined;
     const patientQueueId = patient.id;
+    const [resolvedPid, setResolvedPid] = useState<string>(initialPatientId || '');
+    const [initialSymptom, setInitialSymptom] = useState<string>('');
 
     // Edit state for each editable field
     const [editVisitReason, setEditVisitReason] = useState('');
@@ -149,14 +168,21 @@ export function LeftPatientPanel({
                     try {
                         const queueRes = await clinicalService.getPatientByQueueId(patientQueueId, accessToken) as unknown as Record<string, unknown>;
                         const queueData = (queueRes?.data || queueRes) as Record<string, unknown>;
-                        const booking = queueData?.booking as Record<string, unknown> | undefined;
+                        const step = queueData?.step as Record<string, unknown> | undefined;
+                        const flow = step?.flow as Record<string, unknown> | undefined;
+                        const booking = (flow?.booking || queueData?.booking) as Record<string, unknown> | undefined;
                         const patientObj = booking?.patient as Record<string, unknown> | undefined;
                         if (patientObj?.patient_id) {
                             resolvedPatientId = patientObj.patient_id as string;
+                            setResolvedPid(resolvedPatientId);
                         }
                     } catch {
                         // ignore queue lookup error
                     }
+                }
+
+                if (resolvedPatientId) {
+                    setResolvedPid(resolvedPatientId);
                 }
 
                 const searchId = resolvedPatientId || patientQueueId;
@@ -177,9 +203,14 @@ export function LeftPatientPanel({
                     }
                 }
 
+                let sessionPatientId = resolvedPatientId;
                 if (isMounted && list.length > 0) {
                     const session = list[0];
                     setSessionData(session);
+                    if (!sessionPatientId && session.patient_id) {
+                        sessionPatientId = session.patient_id;
+                        setResolvedPid(session.patient_id);
+                    }
                     setEditVisitReason(session.chief_complaint || '');
                     setEditMedicalHistory(session.pmh || '');
                     setEditVitals({
@@ -190,6 +221,31 @@ export function LeftPatientPanel({
                         spo2: session.spo2 !== undefined ? String(session.spo2) : '',
                     });
                 }
+
+                // Fetch triage answer for Turn 1 symptom name using real patient ID
+                const triageTargetId = sessionPatientId || searchId;
+                try {
+                    const triageRes = await clinicalService.getLatestTriageAnswer(triageTargetId, accessToken) as unknown as Record<string, unknown>;
+                    const triageData = (triageRes?.data || triageRes) as Record<string, unknown>;
+                    const nestedData = (triageData?.data || triageData) as Record<string, unknown>;
+                    const qData = (nestedData?.questionnaire_data || triageData?.questionnaire_data) as Record<string, unknown> | undefined;
+                    const history = (qData?.history || []) as Array<Record<string, unknown>>;
+                    const turn1 = history.find((h) => h.turn === 1 || h.question_type === 'initial') || history[0];
+                    if (turn1) {
+                        const answers = (turn1.answers || []) as Array<Record<string, unknown>>;
+                        if (answers.length > 0) {
+                            const firstAns = answers[0];
+                            const symName = (firstAns.name as string) || symptomLookup.get(firstAns.id as string) || (firstAns.id as string) || '';
+                            if (symName && isMounted) setInitialSymptom(symName);
+                        } else if (turn1.answer && typeof turn1.answer === 'object') {
+                            const ansObj = turn1.answer as Record<string, unknown>;
+                            const symName = (ansObj.name as string) || (ansObj.choice_label as string) || symptomLookup.get(ansObj.id as string) || (ansObj.id as string) || '';
+                            if (symName && isMounted) setInitialSymptom(symName);
+                        }
+                    }
+                } catch (err) {
+                    console.warn('Failed to fetch triage symptom for button:', err);
+                }
             } catch (err) {
                 console.error('Failed to fetch visit session for left panel:', err);
             }
@@ -199,7 +255,7 @@ export function LeftPatientPanel({
         return () => {
             isMounted = false;
         };
-    }, [initialPatientId, patientQueueId, accessToken]);
+    }, [initialPatientId, patientQueueId, accessToken, patient.patientId, patient.id]);
 
     useEffect(() => {
         if (editingField === 'vitals') {
@@ -567,11 +623,33 @@ export function LeftPatientPanel({
                                         </div>
                                     )}
                                 </div>
+
+                                {/* 6. Gợi ý AI Button */}
+                                <button
+                                    type="button"
+                                    onClick={() => setIsTriageModalOpen(true)}
+                                    className="w-full p-4 rounded-[16px] bg-neutral-50/70 border border-neutral-100 hover:border-[#DDD6FE] hover:bg-[#FAF8FF] transition-all group shadow-2xs cursor-pointer text-left"
+                                >
+                                    <p className="text-[10px] font-bold text-[#8B7CF6] uppercase tracking-wider mb-1.5">
+                                        Gợi ý AI
+                                    </p>
+                                    <p className="text-[12px] font-bold text-neutral-800 leading-snug">
+                                        Lý do: <span className="font-medium text-neutral-700">{initialSymptom || sessionData?.chief_complaint || displayVisitReason || 'Chưa có thông tin'}</span>
+                                    </p>
+                                </button>
                             </>
                         )}
                     </div>
                 </div>
             )}
+
+            {/* Triage AI Survey Modal */}
+            <TriageAnswerDetailModal
+                open={isTriageModalOpen}
+                onOpenChange={setIsTriageModalOpen}
+                patientId={resolvedPid || sessionData?.patient_id || initialPatientId || patient.patientId || patient.id}
+                patientName={patient.name}
+            />
         </div>
     );
 }

@@ -809,6 +809,11 @@ export const clinicalService = {
             headers: { Authorization: `Bearer ${token}` },
         }),
 
+    getLatestTriageAnswer: (patientId: string, token: string) =>
+        apiClient.get<unknown>(`/api/visit-session/patient/${patientId}/latest-answer`, {
+            headers: { Authorization: `Bearer ${token}` },
+        }),
+
     getServices: (token: string, page = 1, limit = 100) =>
         apiClient.get<unknown>(`/api/service?page=${page}&limit=${limit}`, {
             headers: { Authorization: `Bearer ${token}` },
