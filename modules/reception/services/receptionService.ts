@@ -217,7 +217,7 @@ export const receptionService = {
 
     async getSpecialtyCatalog(token: string) {
         try {
-            const res = await apiClient.get<unknown>('/api/specialty', {
+            const res = await apiClient.get<unknown>('/api/specialty?page=1&limit=500', {
                 headers: { Authorization: `Bearer ${token}` },
             });
             return mapSpecialtyCatalogResponse(res.data ?? res);

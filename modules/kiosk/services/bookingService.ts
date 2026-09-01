@@ -9,12 +9,10 @@ import {
 export const bookingService = {
 
   getAllSpecialties: async (params?: { page?: number; limit?: number }) => {
-    const searchParams = new URLSearchParams();
-    if (params?.page !== undefined) searchParams.append('page', String(params.page));
-    if (params?.limit !== undefined) searchParams.append('limit', String(params.limit));
-    const queryString = searchParams.toString();
+    const page = params?.page ?? 1;
+    const limit = params?.limit ?? 500;
     return kioskApiClient.get<SpecialtyItem[]>(
-      queryString ? `/api/specialty?${queryString}` : '/api/specialty'
+      `/api/specialty?page=${page}&limit=${limit}`
     );
   },
 

@@ -134,7 +134,7 @@ export const roomService = {
     },
 
     getSpecialties: async (token: string) => {
-        return apiClient.get<Specialty[]>('/api/specialty', {
+        return apiClient.get<Specialty[]>('/api/specialty?page=1&limit=500', {
             headers: { Authorization: `Bearer ${token}` },
         });
     },
