@@ -63,9 +63,6 @@ export function AdminDisplaysPage() {
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
             <div>
               <h1 className="text-xl font-bold text-neutral-900">Màn hình kiosk & TV</h1>
-              <p className="text-[13px] text-[#7B7B7B] font-medium mt-1">
-                Quản lý Display_Screen theo loại, bật/tắt thiết bị và đổi PIN toàn hệ thống (mặc định 123456).
-              </p>
             </div>
             <button
               type="button"
@@ -205,11 +202,10 @@ function AdminScreenCard({
           </p>
         </div>
         <span
-          className={`text-[10px] font-black px-2 py-1 rounded-full ${
-            screen.status === 'ENABLED'
+          className={`text-[10px] font-black px-2 py-1 rounded-full ${screen.status === 'ENABLED'
               ? 'bg-emerald-50 text-emerald-700'
               : 'bg-slate-100 text-slate-500'
-          }`}
+            }`}
         >
           {screen.status}
         </span>
