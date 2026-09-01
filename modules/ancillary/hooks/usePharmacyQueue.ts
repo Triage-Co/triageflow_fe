@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Prescription, PrescriptionStatusEnum } from '@/shared/types/prescription.types';
-import { pharmacyService } from '../services/pharmacyService';
+import { mergePrescription, pharmacyService } from '../services/pharmacyService';
 
 export function usePharmacyQueue(
     refreshKey: number = 0,
@@ -18,6 +18,18 @@ export function usePharmacyQueue(
     const [actingId, setActingId] = useState<string | null>(null);
     const [actionError, setActionError] = useState<string | null>(null);
     const [scanNotice, setScanNotice] = useState<string | null>(null);
+
+    const resolvePrescriptionAfterAction = useCallback(
+        async (patch: Prescription, previous?: Prescription | null) => {
+            try {
+                const fresh = await pharmacyService.getPrescriptionById(patch.prescription_id);
+                return mergePrescription(previous || patch, fresh);
+            } catch {
+                return mergePrescription(previous || null, patch);
+            }
+        },
+        []
+    );
 
     const fetchQueue = useCallback(async (isSilent = false, dateToFetch = selectedDate) => {
         if (!isSilent) setLoading(true);
@@ -58,10 +70,11 @@ export function usePharmacyQueue(
         if (scanMode === 'dispense') {
             if (prescription.status === 'PREPARED') {
                 const updated = await pharmacyService.dispensePrescription(prescription.prescription_id);
-                onSelect?.(updated);
+                const fresh = await resolvePrescriptionAfterAction(updated, prescription);
+                onSelect?.(fresh);
                 await fetchQueue(true);
-                setScanNotice(`Đã giao thuốc ${updated.pickup_number || updated.prescription_code}`);
-                return { ...updated, message: `Đã giao thuốc ${updated.pickup_number || updated.prescription_code}` };
+                setScanNotice(`Đã giao thuốc ${fresh.pickup_number || fresh.prescription_code}`);
+                return { ...fresh, message: `Đã giao thuốc ${fresh.pickup_number || fresh.prescription_code}` };
             }
             if (prescription.status === 'DISPENSED') {
                 setScanNotice(`Đơn ${prescription.prescription_code} đã được giao thuốc trước đó.`);
@@ -77,17 +90,18 @@ export function usePharmacyQueue(
         onSelect?.(prescription);
         await fetchQueue(true);
         return prescription;
-    }, [fetchQueue, onSelect, scanMode]);
+    }, [fetchQueue, onSelect, resolvePrescriptionAfterAction, scanMode]);
 
     const handleMiss = async (prescription: Prescription) => {
         setActingId(prescription.prescription_id);
         setActionError(null);
         try {
             const updated = await pharmacyService.missPrescription(prescription.prescription_id);
-            onSelect?.(updated);
+            const fresh = await resolvePrescriptionAfterAction(updated, prescription);
+            onSelect?.(fresh);
             await fetchQueue(true);
-        } catch (err: any) {
-            setActionError(err?.message || 'Không thể đánh miss số này');
+        } catch (err: unknown) {
+            setActionError(err instanceof Error ? err.message : 'Không thể đánh miss số này');
         } finally {
             setActingId(null);
         }
@@ -98,10 +112,11 @@ export function usePharmacyQueue(
         setActionError(null);
         try {
             const updated = await pharmacyService.recallPrescription(prescription.prescription_id);
-            onSelect?.(updated);
+            const fresh = await resolvePrescriptionAfterAction(updated, prescription);
+            onSelect?.(fresh);
             await fetchQueue(true);
-        } catch (err: any) {
-            setActionError(err?.message || 'Không thể gọi lại số này');
+        } catch (err: unknown) {
+            setActionError(err instanceof Error ? err.message : 'Không thể gọi lại số này');
         } finally {
             setActingId(null);
         }
