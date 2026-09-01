@@ -12,6 +12,7 @@ import {
 
 import { useAuthStore } from '../store/authStore';
 import { useFlowStore } from '../store/flowStore';
+import { usePackageBookingStore } from '../store/packageBookingStore';
 
 export const PaymentView: React.FC = () => {
   const goHome = useKioskStore((state) => state.goHome);
@@ -22,7 +23,11 @@ export const PaymentView: React.FC = () => {
   const setPaymentMethod = useFlowStore((state) => state.setPaymentMethod);
   const activeBill = useFlowStore((state) => state.activeBill);
   const paymentQrData = useFlowStore((state) => state.paymentQrData);
+  const paymentMeta = useFlowStore((state) => state.paymentMeta);
   const patientInfo = useAuthStore((state) => state.patientInfo);
+  const selectedDoctor = useKioskStore((state) => state.selectedDoctor);
+  const selectedPackageDetail = usePackageBookingStore((state) => state.selectedPackageDetail);
+  const selectedDate = usePackageBookingStore((state) => state.selectedDate);
   const isPaymentChecking = useFlowStore((state) => state.isPaymentChecking);
   const verifyPaymentAndIssueTicket = useFlowStore((state) => state.verifyPaymentAndIssueTicket);
 
@@ -31,6 +36,34 @@ export const PaymentView: React.FC = () => {
   const formattedAmount = totalAmount > 0 ? totalAmount.toLocaleString('vi-VN') + ' đ' : '0 đ';
   const patientCodeDisplay = activeBill?.patientCode || patientInfo?.idNumber || '---';
   const paymentContentDisplay = paymentQrData?.description || activeBill?.items?.[0]?.name || 'Dịch vụ khám bệnh';
+
+  const displayServiceName =
+    paymentMeta?.specialtyName ||
+    selectedPackageDetail?.package_name ||
+    selectedDoctor?.specialty ||
+    'Dịch vụ khám bệnh';
+
+  const displayDoctorName =
+    paymentMeta?.doctorName ||
+    selectedDoctor?.name ||
+    'Bác sĩ phụ trách';
+
+  const displayRoomName =
+    paymentMeta?.roomName ||
+    selectedDoctor?.room ||
+    'Phòng khám theo chỉ định';
+
+  const displayPatientName =
+    paymentMeta?.patientName ||
+    patientInfo?.fullName ||
+    'Bệnh nhân';
+
+  const displayTime =
+    paymentMeta?.slotTime
+      ? `${paymentMeta.slotTime}${paymentMeta.selectedDate ? ` - ${paymentMeta.selectedDate}` : ''}`
+      : selectedDate
+        ? selectedDate
+        : new Date().toLocaleDateString('vi-VN');
 
   // URL mã QR VietQR động từ PayOS payload
   const qrCodePayload = paymentQrData?.qrCode || (paymentQrData?.orderCode ? `PAYOS:${paymentQrData.orderCode}` : '');
@@ -117,16 +150,38 @@ export const PaymentView: React.FC = () => {
           </div>
 
           {/* Cột phải: Chi tiết hóa đơn & Nút bấm xác nhận */}
-          <div className="md:col-span-6 bg-white rounded-[28px] p-8 shadow-md border border-neutral-100 flex flex-col justify-between space-y-6">
+          <div className="md:col-span-6 bg-white rounded-[28px] p-8 shadow-md border border-neutral-100 flex flex-col justify-between space-y-5">
             <div className="space-y-4">
               <h4 className="font-extrabold text-[#1E2939] text-base border-b border-neutral-100 pb-3">Chi tiết thanh toán</h4>
 
-              <div className="space-y-3 text-xs font-semibold text-neutral-600">
+              {/* Thông tin dịch vụ / phòng khám / bác sĩ */}
+              <div className="bg-blue-50/70 border border-blue-100 rounded-2xl p-3.5 space-y-2">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-neutral-500 font-semibold">Dịch vụ:</span>
+                  <span className="font-bold text-[#1E2939] text-right max-w-[62%] truncate">{displayServiceName}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-neutral-500 font-semibold">Phòng khám:</span>
+                  <span className="font-extrabold text-[#155DFC] text-right">{displayRoomName}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-neutral-500 font-semibold">Bác sĩ:</span>
+                  <span className="font-bold text-[#1E2939] text-right">{displayDoctorName}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-neutral-500 font-semibold">Thời gian:</span>
+                  <span className="font-bold text-neutral-700 text-right">{displayTime}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-neutral-500 font-semibold">Bệnh nhân:</span>
+                  <span className="font-bold text-neutral-800 text-right">{displayPatientName}</span>
+                </div>
+              </div>
+
+              <div className="space-y-2.5 text-xs font-semibold text-neutral-600">
                 <div>
                   <span className="text-neutral-400 block mb-0.5">Nội dung chuyển khoản</span>
                   <span className="font-bold text-[#1E2939] text-sm break-all">{paymentContentDisplay}</span>
-                </div>
-                <div>
                 </div>
                 <div>
                   <span className="text-neutral-400 block mb-0.5">Tổng số tiền</span>
@@ -135,7 +190,7 @@ export const PaymentView: React.FC = () => {
               </div>
 
               {/* Waiting status pill */}
-              <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-4 text-xs space-y-1 text-amber-800">
+              <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-3 text-xs space-y-1 text-amber-800">
                 <div className="flex items-center gap-2 font-bold">
                   <Clock className="w-4 h-4 text-amber-600" /> Đang chờ chuyển khoản
                 </div>

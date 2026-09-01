@@ -8,16 +8,33 @@ import { flowService } from '../services/flowService';
 import { createPaymentBill } from '../utils/flowHelpers';
 import { getActivePatientId } from '../utils/kioskHelpers';
 
+export interface PaymentMetaInfo {
+  specialtyName?: string;
+  doctorName?: string;
+  roomName?: string;
+  slotTime?: string;
+  selectedDate?: string;
+  patientName?: string;
+  ticketCode?: string;
+}
+
 export interface BillPaymentSlice {
   paymentQrData: BookingPaymentData | null;
   paymentMethod: PaymentMethod | null;
   activeBill: PaymentBill | null;
+  paymentMeta: PaymentMetaInfo | null;
   pendingPaymentSteps: PendingPaymentStep[];
   isPaymentChecking: boolean;
   isFetchingPendingSteps: boolean;
   selectedPendingStep: PendingPaymentStep | null;
 
-  setBookingPaymentState: (stepId: string, bookingId: string, paymentData: BookingPaymentData, patientId: string) => void;
+  setBookingPaymentState: (
+    stepId: string,
+    bookingId: string,
+    paymentData: BookingPaymentData,
+    patientId: string,
+    meta?: PaymentMetaInfo
+  ) => void;
   setPaymentMethod: (method: PaymentMethod | null) => void;
   fetchPendingPaymentSteps: (patientId: string) => Promise<boolean>;
   selectPendingStep: (step: PendingPaymentStep) => void;
@@ -35,6 +52,7 @@ export const createBillPaymentSlice: StateCreator<
   paymentQrData: null,
   paymentMethod: null,
   activeBill: null,
+  paymentMeta: null,
   pendingPaymentSteps: [],
   isPaymentChecking: false,
   isFetchingPendingSteps: false,
@@ -75,7 +93,7 @@ export const createBillPaymentSlice: StateCreator<
     }
   },
 
-  setBookingPaymentState: (stepId, bookingId, paymentData, patientId) => {
+  setBookingPaymentState: (stepId, bookingId, paymentData, patientId, meta) => {
     const authPatientInfo = useAuthStore.getState().patientInfo;
     const patientName = authPatientInfo?.fullName ?? '';
     const bill = createPaymentBill(paymentData, patientId, patientName, stepId, bookingId);
@@ -85,6 +103,7 @@ export const createBillPaymentSlice: StateCreator<
       paymentQrData: paymentData,
       paymentMethod: 'bank',
       activeBill: bill,
+      paymentMeta: meta || null,
     });
   },
 

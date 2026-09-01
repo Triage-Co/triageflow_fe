@@ -26,20 +26,39 @@ export async function fetchGoogleTranslate(text: string, from = 'en', to = 'vi')
         return COMMON_MEDICAL_TERMS[trimmed];
     }
 
+    // 1. Thử endpoint chính của Google Translate
     try {
         const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${from}&tl=${to}&dt=t&q=${encodeURIComponent(trimmed)}`;
         const res = await fetch(url);
-        if (!res.ok) throw new Error(`Google Translate status ${res.status}`);
-        const data = await res.json();
-        if (Array.isArray(data) && Array.isArray(data[0])) {
-            const translated = data[0].map((item: any) => item?.[0] || '').join('').trim();
-            return translated || trimmed;
+        if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data) && Array.isArray(data[0])) {
+                const translated = data[0].map((item: any) => item?.[0] || '').join('').trim();
+                if (translated) return translated;
+            }
         }
-        return trimmed;
+    } catch {
+        // Tiếp tục thử mirror fallback
+    }
+
+    // 2. Thử mirror endpoint phụ của Google Translate (clients5)
+    try {
+        const mirrorUrl = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=${from}&tl=${to}&q=${encodeURIComponent(trimmed)}`;
+        const res = await fetch(mirrorUrl);
+        if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data) && typeof data[0] === 'string') {
+                return data[0].trim();
+            }
+            if (typeof data === 'string' && data.trim()) {
+                return data.trim();
+            }
+        }
     } catch (err) {
         console.warn('[Google Translate Fallback Error]:', err);
-        return trimmed;
     }
+
+    return trimmed;
 }
 
 /**

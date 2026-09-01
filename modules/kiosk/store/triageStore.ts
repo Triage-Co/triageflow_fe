@@ -286,10 +286,14 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
                     kioskState.setAIRegisterStep('ai_result');
                 } else {
                     let finalQuestion = question;
-                    try {
-                        finalQuestion = await translateQuestionWithGoogle(question as any) as any;
-                    } catch (err: any) {
-                        console.error("Translation error:", err);
+                    const qText = (question as any)?.text || '';
+                    const isVn = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i.test(qText);
+                    if (!isVn) {
+                        try {
+                            finalQuestion = await translateQuestionWithGoogle(question as any) as any;
+                        } catch (err: any) {
+                            console.error("Translation error:", err);
+                        }
                     }
                     set({ currentQuestion: finalQuestion });
                     kioskState.setAIRegisterStep('quiz_detail');
@@ -370,10 +374,14 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
                     kioskState.setAIRegisterStep('ai_result');
                 } else {
                     let finalQuestion = question;
-                    try {
-                        finalQuestion = await translateQuestionWithGoogle(question as any) as any;
-                    } catch (err: any) {
-                        console.error("Translation error:", err);
+                    const qText = (question as any)?.text || '';
+                    const isVn = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i.test(qText);
+                    if (!isVn) {
+                        try {
+                            finalQuestion = await translateQuestionWithGoogle(question as any) as any;
+                        } catch (err: any) {
+                            console.error("Translation error:", err);
+                        }
                     }
                     set({ currentQuestion: finalQuestion });
                 }
