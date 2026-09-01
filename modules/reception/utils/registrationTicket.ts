@@ -98,6 +98,7 @@ body {
         <tr><td class="label">PHÒNG KHÁM:</td><td class="value">${result.roomLabel}</td></tr>
         <tr><td class="label">NGÀY KHÁM:</td><td class="value">${result.appointmentDate || (result.slotTimeLabel || "—").split(", ")[0]}</td></tr>
         <tr><td class="label">GIỜ KHÁM:</td><td class="value">${(result.slotTimeLabel || "").includes(", ") ? (result.slotTimeLabel || "").split(", ")[1] : "—"}</td></tr>
+        <tr><td class="label">MÃ VÉ KHÁM:</td><td class="value">${(result.ticketCode || "").trim() || "—"}</td></tr>
     </table>
     
     <div class="dashed-line"></div>

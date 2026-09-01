@@ -942,6 +942,14 @@ export function PatientActiveFlowsView({
                         {activeRegistrationResult.slotTimeLabel}
                       </span>
                     </div>
+                    <div className="flex justify-between py-0.5">
+                      <span className="text-neutral-500 font-medium">
+                        Mã vé khám:
+                      </span>
+                      <span className="font-semibold text-neutral-800">
+                        {activeRegistrationResult.ticketCode || "—"}
+                      </span>
+                    </div>
                   </div>
 
                   {/* QR Code */}

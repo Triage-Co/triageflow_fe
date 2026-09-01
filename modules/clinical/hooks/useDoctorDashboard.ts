@@ -8,6 +8,7 @@ import { labService } from '@/modules/lab/services/labService';
 import type { ShiftInfo } from '@/modules/lab/types/lab.types';
 import { useRoomQueue } from '@/modules/queue/hooks/useRoomQueue';
 import { pickStaffShift } from '@/modules/clinical/utils/staffShift';
+import { canStaffViewPatientEmr } from '@/modules/clinical/services/clinicalService';
 
 export function useDoctorDashboard() {
     const router = useRouter();
@@ -70,8 +71,18 @@ export function useDoctorDashboard() {
 
     const openPatientEmr = (queueId: string) => {
         const serving = roomQueue.queue?.serving;
-        const name = serving?.patient?.full_name || 'Bệnh nhân';
-        const stt = serving?.queue_number || '';
+        if (!serving || serving.queue_id !== queueId) {
+            return;
+        }
+
+        if (
+            !canStaffViewPatientEmr(serving.status, serving.step?.step_status)
+        ) {
+            return;
+        }
+
+        const name = serving.patient?.full_name || 'Bệnh nhân';
+        const stt = serving.queue_number || '';
         openTab({ id: queueId, name, stt });
         router.push(`${basePath}/${queueId}`);
     };

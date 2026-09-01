@@ -25,6 +25,7 @@ export interface PatientActiveFlowItem {
   bookingId?: string;
   appointmentDate?: string;
   ticketNo: string;
+  ticketCode?: string;
   queueNumber?: string;
   specialty: string;
   doctorLabel: string;
@@ -512,6 +513,7 @@ export function mapActiveFlowsList(
       appointmentDate,
       bookingId: bookingId || undefined,
       ticketNo,
+      ticketCode: flow.ticket_code ? String(flow.ticket_code).trim() : undefined,
       queueNumber,
       specialty,
       doctorLabel,
@@ -606,6 +608,7 @@ export function flowItemToRegistrationResult(
   return {
     appointmentDate: flowItem.appointmentDate,
     ticketNo: flowItem.ticketNo,
+    ticketCode: flowItem.ticketCode,
     queueNumber: flowItem.queueNumber,
     bookingId: flowItem.bookingId,
     stepId: flowItem.steps[0]?.stepId || "step-1",
