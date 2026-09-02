@@ -272,6 +272,22 @@ export function canStaffViewPatientEmr(
     return false;
 }
 
+/** Waiting in queue — staff may preview patient info before call-next. */
+export function canStaffPreviewPatientEmr(queueStatus?: string | null): boolean {
+    const q = (queueStatus || '').toUpperCase();
+    return q === 'QUEUED' || q === 'PENDING' || q === 'WAITING';
+}
+
+export function canStaffAccessPatientEmr(
+    queueStatus?: string | null,
+    stepStatus?: string,
+): boolean {
+    return (
+        canStaffViewPatientEmr(queueStatus, stepStatus) ||
+        canStaffPreviewPatientEmr(queueStatus)
+    );
+}
+
 export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient {
     const calculateAge = (dobString?: string): number | undefined => {
         if (!dobString) return undefined;

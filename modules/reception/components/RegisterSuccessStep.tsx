@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import {
     Check,
     Clock,
@@ -204,13 +203,14 @@ export function RegisterSuccessStep({ result, onRegisterNew }: RegisterSuccessSt
                                 <UserRound className="w-4 h-4" />
                                 Đăng ký bệnh nhân mới
                             </button>
-                            <Link
-                                href="/reception"
-                                className="inline-flex items-center justify-center gap-2 min-h-[48px] px-4 rounded-xl border border-[#E5E7EB] bg-white text-[#374151] text-[14px] font-semibold hover:bg-[#F9FAFB] transition-colors"
+                            <button
+                                type="button"
+                                onClick={onRegisterNew}
+                                className="inline-flex items-center justify-center gap-2 min-h-[48px] px-4 rounded-xl border border-[#E5E7EB] bg-white text-[#374151] text-[14px] font-semibold hover:bg-[#F9FAFB] transition-colors cursor-pointer"
                             >
                                 <Home className="w-4 h-4" />
                                 Về trang chủ lễ tân
-                            </Link>
+                            </button>
                         </div>
                     </div>
 

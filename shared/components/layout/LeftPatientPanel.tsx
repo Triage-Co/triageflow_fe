@@ -8,24 +8,9 @@ import { WorkflowDiagram } from '@/app/(staff)/doctor/_components/workflow/Workf
 import { TriageAnswerDetailModal } from './TriageAnswerDetailModal';
 import { clinicalService } from '@/modules/clinical/services/clinicalService';
 import { labService } from '@/modules/lab/services/labService';
-import { commonSymptomDataset } from '@/modules/kiosk/data/commonSymptoms';
 import { pickStaffShift } from '@/modules/clinical/utils/staffShift';
 import { useAuthStore } from '@/store/authStore';
 import { isClinicalEmrReadOnly } from '@/modules/clinical/utils/appointmentDate';
-
-// Build symptom lookup dictionary from Kiosk dataset
-const symptomLookup = new Map<string, string>();
-try {
-    Object.values(commonSymptomDataset).forEach((part) => {
-        part.symptoms?.forEach((sym) => {
-            if (sym.id) {
-                symptomLookup.set(sym.id, sym.labelVn || sym.labelEn);
-            }
-        });
-    });
-} catch {
-    // ignore
-}
 
 type SidePanelTab = 'process' | 'info';
 type EditingField = 'visitReason' | 'medicalHistory' | 'vitals' | null;
@@ -82,6 +67,38 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     );
 }
 
+function extractTurn1SymptomName(history: Array<Record<string, unknown>>): string {
+    const turn1 =
+        history.find((h) => h.turn === 1) ||
+        history.find((h) => h.question_type === 'initial');
+    if (!turn1) return '';
+
+    const nameFromRecord = (record: Record<string, unknown> | undefined): string => {
+        if (!record) return '';
+        const rawName = record.name;
+        if (typeof rawName === 'string' && rawName.trim()) {
+            return rawName.trim();
+        }
+        return '';
+    };
+
+    const topLevelName = nameFromRecord(turn1);
+    if (topLevelName) return topLevelName;
+
+    const answers = turn1.answers as Array<Record<string, unknown>> | undefined;
+    if (Array.isArray(answers) && answers.length > 0) {
+        const presentAnswer = answers.find((a) => a.choice_id === 'present') || answers[0];
+        const answerName = nameFromRecord(presentAnswer);
+        if (answerName) return answerName;
+    }
+
+    if (turn1.answer && typeof turn1.answer === 'object') {
+        return nameFromRecord(turn1.answer as Record<string, unknown>);
+    }
+
+    return '';
+}
+
 interface LeftPanelProps {
     patient: Patient;
     isOpen: boolean;
@@ -97,7 +114,7 @@ export function LeftPatientPanel({
 }: LeftPanelProps) {
     const user = useAuthStore((s) => s.user);
     const accessToken = useAuthStore((s) => s.accessToken);
-    const isReadOnly = isClinicalEmrReadOnly(user?.role, patient.appointmentDate);
+    const isReadOnly = isClinicalEmrReadOnly(user?.role, patient.appointmentDate, patient.status);
     const [tab, setTab] = useState<SidePanelTab>('info');
     const [shiftRoomName, setShiftRoomName] = useState('');
     const [sessionData, setSessionData] = useState<VisitSessionData | null>(null);
@@ -230,19 +247,8 @@ export function LeftPatientPanel({
                     const nestedData = (triageData?.data || triageData) as Record<string, unknown>;
                     const qData = (nestedData?.questionnaire_data || triageData?.questionnaire_data) as Record<string, unknown> | undefined;
                     const history = (qData?.history || []) as Array<Record<string, unknown>>;
-                    const turn1 = history.find((h) => h.turn === 1 || h.question_type === 'initial') || history[0];
-                    if (turn1) {
-                        const answers = (turn1.answers || []) as Array<Record<string, unknown>>;
-                        if (answers.length > 0) {
-                            const firstAns = answers[0];
-                            const symName = (firstAns.name as string) || symptomLookup.get(firstAns.id as string) || (firstAns.id as string) || '';
-                            if (symName && isMounted) setInitialSymptom(symName);
-                        } else if (turn1.answer && typeof turn1.answer === 'object') {
-                            const ansObj = turn1.answer as Record<string, unknown>;
-                            const symName = (ansObj.name as string) || (ansObj.choice_label as string) || symptomLookup.get(ansObj.id as string) || (ansObj.id as string) || '';
-                            if (symName && isMounted) setInitialSymptom(symName);
-                        }
-                    }
+                    const turn1SymptomName = extractTurn1SymptomName(history);
+                    if (isMounted) setInitialSymptom(turn1SymptomName);
                 } catch (err) {
                     console.warn('Failed to fetch triage symptom for button:', err);
                 }
@@ -634,7 +640,7 @@ export function LeftPatientPanel({
                                         Gợi ý AI
                                     </p>
                                     <p className="text-[12px] font-bold text-neutral-800 leading-snug">
-                                        Lý do: <span className="font-medium text-neutral-700">{initialSymptom || sessionData?.chief_complaint || displayVisitReason || 'Chưa có thông tin'}</span>
+                                        Lý do: <span className="font-medium text-neutral-700">{initialSymptom || 'Chưa có thông tin'}</span>
                                     </p>
                                 </button>
                             </>

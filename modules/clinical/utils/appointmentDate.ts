@@ -30,12 +30,16 @@ export function isFutureLocalDate(dateYmd?: string | null): boolean {
     return day > todayLocalYmd();
 }
 
-/** Nurse always view-only; doctor view-only for future appointment days. */
+import type { Status } from '@/modules/clinical/types/clinical.types';
+
+/** Nurse always view-only; doctor view-only for future appointment days or waiting-queue preview. */
 export function isClinicalEmrReadOnly(
     role: string | undefined,
     appointmentDate?: string | null,
+    patientStatus?: Status | null,
 ): boolean {
     if (role === 'NURSE') return true;
     if (role === 'DOCTOR' && isFutureLocalDate(appointmentDate)) return true;
+    if (role === 'DOCTOR' && patientStatus === 'Đang chờ') return true;
     return false;
 }

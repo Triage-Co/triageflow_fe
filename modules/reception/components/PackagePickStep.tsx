@@ -289,7 +289,7 @@ export function PackagePickStep({
 
                 {isLoadingPackages ? (
                     <div className="flex flex-col items-center justify-center py-10 text-neutral-400 bg-neutral-50/50 rounded-2xl border border-neutral-100">
-                        <Loader2 className="w-8 h-8 animate-spin text-amber-500 mb-2" />
+                        <Loader2 className="w-8 h-8 animate-spin text-[#8B7CF6] mb-2" />
                         <p className="text-xs font-semibold">Đang tải danh sách gói khám...</p>
                     </div>
                 ) : packagesError ? (
@@ -315,21 +315,26 @@ export function PackagePickStep({
                                     className={cn(
                                         'relative flex flex-col justify-between p-4 rounded-2xl border text-left transition-all group touch-manipulation',
                                         isSelected
-                                            ? 'bg-gradient-to-br from-[#FFFBEB] to-white border-[#F59E0B] shadow-[0_4px_16px_rgba(245,158,11,0.18)] ring-2 ring-[#F59E0B]'
-                                            : 'bg-white border-[#E5E7EB] hover:border-[#FCD34D] hover:shadow-sm',
+                                            ? 'bg-gradient-to-br from-[#F5F2FF] to-white border-[#8B7CF6] shadow-[0_4px_16px_rgba(139,124,246,0.18)] ring-2 ring-[#8B7CF6]'
+                                            : 'bg-white border-[#E5E7EB] hover:border-[#C4B5FD] hover:shadow-sm',
                                     )}
                                 >
                                     <div className="space-y-2">
-                                        <div className="flex items-center justify-between gap-2">
-                                            <span className="text-[10px] font-bold uppercase tracking-wider text-[#D97706] bg-[#FEF3C7] px-2 py-0.5 rounded-md">
+                                        <div
+                                            className={cn(
+                                                'flex items-center justify-between gap-2',
+                                                isSelected && 'pr-7',
+                                            )}
+                                        >
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-[#7C6FE0] bg-[#EDE9FE] px-2 py-0.5 rounded-md">
                                                 Gói dịch vụ
                                             </span>
-                                            <span className="text-[14px] font-extrabold text-[#D97706]">
+                                            <span className="text-[14px] font-extrabold text-[#8B7CF6] shrink-0">
                                                 {pkg.price ? `${pkg.price.toLocaleString('vi-VN')} đ` : 'Miễn phí'}
                                             </span>
                                         </div>
 
-                                        <h4 className="text-[14px] font-bold text-[#1F2937] group-hover:text-[#D97706] transition-colors leading-snug">
+                                        <h4 className="text-[14px] font-bold text-[#1F2937] group-hover:text-[#8B7CF6] transition-colors leading-snug">
                                             {pkg.package_name}
                                         </h4>
 
@@ -339,13 +344,13 @@ export function PackagePickStep({
                                     </div>
 
                                     <div className="mt-4 pt-2.5 border-t border-[#F3F4F6] flex items-center justify-between text-[11px] font-bold">
-                                        <span className={isSelected ? 'text-[#D97706]' : 'text-[#9CA3AF]'}>
+                                        <span className={isSelected ? 'text-[#8B7CF6]' : 'text-[#9CA3AF]'}>
                                             {isSelected ? '✓ Đã chọn gói này' : 'Bấm để chọn'}
                                         </span>
                                     </div>
 
                                     {isSelected && (
-                                        <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-[#F59E0B] text-white flex items-center justify-center shadow-sm">
+                                        <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-[#8B7CF6] text-white flex items-center justify-center shadow-sm">
                                             <Check className="w-3 h-3" strokeWidth={3} />
                                         </div>
                                     )}
@@ -358,14 +363,14 @@ export function PackagePickStep({
 
             {/* 2. Package Details & Steps (if detail loaded) */}
             {selectedPkg && packageDetail?.template?.steps && packageDetail.template.steps.length > 0 && (
-                <div className="bg-amber-50/50 border border-amber-200/70 rounded-2xl p-4">
-                    <h4 className="text-[13px] font-bold text-amber-900 mb-2.5 flex items-center gap-1.5">
-                        <Sparkles className="w-4 h-4 text-amber-600" />
+                <div className="bg-[#F5F2FF]/50 border border-[#8B7CF6]/20 rounded-2xl p-4">
+                    <h4 className="text-[13px] font-bold text-[#7C6FE0] mb-2.5 flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-[#8B7CF6]" />
                         Các danh mục & bước khám trong gói:
                     </h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {packageDetail.template.steps.map((step, idx) => (
-                            <div key={idx} className="flex items-center gap-2 bg-white/90 border border-amber-100 rounded-xl p-2.5 text-[12px] text-neutral-800">
+                            <div key={idx} className="flex items-center gap-2 bg-white/90 border border-[#EDE9FE] rounded-xl p-2.5 text-[12px] text-neutral-800">
                                 <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
                                 <span className="font-semibold">{step.step_name}</span>
                             </div>
@@ -389,7 +394,7 @@ export function PackagePickStep({
                     {/* Date Picker Bar */}
                     <div className="space-y-2">
                         <span className="text-[12px] font-bold text-neutral-600 flex items-center gap-1.5">
-                            <Calendar className="w-3.5 h-3.5 text-amber-600" /> Chọn ngày khám:
+                            <Calendar className="w-3.5 h-3.5 text-[#8B7CF6]" /> Chọn ngày khám:
                         </span>
                         <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                             {daysList.map((day) => {
@@ -405,7 +410,7 @@ export function PackagePickStep({
                                         className={cn(
                                             'min-w-[100px] py-2.5 px-3 rounded-xl border flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-all',
                                             isActive
-                                                ? 'bg-[#D97706] border-[#D97706] text-white font-extrabold shadow-sm'
+                                                ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white font-extrabold shadow-sm'
                                                 : 'bg-white border-neutral-200 hover:bg-neutral-50 text-neutral-700 font-semibold',
                                         )}
                                     >
@@ -422,12 +427,12 @@ export function PackagePickStep({
                     {/* Slots Grid */}
                     <div className="space-y-2">
                         <span className="text-[12px] font-bold text-neutral-600 flex items-center gap-1.5">
-                            <Clock className="w-3.5 h-3.5 text-amber-600" /> Chọn khung giờ khám:
+                            <Clock className="w-3.5 h-3.5 text-[#8B7CF6]" /> Chọn khung giờ khám:
                         </span>
 
                         {isLoadingSlots ? (
                             <div className="flex items-center justify-center py-6 text-neutral-400 bg-neutral-50/50 rounded-xl border border-neutral-100">
-                                <Loader2 className="w-5 h-5 animate-spin text-amber-500 mr-2" />
+                                <Loader2 className="w-5 h-5 animate-spin text-[#8B7CF6] mr-2" />
                                 <span className="text-xs">Đang kiểm tra khung giờ trống...</span>
                             </div>
                         ) : roomSlots.length === 0 ? (
@@ -446,8 +451,8 @@ export function PackagePickStep({
                                             className={cn(
                                                 'py-2.5 px-3 rounded-xl border text-center font-bold text-[13px] transition-all flex flex-col items-center justify-center gap-0.5',
                                                 isSelected
-                                                    ? 'bg-amber-600 border-amber-600 text-white shadow-md'
-                                                    : 'bg-white border-neutral-200 hover:border-amber-300 hover:bg-amber-50/30 text-neutral-800',
+                                                    ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white shadow-md'
+                                                    : 'bg-white border-neutral-200 hover:border-[#C4B5FD] hover:bg-[#F5F2FF]/30 text-neutral-800',
                                             )}
                                         >
                                             <span className="font-mono">{slot.start_time.slice(0, 5)} - {slot.end_time.slice(0, 5)}</span>

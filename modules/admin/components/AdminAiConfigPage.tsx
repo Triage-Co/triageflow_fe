@@ -27,12 +27,13 @@ export function AdminAiConfigPage() {
     return (
         <div className="flex-1 flex flex-col overflow-hidden relative">
             <div className="flex-1 min-h-0 overflow-y-auto p-6">
-                        <div className="max-w-6xl mx-auto space-y-5">
-                            <div>
-                                <h1 className="text-xl font-bold text-neutral-900">Cấu hình AI</h1>
-                            </div>
+                        <div className="mb-6">
+                            <h1 className="text-[22px] font-bold text-[#2D2D2D] tracking-tight">
+                                Cấu hình AI
+                            </h1>
+                        </div>
 
-                            <div className="inline-flex rounded-xl border border-neutral-200 bg-neutral-50 p-1">
+                        <div className="inline-flex rounded-xl border border-neutral-200 bg-neutral-50 p-1 mb-6">
                                 {MAIN_TABS.map((tab) => {
                                     const Icon = tab.icon;
                                     const isActive = activeTab === tab.id;
@@ -88,7 +89,6 @@ export function AdminAiConfigPage() {
                                     )}
                                 </div>
                             )}
-                        </div>
             </div>
         </div>
     );

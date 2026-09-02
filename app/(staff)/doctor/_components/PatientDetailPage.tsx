@@ -8,6 +8,7 @@ import { WorkflowDiagram } from './workflow/WorkflowDiagram';
 import { DoctorHeader } from './DoctorHeader';
 import { ClinicalProcessPanel } from './ClinicalProcessPanel';
 import { physicalExamEntries } from '@/modules/clinical/utils/physicalExam';
+import { normalizeMultilineText } from '@/modules/clinical/utils/multilineText';
 
 type DetailTab = 'info' | 'process';
 
@@ -145,8 +146,8 @@ export function PatientDetailPage({ patient, clinicName }: PatientDetailPageProp
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-3">
                                     Quá trình bệnh lý và diễn biến lâm sàng
                                 </p>
-                                <div className="bg-neutral-50 rounded-[12px] border border-neutral-100 p-3 text-sm text-neutral-700 leading-relaxed min-h-[80px]">
-                                    {displayText(clinicalProgression)}
+                                <div className="bg-neutral-50 rounded-[12px] border border-neutral-100 p-3 text-sm text-neutral-700 leading-relaxed min-h-[80px] whitespace-pre-line">
+                                    {displayText(normalizeMultilineText(clinicalProgression))}
                                 </div>
                             </div>
 

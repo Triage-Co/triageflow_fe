@@ -283,6 +283,16 @@ export const receptionService = {
         return assertApiSuccess(res, 'Không tạo được lịch khám theo gói.');
     },
 
+    async createBookingCashPackage(
+        data: { patient_id: string; slot_id: string; package_id: string },
+        token: string,
+    ) {
+        const res = await apiClient.post<Record<string, unknown>>('/api/booking/cash-package', data, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        return assertApiSuccess(res, 'Không tạo được lịch khám gói tiền mặt.');
+    },
+
     async getExamPackages(token?: string) {
         const res = await apiClient.get<unknown>('/api/exam-package', {
             ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),

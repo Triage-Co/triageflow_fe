@@ -21,6 +21,7 @@ import { useAuthStore } from '@/store/authStore';
 import { ParaclinicalOrdersTab } from '@/modules/clinical/components/ParaclinicalOrdersTab';
 import { EmrPrescriptionTab } from '@/modules/clinical/components/EmrPrescriptionTab';
 import { physicalExamEntries } from '@/modules/clinical/utils/physicalExam';
+import { normalizeMultilineText } from '@/modules/clinical/utils/multilineText';
 import { isClinicalEmrReadOnly } from '@/modules/clinical/utils/appointmentDate';
 import {
     Dialog,
@@ -104,7 +105,7 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
     const record = patient.medicalRecord;
     const user = useAuthStore((s) => s.user);
     const accessToken = useAuthStore((s) => s.accessToken);
-    const isReadOnly = isClinicalEmrReadOnly(user?.role, patient.appointmentDate);
+    const isReadOnly = isClinicalEmrReadOnly(user?.role, patient.appointmentDate, patient.status);
     const [sessionData, setSessionData] = useState<VisitSessionData | null>(null);
 
     const initialPatientId = patient.patientId || (patient as unknown as Record<string, unknown>).patient_id as string | undefined;
@@ -114,7 +115,9 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
 
     // Edit fields states
     const [editVisitReason, setEditVisitReason] = useState(record?.visitReason || '');
-    const [editClinicalProgression, setEditClinicalProgression] = useState(record?.clinicalProgression || '');
+    const [editClinicalProgression, setEditClinicalProgression] = useState(
+        normalizeMultilineText(record?.clinicalProgression || '')
+    );
     const [editMedicalHistory, setEditMedicalHistory] = useState(record?.medicalHistory.join('\n') || '');
     // Dynamic physical exam rows: [{id, label, value}]
     const [editPhysicalExamRows, setEditPhysicalExamRows] = useState<{ id: string; label: string; value: string }[]>([]);
@@ -162,7 +165,7 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
                     const session = list[0];
                     setSessionData(session);
                     if (session.chief_complaint) setEditVisitReason(session.chief_complaint);
-                    if (session.hpi) setEditClinicalProgression(session.hpi);
+                    if (session.hpi) setEditClinicalProgression(normalizeMultilineText(session.hpi));
                     if (session.pmh) setEditMedicalHistory(session.pmh);
                     if (session.pe) {
                         setEditPhysicalExamRows(
@@ -276,7 +279,7 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
 
     const handleCancel = (section: EditingSection) => {
         if (section === 'visitReason') setEditVisitReason(displayVisitReason);
-        else if (section === 'clinicalProgression') setEditClinicalProgression(displayClinicalProgression || '');
+        else if (section === 'clinicalProgression') setEditClinicalProgression(normalizeMultilineText(displayClinicalProgression || ''));
         else if (section === 'medicalHistory') setEditMedicalHistory(displayMedicalHistory.join('\n'));
         else if (section === 'physicalExam') {
             setEditPhysicalExamRows(
@@ -351,7 +354,9 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
                         </div>
                     </div>
                 ) : displayClinicalProgression ? (
-                    <p className="text-[13px] text-[#555] leading-relaxed">{displayClinicalProgression}</p>
+                    <p className="text-[13px] text-[#555] leading-relaxed whitespace-pre-line">
+                        {normalizeMultilineText(displayClinicalProgression)}
+                    </p>
                 ) : (
                     <p className="text-[13px] text-[#ADADAD] italic">Nhập quá trình bệnh lý...</p>
                 )}
@@ -547,7 +552,7 @@ function LabTestsTab({
 function DiagnosisTreatmentTab({ patient }: { patient: Patient }) {
     const accessToken = useAuthStore((s) => s.accessToken);
     const user = useAuthStore((s) => s.user);
-    const isReadOnly = isClinicalEmrReadOnly(user?.role, patient.appointmentDate);
+    const isReadOnly = isClinicalEmrReadOnly(user?.role, patient.appointmentDate, patient.status);
 
     const initialPatientId =
         patient.patientId ||
@@ -844,7 +849,7 @@ export function RightMedicalArea({
 }: RightMedicalAreaProps) {
     const accessToken = useAuthStore((s) => s.accessToken);
     const user = useAuthStore((s) => s.user);
-    const isReadOnly = isClinicalEmrReadOnly(user?.role, patient.appointmentDate);
+    const isReadOnly = isClinicalEmrReadOnly(user?.role, patient.appointmentDate, patient.status);
     const [activeTab, setActiveTab] = useState<MedTab>('kham-benh');
     const [isCompleteDialogOpen, setIsCompleteDialogOpen] = useState(false);
     const [isCompletingExam, setIsCompletingExam] = useState(false);

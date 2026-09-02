@@ -71,18 +71,26 @@ export function useDoctorDashboard() {
 
     const openPatientEmr = (queueId: string) => {
         const serving = roomQueue.queue?.serving;
-        if (!serving || serving.queue_id !== queueId) {
-            return;
+        const waiting = roomQueue.queue?.waiting ?? [];
+
+        let name = 'Bệnh nhân';
+        let stt = '';
+
+        if (serving?.queue_id === queueId) {
+            if (
+                !canStaffViewPatientEmr(serving.status, serving.step?.step_status)
+            ) {
+                return;
+            }
+            name = serving.patient?.full_name || 'Bệnh nhân';
+            stt = serving.queue_number || '';
+        } else {
+            const waitingEntry = waiting.find((entry) => entry.queue_id === queueId);
+            if (!waitingEntry) return;
+            name = waitingEntry.patient_name || 'Bệnh nhân';
+            stt = waitingEntry.queue_number || '';
         }
 
-        if (
-            !canStaffViewPatientEmr(serving.status, serving.step?.step_status)
-        ) {
-            return;
-        }
-
-        const name = serving.patient?.full_name || 'Bệnh nhân';
-        const stt = serving.queue_number || '';
         openTab({ id: queueId, name, stt });
         router.push(`${basePath}/${queueId}`);
     };

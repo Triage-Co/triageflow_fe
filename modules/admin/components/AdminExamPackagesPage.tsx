@@ -189,29 +189,30 @@ export function AdminExamPackagesPage() {
     return (
         <div className="flex-1 flex flex-col overflow-hidden relative">
             <div className="flex-1 min-h-0 overflow-y-auto p-6">
-                        <div className="max-w-6xl mx-auto space-y-5">
-                            <div className="flex items-start justify-between gap-4 flex-wrap">
-                                <div>
-                                    <h1 className="text-xl font-bold text-neutral-900">Gói khám</h1>
-                                    <p className="text-[13px] text-[#7B7B7B] font-medium mt-1">
-                                        Gói khám gắn với quy trình khám bệnh (template) và giá bán.{' '}
-                                        <Link href="/admin/process" className="text-brand-500 font-bold hover:underline inline-flex items-center gap-0.5">
-                                            Mở quy trình khám
-                                            <ExternalLink className="w-3 h-3" />
-                                        </Link>
-                                    </p>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={openCreate}
-                                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-sm font-bold cursor-pointer"
-                                >
-                                    <Plus className="w-4 h-4" />
-                                    Thêm gói khám
-                                </button>
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
+                            <div>
+                                <h1 className="text-[22px] font-bold text-[#2D2D2D] tracking-tight">
+                                    Gói khám
+                                </h1>
+                                <p className="text-[13px] text-[#7B7B7B] font-medium mt-1">
+                                    Gói khám gắn với quy trình khám bệnh (template) và giá bán.{' '}
+                                    <Link href="/admin/process" className="text-brand-500 font-bold hover:underline inline-flex items-center gap-0.5">
+                                        Mở quy trình khám
+                                        <ExternalLink className="w-3 h-3" />
+                                    </Link>
+                                </p>
                             </div>
+                            <button
+                                type="button"
+                                onClick={openCreate}
+                                className="flex items-center gap-2 px-4 py-2.5 bg-[#8B7CF6] hover:bg-[#7a6ae5] text-white text-[13px] font-bold rounded-xl transition-all shadow-sm cursor-pointer"
+                            >
+                                <Plus className="w-4 h-4" />
+                                Thêm gói khám
+                            </button>
+                        </div>
 
-                            <div className="flex items-center gap-3 flex-wrap">
+                        <div className="flex items-center gap-3 flex-wrap mb-6">
                                 <div className="flex items-center gap-2 bg-white border border-neutral-200 rounded-xl px-3 py-2 max-w-md flex-1 min-w-[220px]">
                                     <Search className="w-4 h-4 text-neutral-400" />
                                     <input
@@ -374,8 +375,7 @@ export function AdminExamPackagesPage() {
                                     )}
                                 </div>
                             )}
-                        </div>
-                    </div>
+            </div>
 
             {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

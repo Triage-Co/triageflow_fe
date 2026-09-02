@@ -251,8 +251,11 @@ export function StaffQRScanModal({
           {/* Camera View */}
           {(mode === 'camera' || cameraOnly) && (
             <div className="flex flex-col items-center space-y-3 pt-1">
-              <div className="relative aspect-square w-full max-w-[270px] overflow-hidden rounded-2xl border-2 border-slate-800 bg-slate-950 shadow-inner flex items-center justify-center">
-                <div id="shared-staff-qr-reader" className="w-full h-full" />
+              <div className="relative aspect-video w-full max-w-[320px] overflow-hidden rounded-2xl border-2 border-slate-800 bg-slate-950 shadow-inner">
+                <div
+                  id="shared-staff-qr-reader"
+                  className="cccd-qr-reader absolute inset-0 w-full h-full"
+                />
 
                 {isCameraLoading && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-950/90 text-white">
