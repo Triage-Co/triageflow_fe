@@ -1,6 +1,7 @@
 'use client';
 
 import type { Patient } from '@/modules/clinical/types/clinical.types';
+import { printHtmlDocument } from '@/shared/utils/printHtmlDocument';
 
 export const INDICATION_PRINT_CSS = `
 @page {
@@ -146,7 +147,7 @@ export function printServiceOrderIndications(input: IndicationPrintInput): void 
 <html lang="vi">
 <head>
   <meta charset="utf-8" />
-  <title>Phiếu chỉ định ${escapeHtml(patientName)}</title>
+  <title></title>
   <style>${INDICATION_PRINT_CSS}</style>
 </head>
 <body>
@@ -184,17 +185,8 @@ export function printServiceOrderIndications(input: IndicationPrintInput): void 
       </div>
     </div>
   </div>
-  <script>
-    setTimeout(function () { window.focus(); window.print(); }, 200);
-  </script>
 </body>
 </html>`;
 
-    const win = window.open('', '_blank', 'width=560,height=840');
-    if (!win) {
-        throw new Error('Trình duyệt chặn cửa sổ in. Vui lòng cho phép popup cho trang này.');
-    }
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
+    printHtmlDocument(html);
 }
