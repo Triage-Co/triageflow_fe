@@ -617,7 +617,7 @@ export function EmrPrescriptionTab({
                                                 />
                                             </div>
                                             <p className="max-w-[120px] text-[11px] font-semibold text-[#7C7C8A]">
-                                                Quét tại nhà thuốc để nhận thuốc
+                                                Quét tại nhà thuốc
                                             </p>
                                         </>
                                     ) : (
@@ -811,7 +811,7 @@ function ReadonlyPrescriptionBody({
                         <QRCodeSVG value={qrPayload(prescription)} size={96} level="M" includeMargin={false} />
                     </div>
                     <p className="max-w-[120px] text-[11px] font-semibold text-[#7C7C8A]">
-                        Quét tại nhà thuốc để nhận thuốc
+                        Quét tại nhà thuốc
                     </p>
                 </div>
                 <div className="text-right">

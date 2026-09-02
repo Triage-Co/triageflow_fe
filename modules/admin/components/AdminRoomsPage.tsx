@@ -18,9 +18,10 @@ import {
 import { cn } from '@/lib/utils';
 import { useRoomStore } from '../store/roomStore';
 import { useAuthStore } from '@/modules/auth/store/authStore';
-import type { HospitalRoom, Specialty } from '../types/room.types';
+import type { HospitalRoom, Specialty, PhysicalRoomItem } from '../types/room.types';
 import { ROOM_TYPE_OPTIONS } from '../types/process.types';
 import { getCompactPages } from '../utils/pagination';
+import { roomService } from '../services/roomService';
 
 const DEFAULT_ROOM_TYPE = 'CLINICAL_ROOM';
 
@@ -33,7 +34,7 @@ const getSpecialtyName = (room: HospitalRoom, specialties: Specialty[]): string 
     if (room.specialty?.specialty_code) return room.specialty.specialty_code;
     if (found?.specialty_code) return found.specialty_code;
     if (room.specialty_id) return `ID: ${room.specialty_id.slice(0, 8)}…`;
-    return 'Chưa xác định';
+    return 'Không thuộc chuyên khoa';
 };
 
 /** Trả về mã chuyên khoa từ nested specialty object, fallback lookup trong danh sách chuyên khoa */
@@ -41,7 +42,7 @@ const getSpecialtyCode = (room: HospitalRoom, specialties: Specialty[]): string 
     if (room.specialty?.specialty_code) return room.specialty.specialty_code;
     const found = specialties.find((s) => s.specialty_id === room.specialty_id);
     if (found?.specialty_code) return found.specialty_code;
-    return 'N/A';
+    return '—';
 };
 
 /* ─── Component ──────────────────────────────────────────────────────────── */
@@ -64,6 +65,7 @@ export function AdminRoomsPage() {
 
     const [searchQuery, setSearchQuery] = useState('');
     const [specialtyFilter, setSpecialtyFilter] = useState('ALL');
+    const [physicalRooms, setPhysicalRooms] = useState<PhysicalRoomItem[]>([]);
 
     // Pagination states
     const [currentPage, setCurrentPage] = useState(1);
@@ -78,6 +80,7 @@ export function AdminRoomsPage() {
         room_type: DEFAULT_ROOM_TYPE,
         specialty_id: '',
         custom_specialty_id: '',
+        physical_room_id: '',
     });
 
     // Edit Modal states
@@ -89,6 +92,7 @@ export function AdminRoomsPage() {
         room_type: DEFAULT_ROOM_TYPE,
         specialty_id: '',
         custom_specialty_id: '',
+        physical_room_id: '',
     });
 
     // Delete Confirm states
@@ -100,6 +104,13 @@ export function AdminRoomsPage() {
         if (accessToken) {
             fetchRooms(accessToken);
             fetchSpecialties(accessToken);
+            roomService
+                .getPhysicalRooms(accessToken)
+                .then((res) => {
+                    const list = Array.isArray(res?.data) ? res.data : [];
+                    setPhysicalRooms(list);
+                })
+                .catch(() => setPhysicalRooms([]));
         }
     }, [accessToken, fetchRooms, fetchSpecialties]);
 
@@ -109,8 +120,9 @@ export function AdminRoomsPage() {
         setEditForm({
             room_name: room.room_name,
             room_type: room.room_type || DEFAULT_ROOM_TYPE,
-            specialty_id: room.specialty_id,
+            specialty_id: room.specialty_id || '',
             custom_specialty_id: '',
+            physical_room_id: room.physical_room_id || room.physical_room?.id || '',
         });
         setEditError(null);
         setEditingRoom(room);
@@ -128,8 +140,8 @@ export function AdminRoomsPage() {
             ? createForm.custom_specialty_id.trim()
             : createForm.specialty_id;
 
-        if (!createForm.room_name.trim() || !specId) {
-            setCreateError('Vui lòng điền đầy đủ thông tin bắt buộc.');
+        if (!createForm.room_name.trim()) {
+            setCreateError('Vui lòng điền tên phòng khám.');
             return;
         }
 
@@ -138,9 +150,10 @@ export function AdminRoomsPage() {
         try {
             await createRoom(
                 {
-                    room_name: createForm.room_name,
+                    room_name: createForm.room_name.trim(),
                     room_type: createForm.room_type,
-                    specialty_id: specId,
+                    specialty_id: specId || undefined,
+                    physical_room_id: createForm.physical_room_id.trim() || null,
                 },
                 accessToken || ''
             );
@@ -148,8 +161,9 @@ export function AdminRoomsPage() {
             setCreateForm({
                 room_name: '',
                 room_type: DEFAULT_ROOM_TYPE,
-                specialty_id: specialties[0]?.specialty_id || '',
+                specialty_id: '',
                 custom_specialty_id: '',
+                physical_room_id: '',
             });
             // Refetch to sync updated relationship from database
             if (accessToken) {
@@ -169,8 +183,8 @@ export function AdminRoomsPage() {
             ? editForm.custom_specialty_id.trim()
             : editForm.specialty_id;
 
-        if (!editForm.room_name.trim() || !specId) {
-            setEditError('Vui lòng điền đầy đủ thông tin bắt buộc.');
+        if (!editForm.room_name.trim()) {
+            setEditError('Vui lòng điền tên phòng khám.');
             return;
         }
 
@@ -180,9 +194,10 @@ export function AdminRoomsPage() {
             await updateRoom(
                 editingRoom.room_id,
                 {
-                    room_name: editForm.room_name,
+                    room_name: editForm.room_name.trim(),
                     room_type: editForm.room_type,
-                    specialty_id: specId,
+                    specialty_id: specId || undefined,
+                    physical_room_id: editForm.physical_room_id.trim() || null,
                 },
                 accessToken || ''
             );
@@ -257,8 +272,9 @@ export function AdminRoomsPage() {
                                     setCreateForm({
                                         room_name: '',
                                         room_type: DEFAULT_ROOM_TYPE,
-                                        specialty_id: specialties[0]?.specialty_id || '',
+                                        specialty_id: '',
                                         custom_specialty_id: '',
+                                        physical_room_id: '',
                                     });
                                 }}
                                 className="flex items-center gap-2 px-4 py-2.5 bg-[#8B7CF6] hover:bg-[#7a6ae5] text-white text-[13px] font-bold rounded-xl transition-all shadow-sm cursor-pointer"
@@ -346,35 +362,53 @@ export function AdminRoomsPage() {
                                         <tr className="bg-neutral-50/80 border-b border-[#EBEBEB]">
                                             <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider w-[80px]">STT</th>
                                             <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Tên phòng</th>
+                                            <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Phòng vật lý</th>
                                             <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Tên chuyên khoa</th>
                                             <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider">Mã chuyên khoa</th>
                                             <th className="px-5 py-3.5 text-[11px] font-bold text-[#7B7B7B] uppercase tracking-wider text-right w-[120px]">Thao tác</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-neutral-100">
-                                        {paginatedRooms.map((room, index) => (
-                                            <tr key={room.room_id || index} className="hover:bg-neutral-50/50 transition-colors group">
-                                                <td className="px-5 py-4 text-[13px] font-semibold text-[#7B7B7B]">
-                                                    {(currentPage - 1) * ITEMS_PER_PAGE + index + 1}
-                                                </td>
-                                                <td className="px-5 py-4">
-                                                    <div
-                                                        onClick={() => router.push(`/admin/rooms/${room.room_id}`)}
-                                                        className="flex items-center gap-2.5 cursor-pointer group/room"
-                                                    >
-                                                        <div className="w-8 h-8 rounded-xl bg-[#F5F2FF] border border-[#E0DCFB] flex items-center justify-center shrink-0 group-hover/room:bg-[#8B7CF6] transition-colors">
-                                                            <Home className="w-4 h-4 text-[#8B7CF6] group-hover/room:text-white transition-colors" />
+                                        {paginatedRooms.map((room, index) => {
+                                            const physicalRoomObj =
+                                                room.physical_room ||
+                                                physicalRooms.find((pr) => pr.id === room.physical_room_id);
+
+                                            return (
+                                                <tr key={room.room_id || index} className="hover:bg-neutral-50/50 transition-colors group">
+                                                    <td className="px-5 py-4 text-[13px] font-semibold text-[#7B7B7B]">
+                                                        {(currentPage - 1) * ITEMS_PER_PAGE + index + 1}
+                                                    </td>
+                                                    <td className="px-5 py-4">
+                                                        <div
+                                                            onClick={() => router.push(`/admin/rooms/${room.room_id}`)}
+                                                            className="flex items-center gap-2.5 cursor-pointer group/room"
+                                                        >
+                                                            <div className="w-8 h-8 rounded-xl bg-[#F5F2FF] border border-[#E0DCFB] flex items-center justify-center shrink-0 group-hover/room:bg-[#8B7CF6] transition-colors">
+                                                                <Home className="w-4 h-4 text-[#8B7CF6] group-hover/room:text-white transition-colors" />
+                                                            </div>
+                                                            <span className="text-[13px] font-bold text-[#2D2D2D] group-hover/room:text-[#8B7CF6] transition-colors">
+                                                                {room.room_name}
+                                                            </span>
                                                         </div>
-                                                        <span className="text-[13px] font-bold text-[#2D2D2D] group-hover/room:text-[#8B7CF6] transition-colors">
-                                                            {room.room_name}
+                                                    </td>
+                                                    <td className="px-5 py-4">
+                                                        {physicalRoomObj?.roomLabel ? (
+                                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-semibold">
+                                                                {physicalRoomObj.roomLabel}
+                                                                {physicalRoomObj.roomCode && (
+                                                                    <span className="text-emerald-500 font-mono text-[10px]">({physicalRoomObj.roomCode})</span>
+                                                                )}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-neutral-400 text-[12px] font-normal">— Chưa gán</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-5 py-4">
+                                                        <span className="inline-flex items-center text-[10px] font-bold px-3 py-1 rounded-full border bg-[#F5F2FF] text-[#8B7CF6] border-[#E0DCFB] w-fit">
+                                                            {getSpecialtyName(room, specialties)}
                                                         </span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-5 py-4">
-                                                    <span className="inline-flex items-center text-[10px] font-bold px-3 py-1 rounded-full border bg-[#F5F2FF] text-[#8B7CF6] border-[#E0DCFB] w-fit">
-                                                        {getSpecialtyName(room, specialties)}
-                                                    </span>
-                                                </td>
+                                                    </td>
                                                 <td className="px-5 py-4 text-[12px] text-[#7B7B7B] font-mono">
                                                     {getSpecialtyCode(room, specialties)}
                                                 </td>
@@ -404,7 +438,8 @@ export function AdminRoomsPage() {
                                                     </div>
                                                 </td>
                                             </tr>
-                                        ))}
+                                        );
+                                    })}
                                     </tbody>
                                 </table>
                             )}
@@ -522,12 +557,13 @@ export function AdminRoomsPage() {
                             </select>
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-[11px] font-bold text-neutral-500 uppercase">Chuyên khoa phụ trách *</label>
+                            <label className="text-[11px] font-bold text-neutral-500 uppercase">Chuyên khoa phụ trách (Không bắt buộc)</label>
                             <select
                                 value={createForm.specialty_id}
                                 onChange={(e) => setCreateForm(prev => ({ ...prev, specialty_id: e.target.value }))}
                                 className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
                             >
+                                <option value="">-- Không thuộc chuyên khoa --</option>
                                 {specialties.map((sp) => (
                                     <option key={sp.specialty_id} value={sp.specialty_id}>
                                         {sp.specialty_name || sp.specialty_code}
@@ -548,6 +584,21 @@ export function AdminRoomsPage() {
                                 />
                             </div>
                         )}
+                        <div className="space-y-1.5">
+                            <label className="text-[11px] font-bold text-neutral-500 uppercase">Phòng vật lý trên bản đồ (Không bắt buộc)</label>
+                            <select
+                                value={createForm.physical_room_id}
+                                onChange={(e) => setCreateForm(prev => ({ ...prev, physical_room_id: e.target.value }))}
+                                className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
+                            >
+                                <option value="">-- Chưa liên kết bản đồ --</option>
+                                {physicalRooms.map((pr) => (
+                                    <option key={pr.id} value={pr.id}>
+                                        {pr.roomLabel || pr.roomCode} ({pr.roomCode})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
 
                     <div className="flex gap-3 mt-2 pt-4 border-t border-neutral-100">
@@ -616,12 +667,13 @@ export function AdminRoomsPage() {
                             </select>
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-[11px] font-bold text-neutral-500 uppercase">Chuyên khoa phụ trách *</label>
+                            <label className="text-[11px] font-bold text-neutral-500 uppercase">Chuyên khoa phụ trách (Không bắt buộc)</label>
                             <select
                                 value={editForm.specialty_id}
                                 onChange={(e) => setEditForm(prev => ({ ...prev, specialty_id: e.target.value }))}
                                 className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
                             >
+                                <option value="">-- Không thuộc chuyên khoa --</option>
                                 {specialties.map((sp) => (
                                     <option key={sp.specialty_id} value={sp.specialty_id}>
                                         {sp.specialty_name || sp.specialty_code}
@@ -642,6 +694,21 @@ export function AdminRoomsPage() {
                                 />
                             </div>
                         )}
+                        <div className="space-y-1.5">
+                            <label className="text-[11px] font-bold text-neutral-500 uppercase">Phòng vật lý trên bản đồ (Không bắt buộc)</label>
+                            <select
+                                value={editForm.physical_room_id}
+                                onChange={(e) => setEditForm(prev => ({ ...prev, physical_room_id: e.target.value }))}
+                                className="w-full text-xs border border-neutral-200 rounded-xl px-3.5 py-2.5 focus:border-[#8B7CF6] outline-none bg-white font-semibold text-[#2D2D2D]"
+                            >
+                                <option value="">-- Chưa liên kết bản đồ --</option>
+                                {physicalRooms.map((pr) => (
+                                    <option key={pr.id} value={pr.id}>
+                                        {pr.roomLabel || pr.roomCode} ({pr.roomCode})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
 
                     <div className="flex gap-3 mt-2 pt-4 border-t border-neutral-100">

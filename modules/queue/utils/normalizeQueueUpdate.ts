@@ -1,4 +1,53 @@
-import type { CallNextPatient, CallNextResponse } from '../types/queue.types';
+import type { CallNextPatient, CallNextResponse, MissingEntry } from '../types/queue.types';
+import type { RedirectedPatient } from '../types/rebalance.types';
+import { normalizeMissingList } from './normalizeStaffRoomQueue';
+
+const MISSED_UPCOMING_STATUSES = new Set(['MISSING', 'SKIPPED', 'ABSENT']);
+
+function mergeMissingEntries(entries: MissingEntry[]): MissingEntry[] {
+    const byKey = new Map<string, MissingEntry>();
+    for (const entry of entries) {
+        const key = entry.queue_id || entry.queue_number;
+        if (!key) continue;
+        byKey.set(key, entry);
+    }
+    return Array.from(byKey.values());
+}
+
+function normalizeRedirectedPatients(raw: unknown): RedirectedPatient[] {
+    if (!Array.isArray(raw)) return [];
+    const out: RedirectedPatient[] = [];
+    const seen = new Set<string>();
+    for (const item of raw) {
+        if (!item || typeof item !== 'object') continue;
+        const rec = item as Record<string, unknown>;
+        const queueNumber = rec.queue_number != null ? String(rec.queue_number).trim() : '';
+        if (!queueNumber) continue;
+        const key = queueNumber.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({
+            queue_number: rec.queue_number as string | number,
+            patient_name: rec.patient_name != null ? String(rec.patient_name) : '',
+            to_room_name: rec.to_room_name != null ? String(rec.to_room_name) : '',
+            expires_at: rec.expires_at != null ? String(rec.expires_at) : undefined,
+        });
+    }
+    return out;
+}
+
+function missingFromUpcomingPatient(p: CallNextPatient): MissingEntry | null {
+    const queueId = p.queue_id ? String(p.queue_id) : '';
+    const queueNumber = p.queue_number != null ? String(p.queue_number).trim() : '';
+    if (!queueId && !queueNumber) return null;
+    return {
+        queue_id: queueId || queueNumber,
+        queue_number: queueNumber,
+        patient_name: String(p.patient_name ?? ''),
+        missed_at: null,
+        step_id: undefined,
+    };
+}
 
 const LOG = '[TV Display][Normalize]';
 
@@ -28,6 +77,7 @@ export function normalizeQueueUpdatePayload(
         upcoming_raw_len: Array.isArray(body.upcoming_patients)
             ? body.upcoming_patients.length
             : `(not array: ${typeof body.upcoming_patients})`,
+        missing_raw_len: Array.isArray(body.missing) ? body.missing.length : 0,
     });
 
     const roomInfo = body.room_info;
@@ -46,6 +96,7 @@ export function normalizeQueueUpdatePayload(
     const currentName = current?.patient_name ? current.patient_name.trim().toLowerCase() : '';
 
     const dropReasons: { queue_number?: string; reason: string }[] = [];
+    const missedFromUpcoming: MissingEntry[] = [];
 
     const upcoming_patients = upcomingRaw
         .filter((p) => {
@@ -57,6 +108,13 @@ export function normalizeQueueUpdatePayload(
             const pNum = p.queue_number ? String(p.queue_number).trim() : '';
             const pName = p.patient_name ? p.patient_name.trim().toLowerCase() : '';
             const status = String(p.status ?? '').toUpperCase();
+
+            if (MISSED_UPCOMING_STATUSES.has(status)) {
+                const missed = missingFromUpcomingPatient(p);
+                if (missed) missedFromUpcoming.push(missed);
+                dropReasons.push({ queue_number: pNum, reason: `status=${status} (missed)` });
+                return false;
+            }
 
             // 1. Filter out by matching queue_id if present
             if (currentId && pId && currentId === pId) {
@@ -118,6 +176,22 @@ export function normalizeQueueUpdatePayload(
           }
         : null;
 
+    const missing = mergeMissingEntries([
+        ...normalizeMissingList(body.missing),
+        ...missedFromUpcoming,
+    ]);
+
+    const redirected_patients = normalizeRedirectedPatients(body.redirected_patients);
+    const redirectedNumbers = new Set(
+        redirected_patients.map((p) => String(p.queue_number).trim()),
+    );
+    const upcomingWithoutRedirected =
+        redirectedNumbers.size === 0
+            ? upcoming_patients
+            : upcoming_patients.filter(
+                  (p) => !redirectedNumbers.has(String(p.queue_number).trim()),
+              );
+
     const result: CallNextResponse = {
         room_info: {
             room_name: String(roomInfo.room_name ?? ''),
@@ -125,12 +199,16 @@ export function normalizeQueueUpdatePayload(
             doctor_name: String(roomInfo.doctor_name ?? ''),
         },
         current_patient,
-        upcoming_patients,
+        upcoming_patients: upcomingWithoutRedirected,
+        missing,
+        redirected_patients,
     };
 
     console.log(`${LOG} result`, {
         current_number: current_patient?.queue_number ?? null,
-        upcoming_numbers: upcoming_patients.map((p) => p.queue_number),
+        upcoming_numbers: upcomingWithoutRedirected.map((p) => p.queue_number),
+        redirected_numbers: redirected_patients.map((p) => p.queue_number),
+        missing_numbers: missing.map((m) => m.queue_number),
     });
 
     return result;

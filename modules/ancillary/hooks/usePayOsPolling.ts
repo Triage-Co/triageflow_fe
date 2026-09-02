@@ -24,7 +24,6 @@ export function usePayOsPolling(
     const [isChecking, setIsChecking] = useState(false);
     const [txData, setTxData] = useState<PayOsData | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [secondsLeft, setSecondsLeft] = useState(10);
 
     const totalAmount = prescription.total_amount || 0;
     const rxCode = prescription.prescription_code || prescription.prescription_id;
@@ -135,28 +134,6 @@ export function usePayOsPolling(
         return false;
     }, [prescription.prescription_id, rxCode, totalAmount, onPaymentSuccess]);
 
-    // Auto-polling 10 giây
-    useEffect(() => {
-        if (prescription.status !== 'PENDING') return;
-
-        const interval = setInterval(async () => {
-            const isDone = await checkStatus(false);
-            if (isDone) {
-                clearInterval(interval);
-            }
-            setSecondsLeft(10);
-        }, 10000);
-
-        const countdownInterval = setInterval(() => {
-            setSecondsLeft((prev) => (prev > 1 ? prev - 1 : 10));
-        }, 1000);
-
-        return () => {
-            clearInterval(interval);
-            clearInterval(countdownInterval);
-        };
-    }, [prescription.prescription_id, prescription.status, checkStatus]);
-
     const qrImageSource = (txData?.qrCode && txData.qrCode.startsWith('http'))
         ? txData.qrCode
         : (txData?.bin && txData?.accountNumber)
@@ -170,7 +147,6 @@ export function usePayOsPolling(
         isChecking,
         txData,
         error,
-        secondsLeft,
         qrImageSource,
         checkStatus
     };

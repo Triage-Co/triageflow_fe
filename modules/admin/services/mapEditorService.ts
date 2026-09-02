@@ -97,6 +97,23 @@ export async function saveMapGeometry(
   return response.data;
 }
 
+export async function rebuildGraphEdges(
+  floorId: string,
+  token: string,
+): Promise<GenerateGraphResult> {
+  const response = await apiClient.post<GenerateGraphResult>(
+    `/api/graph/${floorId}/rebuild-edges`,
+    {},
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+
+  if (!response.data) {
+    throw new Error('Invalid graph rebuild-edges API response');
+  }
+
+  return response.data;
+}
+
 export async function generateGraph(
   floorId: string,
   token: string,

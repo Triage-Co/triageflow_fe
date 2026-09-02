@@ -121,6 +121,8 @@ export function RoomWaitingScreen({
       upcoming_numbers: (socketData?.upcoming_patients ?? []).map(
         (p) => p.queue_number,
       ),
+      missing_count: socketData?.missing?.length ?? 0,
+      missing_numbers: (socketData?.missing ?? []).map((m) => m.queue_number),
       room_info: socketData?.room_info ?? null,
     });
   }, [socketData, isConnected, socketError]);
@@ -211,6 +213,13 @@ export function RoomWaitingScreen({
     return `PHÒNG ${upper}`;
   };
 
+  const formatInviteRoomName = (rawName?: string): string => {
+    const trimmed = (rawName || "").trim();
+    if (!trimmed || isUuidString(trimmed)) return "phòng khác";
+    if (/^phòng/i.test(trimmed)) return trimmed;
+    return `Phòng ${trimmed}`;
+  };
+
   // Determine room name & department to display (prioritizing non-UUID names)
   const socketRoomName = socketData?.room_info?.room_name;
   const resolvedRoomName =
@@ -232,6 +241,8 @@ export function RoomWaitingScreen({
     },
     current_patient: null,
     upcoming_patients: [],
+    missing: [],
+    redirected_patients: [],
   };
 
   const room = {
@@ -257,6 +268,17 @@ export function RoomWaitingScreen({
       patientName: p.patient_name,
       position: idx + 1,
     }));
+
+  const displayMissed = (activeData.missing ?? [])
+    .map((m) => String(m.queue_number).trim())
+    .filter((n) => n && n !== "---");
+
+  const nowMs = currentTime ? currentTime.getTime() : null;
+  const displayRedirected = (activeData.redirected_patients ?? []).filter((p) => {
+    if (!p.expires_at || nowMs == null) return true;
+    const exp = new Date(p.expires_at).getTime();
+    return Number.isFinite(exp) && exp > nowMs;
+  });
 
   /** CALLING = vừa gọi vào phòng; IN_PROGRESS = đang khám */
   const currentStatusLabel =
@@ -286,6 +308,7 @@ export function RoomWaitingScreen({
         queueNumber: p.queueNumber,
         patientName: p.patientName,
       })),
+      missed: displayMissed,
     });
     // intentionally exclude clock-driven state
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -385,14 +408,34 @@ export function RoomWaitingScreen({
 
       {/* ── 2. BODY: CURRENT (left ~60%) | UPCOMING (right ~40%) ── */}
       <div className="flex-1 min-h-0 flex overflow-hidden">
-        {/* Left: current patient */}
+        {/* Left: current patient + missed turns */}
         <div className="w-[60%] min-w-0 flex flex-col border-r border-black/10">
-          <AnimatedQueueNumber
-            queueNumber={currentPatient?.queueNumber ?? "---"}
-            patientName={currentPatient?.patientName ?? "Chưa có bệnh nhân"}
-            statusLabel={currentStatusLabel}
-            status={currentPatient?.status ?? ""}
-          />
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            <AnimatedQueueNumber
+              queueNumber={currentPatient?.queueNumber ?? "---"}
+              patientName={currentPatient?.patientName ?? "Chưa có bệnh nhân"}
+              statusLabel={currentStatusLabel}
+              status={currentPatient?.status ?? ""}
+            />
+          </div>
+
+          <div className="shrink-0 border-t-2 border-black/15 bg-white/40 backdrop-blur-sm px-4 sm:px-6 py-3">
+            <span className="text-sm sm:text-base font-black tracking-[0.15em] text-black/70 uppercase block mb-2">
+              Đã lỡ lượt
+            </span>
+            {displayMissed.length > 0 && (
+              <div className="flex flex-wrap gap-2 sm:gap-3">
+                {displayMissed.map((num, idx) => (
+                  <span
+                    key={`${num}-${idx}`}
+                    className="font-mono font-black text-xl sm:text-2xl md:text-3xl text-red-900 bg-red-100/80 border border-red-300/60 px-3 sm:px-4 py-1 rounded-xl shadow-sm"
+                  >
+                    {num}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Right: upcoming queue (single column, max 7) */}
@@ -403,11 +446,30 @@ export function RoomWaitingScreen({
             </span>
           </div>
 
-          {displayUpcoming.length === 0 ?
+          {displayUpcoming.length === 0 && displayRedirected.length === 0 ?
             <div className="flex-1 flex items-center justify-center text-black/40 font-bold text-base sm:text-lg">
               Không có bệnh nhân đang chờ
             </div>
           : <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+              {displayRedirected.map((p, idx) => {
+                const roomLabel = formatInviteRoomName(p.to_room_name);
+                return (
+                  <div
+                    key={`redirect-${String(p.queue_number)}-${idx}`}
+                    className="tv-redirect-blink flex items-center py-1.5 sm:py-2 text-base sm:text-lg md:text-xl lg:text-2xl font-bold border-b border-amber-400/40 bg-gradient-to-r from-amber-200/90 to-orange-200/80 rounded-xl px-2 mb-1.5"
+                  >
+                    <div className="flex items-center gap-2 sm:gap-3 truncate min-w-0 w-full text-amber-950">
+                      <span className="text-black font-black font-mono min-w-[3.5rem] sm:min-w-[4.5rem] shrink-0">
+                        STT {p.queue_number}
+                      </span>
+                      <span className="text-amber-800 font-black shrink-0">➔</span>
+                      <span className="font-semibold truncate">
+                        Mời sang {roomLabel} (rút ngắn thời gian chờ)
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
               {displayUpcoming.map((p, idx) => (
                 <div
                   key={p.id}

@@ -63,13 +63,15 @@ const toDateKey = (dateValue: string): string => {
 };
 
 const SHIFT_PAGE_SIZE = 7;
+/** Tải toàn bộ ca trong khoảng lọc; phân trang + search xử lý trên FE */
+const SHIFT_FETCH_LIMIT = 500;
 
 /* ─── Component ──────────────────────────────────────────────────────────── */
 
 export function AdminShiftPage() {
     const accessToken = useAuthStore((s) => s.accessToken);
 
-    const { shifts, meta, isLoading, error, fetchShifts, createShift, updateShift, deleteShift, clearError } = useShiftStore();
+    const { shifts, isLoading, error, fetchShifts, createShift, updateShift, deleteShift, clearError } = useShiftStore();
     const { staffs, fetchStaffs } = useStaffStore();
     const { rooms, specialties, fetchRooms, fetchSpecialties } = useRoomStore();
 
@@ -137,10 +139,10 @@ export function AdminShiftPage() {
             room_id: roomFilter === 'ALL' ? undefined : roomFilter,
             from: from && to && from > to ? to : from,
             to: from && to && from > to ? from : to,
-            page: currentPage,
-            limit: SHIFT_PAGE_SIZE,
+            page: 1,
+            limit: SHIFT_FETCH_LIMIT,
         });
-    }, [accessToken, roomFilter, fromDate, toDate, currentPage, fetchShifts]);
+    }, [accessToken, roomFilter, fromDate, toDate, fetchShifts]);
 
     useEffect(() => {
         if (!selectedRoomShift || !accessToken) return;
@@ -326,22 +328,41 @@ export function AdminShiftPage() {
 
     /* ── Computed ── */
 
-    const filteredShifts = shifts.filter((shift) => {
-        const shiftDate = toDateKey(shift.date);
-        const roomName = getRoomName(shift.room_id).toLowerCase();
-        const q = searchQuery.toLowerCase().trim();
-        const matchesSearch = !q ||
-            roomName.includes(q) ||
-            shiftDate.includes(q) ||
-            shift.start_time.includes(q) ||
-            shift.end_time.includes(q);
+    const filteredShifts = shifts
+        .filter((shift) => {
+            const shiftDate = toDateKey(shift.date);
+            const roomName = getRoomName(shift.room_id).toLowerCase();
+            const q = searchQuery.toLowerCase().trim();
+            return (
+                !q ||
+                roomName.includes(q) ||
+                shiftDate.includes(q) ||
+                shift.start_time.includes(q) ||
+                shift.end_time.includes(q)
+            );
+        })
+        .toSorted((a, b) => {
+            const dateDiff = toDateKey(b.date).localeCompare(toDateKey(a.date));
+            if (dateDiff !== 0) return dateDiff;
+            const roomDiff = getRoomName(a.room_id).localeCompare(getRoomName(b.room_id), 'vi', {
+                sensitivity: 'base',
+            });
+            if (roomDiff !== 0) return roomDiff;
+            return a.start_time.localeCompare(b.start_time);
+        });
 
-        return matchesSearch;
-    });
-
-    const total = meta?.total ?? 0;
+    const total = filteredShifts.length;
     const totalPages = Math.max(1, Math.ceil(total / SHIFT_PAGE_SIZE));
-    const paginatedShifts = filteredShifts;
+    const paginatedShifts = filteredShifts.slice(
+        (currentPage - 1) * SHIFT_PAGE_SIZE,
+        currentPage * SHIFT_PAGE_SIZE
+    );
+
+    useEffect(() => {
+        if (currentPage > totalPages) {
+            setCurrentPage(totalPages);
+        }
+    }, [currentPage, totalPages]);
 
     /* ── Render ── */
 
@@ -563,7 +584,7 @@ export function AdminShiftPage() {
                                 </table>
                             )}
 
-                            {!isLoading && filteredShifts.length === 0 && (
+                            {!isLoading && total === 0 && (
                                 <div className="flex flex-col items-center justify-center py-16 gap-2">
                                     <CalendarDays className="w-8 h-8 text-neutral-300" />
                                     <p className="text-[13px] text-[#ADADAD] font-medium">Không có ca trực nào phù hợp.</p>

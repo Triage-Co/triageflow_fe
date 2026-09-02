@@ -3,11 +3,8 @@
 import React, { useState } from 'react';
 import {
     QrCode,
-    Clock,
     X,
     AlertCircle,
-    Sparkles,
-    ExternalLink,
     Copy,
     Check,
     Loader2,
@@ -32,14 +29,13 @@ export function PaymentQRModal({
     onPaymentSuccess
 }: PaymentQRModalProps) {
     const accessToken = useAuthStore((s) => s.accessToken);
-    const [copiedField, setCopiedField] = useState<'link' | 'account' | 'memo' | null>(null);
+    const [copiedField, setCopiedField] = useState<'account' | 'memo' | null>(null);
 
     const {
         isGenerating,
         isChecking,
         txData,
         error,
-        secondsLeft,
         qrImageSource,
         checkStatus
     } = usePayOsPolling(prescription, accessToken || undefined, onPaymentSuccess);
@@ -49,7 +45,7 @@ export function PaymentQRModal({
     const totalAmount = txData?.amount || prescription.total_amount || 0;
     const rxCode = prescription.prescription_code || prescription.prescription_id;
 
-    const handleCopy = async (text: string, type: 'link' | 'account' | 'memo') => {
+    const handleCopy = async (text: string, type: 'account' | 'memo') => {
         try {
             await navigator.clipboard.writeText(text);
             setCopiedField(type);
@@ -79,18 +75,12 @@ export function PaymentQRModal({
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                            <Clock className="w-3 h-3 animate-spin text-amber-600 dark:text-amber-400" />
-                            Kiểm tra ({secondsLeft}s)
-                        </span>
-                        <button
-                            onClick={onClose}
-                            className="p-1.5 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-500 transition-colors cursor-pointer"
-                        >
-                            <X className="w-5 h-5" />
-                        </button>
-                    </div>
+                    <button
+                        onClick={onClose}
+                        className="p-1.5 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-500 transition-colors cursor-pointer"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
                 </div>
 
                 {/* Error Box */}
@@ -98,34 +88,6 @@ export function PaymentQRModal({
                     <div className="p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-2xl text-red-700 dark:text-red-300 text-xs flex items-center gap-2">
                         <AlertCircle className="w-4 h-4 shrink-0" />
                         <span>{error}</span>
-                    </div>
-                )}
-
-                {/* PayOS Direct Link */}
-                {txData?.checkoutUrl && (
-                    <div className="bg-purple-50/50 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/40 rounded-2xl p-3 flex items-center justify-between gap-2 text-xs">
-                        <div className="flex items-center gap-2">
-                            <Sparkles className="w-4 h-4 text-purple-600 shrink-0" />
-                            <span className="text-neutral-700 dark:text-neutral-300 font-medium">Link thanh toán PayOS:</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                            <a
-                                href={txData.checkoutUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-[#7C6CF5] hover:bg-[#6C5CE7] text-white font-bold transition-colors cursor-pointer text-xs"
-                            >
-                                <ExternalLink className="w-3 h-3" />
-                                Mở cổng PayOS
-                            </a>
-                            <button
-                                onClick={() => handleCopy(txData.checkoutUrl || '', 'link')}
-                                className="p-1.5 rounded-lg bg-white dark:bg-neutral-800 hover:bg-neutral-100 text-neutral-600 dark:text-neutral-300 transition-colors cursor-pointer border border-purple-200 dark:border-purple-800"
-                                title="Sao chép link"
-                            >
-                                {copiedField === 'link' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                            </button>
-                        </div>
                     </div>
                 )}
 
@@ -209,11 +171,6 @@ export function PaymentQRModal({
                                     </div>
                                 </div>
                             )}
-                        </div>
-
-                        <div className="flex items-center gap-2 p-2.5 bg-purple-50 dark:bg-purple-950/30 border border-purple-200/60 dark:border-purple-900/40 rounded-xl text-[11px] text-purple-900 dark:text-purple-300">
-                            <Loader2 className="w-3.5 h-3.5 animate-spin text-[#7C6CF5] shrink-0" />
-                            <span>Tự động kiểm tra mỗi 10 giây khi nhận tiền...</span>
                         </div>
                     </div>
                 </div>

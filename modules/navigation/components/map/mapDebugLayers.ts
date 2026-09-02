@@ -50,7 +50,10 @@ export function buildNodesGroup(
 
     const nodeColor = NODE_COLORS[node.type] || NODE_COLORS.Default;
 
-    const dotGeo = new THREE.CircleGeometry(0.4, 16);
+    const dotGeo = new THREE.CircleGeometry(
+      node.type === 'CORRIDOR' || node.type === 'JUNCTION' ? 0.55 : 0.4,
+      16,
+    );
     const dotMat = new THREE.MeshStandardMaterial({
       color: nodeColor,
       emissive: nodeColor,
@@ -63,7 +66,8 @@ export function buildNodesGroup(
     dotMesh.rotation.x = -Math.PI / 2;
     dotMesh.position.set(pt.x, 0.08, pt.z);
 
-    const radius = node.type === 'CORRIDOR' ? 0.25 : 0.3;
+    const radius =
+      node.type === 'CORRIDOR' || node.type === 'JUNCTION' ? 0.55 : 0.3;
     const nodeGeo = new THREE.SphereGeometry(radius, 16, 16);
     const nodeMat = new THREE.MeshStandardMaterial({
       color: nodeColor,
@@ -82,36 +86,72 @@ export function buildNodesGroup(
       editable: node.type === 'CORRIDOR' || node.type === 'JUNCTION',
       originalColor: nodeColor,
     };
-    nodeMesh.userData = userData;
-    dotMesh.userData = userData;
+    nodeMesh.userData = { ...userData, pickable: userData.editable };
+    // Disk is the visible target in top-down; must be pickable so clicks match highlight.
+    dotMesh.userData = { ...userData, pickable: userData.editable };
 
     group.add(dotMesh);
     group.add(nodeMesh);
+
+    if (userData.editable) {
+      const hitGeo = new THREE.SphereGeometry(1.6, 10, 10);
+      const hitMat = new THREE.MeshBasicMaterial({
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+      });
+      const hitMesh = new THREE.Mesh(hitGeo, hitMat);
+      hitMesh.position.set(pt.x, 0.3, pt.z);
+      hitMesh.userData = { ...userData, pickable: true, hitHelper: true };
+      group.add(hitMesh);
+    }
   });
 
   if (edges && edges.length > 0) {
-    const edgeMaterial = new THREE.LineBasicMaterial({
-      color: 0x818cf8,
-      transparent: true,
-      opacity: 0.75,
-    });
-    const seenEdgeKeys = new Set<string>();
+    const pairs = new Map<
+      string,
+      {
+        ids: string[];
+        p1: { x: number; z: number };
+        p2: { x: number; z: number };
+      }
+    >();
 
     edges.forEach((edge) => {
       const p1 = nodePosMap.get(edge.fromNodeId);
       const p2 = nodePosMap.get(edge.toNodeId);
       if (!p1 || !p2) return;
 
-      const edgeKey = [edge.fromNodeId, edge.toNodeId].sort().join('||');
-      if (seenEdgeKeys.has(edgeKey)) return;
-      seenEdgeKeys.add(edgeKey);
+      const pairKey = [edge.fromNodeId, edge.toNodeId].sort().join('||');
+      const existing = pairs.get(pairKey);
+      if (existing) {
+        if (!existing.ids.includes(edge.id)) existing.ids.push(edge.id);
+        return;
+      }
+      pairs.set(pairKey, { ids: [edge.id], p1, p2 });
+    });
 
+    pairs.forEach((pair, pairKey) => {
+      const edgeMaterial = new THREE.LineBasicMaterial({
+        color: 0x818cf8,
+        transparent: true,
+        opacity: 0.85,
+        linewidth: 1,
+      });
       const points = [
-        new THREE.Vector3(p1.x, 0.15, p1.z),
-        new THREE.Vector3(p2.x, 0.15, p2.z),
+        new THREE.Vector3(pair.p1.x, 0.18, pair.p1.z),
+        new THREE.Vector3(pair.p2.x, 0.18, pair.p2.z),
       ];
       const edgeGeo = new THREE.BufferGeometry().setFromPoints(points);
-      group.add(new THREE.Line(edgeGeo, edgeMaterial));
+      const line = new THREE.Line(edgeGeo, edgeMaterial);
+      line.userData = {
+        type: 'EDGE',
+        pairKey,
+        ids: pair.ids,
+        pickable: true,
+        originalColor: 0x818cf8,
+      };
+      group.add(line);
     });
   }
 

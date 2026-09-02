@@ -16,12 +16,7 @@ export interface MedicalRecord {
     visitReason: string;
     clinicalProgression: string;
     medicalHistory: string[];
-    physicalExam: {
-        throat?: string;
-        lungs: string;
-        heart: string;
-        abdomen: string;
-    };
+    physicalExam: Record<string, string>;
     diagnosis?: string;
     treatmentPlan?: string;
 }

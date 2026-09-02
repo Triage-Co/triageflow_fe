@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Clock, Pin, PhoneCall, RotateCcw, UserX, CheckCircle2, X, Loader2 } from 'lucide-react';
+import { Clock, ExternalLink, Pin, PhoneCall, RotateCcw, UserX, CheckCircle2, X, Loader2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 import { cn } from '@/lib/utils';
 import type { FinishedEntry, MissingEntry, WaitingEntry } from '../types/queue.types';
+import { useFlaggableRules } from '../hooks/useFlaggableRules';
+import { RuleFlagChipPicker } from './RuleFlagChipPicker';
 
 export interface RoomWaitingListProps {
     waiting: WaitingEntry[];
@@ -15,6 +17,8 @@ export interface RoomWaitingListProps {
     onMiss?: (queueId: string) => void | Promise<void>;
     onRecall?: (queueId: string) => void | Promise<void>;
     onPinTop?: (queueId: string) => void | Promise<void>;
+    onSetManualRules?: (queueId: string, codes: string[]) => void | Promise<void>;
+    onOpenEmr?: (queueId: string) => void;
     className?: string;
 }
 
@@ -51,10 +55,14 @@ export function RoomWaitingList({
     onMiss,
     onRecall,
     onPinTop,
+    onSetManualRules,
+    onOpenEmr,
     className,
 }: RoomWaitingListProps) {
     const [tab, setTab] = useState<'waiting' | 'missing' | 'finished'>('waiting');
     const [missPatient, setMissPatient] = useState<WaitingEntry | null>(null);
+    const { rules: flaggableRules, isLoading: flaggableLoading, refetch: refetchFlaggable } =
+        useFlaggableRules();
 
     return (
         <div className={cn('flex h-full min-h-0 flex-col rounded-2xl border border-neutral-200/70 bg-white shadow-sm overflow-hidden', className)}>
@@ -166,14 +174,42 @@ export function RoomWaitingList({
                                         <p className="mt-1 truncate text-sm font-bold text-neutral-800">
                                             {w.patient_name}
                                         </p>
+                                        <RuleFlagChipPicker
+                                            rules={flaggableRules}
+                                            selectedCodes={w.manual_rule_codes ?? []}
+                                            appliedCodes={w.reasons}
+                                            onChange={(codes) => {
+                                                if (!onSetManualRules) return;
+                                                void onSetManualRules(w.queue_id, codes);
+                                            }}
+                                            disabled={isActing || !onSetManualRules}
+                                            hideAdd={!onSetManualRules}
+                                            isLoading={flaggableLoading}
+                                            onRefreshRules={refetchFlaggable}
+                                            compact
+                                            accent="indigo"
+                                            className="mt-1.5"
+                                        />
                                         <p className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-neutral-400">
                                             <Clock className="h-3 w-3" />
-                                            ETA ~{w.eta_minutes ?? '—'}p
+                                            Thời gian chờ ~{w.eta_minutes ?? '—'}p
                                             {w.eta_time ? ` · ${formatEtaTime(w.eta_time)}` : ''}
                                         </p>
                                     </div>
                                 </div>
                                 <div className="flex shrink-0 items-center gap-1.5">
+                                    {onOpenEmr && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-8 rounded-lg border-neutral-200 px-2.5 text-xs font-bold text-neutral-700 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 shadow-2xs"
+                                            disabled={isActing}
+                                            onClick={() => onOpenEmr(w.queue_id)}
+                                            startIcon={<ExternalLink className="h-3 w-3" />}
+                                        >
+                                            Xem thông tin
+                                        </Button>
+                                    )}
                                     {onCallByStep && w.step_id && (
                                         <Button
                                             size="sm"
@@ -298,7 +334,19 @@ export function RoomWaitingList({
                                             </p>
                                         </div>
                                     </div>
-                                    <div className="flex shrink-0 items-center">
+                                    <div className="flex shrink-0 items-center gap-1.5">
+                                        {onOpenEmr && (
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-8 rounded-lg border-neutral-200 px-2.5 text-xs font-bold text-neutral-700 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 shadow-2xs"
+                                                disabled={isActing}
+                                                onClick={() => onOpenEmr(f.queue_id)}
+                                                startIcon={<ExternalLink className="h-3 w-3" />}
+                                            >
+                                                Xem thông tin
+                                            </Button>
+                                        )}
                                         <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200/60 px-2 py-1 rounded-lg">
                                             <CheckCircle2 className="h-3.5 w-3.5" />
                                             Đã khám

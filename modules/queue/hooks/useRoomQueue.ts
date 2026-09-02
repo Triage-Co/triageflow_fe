@@ -12,6 +12,7 @@ import type {
     Serving,
 } from '../types/queue.types';
 import { normalizeStaffRoomQueue } from '../utils/normalizeStaffRoomQueue';
+import { sanitizeStaffScanErrorMessage } from '@/shared/utils/apiError';
 
 const SOCKET_URL =
     process.env.NEXT_PUBLIC_SOCKET_URL ||
@@ -26,6 +27,11 @@ function asStaffUuid(value?: string | null): string | undefined {
     if (!value) return undefined;
     const trimmed = value.trim();
     return UUID_RE.test(trimmed) ? trimmed : undefined;
+}
+
+function toQueueErrorMessage(e: unknown, fallback: string): string {
+    const raw = e instanceof Error ? e.message : fallback;
+    return sanitizeStaffScanErrorMessage(raw);
 }
 
 export interface UseRoomQueueOptions {
@@ -53,6 +59,7 @@ export interface UseRoomQueueReturn {
     missQueue: (queueId: string) => Promise<void>;
     recall: (queueId: string) => Promise<void>;
     override: (queueId: string, body: QueueOverrideBody) => Promise<void>;
+    setManualRules: (queueId: string, codes: string[]) => Promise<void>;
     scanTicket: (dto: { ticket_code?: string; queue_id?: string }) => Promise<any>;
     startServing: (queueId?: string) => Promise<any>;
     isActing: boolean;
@@ -89,8 +96,7 @@ export function useRoomQueue({
             const data = await queueService.getRoomQueue(roomId, accessToken || undefined);
             setQueue(data);
         } catch (e) {
-            const msg = e instanceof Error ? e.message : 'Không tải được hàng chờ phòng';
-            setError(msg);
+            setError(toQueueErrorMessage(e, 'Không tải được hàng chờ phòng'));
         } finally {
             setIsLoading(false);
         }
@@ -178,8 +184,7 @@ export function useRoomQueue({
         try {
             return await fn();
         } catch (e) {
-            const msg = e instanceof Error ? e.message : 'Thao tác hàng chờ thất bại';
-            setError(msg);
+            setError(toQueueErrorMessage(e, 'Thao tác hàng chờ thất bại'));
             throw e;
         } finally {
             setIsActing(false);
@@ -349,6 +354,20 @@ export function useRoomQueue({
         [accessToken, withActing, refresh],
     );
 
+    const setManualRules = useCallback(
+        async (queueId: string, codes: string[]) => {
+            await withActing(async () => {
+                await queueService.updateQueueManualRules(
+                    queueId,
+                    codes,
+                    accessToken || undefined,
+                );
+                await refresh();
+            });
+        },
+        [accessToken, withActing, refresh],
+    );
+
     const scanTicket = useCallback(
         async (dto: { ticket_code?: string; queue_id?: string }) => {
             if (!roomId) throw new Error('Chưa chọn phòng khám');
@@ -394,6 +413,7 @@ export function useRoomQueue({
         missQueue,
         recall,
         override,
+        setManualRules,
         scanTicket,
         startServing,
         isActing,

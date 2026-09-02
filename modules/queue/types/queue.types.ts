@@ -1,3 +1,5 @@
+import type { RedirectedPatient } from './rebalance.types';
+
 /** Queue lifecycle statuses used across TV + staff */
 export type QueueStatus =
     | 'PENDING'
@@ -84,6 +86,8 @@ export interface CallNextResponse {
     room_id?: string;
     expected_service_minutes?: number;
     timestamp?: string;
+    /** Confirmed rebalance overlays for the source-room TV (Room A). */
+    redirected_patients?: RedirectedPatient[];
 }
 
 export interface CallNextRequestDto {
@@ -166,6 +170,9 @@ export interface WaitingEntry {
     eta_time: string | null;
     /** Optional step id when BE includes it for call-by-step */
     step_id?: string;
+    /** Manual flag codes staff attached (PEDIATRIC_ACUTE, QUICK_TASK, …). */
+    manual_rule_codes?: string[];
+    visit_session_id?: string;
 }
 
 export interface MissingEntry {

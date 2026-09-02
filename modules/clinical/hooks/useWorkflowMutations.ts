@@ -21,7 +21,7 @@ import {
     pickServiceCodeByContext,
 } from '@/modules/clinical/workflow/draftBuilder';
 import { asRecord, getRoomTypeValue, pickLinkedServiceOrderDetailId } from '@/modules/clinical/workflow/flowPickers';
-import { orderFlowStepsForTimeline } from '@/modules/clinical/workflow/flowOrder';
+import { sortStepsTopologically } from '@/modules/clinical/workflow/sortStepsTopologically';
 import {
     findLiveExamStepId,
     isDraftPaymentStep,
@@ -546,7 +546,7 @@ export function useWorkflowMutations(args: UseWorkflowMutationsArgs) {
 
             const flowObj = await reloadFlow();
             const liveRaw = Array.isArray(flowObj?.steps) ? (flowObj!.steps as unknown[]) : [];
-            const liveOrdered = orderFlowStepsForTimeline(liveRaw);
+            const liveOrdered = sortStepsTopologically(liveRaw);
 
             const newLiveSteps = liveOrdered.filter((item) => {
                 const live = asRecord(item);

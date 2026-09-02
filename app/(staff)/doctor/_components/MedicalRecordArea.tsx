@@ -4,6 +4,8 @@ import { useState } from 'react';
 import type { Patient } from '@/modules/clinical/types/clinical.types';
 import { ActionToolbar, type ToolbarTab } from './ActionToolbar';
 import { MedicalSection } from './MedicalSection';
+import { physicalExamEntries } from '@/modules/clinical/utils/physicalExam';
+import { normalizeMultilineText } from '@/modules/clinical/utils/multilineText';
 
 interface MedicalRecordAreaProps {
     patient: Patient;
@@ -23,7 +25,9 @@ function ExamTab({ patient }: { patient: Patient }) {
             {/* Quá trình bệnh lý */}
             <MedicalSection title="Quá trình bệnh lý và diễn biến lâm sàng" minHeight="180px" onEdit={() => {}}>
                 {record.clinicalProgression ? (
-                    <p className="text-[#7B7B7B] whitespace-pre-line">{record.clinicalProgression}</p>
+                    <p className="text-[#7B7B7B] whitespace-pre-line">
+                        {normalizeMultilineText(record.clinicalProgression)}
+                    </p>
                 ) : (
                     <p className="text-[#ADADAD] italic text-[12px]">Nhập quá trình bệnh lý...</p>
                 )}
@@ -45,20 +49,18 @@ function ExamTab({ patient }: { patient: Patient }) {
 
                 {/* Khám lâm sàng */}
                 <MedicalSection title="Khám lâm sàng" onEdit={() => {}}>
-                    <div className="space-y-2">
-                        <div>
-                            <span className="text-[12px] font-medium text-[#2D2D2D]">Phổi: </span>
-                            <span className="text-[#7B7B7B]">{record.physicalExam.lungs}</span>
+                    {physicalExamEntries(record.physicalExam).length > 0 ? (
+                        <div className="space-y-2">
+                            {physicalExamEntries(record.physicalExam).map((row) => (
+                                <div key={row.label}>
+                                    <span className="text-[12px] font-medium text-[#2D2D2D]">{row.label}: </span>
+                                    <span className="text-[#7B7B7B]">{row.value}</span>
+                                </div>
+                            ))}
                         </div>
-                        <div>
-                            <span className="text-[12px] font-medium text-[#2D2D2D]">Tim: </span>
-                            <span className="text-[#7B7B7B]">{record.physicalExam.heart}</span>
-                        </div>
-                        <div>
-                            <span className="text-[12px] font-medium text-[#2D2D2D]">Tiêu hóa: </span>
-                            <span className="text-[#7B7B7B]">{record.physicalExam.abdomen}</span>
-                        </div>
-                    </div>
+                    ) : (
+                        <p className="text-[#ADADAD] italic text-[12px]">Chưa có dữ liệu khám lâm sàng</p>
+                    )}
                 </MedicalSection>
             </div>
         </div>

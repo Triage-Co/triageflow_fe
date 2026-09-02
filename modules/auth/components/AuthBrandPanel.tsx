@@ -35,9 +35,9 @@ export function AuthBrandPanel() {
                 {/* Feature badges */}
                 <div className="mt-10 flex items-center gap-6">
                     {[
-                        { label: 'AI', sub: 'Powered' },
-                        { label: 'Smart', sub: 'Routing' },
-                        { label: 'Real-time', sub: 'Tracking' },
+                        { label: 'Phân loại', sub: 'Bằng AI' },
+                        { label: 'Điều phối', sub: 'Thông minh' },
+                        { label: 'Theo dõi', sub: 'Thời gian thực' },
                     ].map(({ label, sub }) => (
                         <div key={label} className="flex flex-col items-center gap-1">
                             <span className="text-sm font-semibold text-white px-3 py-1 rounded-full bg-white/15 border border-white/20">

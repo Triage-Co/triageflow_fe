@@ -70,8 +70,31 @@ export function useDoctorDashboard() {
 
     const openPatientEmr = (queueId: string) => {
         const serving = roomQueue.queue?.serving;
-        const name = serving?.patient?.full_name || 'Bệnh nhân';
-        const stt = serving?.queue_number || '';
+        const waiting = roomQueue.queue?.waiting ?? [];
+        const finished = roomQueue.queue?.finished ?? [];
+
+        let name = 'Bệnh nhân';
+        let stt = '';
+
+        if (serving?.queue_id === queueId) {
+            name = serving.patient?.full_name || 'Bệnh nhân';
+            stt = serving.queue_number || '';
+        } else {
+            const waitingEntry = waiting.find((entry) => entry.queue_id === queueId);
+            if (waitingEntry) {
+                name = waitingEntry.patient_name || 'Bệnh nhân';
+                stt = waitingEntry.queue_number || '';
+            } else {
+                const finishedEntry = finished.find((entry) => entry.queue_id === queueId);
+                if (!finishedEntry) return;
+                name =
+                    finishedEntry.patient_name ||
+                    finishedEntry.patient?.full_name ||
+                    'Bệnh nhân';
+                stt = finishedEntry.queue_number || '';
+            }
+        }
+
         openTab({ id: queueId, name, stt });
         router.push(`${basePath}/${queueId}`);
     };

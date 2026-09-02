@@ -23,7 +23,6 @@ import {
     User,
     Search,
     Stethoscope,
-    QrCode,
     Package,
     Sparkles,
     Monitor,
@@ -67,19 +66,16 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
         { label: 'Thông tin cá nhân', href: '/settings', icon: User },
     ],
     PHARMACY_STAFF: [
-        { label: 'Tiếp nhận đơn tại quầy', href: '/pharmacy/checkin', icon: QrCode },
         { label: 'Quản lý & Cấp phát đơn', href: '/pharmacy', icon: Pill },
         { label: 'Danh mục dược phẩm', href: '/pharmacy/medicines', icon: Package },
         { label: 'Thông tin cá nhân', href: '/settings', icon: User },
     ],
     PHARMACIST: [
-        { label: 'Tiếp nhận đơn tại quầy', href: '/pharmacy/checkin', icon: QrCode },
         { label: 'Quản lý & Cấp phát đơn', href: '/pharmacy', icon: Pill },
         { label: 'Danh mục dược phẩm', href: '/pharmacy/medicines', icon: Package },
         { label: 'Thông tin cá nhân', href: '/settings', icon: User },
     ],
     PHARMACY: [
-        { label: 'Tiếp nhận đơn tại quầy', href: '/pharmacy/checkin', icon: QrCode },
         { label: 'Quản lý & Cấp phát đơn', href: '/pharmacy', icon: Pill },
         { label: 'Danh mục dược phẩm', href: '/pharmacy/medicines', icon: Package },
         { label: 'Thông tin cá nhân', href: '/settings', icon: User },
@@ -148,9 +144,19 @@ interface SidebarProps {
     /** Allow parent to control collapsed state. If omitted, sidebar manages its own state. */
     collapsed?: boolean;
     onToggle?: () => void;
+    /** Hide collapse control (e.g. mobile drawer). */
+    showCollapseToggle?: boolean;
+    /** Called after a nav link is selected (e.g. close mobile drawer). */
+    onNavItemClick?: () => void;
 }
 
-export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
+export function Sidebar({
+    user,
+    collapsed,
+    onToggle,
+    showCollapseToggle = true,
+    onNavItemClick,
+}: SidebarProps) {
     const pathname = usePathname();
     const router = useRouter();
     const { logout } = useAuthStore();
@@ -251,6 +257,7 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
                         <Link
                             key={item.href}
                             href={item.href}
+                            onClick={() => onNavItemClick?.()}
                             className={cn(
                                 'flex items-center gap-2.5 h-10 rounded-[12px] px-2.5 transition-all duration-200 text-[13px]',
                                 isCollapsed && 'justify-center px-0 w-10 mx-auto',
@@ -272,6 +279,7 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
             </nav>
 
             {/* ── Collapse toggle button ─────────────────── */}
+            {showCollapseToggle && (
             <div className={cn('py-2 shrink-0', isCollapsed ? 'flex justify-center' : 'px-1.5')}>
                 <button
                     onClick={handleToggle}
@@ -293,6 +301,7 @@ export function Sidebar({ user, collapsed, onToggle }: SidebarProps) {
                     )}
                 </button>
             </div>
+            )}
 
             {/* ── User profile / footer section ────────── */}
             <div className={cn('px-4 py-4 shrink-0 border-t border-[#8B7CF6]/10', isCollapsed && 'px-2')}>

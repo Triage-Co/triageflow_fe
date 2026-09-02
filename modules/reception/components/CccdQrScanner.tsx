@@ -21,6 +21,10 @@ interface CameraDevice {
   isPhoneOrExternal: boolean;
 }
 
+function isExcludedCameraLabel(label: string): boolean {
+  return /obs\s*virtual\s*camera/i.test(label);
+}
+
 interface CccdQrScannerProps {
   open: boolean;
   onClose: () => void;
@@ -342,7 +346,9 @@ export function CccdQrScanner({
       setCameraError(null);
 
       const { Html5Qrcode } = await import('html5-qrcode');
-      const deviceList = await Html5Qrcode.getCameras();
+      const deviceList = (await Html5Qrcode.getCameras()).filter(
+        (cam) => !isExcludedCameraLabel(cam.label || ''),
+      );
 
       if (!deviceList || deviceList.length === 0) {
         setCameraError('Không tìm thấy camera khả dụng');

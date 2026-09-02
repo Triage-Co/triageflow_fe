@@ -9,6 +9,7 @@ import {
     normalizeStepType,
 } from '@/modules/admin/types/process.types';
 import { toLocalYmd } from '@/modules/clinical/utils/appointmentDate';
+import { buildPhysicalExamFromApi } from '@/modules/clinical/utils/physicalExam';
 
 // ── API Services & DTOs ──────────────────────────────────────────────────────
 import { apiClient } from '@/shared/services/apiClient';
@@ -52,13 +53,6 @@ export function mapTemplateStepsToAssignPayload(
 }
 
 
-
-const MOCK_PHYSICAL_EXAM = {
-    throat: 'Chưa cập nhật',
-    lungs: 'Chưa cập nhật',
-    heart: 'Chưa cập nhật',
-    abdomen: 'Chưa cập nhật',
-};
 
 function asRecord(value: unknown): Record<string, unknown> | null {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -179,16 +173,14 @@ export function pickFirstTemplateId(raw: unknown): string | undefined {
     return extractTemplateIds(raw)[0];
 }
 
-export function extractWorkflowStepsFromResponse(raw: unknown, currentStepId?: string): WorkflowStep[] {
-    return extractWorkflowSteps(raw, currentStepId);
-}
-
 export interface BackendQueuePatient {
     queue_id: string;
     queue_number: string;
     status: string;
     /** Denormalized room for TV/queue engine — may be null on legacy rows */
     room_id?: string | null;
+    manual_rule_codes?: string[];
+    visit_session_id?: string;
     step: {
         step_id: string;
         next_step_id: string | null;
@@ -242,6 +234,60 @@ export interface BackendQueuePatient {
             };
         };
     };
+}
+
+/**
+ * Staff may open EMR only after the patient has been called into the room
+ * (CALLED / SERVING / FINISHED). Blocks PENDING / QUEUED / WAITING / MISSING.
+ */
+export function canStaffViewPatientEmr(
+    queueStatus?: string | null,
+    stepStatus?: string,
+): boolean {
+    const q = (queueStatus || '').toUpperCase();
+    const step = (stepStatus || '').toUpperCase();
+
+    if (
+        q === 'MISSING' ||
+        q === 'SKIPPED' ||
+        q === 'CANCELLED' ||
+        q === 'DECLINED'
+    ) {
+        return false;
+    }
+
+    if (
+        q === 'CALLED' ||
+        q === 'CALLING' ||
+        q === 'SERVING' ||
+        q === 'IN_PROGRESS' ||
+        q === 'FINISHED' ||
+        q === 'COMPLETED'
+    ) {
+        return true;
+    }
+
+    if (step === 'IN_PROGRESS' || step === 'PROCESSING' || step === 'ONGOING') {
+        return true;
+    }
+
+    return false;
+}
+
+/** Waiting in queue — staff may preview patient info before call-next. */
+export function canStaffPreviewPatientEmr(queueStatus?: string | null): boolean {
+    const q = (queueStatus || '').toUpperCase();
+    return q === 'QUEUED' || q === 'PENDING' || q === 'WAITING';
+}
+
+export function canStaffAccessPatientEmr(
+    queueStatus?: string | null,
+    stepStatus?: string,
+): boolean {
+    return (
+        canStaffViewPatientEmr(queueStatus, stepStatus) ||
+        canStaffPreviewPatientEmr(queueStatus)
+    );
 }
 
 export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient {
@@ -402,10 +448,7 @@ export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient 
         pickNumber(vitalsRecord, ['temperature', 'temp']);
     const spO2 = pickNumber(vitalsRecord, ['spO2', 'spo2', 'oxygen_saturation']);
 
-    const throat = pickString(physicalExamRecord, ['throat']) ?? MOCK_PHYSICAL_EXAM.throat;
-    const lungs = pickString(physicalExamRecord, ['lungs', 'lung']) ?? MOCK_PHYSICAL_EXAM.lungs;
-    const heartExam = pickString(physicalExamRecord, ['heart']) ?? MOCK_PHYSICAL_EXAM.heart;
-    const abdomen = pickString(physicalExamRecord, ['abdomen', 'digestive']) ?? MOCK_PHYSICAL_EXAM.abdomen;
+    const physicalExam = buildPhysicalExamFromApi(physicalExamRecord);
 
     // Extract queue_number safely
     let qNum = item.queue_number;
@@ -460,12 +503,7 @@ export function mapBackendPatientToFrontend(item: BackendQueuePatient): Patient 
             visitReason: visitReasonFromApi || 'Chưa có lý do khám từ hệ thống',
             clinicalProgression: clinicalProgressionFromApi || '',
             medicalHistory: splitList(medicalHistoryFromApiRaw),
-            physicalExam: {
-                throat,
-                lungs,
-                heart: heartExam,
-                abdomen,
-            },
+            physicalExam,
         },
     };
 }
@@ -819,10 +857,30 @@ export const clinicalService = {
             headers: { Authorization: `Bearer ${token}` },
         }),
 
+    createVisitSession: (body: Record<string, unknown>, token: string) =>
+        apiClient.post<unknown>('/api/visit-session', body, {
+            headers: { Authorization: `Bearer ${token}` },
+        }),
+
     updateVisitSession: (visitSessionId: string, body: Record<string, unknown>, token: string) =>
         apiClient.patch<unknown>(`/api/visit-session/${visitSessionId}`, body, {
             headers: { Authorization: `Bearer ${token}` },
         }),
+
+    updateLatestVisitSession: (
+        patientId: string,
+        body: Record<string, unknown>,
+        token: string,
+        options?: { suppressLogError?: boolean },
+    ) =>
+        apiClient.patch<unknown>(
+            `/api/visit-session/patient/${patientId}/latest`,
+            body,
+            {
+                headers: { Authorization: `Bearer ${token}` },
+                suppressLogError: options?.suppressLogError,
+            },
+        ),
 
     /**
      * Fallback for booking/flow steps that have no service_order_id

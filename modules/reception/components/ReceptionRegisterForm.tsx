@@ -74,6 +74,8 @@ import { mapActiveFlowsList } from "@/modules/reception/utils/receptionFlowMappe
 import { isValidPhone } from "@/shared/utils/validators";
 
 import type { Gender } from "@/shared/types/auth.types";
+import { useFlaggableRules } from "@/modules/queue/hooks/useFlaggableRules";
+import { RuleFlagChipPicker } from "@/modules/queue/components/RuleFlagChipPicker";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -361,6 +363,9 @@ export function ReceptionRegisterForm() {
     bookingId: string;
     stepId: string;
   } | null>(null);
+  const [manualRuleCodes, setManualRuleCodes] = useState<string[]>([]);
+  const { rules: flaggableRules, isLoading: flaggableLoading, refetch: refetchFlaggable } =
+    useFlaggableRules();
 
   useEffect(() => {
     setCreatedBooking(null);
@@ -702,6 +707,8 @@ export function ReceptionRegisterForm() {
     setLookupBanner(null);
     setScanBanner(null);
     setRegistrationResult(null);
+    setCreatedBooking(null);
+    setManualRuleCodes([]);
     patientPromiseRef.current = null;
     setStep(1);
   }
@@ -801,14 +808,25 @@ export function ReceptionRegisterForm() {
             form.package_id &&
             effectiveSlotId
           ) {
-            bookingRes = await receptionService.createBookingWithPackage(
-              {
-                patient_id: patientId,
-                slot_id: effectiveSlotId,
-                package_id: form.package_id,
-              },
-              accessToken,
-            );
+            if (form.payment_method === "cash") {
+              bookingRes = await receptionService.createBookingCashPackage(
+                {
+                  patient_id: patientId,
+                  slot_id: effectiveSlotId,
+                  package_id: form.package_id,
+                },
+                accessToken,
+              );
+            } else {
+              bookingRes = await receptionService.createBookingWithPackage(
+                {
+                  patient_id: patientId,
+                  slot_id: effectiveSlotId,
+                  package_id: form.package_id,
+                },
+                accessToken,
+              );
+            }
           } else if (form.payment_method === "cash" && effectiveSlotId) {
             bookingRes = await receptionService.createBookingCash(
               {
@@ -871,6 +889,38 @@ export function ReceptionRegisterForm() {
           throw new Error("Không tạo được lịch khám.");
         }
 
+        const bookingExtracted = extractBookingCreateFields(bData);
+        const visitSessionId = bookingExtracted.visitSessionId;
+
+        const persistManualFlags = async () => {
+          if (!accessToken || manualRuleCodes.length === 0) return;
+          try {
+            await receptionService.persistVisitManualRuleCodes({
+              patientId,
+              codes: manualRuleCodes,
+              token: accessToken,
+              visitSessionId,
+            });
+          } catch (flagErr) {
+            console.warn("[Register] manual rule flags persist failed:", flagErr);
+          }
+        };
+
+        let ticketCode: string | undefined;
+        if (bData) {
+          const dataBody = (bData as Record<string, unknown>)?.data ?? bData;
+          const flowObj =
+            (dataBody as Record<string, unknown>)?.flow ??
+            (bData as Record<string, unknown>)?.flow;
+          const codeFromBooking =
+            (flowObj as Record<string, unknown>)?.ticket_code ??
+            (dataBody as Record<string, unknown>)?.ticket_code ??
+            (bData as Record<string, unknown>)?.ticket_code;
+          if (codeFromBooking) {
+            ticketCode = String(codeFromBooking).trim();
+          }
+        }
+
         let roomLabel =
           selectedSpecialty?.room_name ||
           selectedSlot?.room_name ||
@@ -925,6 +975,7 @@ export function ReceptionRegisterForm() {
             paymentAccountNumber: accountNumber,
             paymentDescription: description,
           });
+          await persistManualFlags();
           setStep(4);
           return;
         }
@@ -984,6 +1035,9 @@ export function ReceptionRegisterForm() {
             if (matchedFlow.slotTimeLabel) {
               slotTimeLabel = matchedFlow.slotTimeLabel;
             }
+            if (matchedFlow.ticketCode) {
+              ticketCode = matchedFlow.ticketCode;
+            }
           }
         } catch {
           // ignore
@@ -998,6 +1052,7 @@ export function ReceptionRegisterForm() {
 
         setRegistrationResult({
           ticketNo,
+          ticketCode,
           appointmentDate: selectedSlot?.shift?.date
             ? String(selectedSlot.shift.date).slice(0, 10)
             : getTodayDateString(),
@@ -1024,6 +1079,7 @@ export function ReceptionRegisterForm() {
           paymentAccountNumber: "",
           paymentDescription: "",
         });
+        await persistManualFlags();
         setStep(4);
       } catch (err) {
         console.error("[Register] submit failed:", err);
@@ -1236,7 +1292,6 @@ export function ReceptionRegisterForm() {
                       >
                         <option value="FEMALE">Nữ</option>
                         <option value="MALE">Nam</option>
-                        <option value="OTHER">Khác</option>
                       </select>
                     </div>
 
@@ -1299,6 +1354,19 @@ export function ReceptionRegisterForm() {
                     </div>
                   </div>
                 </div>
+
+                {(flaggableLoading || flaggableRules.length > 0) && (
+                  <div className="rounded-[12px] border border-[#EDE9FE] bg-[#FAF5FF]/60 p-5 md:p-6">
+                    <RuleFlagChipPicker
+                      rules={flaggableRules}
+                      selectedCodes={manualRuleCodes}
+                      onChange={setManualRuleCodes}
+                      isLoading={flaggableLoading}
+                      onRefreshRules={refetchFlaggable}
+                      accent="purple"
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -1610,29 +1678,44 @@ export function ReceptionRegisterForm() {
                     onChangeMode={() => setBookingMode(null)}
                   />
                 )}
+
+                {(flaggableLoading || flaggableRules.length > 0) && (
+                  <div className="mt-4 rounded-[14px] border border-[#EDE9FE] bg-white p-5 md:p-6 shadow-[0_1px_6px_rgba(0,0,0,0.04)]">
+                    <RuleFlagChipPicker
+                      rules={flaggableRules}
+                      selectedCodes={manualRuleCodes}
+                      onChange={setManualRuleCodes}
+                      isLoading={flaggableLoading}
+                      onRefreshRules={refetchFlaggable}
+                      accent="purple"
+                    />
+                  </div>
+                )}
               </div>
             )}
 
             {/* ── STEP 3 ── */}
             {step === 3 && (
-              <RegisterConfirmStep
-                fullName={form.full_name}
-                citizenId={form.citizen_id}
-                dob={form.dob}
-                phone={form.phone}
-                insuranceId={form.insurance_id}
-                symptoms={form.symptoms}
-                paymentMethod={form.payment_method}
-                onPaymentMethodChange={(method) =>
-                  update("payment_method", method)
-                }
-                departmentId={form.department_id}
-                specialtyCatalog={specialtyCatalog}
-                selectedSpecialty={selectedSpecialty}
-                selectedSlot={selectedSlot}
-                triageSession={triageSession}
-                bookingMode={bookingMode}
-              />
+              <div className="space-y-4">
+                <RegisterConfirmStep
+                  fullName={form.full_name}
+                  citizenId={form.citizen_id}
+                  dob={form.dob}
+                  phone={form.phone}
+                  insuranceId={form.insurance_id}
+                  symptoms={form.symptoms}
+                  paymentMethod={form.payment_method}
+                  onPaymentMethodChange={(method) =>
+                    update("payment_method", method)
+                  }
+                  departmentId={form.department_id}
+                  specialtyCatalog={specialtyCatalog}
+                  selectedSpecialty={selectedSpecialty}
+                  selectedSlot={selectedSlot}
+                  triageSession={triageSession}
+                  bookingMode={bookingMode}
+                />
+              </div>
             )}
 
             {step === 4 && !registrationResult && (

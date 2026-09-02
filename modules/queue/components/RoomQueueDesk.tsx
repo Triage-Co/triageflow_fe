@@ -47,6 +47,7 @@ export function RoomQueueDesk({
         scanTicket,
         startServing,
         isActing,
+        setManualRules,
     } = roomQueue;
 
     return (
@@ -145,6 +146,7 @@ export function RoomQueueDesk({
                     missing={queue?.missing ?? []}
                     finished={queue?.finished ?? []}
                     isActing={isActing}
+                    onOpenEmr={onOpenEmr}
                     onCallByStep={(stepId) => void callNext(stepId).catch(() => undefined)}
                     onMiss={(qid) => void missQueue(qid).catch(() => undefined)}
                     onRecall={(qid) => void recall(qid).catch(() => undefined)}
@@ -153,6 +155,9 @@ export function RoomQueueDesk({
                             action: 'PIN_TOP',
                             reason: 'Staff pin top',
                         }).catch(() => undefined)
+                    }
+                    onSetManualRules={(qid, codes) =>
+                        void setManualRules(qid, codes).catch(() => undefined)
                     }
                 />
             </div>

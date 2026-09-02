@@ -20,6 +20,8 @@ import {
 import { useAuthStore } from '@/store/authStore';
 import { ParaclinicalOrdersTab } from '@/modules/clinical/components/ParaclinicalOrdersTab';
 import { EmrPrescriptionTab } from '@/modules/clinical/components/EmrPrescriptionTab';
+import { physicalExamEntries } from '@/modules/clinical/utils/physicalExam';
+import { normalizeMultilineText } from '@/modules/clinical/utils/multilineText';
 import { isClinicalEmrReadOnly } from '@/modules/clinical/utils/appointmentDate';
 import {
     Dialog,
@@ -103,7 +105,7 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
     const record = patient.medicalRecord;
     const user = useAuthStore((s) => s.user);
     const accessToken = useAuthStore((s) => s.accessToken);
-    const isReadOnly = isClinicalEmrReadOnly(user?.role, patient.appointmentDate);
+    const isReadOnly = isClinicalEmrReadOnly(user?.role, patient.appointmentDate, patient.status);
     const [sessionData, setSessionData] = useState<VisitSessionData | null>(null);
 
     const initialPatientId = patient.patientId || (patient as unknown as Record<string, unknown>).patient_id as string | undefined;
@@ -113,7 +115,9 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
 
     // Edit fields states
     const [editVisitReason, setEditVisitReason] = useState(record?.visitReason || '');
-    const [editClinicalProgression, setEditClinicalProgression] = useState(record?.clinicalProgression || '');
+    const [editClinicalProgression, setEditClinicalProgression] = useState(
+        normalizeMultilineText(record?.clinicalProgression || '')
+    );
     const [editMedicalHistory, setEditMedicalHistory] = useState(record?.medicalHistory.join('\n') || '');
     // Dynamic physical exam rows: [{id, label, value}]
     const [editPhysicalExamRows, setEditPhysicalExamRows] = useState<{ id: string; label: string; value: string }[]>([]);
@@ -161,13 +165,15 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
                     const session = list[0];
                     setSessionData(session);
                     if (session.chief_complaint) setEditVisitReason(session.chief_complaint);
-                    if (session.hpi) setEditClinicalProgression(session.hpi);
+                    if (session.hpi) setEditClinicalProgression(normalizeMultilineText(session.hpi));
                     if (session.pmh) setEditMedicalHistory(session.pmh);
                     if (session.pe) {
                         setEditPhysicalExamRows(
-                            Object.entries(session.pe)
-                                .filter(([, v]) => v)
-                                .map(([k, v], idx) => ({ id: `pe-${idx}`, label: k, value: v }))
+                            physicalExamEntries(session.pe).map((r, idx) => ({
+                                id: `pe-${idx}`,
+                                label: r.label,
+                                value: r.value,
+                            }))
                         );
                     }
                 }
@@ -190,12 +196,9 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
         ? [sessionData.pmh]
         : (record.medicalHistory && record.medicalHistory.length > 0 ? record.medicalHistory : []);
 
-    // Build display rows from sessionData.pe or fallback to record.physicalExam
-    const displayPhysicalExamRows: { label: string; value: string }[] = sessionData?.pe
-        ? Object.entries(sessionData.pe).filter(([, v]) => v).map(([k, v]) => ({ label: k, value: v }))
-        : Object.entries(record.physicalExam)
-            .filter(([, v]) => v)
-            .map(([k, v]) => ({ label: k, value: v as string }));
+    const displayPhysicalExamRows = sessionData?.pe
+        ? physicalExamEntries(sessionData.pe)
+        : physicalExamEntries(record.physicalExam);
 
     const handleSave = async (section: EditingSection) => {
         if (!patient.medicalRecord) return;
@@ -215,7 +218,7 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
                 if (row.label.trim()) acc[row.label.trim()] = row.value;
                 return acc;
             }, {});
-            updatedRecord.physicalExam = peObj as typeof updatedRecord.physicalExam;
+            updatedRecord.physicalExam = peObj;
         }
 
         // Trigger updates in parent state
@@ -276,7 +279,7 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
 
     const handleCancel = (section: EditingSection) => {
         if (section === 'visitReason') setEditVisitReason(displayVisitReason);
-        else if (section === 'clinicalProgression') setEditClinicalProgression(displayClinicalProgression || '');
+        else if (section === 'clinicalProgression') setEditClinicalProgression(normalizeMultilineText(displayClinicalProgression || ''));
         else if (section === 'medicalHistory') setEditMedicalHistory(displayMedicalHistory.join('\n'));
         else if (section === 'physicalExam') {
             setEditPhysicalExamRows(
@@ -351,7 +354,9 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
                         </div>
                     </div>
                 ) : displayClinicalProgression ? (
-                    <p className="text-[13px] text-[#555] leading-relaxed">{displayClinicalProgression}</p>
+                    <p className="text-[13px] text-[#555] leading-relaxed whitespace-pre-line">
+                        {normalizeMultilineText(displayClinicalProgression)}
+                    </p>
                 ) : (
                     <p className="text-[13px] text-[#ADADAD] italic">Nhập quá trình bệnh lý...</p>
                 )}
@@ -429,7 +434,7 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
                                                     (document.querySelector(`[data-pe-value="${row.id}"]`) as HTMLInputElement)?.focus();
                                                 }
                                             }}
-                                            placeholder="Vùng khám (VD: Họng)"
+                                            placeholder="Vị trí khám (VD: Họng, Phổi...)"
                                             className="w-28 shrink-0 text-xs text-[#2D2D2D] border border-neutral-200 rounded-lg px-2.5 py-1.5 focus:border-[#8B7CF6] outline-none"
                                         />
                                         <input
@@ -489,7 +494,7 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
                                 className="flex items-center gap-1.5 text-[11px] font-semibold text-[#8B7CF6] hover:text-[#7a6ae5] transition-colors cursor-pointer"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                                Thêm vùng khám
+                                Thêm vị trí khám
                             </button>
 
                             <div className="flex gap-2 justify-end pt-1">
@@ -511,7 +516,7 @@ function MedicalRecordContent({ patient, onUpdatePatient }: MedicalRecordContent
                         <div className="space-y-2">
                             {displayPhysicalExamRows.map((row, i) => (
                                 <div key={i} className="flex gap-2 text-[13px]">
-                                    <span className="text-[#9C9C9C] shrink-0 capitalize min-w-[56px]">{row.label}:</span>
+                                    <span className="text-[#9C9C9C] shrink-0 min-w-[72px]">{row.label}:</span>
                                     <span className="text-[#2D2D2D] font-medium">{row.value}</span>
                                 </div>
                             ))}
@@ -547,7 +552,7 @@ function LabTestsTab({
 function DiagnosisTreatmentTab({ patient }: { patient: Patient }) {
     const accessToken = useAuthStore((s) => s.accessToken);
     const user = useAuthStore((s) => s.user);
-    const isReadOnly = isClinicalEmrReadOnly(user?.role, patient.appointmentDate);
+    const isReadOnly = isClinicalEmrReadOnly(user?.role, patient.appointmentDate, patient.status);
 
     const initialPatientId =
         patient.patientId ||
@@ -844,7 +849,7 @@ export function RightMedicalArea({
 }: RightMedicalAreaProps) {
     const accessToken = useAuthStore((s) => s.accessToken);
     const user = useAuthStore((s) => s.user);
-    const isReadOnly = isClinicalEmrReadOnly(user?.role, patient.appointmentDate);
+    const isReadOnly = isClinicalEmrReadOnly(user?.role, patient.appointmentDate, patient.status);
     const [activeTab, setActiveTab] = useState<MedTab>('kham-benh');
     const [isCompleteDialogOpen, setIsCompleteDialogOpen] = useState(false);
     const [isCompletingExam, setIsCompletingExam] = useState(false);

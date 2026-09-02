@@ -234,7 +234,7 @@ export function PrescriptionPrintView({ prescription, patient }: PrescriptionPri
                 </div>
                 <div className="text-center w-[110px]">
                     <QRCodeSVG value={qrValue(prescription)} size={96} level="M" includeMargin={false} />
-                    <p className="text-[10px] mt-1 m-0">Quét tại nhà thuốc để nhận thuốc</p>
+                    <p className="text-[10px] mt-1 m-0">Quét tại nhà thuốc</p>
                 </div>
             </div>
             <table className="w-full border-collapse text-xs mb-3">
@@ -334,7 +334,7 @@ export function printPrescription(prescription: Prescription, patient: Patient):
       </div>
       <div class="qr-box">
         <div id="qr"></div>
-        <p>Quét tại nhà thuốc để nhận thuốc</p>
+        <p>Quét tại nhà thuốc</p>
       </div>
     </div>
     <table>

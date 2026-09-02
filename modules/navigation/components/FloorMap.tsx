@@ -21,6 +21,11 @@ export interface PendingAddNode {
   coords: [number, number];
 }
 
+export interface SelectedGraphEdge {
+  pairKey: string;
+  ids: string[];
+}
+
 export interface EditorPointerEvent {
   lngLat: LngLat;
   hit: EditorHit | null;
@@ -30,12 +35,14 @@ export interface EditorPointerEvent {
 interface FloorMapProps {
   floorNumber?: number;
   refreshKey?: number;
+  highlightedRoomId?: string | null;
   highlightRoomCode?: string | null;
   highlightAreaId?: string | null;
   startRoomId?: string | null;
   targetRoomId?: string | null;
   routePath?: RoutePathNode[] | null;
   onSelectRoom?: (roomId: string) => void;
+  onClearRoomSelect?: () => void;
   showNodes?: boolean;
   showWalkable?: boolean;
   debugSteps?: CorridorDebugSteps | null;
@@ -50,6 +57,10 @@ interface FloorMapProps {
   selectedEditableNodeId?: string | null;
   onSelectEditableNode?: (nodeId: string | null) => void;
   onPlaceNode?: (coords: [number, number]) => void;
+  edgeEditMode?: boolean;
+  pendingEdgeRemoves?: string[];
+  selectedEdgePairKey?: string | null;
+  onSelectEdge?: (edge: SelectedGraphEdge | null) => void;
   /** Geometry editor */
   topDown?: boolean;
   geometryEditMode?: boolean;
@@ -71,12 +82,14 @@ interface FloorMapProps {
 export const FloorMap: React.FC<FloorMapProps> = ({
   floorNumber = 1,
   refreshKey = 0,
+  highlightedRoomId: highlightedRoomIdProp,
   highlightRoomCode,
   highlightAreaId,
   startRoomId,
   targetRoomId,
   routePath,
   onSelectRoom,
+  onClearRoomSelect,
   onHoverRoom,
   showNodes,
   showWalkable,
@@ -92,6 +105,10 @@ export const FloorMap: React.FC<FloorMapProps> = ({
   selectedEditableNodeId,
   onSelectEditableNode,
   onPlaceNode,
+  edgeEditMode,
+  pendingEdgeRemoves,
+  selectedEdgePairKey,
+  onSelectEdge,
   topDown,
   geometryEditMode,
   geometryTool,
@@ -108,7 +125,9 @@ export const FloorMap: React.FC<FloorMapProps> = ({
   heatmapRooms,
 }) => {
   const { data, rawMap, loading, error } = useBuildingMap(floorNumber, refreshKey);
-  const highlightedRoomId = useNavigationStore((s) => s.highlightedRoomId);
+  const storeHighlightedRoomId = useNavigationStore((s) => s.highlightedRoomId);
+  const highlightedRoomId =
+    highlightedRoomIdProp !== undefined ? highlightedRoomIdProp : storeHighlightedRoomId;
 
   const apiFloor = useMemo(() => {
     if (!rawMap) return null;
@@ -140,46 +159,54 @@ export const FloorMap: React.FC<FloorMapProps> = ({
   }
 
   return (
-    <BuildingMapCanvas
-      floorData={data}
-      apiFloor={apiFloor}
-      highlightedRoomId={highlightedRoomId}
-      highlightRoomCode={highlightRoomCode}
-      highlightAreaId={highlightAreaId}
-      startRoomId={startRoomId}
-      targetRoomId={targetRoomId}
-      routePath={routePath}
-      onSelectRoom={onSelectRoom}
-      showNodes={showNodes || nodeEditMode}
-      showWalkable={showWalkable || (nodeEditMode && placingNode)}
-      debugSteps={debugSteps}
-      showDebugStep1={showDebugStep1}
-      showDebugStep2={showDebugStep2}
-      showDebugStep3={showDebugStep3}
-      showDebugStep4={showDebugStep4}
-      nodeEditMode={nodeEditMode}
-      placingNode={placingNode}
-      pendingAdds={pendingAdds}
-      pendingRemoves={pendingRemoves}
-      selectedEditableNodeId={selectedEditableNodeId}
-      onSelectEditableNode={onSelectEditableNode}
-      onPlaceNode={onPlaceNode}
-      topDown={topDown}
-      geometryEditMode={geometryEditMode}
-      geometryTool={geometryTool}
-      editorRooms={editorRooms}
-      editorBoundaries={editorBoundaries}
-      editorSelectedKey={editorSelectedKey}
-      editorSelectedVertex={editorSelectedVertex}
-      editorPreviewPoints={editorPreviewPoints}
-      editorErrorKeys={editorErrorKeys}
-      onEditorPointerDown={onEditorPointerDown}
-      onEditorPointerMove={onEditorPointerMove}
-      onEditorPointerUp={onEditorPointerUp}
-      onHoverRoom={onHoverRoom}
-      heatmapEnabled={heatmapEnabled}
-      heatmapRooms={heatmapRooms}
-    />
+    <div className="w-full h-full min-h-0">
+      <BuildingMapCanvas
+        key={`map-${refreshKey}-${apiFloor?.nodes?.length ?? 0}-${apiFloor?.edges?.length ?? 0}`}
+        floorData={data}
+        apiFloor={apiFloor}
+        highlightedRoomId={highlightedRoomId}
+        highlightRoomCode={highlightRoomCode}
+        highlightAreaId={highlightAreaId}
+        startRoomId={startRoomId}
+        targetRoomId={targetRoomId}
+        routePath={routePath}
+        onSelectRoom={onSelectRoom}
+        onClearRoomSelect={onClearRoomSelect}
+        showNodes={showNodes || nodeEditMode || edgeEditMode}
+        showWalkable={showWalkable || (nodeEditMode && placingNode)}
+        debugSteps={debugSteps}
+        showDebugStep1={showDebugStep1}
+        showDebugStep2={showDebugStep2}
+        showDebugStep3={showDebugStep3}
+        showDebugStep4={showDebugStep4}
+        nodeEditMode={nodeEditMode}
+        placingNode={placingNode}
+        pendingAdds={pendingAdds}
+        pendingRemoves={pendingRemoves}
+        selectedEditableNodeId={selectedEditableNodeId}
+        onSelectEditableNode={onSelectEditableNode}
+        onPlaceNode={onPlaceNode}
+        edgeEditMode={edgeEditMode}
+        pendingEdgeRemoves={pendingEdgeRemoves}
+        selectedEdgePairKey={selectedEdgePairKey}
+        onSelectEdge={onSelectEdge}
+        topDown={topDown}
+        geometryEditMode={geometryEditMode}
+        geometryTool={geometryTool}
+        editorRooms={editorRooms}
+        editorBoundaries={editorBoundaries}
+        editorSelectedKey={editorSelectedKey}
+        editorSelectedVertex={editorSelectedVertex}
+        editorPreviewPoints={editorPreviewPoints}
+        editorErrorKeys={editorErrorKeys}
+        onEditorPointerDown={onEditorPointerDown}
+        onEditorPointerMove={onEditorPointerMove}
+        onEditorPointerUp={onEditorPointerUp}
+        onHoverRoom={onHoverRoom}
+        heatmapEnabled={heatmapEnabled}
+        heatmapRooms={heatmapRooms}
+      />
+    </div>
   );
 };
 

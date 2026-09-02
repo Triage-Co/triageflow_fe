@@ -158,7 +158,7 @@
 .cccd-qr-reader video {
   width: 100% !important;
   height: 100% !important;
-  object-fit: contain !important;
+  object-fit: cover !important;
   background-color: #020617 !important;
   border-radius: 0 !important;
 }
@@ -166,7 +166,8 @@
 .cccd-qr-reader > div {
   width: 100% !important;
   height: 100% !important;
-  min-height: 260px !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
   border: none !important;
 }
 
@@ -366,4 +367,19 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
 
 .show-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #a78bfa;
+}
+
+/* TV source-room overlay after confirmed rebalance */
+@keyframes tv-redirect-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.78;
+  }
+}
+
+.tv-redirect-blink {
+  animation: tv-redirect-blink 1.7s ease-in-out infinite;
 }

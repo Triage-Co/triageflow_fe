@@ -102,3 +102,27 @@ export function formatCaughtError(err: unknown, fallback: string): string {
 export function isPaymentLinkError(message: string): boolean {
     return /tạo.*link|link.*thanh toán|payos.*lỗi|không tạo được.*giao dịch|tạo mã thanh toán/i.test(message);
 }
+
+const INVALID_QUEUE_TICKET_PREFIX = 'Không tìm thấy lượt chờ hợp lệ cho vé';
+
+/** Strip raw ticket JSON from queue scan errors before showing staff UI. */
+export function sanitizeStaffScanErrorMessage(raw: string): string {
+    const msg = raw.trim();
+    if (!msg) return msg;
+
+    if (msg.toLowerCase().startsWith(INVALID_QUEUE_TICKET_PREFIX.toLowerCase())) {
+        return `${INVALID_QUEUE_TICKET_PREFIX}.`;
+    }
+
+    const backtickMatch = msg.match(/^(.+?cho vé)\s*`[^`]*`\.?\s*$/i);
+    if (backtickMatch) {
+        return `${backtickMatch[1].trim()}.`;
+    }
+
+    const jsonMatch = msg.match(/^(.+?cho vé)\s*\{[\s\S]*\}\.?\s*$/i);
+    if (jsonMatch) {
+        return `${jsonMatch[1].trim()}.`;
+    }
+
+    return msg;
+}

@@ -17,6 +17,8 @@ export type SocketQueueUpdateData = CallNextResponse;
 interface UseRoomDisplaySocketOptions {
     roomId?: string;
     staffId?: string;
+    onRebalanceSuggestion?: (payload: RebalanceSuggestionData) => void;
+    onRebalanceResolved?: (payload: RebalanceResolvedData) => void;
 }
 
 interface UseRoomDisplaySocketReturn {
@@ -64,6 +66,8 @@ function summarizeQueuePayload(data: CallNextResponse) {
             : null,
         upcoming_count: data.upcoming_patients?.length ?? 0,
         upcoming_numbers: (data.upcoming_patients ?? []).map((p) => p.queue_number),
+        missing_count: data.missing?.length ?? 0,
+        missing_numbers: (data.missing ?? []).map((m) => m.queue_number),
     };
 }
 
@@ -73,17 +77,26 @@ function summarizeQueuePayload(data: CallNextResponse) {
  * Join: `joinRoomDisplay` { roomId, staffId? }
  * Listen: `onQueueUpdate`, `onRebalanceSuggestion`, `onRebalanceResolved`
  *
- * Payload: { room_info, current_patient, upcoming_patients }
+ * Payload: { room_info, current_patient, upcoming_patients, missing? }
  */
 export function useRoomDisplaySocket({
     roomId,
     staffId,
+    onRebalanceSuggestion,
+    onRebalanceResolved,
 }: UseRoomDisplaySocketOptions): UseRoomDisplaySocketReturn {
     const [data, setData] = useState<SocketQueueUpdateData | null>(null);
     const [rebalanceSuggestions, setRebalanceSuggestions] = useState<RebalanceSuggestionData[]>([]);
     const [isConnected, setIsConnected] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const socketRef = useRef<ReturnType<typeof import('socket.io-client')['io']> | null>(null);
+    const onSuggestionRef = useRef(onRebalanceSuggestion);
+    const onResolvedRef = useRef(onRebalanceResolved);
+
+    useEffect(() => {
+        onSuggestionRef.current = onRebalanceSuggestion;
+        onResolvedRef.current = onRebalanceResolved;
+    }, [onRebalanceSuggestion, onRebalanceResolved]);
 
     // Only UUID staff ids — never send auth email (e.g. admin@gmail.com)
     const safeStaffId = asStaffUuid(staffId);
@@ -179,6 +192,7 @@ export function useRoomDisplaySocket({
                     if (prev.some((s) => s.suggestion_id === payload.suggestion_id)) return prev;
                     return [payload, ...prev];
                 });
+                onSuggestionRef.current?.(payload);
             });
 
             socket.on(EVENT_ON_REBALANCE_RESOLVED, (payload: RebalanceResolvedData) => {
@@ -186,6 +200,7 @@ export function useRoomDisplaySocket({
                 setRebalanceSuggestions((prev) =>
                     prev.filter((s) => s.suggestion_id !== payload.suggestion_id),
                 );
+                onResolvedRef.current?.(payload);
             });
         });
 

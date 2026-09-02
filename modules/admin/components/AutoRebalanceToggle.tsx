@@ -44,14 +44,14 @@ export function AutoRebalanceToggle({ variant }: AutoRebalanceToggleProps) {
             )}
             title={
                 error ??
-                'Tự động đề xuất chuyển bệnh nhân giữa các phòng cùng dịch vụ khi chênh lệch thời gian chờ vượt ngưỡng'
+                'Đề xuất chuyển bệnh nhân giữa các phòng cùng dịch vụ khi chênh lệch thời gian chờ vượt ngưỡng. Tắt = không sinh gợi ý (kể cả cron).'
             }
         >
             <Switch
                 checked={checked}
                 onCheckedChange={onToggle}
                 disabled={busy}
-                aria-label="Tự sắp xếp hàng chờ"
+                aria-label="Đề xuất điều phối"
             />
             <span
                 className={cn(
@@ -59,7 +59,7 @@ export function AutoRebalanceToggle({ variant }: AutoRebalanceToggleProps) {
                     isToolbar ? 'text-[11px]' : 'text-[13px]',
                 )}
             >
-                Tự sắp xếp hàng chờ
+                Đề xuất điều phối
             </span>
             {busy && (
                 <Loader2
