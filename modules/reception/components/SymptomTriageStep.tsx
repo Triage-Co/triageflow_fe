@@ -1006,7 +1006,7 @@ export function SymptomTriageStep({
                                 </div>
                                 <div>
                                     <h4 className={cn('text-[15px] font-bold', bookingPreference === 'auto' ? 'text-white' : 'text-neutral-900')}>
-                                        🚀 Xếp phòng tự động
+                                        Xếp phòng tự động
                                     </h4>
                                     <p className={cn('text-[12px] font-medium mt-1 leading-relaxed', bookingPreference === 'auto' ? 'text-purple-100' : 'text-neutral-500')}>
                                         Hệ thống tự động xếp Bác sĩ trực & Khung giờ sớm nhất còn trống của khoa <strong>{recommendedLabel || 'chuyên khoa'}</strong>
@@ -1045,7 +1045,7 @@ export function SymptomTriageStep({
                                 </div>
                                 <div>
                                     <h4 className={cn('text-[15px] font-bold', bookingPreference === 'manual' ? 'text-white' : 'text-neutral-900')}>
-                                        👨‍⚕️ Tự chọn Bác sĩ & Khung giờ
+                                        Tự chọn Bác sĩ & Khung giờ
                                     </h4>
                                     <p className={cn('text-[12px] font-medium mt-1 leading-relaxed', bookingPreference === 'manual' ? 'text-purple-100' : 'text-neutral-500')}>
                                         Chủ động chọn Bác sĩ, Ngày khám và Khung giờ cụ thể theo nhu cầu của bệnh nhân

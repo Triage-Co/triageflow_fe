@@ -1678,6 +1678,19 @@ export function ReceptionRegisterForm() {
                     onChangeMode={() => setBookingMode(null)}
                   />
                 )}
+
+                {(flaggableLoading || flaggableRules.length > 0) && (
+                  <div className="mt-4 rounded-[14px] border border-[#EDE9FE] bg-white p-5 md:p-6 shadow-[0_1px_6px_rgba(0,0,0,0.04)]">
+                    <RuleFlagChipPicker
+                      rules={flaggableRules}
+                      selectedCodes={manualRuleCodes}
+                      onChange={setManualRuleCodes}
+                      isLoading={flaggableLoading}
+                      onRefreshRules={refetchFlaggable}
+                      accent="purple"
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -1702,18 +1715,6 @@ export function ReceptionRegisterForm() {
                   triageSession={triageSession}
                   bookingMode={bookingMode}
                 />
-                {(flaggableLoading || flaggableRules.length > 0) && (
-                  <div className="rounded-[14px] border border-[#EDE9FE] bg-white p-5 md:p-6 shadow-[0_1px_6px_rgba(0,0,0,0.04)]">
-                    <RuleFlagChipPicker
-                      rules={flaggableRules}
-                      selectedCodes={manualRuleCodes}
-                      onChange={setManualRuleCodes}
-                      isLoading={flaggableLoading}
-                      onRefreshRules={refetchFlaggable}
-                      accent="purple"
-                    />
-                  </div>
-                )}
               </div>
             )}
 
