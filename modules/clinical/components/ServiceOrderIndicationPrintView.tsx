@@ -18,8 +18,8 @@ html, body {
 body {
   font-family: "Times New Roman", "Noto Serif", Georgia, serif;
   color: #111;
-  font-size: 11px;
-  line-height: 1.35;
+  font-size: 15px;
+  line-height: 1.4;
   background: #fff;
 }
 .sheet {
@@ -33,16 +33,16 @@ body {
   page-break-inside: avoid;
 }
 .header { text-align: center; margin-bottom: 8px; }
-.header h1 { margin: 0; font-size: 14px; letter-spacing: 0.02em; }
-.header h2 { margin: 3px 0 0; font-size: 12px; font-weight: 700; }
-.meta p { margin: 2px 0; font-size: 10px; }
+.header h1 { margin: 0; font-size: 19px; letter-spacing: 0.02em; }
+.header h2 { margin: 3px 0 0; font-size: 16px; font-weight: 700; }
+.meta p { margin: 3px 0; font-size: 14px; }
 table { width: 100%; border-collapse: collapse; margin: 8px 0; }
-th, td { border: 1px solid #333; padding: 3px 4px; vertical-align: top; font-size: 10px; }
-th { background: #f3f3f3; font-size: 9px; }
+th, td { border: 1px solid #333; padding: 4px 5px; vertical-align: top; font-size: 14px; }
+th { background: #f3f3f3; font-size: 13px; }
 .footer { margin-top: 10px; display: flex; justify-content: flex-end; }
-.sign { text-align: center; min-width: 130px; font-size: 10px; }
-.sign .space { height: 36px; }
-.note { margin-top: 6px; font-size: 10px; }
+.sign { text-align: center; min-width: 130px; font-size: 14px; }
+.sign .space { height: 40px; }
+.note { margin-top: 6px; font-size: 14px; }
 @media print {
   html, body {
     width: 148mm;
