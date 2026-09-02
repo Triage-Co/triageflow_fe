@@ -364,7 +364,7 @@ export function ReceptionRegisterForm() {
     stepId: string;
   } | null>(null);
   const [manualRuleCodes, setManualRuleCodes] = useState<string[]>([]);
-  const { rules: flaggableRules, isLoading: flaggableLoading } =
+  const { rules: flaggableRules, isLoading: flaggableLoading, refetch: refetchFlaggable } =
     useFlaggableRules();
 
   useEffect(() => {
@@ -1362,6 +1362,7 @@ export function ReceptionRegisterForm() {
                       selectedCodes={manualRuleCodes}
                       onChange={setManualRuleCodes}
                       isLoading={flaggableLoading}
+                      onRefreshRules={refetchFlaggable}
                       accent="purple"
                     />
                   </div>
@@ -1708,6 +1709,7 @@ export function ReceptionRegisterForm() {
                       selectedCodes={manualRuleCodes}
                       onChange={setManualRuleCodes}
                       isLoading={flaggableLoading}
+                      onRefreshRules={refetchFlaggable}
                       accent="purple"
                     />
                   </div>

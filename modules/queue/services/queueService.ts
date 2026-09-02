@@ -355,12 +355,13 @@ function normalizeSuggestionList(raw: unknown): RebalanceSuggestionData[] {
 }
 
 const ALLOWED_FLAG_TYPES = new Set<string>(FLAGGABLE_RULE_TYPES);
+const HIDDEN_PICKER_CODES = new Set(['PIN_TOP', 'AGING_DEFAULT', 'REBALANCE_DEFAULT']);
 
 function normalizeFlaggableRule(raw: unknown): FlaggableRule | null {
     const r = asRecord(raw);
     if (!r) return null;
     const ruleCode = asString(r.rule_code).trim().toUpperCase();
-    if (!ruleCode || ruleCode === 'PIN_TOP') return null;
+    if (!ruleCode || HIDDEN_PICKER_CODES.has(ruleCode)) return null;
     const ruleType = asString(r.rule_type).trim().toUpperCase();
     if (ruleType && !ALLOWED_FLAG_TYPES.has(ruleType)) return null;
     return {
@@ -380,5 +381,10 @@ function normalizeFlaggableList(raw: unknown): FlaggableRule[] {
         seen.add(rule.rule_code);
         out.push(rule);
     }
+    out.sort((a, b) => {
+        const weightDelta = (b.weight ?? 0) - (a.weight ?? 0);
+        if (weightDelta !== 0) return weightDelta;
+        return a.name.localeCompare(b.name, 'vi');
+    });
     return out;
 }
