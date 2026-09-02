@@ -350,7 +350,19 @@ export function RoomWaitingList({
                                             </p>
                                         </div>
                                     </div>
-                                    <div className="flex shrink-0 items-center">
+                                    <div className="flex shrink-0 items-center gap-1.5">
+                                        {onOpenEmr && (
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-8 rounded-lg border-neutral-200 px-2.5 text-xs font-bold text-neutral-700 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 shadow-2xs"
+                                                disabled={isActing}
+                                                onClick={() => onOpenEmr(f.queue_id)}
+                                                startIcon={<ExternalLink className="h-3 w-3" />}
+                                            >
+                                                Xem thông tin
+                                            </Button>
+                                        )}
                                         <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200/60 px-2 py-1 rounded-lg">
                                             <CheckCircle2 className="h-3.5 w-3.5" />
                                             Đã khám

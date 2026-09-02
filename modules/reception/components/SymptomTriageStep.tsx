@@ -13,11 +13,13 @@ import {
     ChevronRight,
     ClipboardList,
     Clock,
+    HelpCircle,
     Loader2,
     Sparkles,
     Star,
     Stethoscope,
     User,
+    X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -43,9 +45,6 @@ import type {
     ReceptionSpecialty,
 } from '@/modules/reception/types/reception.types';
 import {
-    getActiveQuestionItem,
-    getChoiceButtonLabel,
-    getGroupSingleOptionLabel,
     getQuestionType,
     isGroupMultipleQuestion,
     isGroupSingleQuestion,
@@ -173,16 +172,28 @@ export function SymptomTriageStep({
     const [dateScrollIndex, setDateScrollIndex] = useState(0);
     const [isLoadingDoctors, setIsLoadingDoctors] = useState(false);
     const [bookingPreference, setBookingPreference] = useState<'auto' | 'manual'>('auto');
+    /** Giống kiosk QuizDetailStep: lưu đáp án local rồi gửi 1 lần */
+    const [localAnswers, setLocalAnswers] = useState<
+        Record<string, 'present' | 'absent' | 'unknown' | undefined>
+    >({});
 
     const isSessionDirty = useMemo(() => {
         return triageSession.is_analyzed || triageSession.questions_answered > 0 || triageSession.evidence.length > 0;
     }, [triageSession]);
 
     useEffect(() => {
-        if (triageSession.is_analyzed && triageSession.best_slot_id && bookingPreference === 'auto') {
-            onSlotChange(triageSession.best_slot_id);
-        }
-    }, [triageSession.is_analyzed, triageSession.best_slot_id, bookingPreference, onSlotChange]);
+        const bestSlotId = triageSession.best_slot_id;
+        if (!triageSession.is_analyzed || !bestSlotId || bookingPreference !== 'auto') return;
+        // Guard: tránh vòng lặp khi parent tạo onSlotChange mới mỗi render
+        if (slotId === bestSlotId) return;
+        onSlotChange(bestSlotId);
+    }, [
+        triageSession.is_analyzed,
+        triageSession.best_slot_id,
+        bookingPreference,
+        slotId,
+        onSlotChange,
+    ]);
 
     const userPickedDepartmentRef = useRef(false);
 
@@ -322,11 +333,28 @@ export function SymptomTriageStep({
         // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ reload khi đổi chuyên khoa
     }, [departmentId, specialtyCatalog]);
 
-    const activeQuestionItem = triageSession.pending_question
-        ? getActiveQuestionItem(triageSession.pending_question, triageSession.pending_item_index ?? 0)
-        : null;
     const pendingQuestion = triageSession.pending_question;
     const questionType = pendingQuestion ? getQuestionType(pendingQuestion) : null;
+    const isGroupSingle = pendingQuestion != null && isGroupSingleQuestion(pendingQuestion);
+    const isGroupMultiple =
+        pendingQuestion != null && isGroupMultipleQuestion(pendingQuestion);
+
+    const isAllAnswered = pendingQuestion?.items
+        ? isGroupSingle
+            ? pendingQuestion.items.some((item) => localAnswers[item.id] === 'present') ||
+              pendingQuestion.items.every((item) => localAnswers[item.id] === 'absent')
+            : isGroupMultiple
+              ? true
+              : pendingQuestion.items.every((item) => Boolean(localAnswers[item.id]))
+        : false;
+
+    const pendingQuestionKey = pendingQuestion
+        ? `${pendingQuestion.type ?? ''}|${pendingQuestion.text ?? ''}|${pendingQuestion.items.map((i) => i.id).join(',')}`
+        : '';
+
+    useEffect(() => {
+        setLocalAnswers({});
+    }, [pendingQuestionKey]);
 
     useEffect(() => {
         if (!selectedDoctor?.doctor_id) return;
@@ -385,7 +413,42 @@ export function SymptomTriageStep({
         });
     }
 
-    function answerQuestion(itemId: string, choiceId: string) {
+    function submitInterviewAnswers() {
+        if (!pendingQuestion?.items) return;
+
+        let formattedAnswers: Array<{ itemId: string; choiceId: string }> = [];
+
+        if (isGroupSingle) {
+            const selectedItem = pendingQuestion.items.find(
+                (item) => localAnswers[item.id] === 'present',
+            );
+            if (selectedItem) {
+                formattedAnswers = [{ itemId: selectedItem.id, choiceId: 'present' }];
+            } else {
+                formattedAnswers = pendingQuestion.items.map((item) => ({
+                    itemId: item.id,
+                    choiceId: 'absent',
+                }));
+            }
+        } else if (isGroupMultiple) {
+            formattedAnswers = pendingQuestion.items.map((item) => ({
+                itemId: item.id,
+                choiceId: localAnswers[item.id] === 'present' ? 'present' : 'absent',
+            }));
+        } else {
+            formattedAnswers = Object.entries(localAnswers)
+                .filter(
+                    (entry): entry is [string, 'present' | 'absent' | 'unknown'] =>
+                        entry[1] !== undefined,
+                )
+                .map(([id, choiceId]) => ({ itemId: id, choiceId }));
+        }
+
+        if (formattedAnswers.length === 0) {
+            setError('Hãy chọn đáp án trước khi tiếp tục.');
+            return;
+        }
+
         setError(null);
         startTransition(async () => {
             try {
@@ -401,9 +464,9 @@ export function SymptomTriageStep({
                     phone,
                     email,
                     knownPatientId,
-                    itemId,
-                    choiceId,
+                    answers: formattedAnswers,
                 });
+                setLocalAnswers({});
                 applyRoutingResult(result);
             } catch (err) {
                 setError(formatCaughtError(err, 'Không gửi được câu trả lời phỏng vấn.'));
@@ -443,8 +506,8 @@ export function SymptomTriageStep({
             {onChangeMode && (
                 <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[#E5E7EB]">
                     <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-xl bg-[#DCFCE7] flex items-center justify-center">
-                            <Brain className="w-5 h-5 text-[#16A34A]" />
+                        <div className="w-9 h-9 rounded-xl bg-[#EDE9FE] flex items-center justify-center">
+                            <Brain className="w-5 h-5 text-[#8B7CF6]" />
                         </div>
                         <div>
                             <h2 className="text-[16px] font-bold text-[#1F2937]">Gợi ý chuyên khoa từ AI (Triage)</h2>
@@ -484,13 +547,13 @@ export function SymptomTriageStep({
                         type="button"
                         disabled={isPending || !canAnalyze}
                         onClick={runAnalysis}
-                        className="inline-flex items-center justify-center gap-2 min-h-[44px] px-5 rounded-xl bg-[#16A34A] hover:bg-[#15803D] disabled:opacity-50 text-white text-[13px] font-bold shadow-[0_2px_8px_rgba(22,163,74,0.28)]"
+                        className="inline-flex items-center justify-center gap-2 min-h-[44px] px-5 rounded-xl bg-[#8B7CF6] hover:bg-[#7C6FE0] disabled:opacity-50 text-white text-[13px] font-bold shadow-[0_2px_8px_rgba(139,124,246,0.28)]"
                     >
                         {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Brain className="w-4 h-4" />}
                         Phân tích AI & gợi ý khoa
                     </button>
                     <p className="text-[11px] text-[#6B7280]">
-                        AI hỏi thêm để làm rõ triệu chứng, rồi gợi ý mức độ và chuyên khoa.
+                        AI hỏi thêm để làm rõ triệu chứng, rồi gợi ý chuyên khoa phù hợp.
                     </p>
                 </div>
                 {error && (
@@ -502,133 +565,390 @@ export function SymptomTriageStep({
             </div>
 
             {pendingQuestion && (
-                <div className="rounded-[16px] border border-[#86EFAC] bg-gradient-to-br from-[#ECFDF5] via-[#F0FDF4] to-[#DCFCE7] p-5 shadow-[0_2px_14px_rgba(22,163,74,0.12)]">
+                <div className="rounded-[16px] border border-[#DDD6FE] bg-gradient-to-br from-[#F5F3FF] via-[#F5F3FF] to-[#EDE9FE] p-5 shadow-[0_2px_14px_rgba(139,124,246,0.12)] relative overflow-hidden">
+                    {isPending && (
+                        <div className="absolute inset-0 bg-white/70 backdrop-blur-sm z-10 flex items-center justify-center rounded-[16px]">
+                            <div className="flex flex-col items-center gap-2">
+                                <Loader2 className="w-8 h-8 text-[#8B7CF6] animate-spin" />
+                                <span className="text-xs font-bold text-neutral-500">
+                                    Hệ thống AI đang phân tích...
+                                </span>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
                         <div className="flex items-center gap-2.5">
-                            <div className="w-9 h-9 rounded-xl bg-[#16A34A] flex items-center justify-center shadow-[0_2px_8px_rgba(22,163,74,0.3)]">
+                            <div className="w-9 h-9 rounded-xl bg-[#8B7CF6] flex items-center justify-center shadow-[0_2px_8px_rgba(139,124,246,0.3)]">
                                 <Brain className="w-5 h-5 text-white" strokeWidth={2.25} />
                             </div>
                             <div>
-                                <h2 className="text-[15px] font-bold text-[#14532D]">AI đang chẩn đoán</h2>
-                                <p className="text-[11px] text-[#3F6212] mt-0.5">
+                                <h2 className="text-[15px] font-bold text-[#1F2937]">AI đang chẩn đoán</h2>
+                                <p className="text-[11px] text-[#6B7280] mt-0.5">
                                     Trả lời để AI làm rõ tình trạng trước khi gợi ý khoa
                                 </p>
                             </div>
                         </div>
                         <div className="flex flex-wrap gap-1.5">
-                            <span className="inline-flex items-center rounded-full bg-white/90 border border-[#BBF7D0] px-2.5 py-1 text-[11px] font-bold text-[#166534]">
-                                Câu {triageSession.questions_answered + 1}/{triageSession.required_questions || '—'}
-                            </span>
-                            <span className="inline-flex items-center rounded-full bg-white/90 border border-[#BBF7D0] px-2.5 py-1 text-[11px] font-semibold text-[#166534]">
+                            <span className="inline-flex items-center rounded-full bg-white/90 border border-[#DDD6FE] px-2.5 py-1 text-[11px] font-semibold text-[#8B7CF6]">
                                 {triageSession.evidence.length} triệu chứng đã ghi nhận
                             </span>
                             {questionType && (
-                                <span className="inline-flex items-center rounded-full bg-[#166534]/10 border border-[#86EFAC] px-2.5 py-1 text-[11px] font-semibold text-[#14532D]">
+                                <span className="inline-flex items-center rounded-full bg-[#8B7CF6]/10 border border-[#DDD6FE] px-2.5 py-1 text-[11px] font-semibold text-[#1F2937]">
                                     {questionType === 'group_single'
-                                        ? 'Chọn 1 mức án'
+                                        ? 'Chọn 1 đáp án'
                                         : questionType === 'group_multiple'
-                                            ? 'Trả lời từng mục'
-                                            : 'Có / Không / Không rõ'}
+                                          ? 'Chọn nhiều mục'
+                                          : 'Có / Không / Không rõ'}
                                 </span>
                             )}
                         </div>
                     </div>
 
-                    <div className="mb-4 h-2 rounded-full bg-white/80 border border-[#BBF7D0] overflow-hidden">
-                        <div
-                            className="h-full rounded-full bg-[#16A34A] transition-all duration-300"
-                            style={{
-                                width: `${Math.min(
-                                    100,
-                                    ((triageSession.questions_answered + 1) /
-                                        Math.max(triageSession.required_questions || 1, 1)) *
-                                    100,
-                                )}%`,
-                            }}
-                        />
-                    </div>
-
-                    {isGroupMultipleQuestion(pendingQuestion) && pendingQuestion.items.length > 1 && (
-                        <p className="mb-2 text-[11px] font-semibold text-[#3F6212]">
-                            Mục {(triageSession.pending_item_index ?? 0) + 1}/{pendingQuestion.items.length} trong câu hỏi này
-                        </p>
-                    )}
-
-                    <p className="text-[15px] font-bold text-[#14532D] leading-snug mb-4">
-                        {pendingQuestion.text || 'Câu hỏi bổ sung từ AI'}
-                    </p>
-
-                    {isGroupSingleQuestion(pendingQuestion) ? (
-                        <div className="flex flex-col gap-2">
-                            {pendingQuestion.items.map((item) => (
-                                <button
-                                    key={item.id}
-                                    type="button"
-                                    disabled={isPending}
-                                    onClick={() => answerQuestion(item.id, 'present')}
-                                    className="w-full text-left px-4 py-3 rounded-xl border border-[#86EFAC] bg-white text-[13px] font-semibold text-[#14532D] hover:bg-[#F0FDF4] hover:border-[#4ADE80] disabled:opacity-50"
-                                >
-                                    {getGroupSingleOptionLabel(item)}
-                                </button>
-                            ))}
+                    {/* UI chuẩn kiosk QuizDetailStep */}
+                    {pendingQuestion.items.length === 1 ? (
+                        <div className="flex flex-col items-center gap-5 w-full">
+                            <h3 className="text-[16px] sm:text-[18px] font-black text-[#1F2937] leading-snug tracking-tight text-center">
+                                {pendingQuestion.text || 'Câu hỏi bổ sung từ AI'}
+                            </h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full">
+                                {pendingQuestion.items[0].choices.map((choice) => {
+                                    const isSelected =
+                                        localAnswers[pendingQuestion.items[0].id] === choice.id;
+                                    const isYes =
+                                        choice.label === 'Yes' || choice.id === 'present';
+                                    const isNo = choice.label === 'No' || choice.id === 'absent';
+                                    return (
+                                        <button
+                                            key={choice.id}
+                                            type="button"
+                                            disabled={isPending}
+                                            onClick={() =>
+                                                setLocalAnswers({
+                                                    [pendingQuestion.items[0].id]: choice.id as
+                                                        | 'present'
+                                                        | 'absent'
+                                                        | 'unknown',
+                                                })
+                                            }
+                                            className={cn(
+                                                'py-4 px-3 rounded-2xl text-[14px] font-extrabold border-2 shadow-sm transition-all cursor-pointer active:scale-98 text-center flex flex-col items-center justify-center gap-2.5 disabled:opacity-50',
+                                                isSelected
+                                                    ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white hover:bg-[#7C6DF0] shadow-lg shadow-violet-200 scale-[1.02]'
+                                                    : 'bg-white border-[#DDD6FE] text-neutral-700 hover:bg-[#F5F3FF] hover:border-[#8B7CF6] hover:text-[#8B7CF6]',
+                                            )}
+                                        >
+                                            <div
+                                                className={cn(
+                                                    'w-9 h-9 rounded-full flex items-center justify-center transition-all',
+                                                    isSelected
+                                                        ? 'bg-white/20 text-white'
+                                                        : isYes
+                                                          ? 'bg-emerald-100 text-emerald-600'
+                                                          : isNo
+                                                            ? 'bg-rose-100 text-rose-600'
+                                                            : 'bg-amber-100 text-amber-600',
+                                                )}
+                                            >
+                                                {isYes ? (
+                                                    <Check className="w-5 h-5" />
+                                                ) : isNo ? (
+                                                    <X className="w-5 h-5" />
+                                                ) : (
+                                                    <HelpCircle className="w-5 h-5" />
+                                                )}
+                                            </div>
+                                            <span className="leading-tight">
+                                                {isYes ? 'Đúng' : isNo ? 'Không' : 'Không rõ'}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
-                    ) : activeQuestionItem ? (
-                        <div className="space-y-3">
-                            {questionType === 'group_multiple' && activeQuestionItem.name && (
-                                <p className="text-[13px] font-semibold text-[#166534]">
-                                    {activeQuestionItem.name}
-                                </p>
-                            )}
-                            <div className="flex flex-wrap gap-2">
-                                {activeQuestionItem.choices.map((choice) => (
-                                    <button
-                                        key={choice.id}
-                                        type="button"
-                                        disabled={isPending}
-                                        onClick={() => answerQuestion(activeQuestionItem.id, choice.id)}
-                                        className="min-w-[96px] px-4 py-2.5 rounded-xl border border-[#86EFAC] bg-white text-[13px] font-bold text-[#14532D] hover:bg-[#F0FDF4] hover:border-[#4ADE80] disabled:opacity-50"
+                    ) : isGroupSingle ? (
+                        <div className="flex flex-col items-center gap-4 w-full">
+                            <h3 className="text-[16px] sm:text-[18px] font-black text-[#1F2937] leading-snug tracking-tight text-center">
+                                {pendingQuestion.text || 'Câu hỏi bổ sung từ AI'}
+                            </h3>
+                            <div className="w-full max-h-[360px] overflow-y-auto space-y-2.5">
+                                {pendingQuestion.items.map((item) => {
+                                    const isSelected = localAnswers[item.id] === 'present';
+                                    return (
+                                        <button
+                                            key={item.id}
+                                            type="button"
+                                            disabled={isPending}
+                                            onClick={() => {
+                                                const next: Record<string, 'present' | 'absent'> =
+                                                    {};
+                                                pendingQuestion.items.forEach((it) => {
+                                                    next[it.id] =
+                                                        it.id === item.id ? 'present' : 'absent';
+                                                });
+                                                setLocalAnswers(next);
+                                            }}
+                                            className={cn(
+                                                'w-full py-3.5 px-4 rounded-2xl text-[13px] font-extrabold border shadow-sm transition-all cursor-pointer active:scale-98 text-left flex items-center justify-between gap-3 disabled:opacity-50',
+                                                isSelected
+                                                    ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white hover:bg-[#7C6DF0] shadow-md shadow-violet-200'
+                                                    : 'bg-white border-[#DDD6FE] text-neutral-700 hover:bg-[#F5F3FF] hover:border-[#8B7CF6] hover:text-[#8B7CF6]',
+                                            )}
+                                        >
+                                            <span className="leading-snug">{item.name}</span>
+                                            <div
+                                                className={cn(
+                                                    'w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all',
+                                                    isSelected
+                                                        ? 'border-white bg-white'
+                                                        : 'border-neutral-300 bg-white',
+                                                )}
+                                            >
+                                                {isSelected && (
+                                                    <div className="w-2.5 h-2.5 rounded-full bg-[#8B7CF6]" />
+                                                )}
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                                {(() => {
+                                    const isNoneSelected = pendingQuestion.items.every(
+                                        (it) => localAnswers[it.id] === 'absent',
+                                    );
+                                    return (
+                                        <button
+                                            type="button"
+                                            disabled={isPending}
+                                            onClick={() => {
+                                                const next: Record<string, 'absent'> = {};
+                                                pendingQuestion.items.forEach((it) => {
+                                                    next[it.id] = 'absent';
+                                                });
+                                                setLocalAnswers(next);
+                                            }}
+                                            className={cn(
+                                                'w-full py-3.5 px-4 rounded-2xl text-[13px] font-extrabold border shadow-sm transition-all cursor-pointer active:scale-98 text-left flex items-center justify-between gap-3 disabled:opacity-50',
+                                                isNoneSelected
+                                                    ? 'bg-neutral-800 border-neutral-800 text-white hover:bg-neutral-900 shadow-md'
+                                                    : 'bg-white border-[#DDD6FE] text-neutral-700 hover:bg-neutral-50 hover:border-neutral-400',
+                                            )}
+                                        >
+                                            <span className="leading-snug">
+                                                Không có triệu chứng nào nêu trên
+                                            </span>
+                                            <div
+                                                className={cn(
+                                                    'w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all',
+                                                    isNoneSelected
+                                                        ? 'border-white bg-white'
+                                                        : 'border-neutral-300 bg-white',
+                                                )}
+                                            >
+                                                {isNoneSelected && (
+                                                    <div className="w-2.5 h-2.5 rounded-full bg-neutral-800" />
+                                                )}
+                                            </div>
+                                        </button>
+                                    );
+                                })()}
+                            </div>
+                        </div>
+                    ) : isGroupMultiple ? (
+                        <div className="flex flex-col items-center gap-4 w-full">
+                            <h3 className="text-[16px] sm:text-[18px] font-black text-[#1F2937] leading-snug tracking-tight text-center">
+                                {pendingQuestion.text || 'Câu hỏi bổ sung từ AI'}
+                            </h3>
+                            <div className="w-full max-h-[360px] overflow-y-auto space-y-2.5">
+                                {pendingQuestion.items.map((item) => {
+                                    const isSelected = localAnswers[item.id] === 'present';
+                                    return (
+                                        <button
+                                            key={item.id}
+                                            type="button"
+                                            disabled={isPending}
+                                            onClick={() => {
+                                                setLocalAnswers((prev) => ({
+                                                    ...prev,
+                                                    [item.id]:
+                                                        prev[item.id] === 'present'
+                                                            ? 'absent'
+                                                            : 'present',
+                                                }));
+                                            }}
+                                            className={cn(
+                                                'w-full py-3.5 px-4 rounded-2xl text-[13px] font-extrabold border shadow-sm transition-all cursor-pointer active:scale-98 text-left flex items-center justify-between gap-3 disabled:opacity-50',
+                                                isSelected
+                                                    ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white hover:bg-[#7C6DF0] shadow-md shadow-violet-200'
+                                                    : 'bg-white border-[#DDD6FE] text-neutral-700 hover:bg-[#F5F3FF] hover:border-[#8B7CF6] hover:text-[#8B7CF6]',
+                                            )}
+                                        >
+                                            <span className="leading-snug">{item.name}</span>
+                                            <div
+                                                className={cn(
+                                                    'w-5 h-5 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all',
+                                                    isSelected
+                                                        ? 'border-white bg-white text-[#8B7CF6]'
+                                                        : 'border-neutral-300 bg-white',
+                                                )}
+                                            >
+                                                {isSelected && (
+                                                    <svg
+                                                        className="w-3.5 h-3.5 fill-current text-[#8B7CF6]"
+                                                        viewBox="0 0 20 20"
+                                                    >
+                                                        <path d="M0 11l2-2 5 5L18 3l2 2L7 18z" />
+                                                    </svg>
+                                                )}
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                                {(() => {
+                                    const isNoneSelected = pendingQuestion.items.every(
+                                        (it) => localAnswers[it.id] === 'absent',
+                                    );
+                                    return (
+                                        <button
+                                            type="button"
+                                            disabled={isPending}
+                                            onClick={() => {
+                                                const next: Record<string, 'absent'> = {};
+                                                pendingQuestion.items.forEach((it) => {
+                                                    next[it.id] = 'absent';
+                                                });
+                                                setLocalAnswers(next);
+                                            }}
+                                            className={cn(
+                                                'w-full py-3.5 px-4 rounded-2xl text-[13px] font-extrabold border shadow-sm transition-all cursor-pointer active:scale-98 text-left flex items-center justify-between gap-3 disabled:opacity-50',
+                                                isNoneSelected
+                                                    ? 'bg-neutral-800 border-neutral-800 text-white hover:bg-neutral-900 shadow-md'
+                                                    : 'bg-white border-[#DDD6FE] text-neutral-700 hover:bg-neutral-50 hover:border-neutral-400',
+                                            )}
+                                        >
+                                            <span className="leading-snug">
+                                                Không có triệu chứng nào nêu trên
+                                            </span>
+                                            <div
+                                                className={cn(
+                                                    'w-5 h-5 rounded-lg border-2 flex items-center justify-center shrink-0 transition-all',
+                                                    isNoneSelected
+                                                        ? 'border-white bg-white text-neutral-800'
+                                                        : 'border-neutral-300 bg-white',
+                                                )}
+                                            >
+                                                {isNoneSelected && (
+                                                    <svg
+                                                        className="w-3.5 h-3.5 fill-current text-neutral-800"
+                                                        viewBox="0 0 20 20"
+                                                    >
+                                                        <path d="M0 11l2-2 5 5L18 3l2 2L7 18z" />
+                                                    </svg>
+                                                )}
+                                            </div>
+                                        </button>
+                                    );
+                                })()}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center gap-4 w-full">
+                            <h3 className="text-[16px] sm:text-[18px] font-black text-[#1F2937] leading-snug tracking-tight text-center">
+                                {pendingQuestion.text || 'Câu hỏi bổ sung từ AI'}
+                            </h3>
+                            <div className="w-full max-h-[360px] overflow-y-auto space-y-3">
+                                {pendingQuestion.items.map((item) => (
+                                    <div
+                                        key={item.id}
+                                        className="bg-white/90 p-4 rounded-2xl border border-[#DDD6FE] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 transition-all hover:border-[#8B7CF6]/50 hover:shadow-sm"
                                     >
-                                        {getChoiceButtonLabel(choice.id, choice.label)}
-                                    </button>
+                                        <span className="font-extrabold text-neutral-800 text-[13px] text-left leading-relaxed flex-1">
+                                            {item.name}
+                                        </span>
+                                        <div className="grid grid-cols-3 gap-2 shrink-0 w-full sm:w-auto">
+                                            {item.choices.map((choice) => {
+                                                const isSelected =
+                                                    localAnswers[item.id] === choice.id;
+                                                return (
+                                                    <button
+                                                        key={choice.id}
+                                                        type="button"
+                                                        disabled={isPending}
+                                                        onClick={() =>
+                                                            setLocalAnswers((prev) => ({
+                                                                ...prev,
+                                                                [item.id]: choice.id as
+                                                                    | 'present'
+                                                                    | 'absent'
+                                                                    | 'unknown',
+                                                            }))
+                                                        }
+                                                        className={cn(
+                                                            'py-2.5 px-3 rounded-xl text-[12px] font-black border shadow-sm transition-all cursor-pointer active:scale-95 text-center min-w-[80px] disabled:opacity-50',
+                                                            isSelected
+                                                                ? 'bg-[#8B7CF6] border-[#8B7CF6] text-white hover:bg-[#7C6DF0] shadow-md shadow-violet-200'
+                                                                : 'bg-white border-[#DDD6FE] text-neutral-600 hover:bg-[#F5F3FF] hover:border-[#8B7CF6] hover:text-[#8B7CF6]',
+                                                        )}
+                                                    >
+                                                        {choice.label === 'Yes' ||
+                                                        choice.id === 'present'
+                                                            ? 'Có'
+                                                            : choice.label === 'No' ||
+                                                                choice.id === 'absent'
+                                                              ? 'Không'
+                                                              : 'Không rõ'}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
                                 ))}
                             </div>
                         </div>
-                    ) : null}
-
-                    {isPending && (
-                        <div className="mt-4 flex items-center gap-2 text-[12px] font-medium text-[#166534]">
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            AI đang cập nhật chẩn đoán...
-                        </div>
                     )}
+
+                    <div className="w-full pt-4 mt-4 border-t border-[#DDD6FE]/80">
+                        <button
+                            type="button"
+                            onClick={submitInterviewAnswers}
+                            disabled={!isAllAnswered || isPending}
+                            className={cn(
+                                'w-full py-3.5 rounded-full text-white font-black text-[15px] shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer',
+                                isAllAnswered && !isPending
+                                    ? 'bg-[#8B7CF6] hover:bg-[#7C6DF0] shadow-violet-200'
+                                    : 'bg-neutral-300 cursor-not-allowed shadow-none',
+                            )}
+                        >
+                            {isPending ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 animate-spin" /> Đang gửi đáp án...
+                                </>
+                            ) : (
+                                'Tiếp tục câu hỏi →'
+                            )}
+                        </button>
+                    </div>
                 </div>
             )}
 
             {triageSession.is_analyzed && !pendingQuestion && (
                 <div className="space-y-4">
-                    <div className="rounded-[16px] border border-[#86EFAC] bg-gradient-to-br from-[#ECFDF5] via-[#F0FDF4] to-[#DCFCE7] p-5 shadow-[0_2px_14px_rgba(22,163,74,0.12)]">
+                    <div className="rounded-[16px] border border-[#DDD6FE] bg-gradient-to-br from-[#F5F3FF] via-[#F5F3FF] to-[#EDE9FE] p-5 shadow-[0_2px_14px_rgba(139,124,246,0.12)]">
                         <div className="flex items-start gap-3 mb-4">
-                            <div className="w-9 h-9 rounded-xl bg-[#16A34A] flex items-center justify-center shrink-0">
+                            <div className="w-9 h-9 rounded-xl bg-[#8B7CF6] flex items-center justify-center shrink-0">
                                 <CheckCircle2 className="w-5 h-5 text-white" strokeWidth={2.25} />
                             </div>
                             <div className="min-w-0">
-                                <h2 className="text-[15px] font-bold text-[#14532D]">Kết quả AI chẩn đoán</h2>
-                                <p className="text-[12px] text-[#3F6212] mt-0.5">
+                                <h2 className="text-[15px] font-bold text-[#1F2937]">Kết quả AI chẩn đoán</h2>
+                                <p className="text-[12px] text-[#6B7280] mt-0.5">
                                     Đã hoàn tất phỏng vấn. Hệ thống đề xuất chuyên khoa phù hợp nhất bên dưới.
                                 </p>
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-4">
-                            <div className="rounded-xl border border-[#BBF7D0] bg-white/90 px-3.5 py-3">
-                                <p className="text-[10px] font-bold uppercase tracking-wide text-[#65A30D]">Mức độ</p>
-                                <p className="mt-1 text-[13px] font-bold text-[#14532D]">
-                                    {triageSession.triage_label || triageSession.triage_level || '—'}
-                                </p>
-                            </div>
-                            <div className="rounded-xl border border-[#BBF7D0] bg-white/90 px-3.5 py-3">
-                                <p className="text-[10px] font-bold uppercase tracking-wide text-[#65A30D]">Khoa gợi ý</p>
-                                <p className="mt-1 text-[13px] font-bold text-[#14532D]">
+                        <div className="mb-4">
+                            <div className="rounded-xl border border-[#DDD6FE] bg-white/90 px-3.5 py-3">
+                                <p className="text-[10px] font-bold uppercase tracking-wide text-[#8B7CF6]">Khoa gợi ý</p>
+                                <p className="mt-1 text-[13px] font-bold text-[#1F2937]">
                                     {recommendedLabel || triageSession.recommended_department_label || '—'}
                                 </p>
                             </div>
@@ -642,7 +962,7 @@ export function SymptomTriageStep({
                         )}
 
                         {triageSession.routing_note && (
-                            <p className="text-[12px] text-[#3F6212] bg-white/70 border border-[#BBF7D0] rounded-xl px-3.5 py-2.5">
+                            <p className="text-[12px] text-[#6B7280] bg-white/70 border border-[#DDD6FE] rounded-xl px-3.5 py-2.5">
                                 {triageSession.routing_note}
                             </p>
                         )}
@@ -666,20 +986,20 @@ export function SymptomTriageStep({
                                 className={cn(
                                     'p-4 rounded-2xl border text-left transition-all relative overflow-hidden flex flex-col justify-between cursor-pointer',
                                     bookingPreference === 'auto'
-                                        ? 'bg-gradient-to-br from-emerald-600 to-teal-700 text-white border-transparent shadow-[0_4px_16px_rgba(5,150,105,0.25)] ring-2 ring-emerald-400'
-                                        : 'bg-[#F9FAFB] border-[#E5E7EB] text-[#374151] hover:border-[#86EFAC] hover:bg-[#F0FDF4]'
+                                        ? 'bg-gradient-to-br from-[#8B7CF6] to-[#6D28D9] text-white border-transparent shadow-[0_4px_16px_rgba(139,124,246,0.25)] ring-2 ring-[#8B7CF6]'
+                                        : 'bg-[#F9FAFB] border-[#E5E7EB] text-[#374151] hover:border-[#DDD6FE] hover:bg-[#F5F3FF]'
                                 )}
                             >
                                 <div className="flex items-center justify-between mb-2">
                                     <span className={cn(
                                         'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold',
-                                        bookingPreference === 'auto' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
+                                        bookingPreference === 'auto' ? 'bg-white/20 text-white' : 'bg-[#EDE9FE] text-[#6D28D9]'
                                     )}>
                                         <Sparkles className="w-3.5 h-3.5" />
                                         Loại 1 · Đề xuất nhanh
                                     </span>
                                     {bookingPreference === 'auto' && (
-                                        <div className="w-6 h-6 rounded-full bg-white text-emerald-700 flex items-center justify-center">
+                                        <div className="w-6 h-6 rounded-full bg-white text-[#6D28D9] flex items-center justify-center">
                                             <Check className="w-4 h-4 stroke-[3]" />
                                         </div>
                                     )}
@@ -688,7 +1008,7 @@ export function SymptomTriageStep({
                                     <h4 className={cn('text-[15px] font-bold', bookingPreference === 'auto' ? 'text-white' : 'text-neutral-900')}>
                                         🚀 Xếp phòng tự động
                                     </h4>
-                                    <p className={cn('text-[12px] font-medium mt-1 leading-relaxed', bookingPreference === 'auto' ? 'text-emerald-100' : 'text-neutral-500')}>
+                                    <p className={cn('text-[12px] font-medium mt-1 leading-relaxed', bookingPreference === 'auto' ? 'text-purple-100' : 'text-neutral-500')}>
                                         Hệ thống tự động xếp Bác sĩ trực & Khung giờ sớm nhất còn trống của khoa <strong>{recommendedLabel || 'chuyên khoa'}</strong>
                                     </p>
                                 </div>
@@ -738,17 +1058,17 @@ export function SymptomTriageStep({
             )}
 
             {triageSession.is_analyzed && bookingPreference === 'auto' && (
-                <div className="rounded-[16px] border border-[#BBF7D0] bg-[#F0FDF4] p-5 flex items-center justify-between gap-4">
+                <div className="rounded-[16px] border border-[#DDD6FE] bg-[#F5F3FF] p-5 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-[#16A34A] text-white flex items-center justify-center font-bold shrink-0">
+                        <div className="w-10 h-10 rounded-xl bg-[#8B7CF6] text-white flex items-center justify-center font-bold shrink-0">
                             <CheckCircle2 className="w-6 h-6" />
                         </div>
                         <div>
-                            <p className="text-[14px] font-bold text-[#14532D]">
+                            <p className="text-[14px] font-bold text-[#1F2937]">
                                 Đã kích hoạt Xếp phòng tự động cho khoa {recommendedLabel}
                             </p>
-                            <p className="text-[12px] text-[#166534] mt-0.5">
-                                Bấm nút <strong>Tiếp theo</strong> bên dưới để xác nhận và chọn phương thức thanh toán (Tiền mặt hoặc Quét mã QR).
+                            <p className="text-[12px] text-[#6B7280] mt-0.5">
+                                Bấm nút <strong className="text-[#8B7CF6]">Tiếp theo</strong> bên dưới để xác nhận và chọn phương thức thanh toán (Tiền mặt hoặc Quét mã QR).
                             </p>
                         </div>
                     </div>
@@ -977,12 +1297,12 @@ export function SymptomTriageStep({
                                                                 className={cn(
                                                                     'relative px-2.5 py-2 rounded-xl border text-center transition-all disabled:cursor-not-allowed',
                                                                     isSelected
-                                                                        ? 'border-[#16A34A] bg-[#16A34A] text-white shadow-[0_4px_12px_rgba(22,163,74,0.3)]'
+                                                                        ? 'border-[#8B7CF6] bg-[#8B7CF6] text-white shadow-[0_4px_12px_rgba(139,124,246,0.3)]'
                                                                         : isPast
                                                                             ? 'border-neutral-200 bg-neutral-100 text-neutral-400 opacity-60'
                                                                             : isFull
                                                                                 ? 'border-[#FCA5A5] bg-[#FEE2E2] text-[#B91C1C]'
-                                                                                : 'border-[#E5E7EB] bg-white text-[#374151] hover:border-[#86EFAC] hover:bg-[#F0FDF4]',
+                                                                                : 'border-[#E5E7EB] bg-white text-[#374151] hover:border-[#DDD6FE] hover:bg-[#F5F3FF]',
                                                                 )}
                                                             >
                                                                 <span className="text-[12px] font-bold block">
@@ -1027,13 +1347,13 @@ export function SymptomTriageStep({
                             </div>
 
                             {slotId && selectedSlot && (
-                                <div className="mt-3 rounded-xl border border-[#86EFAC] bg-[#F0FDF4] px-3.5 py-2.5 flex items-center gap-2.5">
-                                    <div className="w-7 h-7 rounded-lg bg-[#16A34A] flex items-center justify-center shrink-0">
+                                <div className="mt-3 rounded-xl border border-[#DDD6FE] bg-[#F5F3FF] px-3.5 py-2.5 flex items-center gap-2.5">
+                                    <div className="w-7 h-7 rounded-lg bg-[#8B7CF6] flex items-center justify-center shrink-0">
                                         <CheckCircle2 className="w-4 h-4 text-white" />
                                     </div>
                                     <div className="min-w-0 flex-1">
-                                        <p className="text-[11px] font-bold text-[#166534]">Đã chọn khung giờ</p>
-                                        <p className="text-[11px] text-[#15803D] truncate">
+                                        <p className="text-[11px] font-bold text-[#8B7CF6]">Đã chọn khung giờ</p>
+                                        <p className="text-[11px] text-[#7C6FE0] truncate">
                                             {selectedDateMeta?.isToday ? 'Hôm nay' : selectedDateMeta?.weekday} ·{' '}
                                             {formatSlotTimeRange(selectedSlot.start_time, selectedSlot.end_time)}
                                         </p>
