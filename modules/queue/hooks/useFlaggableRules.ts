@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuthStore } from '@/modules/auth/store/authStore';
 import { queueService } from '../services/queueService';
 import type { FlaggableRule } from '../types/ruleFlag.types';
@@ -11,32 +11,28 @@ export function useFlaggableRules() {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const refetch = useCallback(
+        async (opts?: { silent?: boolean }) => {
+            if (!accessToken) return;
+            if (!opts?.silent) setIsLoading(true);
+            try {
+                const list = await queueService.getFlaggableRules(accessToken);
+                setRules(list);
+                setError(null);
+            } catch (e: unknown) {
+                setError(
+                    e instanceof Error ? e.message : 'Không tải được danh sách cờ ưu tiên',
+                );
+            } finally {
+                if (!opts?.silent) setIsLoading(false);
+            }
+        },
+        [accessToken],
+    );
+
     useEffect(() => {
-        if (!accessToken) return;
+        void refetch();
+    }, [refetch]);
 
-        let cancelled = false;
-
-        void queueService
-            .getFlaggableRules(accessToken)
-            .then((list) => {
-                if (!cancelled) {
-                    setRules(list);
-                    setError(null);
-                }
-            })
-            .catch((e: unknown) => {
-                if (cancelled) return;
-                setRules([]);
-                setError(e instanceof Error ? e.message : 'Không tải được danh sách cờ ưu tiên');
-            })
-            .finally(() => {
-                if (!cancelled) setIsLoading(false);
-            });
-
-        return () => {
-            cancelled = true;
-        };
-    }, [accessToken]);
-
-    return { rules, isLoading, error };
+    return { rules, isLoading, error, refetch };
 }

@@ -46,7 +46,7 @@ function VisitRuleFlags({
     initialCodes: string[];
 }) {
     const accessToken = useAuthStore((s) => s.accessToken);
-    const { rules, isLoading } = useFlaggableRules();
+    const { rules, isLoading, refetch } = useFlaggableRules();
     const [codes, setCodes] = useState(initialCodes);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -86,6 +86,7 @@ function VisitRuleFlags({
                 onChange={(next) => void handleChange(next)}
                 disabled={saving || !accessToken}
                 isLoading={isLoading}
+                onRefreshRules={refetch}
                 accent="purple"
             />
             {error && (
