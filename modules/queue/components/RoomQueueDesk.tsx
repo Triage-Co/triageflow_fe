@@ -47,6 +47,7 @@ export function RoomQueueDesk({
         scanTicket,
         startServing,
         isActing,
+        setManualRules,
     } = roomQueue;
 
     return (
@@ -154,6 +155,9 @@ export function RoomQueueDesk({
                             action: 'PIN_TOP',
                             reason: 'Staff pin top',
                         }).catch(() => undefined)
+                    }
+                    onSetManualRules={(qid, codes) =>
+                        void setManualRules(qid, codes).catch(() => undefined)
                     }
                 />
             </div>

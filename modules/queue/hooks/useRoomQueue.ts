@@ -59,6 +59,7 @@ export interface UseRoomQueueReturn {
     missQueue: (queueId: string) => Promise<void>;
     recall: (queueId: string) => Promise<void>;
     override: (queueId: string, body: QueueOverrideBody) => Promise<void>;
+    setManualRules: (queueId: string, codes: string[]) => Promise<void>;
     scanTicket: (dto: { ticket_code?: string; queue_id?: string }) => Promise<any>;
     startServing: (queueId?: string) => Promise<any>;
     isActing: boolean;
@@ -353,6 +354,20 @@ export function useRoomQueue({
         [accessToken, withActing, refresh],
     );
 
+    const setManualRules = useCallback(
+        async (queueId: string, codes: string[]) => {
+            await withActing(async () => {
+                await queueService.updateQueueManualRules(
+                    queueId,
+                    codes,
+                    accessToken || undefined,
+                );
+                await refresh();
+            });
+        },
+        [accessToken, withActing, refresh],
+    );
+
     const scanTicket = useCallback(
         async (dto: { ticket_code?: string; queue_id?: string }) => {
             if (!roomId) throw new Error('Chưa chọn phòng khám');
@@ -398,6 +413,7 @@ export function useRoomQueue({
         missQueue,
         recall,
         override,
+        setManualRules,
         scanTicket,
         startServing,
         isActing,

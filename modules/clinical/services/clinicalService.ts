@@ -179,6 +179,8 @@ export interface BackendQueuePatient {
     status: string;
     /** Denormalized room for TV/queue engine — may be null on legacy rows */
     room_id?: string | null;
+    manual_rule_codes?: string[];
+    visit_session_id?: string;
     step: {
         step_id: string;
         next_step_id: string | null;
@@ -855,10 +857,30 @@ export const clinicalService = {
             headers: { Authorization: `Bearer ${token}` },
         }),
 
+    createVisitSession: (body: Record<string, unknown>, token: string) =>
+        apiClient.post<unknown>('/api/visit-session', body, {
+            headers: { Authorization: `Bearer ${token}` },
+        }),
+
     updateVisitSession: (visitSessionId: string, body: Record<string, unknown>, token: string) =>
         apiClient.patch<unknown>(`/api/visit-session/${visitSessionId}`, body, {
             headers: { Authorization: `Bearer ${token}` },
         }),
+
+    updateLatestVisitSession: (
+        patientId: string,
+        body: Record<string, unknown>,
+        token: string,
+        options?: { suppressLogError?: boolean },
+    ) =>
+        apiClient.patch<unknown>(
+            `/api/visit-session/patient/${patientId}/latest`,
+            body,
+            {
+                headers: { Authorization: `Bearer ${token}` },
+                suppressLogError: options?.suppressLogError,
+            },
+        ),
 
     /**
      * Fallback for booking/flow steps that have no service_order_id

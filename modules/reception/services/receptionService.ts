@@ -702,6 +702,58 @@ export const receptionService = {
         }
     },
 
+    /**
+     * Persist reception-selected priority flags on the visit session.
+     * PATCH /api/visit-session/:id, else PATCH .../patient/:id/latest,
+     * else POST /api/visit-session when no session exists yet.
+     */
+    async persistVisitManualRuleCodes(
+        params: {
+            patientId: string;
+            codes: string[];
+            token: string;
+            visitSessionId?: string;
+        },
+    ) {
+        const body: Record<string, unknown> = {
+            manual_rule_codes: params.codes,
+        };
+
+        if (params.visitSessionId) {
+            const res = await clinicalService.updateVisitSession(
+                params.visitSessionId,
+                body,
+                params.token,
+            );
+            return assertApiSuccess(res, 'Không lưu được cờ ưu tiên phiên khám.');
+        }
+
+        try {
+            const res = await clinicalService.updateLatestVisitSession(
+                params.patientId,
+                body,
+                params.token,
+                { suppressLogError: true },
+            );
+            return assertApiSuccess(res, 'Không lưu được cờ ưu tiên phiên khám.');
+        } catch (err) {
+            if (!(err instanceof ApiError) || err.statusCode !== 404) {
+                throw err;
+            }
+            const created = await clinicalService.createVisitSession(
+                {
+                    patient_id: params.patientId,
+                    manual_rule_codes: params.codes,
+                },
+                params.token,
+            );
+            return assertApiSuccess(
+                created,
+                'Không tạo được phiên khám để gắn cờ ưu tiên.',
+            );
+        }
+    },
+
     resolvePatientIdByCitizenId,
     clearPatientCache: clearPatientLocalStorageCache,
 };

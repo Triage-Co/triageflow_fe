@@ -377,6 +377,7 @@ export function extractBookingCreateFields(raw: unknown): {
     bookingId?: string;
     stepId?: string;
     queueId?: string;
+    visitSessionId?: string;
 } {
     if (raw == null) return {};
     if (typeof raw !== 'object') {
@@ -415,6 +416,9 @@ export function extractBookingCreateFields(raw: unknown): {
         bookingId: asOptionalString(findValue(raw, ['booking_id', 'bookingId', 'id', 'id_booking', 'booking_number'])),
         stepId: asOptionalString(findValue(raw, ['step_id', 'stepId', 'step'])),
         queueId: asOptionalString(findValue(raw, ['queue_id', 'queueId'])),
+        visitSessionId: asOptionalString(
+            findValue(raw, ['visit_session_id', 'visitSessionId']),
+        ),
     };
 }
 
@@ -613,5 +617,9 @@ export function mapBackendToReceptionDetail(item: BackendQueuePatient): Receptio
         waitMinutes: calcWaitMinutes(slot.start_time),
         priority: mapPriority(patient.dob || account?.dob, item.step.flow.status),
         status: mapReceptionStatus(item),
+        manualRuleCodes: Array.isArray(item.manual_rule_codes)
+            ? item.manual_rule_codes.map((c) => String(c).trim().toUpperCase()).filter(Boolean)
+            : [],
+        visitSessionId: item.visit_session_id,
     };
 }
