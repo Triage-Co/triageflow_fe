@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import {
     clinicalService,
+    canStaffAccessPatientEmr,
     canStaffViewPatientEmr,
     mapBackendPatientToFrontend,
     startExamStepIfPending,
@@ -27,6 +28,7 @@ export function useDoctorPatient(id: string) {
         stepId?: string;
         stepStatus?: string;
         stepName?: string;
+        queueStatus?: string;
     } | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -52,7 +54,7 @@ export function useDoctorPatient(id: string) {
                 const queueStatus = res.data.status;
                 const stepStatus = res.data.step?.step_status;
 
-                if (!canStaffViewPatientEmr(queueStatus, stepStatus)) {
+                if (!canStaffAccessPatientEmr(queueStatus, stepStatus)) {
                     setError(EMR_CALL_REQUIRED_MESSAGE);
                     return;
                 }
@@ -83,6 +85,7 @@ export function useDoctorPatient(id: string) {
                     stepId: stepRec?.step_id,
                     stepStatus: stepRec?.step_status,
                     stepName: stepRec?.step_name,
+                    queueStatus,
                 });
                 setPatient(finalPatient);
                 setPatientData(id, finalPatient);
@@ -104,6 +107,14 @@ export function useDoctorPatient(id: string) {
     useEffect(() => {
         if (!patient || !accessToken || !id) return;
         if (isFutureLocalDate(patient.appointmentDate)) return;
+        if (
+            !canStaffViewPatientEmr(
+                queueStepMeta?.queueStatus,
+                queueStepMeta?.stepStatus,
+            )
+        ) {
+            return;
+        }
         if (startedExamForQueueIds.has(id)) return;
         startedExamForQueueIds.add(id);
 

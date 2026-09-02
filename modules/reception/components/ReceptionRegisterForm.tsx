@@ -702,6 +702,7 @@ export function ReceptionRegisterForm() {
     setLookupBanner(null);
     setScanBanner(null);
     setRegistrationResult(null);
+    setCreatedBooking(null);
     patientPromiseRef.current = null;
     setStep(1);
   }
@@ -801,14 +802,25 @@ export function ReceptionRegisterForm() {
             form.package_id &&
             effectiveSlotId
           ) {
-            bookingRes = await receptionService.createBookingWithPackage(
-              {
-                patient_id: patientId,
-                slot_id: effectiveSlotId,
-                package_id: form.package_id,
-              },
-              accessToken,
-            );
+            if (form.payment_method === "cash") {
+              bookingRes = await receptionService.createBookingCashPackage(
+                {
+                  patient_id: patientId,
+                  slot_id: effectiveSlotId,
+                  package_id: form.package_id,
+                },
+                accessToken,
+              );
+            } else {
+              bookingRes = await receptionService.createBookingWithPackage(
+                {
+                  patient_id: patientId,
+                  slot_id: effectiveSlotId,
+                  package_id: form.package_id,
+                },
+                accessToken,
+              );
+            }
           } else if (form.payment_method === "cash" && effectiveSlotId) {
             bookingRes = await receptionService.createBookingCash(
               {

@@ -40,7 +40,7 @@ import {
   type PatientActiveFlowItem,
 } from "@/modules/reception/utils/receptionFlowMapper";
 import { formatPhoneDisplay } from "@/modules/reception/utils/receptionSearch";
-import { getTodayDateString } from "@/modules/reception/utils/receptionMapper";
+import { getTodayDateString, extractBookingCreateFields } from "@/modules/reception/utils/receptionMapper";
 import {
   downloadRegistrationTicketPdf,
   getQrImageUrl,
@@ -190,10 +190,27 @@ export function PatientActiveFlowsView({
     setPaymentFeedback(null);
     try {
       const amount = order.total_price || 0;
-      await receptionService.payCashServiceOrder(
+      const cashRes = await receptionService.payCashServiceOrder(
         order.service_order_id,
         accessToken,
       );
+      if (order.booking_id) {
+        try {
+          await receptionService.resolveQueueNumberAfterBooking(
+            {
+              bookingId: order.booking_id,
+              ...extractBookingCreateFields(cashRes),
+            },
+            patientId,
+            accessToken,
+          );
+        } catch (resolveErr) {
+          console.warn(
+            "[PatientActiveFlowsView] Queue resolve after cash payment:",
+            resolveErr,
+          );
+        }
+      }
       setPaymentFeedback({
         type: "success",
         message: `Đã xác nhận thu ${Number(amount).toLocaleString("vi-VN")} đ tiền mặt thành công!`,

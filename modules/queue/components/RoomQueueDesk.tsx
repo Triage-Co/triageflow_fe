@@ -145,6 +145,7 @@ export function RoomQueueDesk({
                     missing={queue?.missing ?? []}
                     finished={queue?.finished ?? []}
                     isActing={isActing}
+                    onOpenEmr={onOpenEmr}
                     onCallByStep={(stepId) => void callNext(stepId).catch(() => undefined)}
                     onMiss={(qid) => void missQueue(qid).catch(() => undefined)}
                     onRecall={(qid) => void recall(qid).catch(() => undefined)}

@@ -249,7 +249,7 @@ export default function StaffSettingsView() {
     const roleName = getRoleDisplayName(profile?.role);
 
     return (
-        <div className="flex-1 flex flex-col overflow-y-auto bg-white rounded-tl-4xl rounded-bl-4xl p-6 md:p-10 relative">
+        <div className="flex-1 flex flex-col overflow-y-auto bg-white rounded-tl-[48px] rounded-bl-[48px] p-6 md:p-10 relative">
             <div className="max-w-4xl w-full mx-auto space-y-8 pb-20">
                 {/* ── Toast Alert ── */}
                 {saveToast && (

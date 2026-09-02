@@ -5,6 +5,7 @@ import type { Patient } from '@/modules/clinical/types/clinical.types';
 import { ActionToolbar, type ToolbarTab } from './ActionToolbar';
 import { MedicalSection } from './MedicalSection';
 import { physicalExamEntries } from '@/modules/clinical/utils/physicalExam';
+import { normalizeMultilineText } from '@/modules/clinical/utils/multilineText';
 
 interface MedicalRecordAreaProps {
     patient: Patient;
@@ -24,7 +25,9 @@ function ExamTab({ patient }: { patient: Patient }) {
             {/* Quá trình bệnh lý */}
             <MedicalSection title="Quá trình bệnh lý và diễn biến lâm sàng" minHeight="180px" onEdit={() => {}}>
                 {record.clinicalProgression ? (
-                    <p className="text-[#7B7B7B] whitespace-pre-line">{record.clinicalProgression}</p>
+                    <p className="text-[#7B7B7B] whitespace-pre-line">
+                        {normalizeMultilineText(record.clinicalProgression)}
+                    </p>
                 ) : (
                     <p className="text-[#ADADAD] italic text-[12px]">Nhập quá trình bệnh lý...</p>
                 )}
