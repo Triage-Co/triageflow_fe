@@ -149,12 +149,10 @@ export const PaymentView: React.FC = () => {
             </div>
           </div>
 
-          {/* Cột phải: Chi tiết hóa đơn & Nút bấm xác nhận */}
           <div className="md:col-span-6 bg-white rounded-[28px] p-8 shadow-md border border-neutral-100 flex flex-col justify-between space-y-5">
             <div className="space-y-4">
               <h4 className="font-extrabold text-[#1E2939] text-base border-b border-neutral-100 pb-3">Chi tiết thanh toán</h4>
 
-              {/* Thông tin dịch vụ / phòng khám / bác sĩ */}
               <div className="bg-blue-50/70 border border-blue-100 rounded-2xl p-3.5 space-y-2">
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-neutral-500 font-semibold">Dịch vụ:</span>

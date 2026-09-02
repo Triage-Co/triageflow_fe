@@ -8,12 +8,17 @@ import {
   User,
   X,
   FileText,
-  Map
+  Map,
+  Pill,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useFlowStore } from '../store/flowStore';
 import { stripRoomName, QUEUE_TYPE_MAP } from '../utils/flowHelpers';
 import { printKioskTicket } from '../utils/kioskTicketPrinter';
+import { prescriptionService } from '../services/prescriptionService';
+import { PrescriptionDetailModal } from '../modals/PrescriptionDetailModal';
+import { ServicePaymentQrModal } from '../modals/ServicePaymentQrModal';
+import { PrescriptionData } from '../types/prescription.types';
 import { cn } from '@/lib/utils';
 
 export const PatientInfoView: React.FC = () => {
@@ -50,6 +55,71 @@ export const PatientInfoView: React.FC = () => {
 
   const currentDateStr = new Date().toLocaleDateString('vi-VN');
   const currentTimeStr = activeTicket?.createdAt || new Date().toLocaleTimeString('vi-VN');
+
+  // States cho Modal Xem đơn thuốc & Thanh toán đơn thuốc
+  const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
+  const [activePrescription, setActivePrescription] = useState<PrescriptionData | null>(null);
+  const [isLoadingPrescription, setIsLoadingPrescription] = useState(false);
+
+  const [isPrescriptionQrModalOpen, setIsPrescriptionQrModalOpen] = useState(false);
+  const [prescriptionQrData, setPrescriptionQrData] = useState<{ qrCode: string; amount: number } | null>(null);
+  const [payingServiceOrderId, setPayingServiceOrderId] = useState<string>('');
+
+  const handleOpenPrescriptionModal = async () => {
+    setIsPrescriptionModalOpen(true);
+    setIsLoadingPrescription(true);
+
+    try {
+      // 1. Tra cứu đơn thuốc theo mã phiếu khám (ticketCode)
+      if (ticketCode) {
+        const ticketRes = await prescriptionService.getPrescriptionByTicketCode(ticketCode);
+        const presList = (ticketRes as any)?.data?.prescriptions || (ticketRes as any)?.prescriptions;
+        if (Array.isArray(presList) && presList.length > 0) {
+          setActivePrescription(presList[0]);
+          return;
+        }
+      }
+
+      // 2. Tra cứu theo patientId nếu có
+      if (patientId) {
+        const patientRes = await prescriptionService.getPrescriptionsByPatient(patientId);
+        const presList =
+          (patientRes as any)?.data?.items ||
+          (patientRes as any)?.data ||
+          (patientRes as any)?.items ||
+          patientRes;
+
+        if (Array.isArray(presList) && presList.length > 0) {
+          const matched = activeTicket?.bookingId
+            ? presList.find((p: any) => p.booking_id === activeTicket.bookingId)
+            : null;
+          setActivePrescription(matched || presList[0]);
+          return;
+        }
+      }
+
+      setActivePrescription(null);
+    } catch (error) {
+      console.warn('Lỗi khi tra cứu đơn thuốc:', error);
+      setActivePrescription(null);
+    } finally {
+      setIsLoadingPrescription(false);
+    }
+  };
+
+  const handlePayPrescription = (pres: PrescriptionData) => {
+    const qr = pres.serviceOrder?.qr_code || pres.qr_code;
+    const amount = pres.serviceOrder?.total_price || pres.total_amount || 0;
+    const soId = pres.serviceOrder?.service_order_id || pres.prescription_id || '';
+
+    if (qr && soId) {
+      setPrescriptionQrData({ qrCode: qr, amount });
+      setPayingServiceOrderId(soId);
+      setIsPrescriptionQrModalOpen(true);
+    } else {
+      showToast('Đơn thuốc chưa sẵn sàng thanh toán QR trực tiếp.', 'info');
+    }
+  };
 
   const handleOpenPrintModal = () => {
     if (!ticketNo || ticketNo === '---') {
@@ -382,23 +452,32 @@ export const PatientInfoView: React.FC = () => {
               ════════════════════════════════ */}
           <div className="flex flex-col min-h-0 gap-5">
 
-            {/* ── Print Button (large, prominent) ── */}
+            {/* ── Print Button & Actions Card (large, prominent) ── */}
             <div
-              style={{ flex: '4 4 0%' }}
-              className="bg-white rounded-[28px] shadow-lg border border-neutral-100 p-6 flex flex-col items-center justify-center gap-4 min-h-0"
+              style={{ flex: '5 5 0%' }}
+              className="bg-white rounded-[28px] shadow-lg border border-neutral-100 p-6 flex flex-col items-center justify-center gap-3.5 min-h-0"
             >
               <button
                 onClick={handleOpenPrintModal}
-                className="w-full flex items-center justify-center gap-3 px-8 py-4.5 bg-gradient-to-r from-[#155DFC] to-[#4F80E1] hover:from-[#1250d6] hover:to-[#3a6ad4] active:scale-95 text-white rounded-2xl font-black text-base transition-all cursor-pointer"
+                className="w-full flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-[#155DFC] to-[#4F80E1] hover:from-[#1250d6] hover:to-[#3a6ad4] active:scale-95 text-white rounded-2xl font-black text-base transition-all cursor-pointer shadow-md shadow-blue-500/10"
               >
                 <Printer className="w-5 h-5" />
                 IN PHIẾU KHÁM
               </button>
 
+              {/* ── View prescription button ── */}
+              <button
+                onClick={handleOpenPrescriptionModal}
+                className="w-full flex items-center justify-center gap-2.5 py-3.5 bg-emerald-50 hover:bg-emerald-100 active:scale-95 text-emerald-800 border border-emerald-200/80 rounded-2xl font-black text-sm sm:text-base transition-all cursor-pointer shadow-sm"
+              >
+                <Pill className="w-5 h-5 text-emerald-600" />
+                Xem đơn thuốc
+              </button>
+
               {/* ── View doctor route shortcut (inside print card) ── */}
               <button
                 onClick={() => navigateToView('doctor_route')}
-                className="w-full flex items-center justify-center gap-2 py-4.5 bg-neutral-100 hover:bg-neutral-200 active:scale-95 text-[#155DFC] rounded-2xl font-black text-base transition-all cursor-pointer"
+                className="w-full flex items-center justify-center gap-2 py-3.5 bg-neutral-100 hover:bg-neutral-200 active:scale-95 text-[#155DFC] rounded-2xl font-black text-sm sm:text-base transition-all cursor-pointer"
               >
                 <Navigation className="w-5 h-5 rotate-45" />
                 Xem lộ trình bác sĩ chỉ định
@@ -407,7 +486,7 @@ export const PatientInfoView: React.FC = () => {
 
             {/* ── Điểm đến hiện tại ── */}
             <div
-              style={{ flex: '6 6 0%' }}
+              style={{ flex: '5 5 0%' }}
               className="bg-gradient-to-br from-[#4F80E1] to-[#2563EB] rounded-[28px] shadow-xl flex flex-col justify-between p-8 gap-5 min-h-0"
             >
               {/* Card label */}
@@ -445,6 +524,37 @@ export const PatientInfoView: React.FC = () => {
 
           </div>
         </div>
+      )}
+
+      {/* Modal Chi tiết đơn thuốc */}
+      <PrescriptionDetailModal
+        isOpen={isPrescriptionModalOpen}
+        onClose={() => setIsPrescriptionModalOpen(false)}
+        prescription={activePrescription}
+        isLoading={isLoadingPrescription}
+        onSelectPay={handlePayPrescription}
+      />
+
+      {/* Modal Thanh toán QR nếu thanh toán trực tiếp đơn thuốc */}
+      {isPrescriptionQrModalOpen && prescriptionQrData && patientId && (
+        <ServicePaymentQrModal
+          isOpen={isPrescriptionQrModalOpen}
+          onClose={() => {
+            setIsPrescriptionQrModalOpen(false);
+            setPrescriptionQrData(null);
+          }}
+          qrResult={{
+            qrCode: prescriptionQrData.qrCode,
+            amount: prescriptionQrData.amount,
+          }}
+          patientId={patientId}
+          serviceOrderId={payingServiceOrderId}
+          onPaymentSuccess={() => {
+            setIsPrescriptionQrModalOpen(false);
+            showToast('Thanh toán đơn thuốc thành công!', 'success');
+            handleOpenPrescriptionModal();
+          }}
+        />
       )}
     </div>
   );

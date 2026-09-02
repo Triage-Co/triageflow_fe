@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useKioskStore } from '../store/kioskStore';
-import { ArrowLeft, MapPin, Navigation, RotateCw, CheckCircle2, Clock, User, X, FileText, ChevronDown, ChevronUp, XCircle } from 'lucide-react';
+import { ArrowLeft, MapPin, Navigation, RotateCw, CheckCircle2, Clock, User, X, FileText, ChevronDown, ChevronUp, XCircle, Receipt } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFlowStore } from '../store/flowStore';
 import { useAuthStore } from '../store/authStore';
@@ -27,6 +27,7 @@ export const DoctorRouteView: React.FC = () => {
 
   // States & selectors cho chức năng thanh toán Service Order
   const [isServiceOrderModalOpen, setIsServiceOrderModalOpen] = useState(false);
+  const [serviceOrderModalTab, setServiceOrderModalTab] = useState<'pending' | 'invoice'>('pending');
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [selectedServiceOrderId, setSelectedServiceOrderId] = useState<string>('');
 
@@ -120,8 +121,16 @@ export const DoctorRouteView: React.FC = () => {
 
   const handleOpenServiceOrders = async () => {
     if (patientId) {
+      setServiceOrderModalTab('pending');
       setIsServiceOrderModalOpen(true);
       await fetchPendingServiceOrders(patientId);
+    }
+  };
+
+  const handleOpenInvoice = () => {
+    if (patientId) {
+      setServiceOrderModalTab('invoice');
+      setIsServiceOrderModalOpen(true);
     }
   };
 
@@ -262,6 +271,14 @@ export const DoctorRouteView: React.FC = () => {
             className="flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-2xl text-xs sm:text-sm font-extrabold shadow-md shadow-amber-500/10 transition-all cursor-pointer"
           >
             Các mục cần thanh toán
+          </button>
+
+          <button
+            onClick={handleOpenInvoice}
+            className="flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 bg-white hover:bg-slate-50 border border-slate-200 active:scale-95 text-[#155DFC] rounded-2xl text-xs sm:text-sm font-extrabold shadow-xs transition-all cursor-pointer"
+          >
+            <Receipt className="w-4 h-4" />
+            Hóa đơn
           </button>
 
           <button
@@ -625,7 +642,7 @@ export const DoctorRouteView: React.FC = () => {
         </div>
       </div>
 
-      {/* Popup 1: Danh sách service orders cần thanh toán */}
+      {/* Popup 1: Danh sách service orders cần thanh toán & Hóa đơn */}
       <ServiceOrderModal
         isOpen={isServiceOrderModalOpen}
         onClose={() => setIsServiceOrderModalOpen(false)}
@@ -633,6 +650,7 @@ export const DoctorRouteView: React.FC = () => {
         onSelectPay={handleSelectPay}
         isFetching={isFetchingServiceOrders}
         activeBookingId={activeBookingId}
+        defaultTab={serviceOrderModalTab}
       />
 
       {/* Popup 2: Hiển thị mã QR thanh toán */}

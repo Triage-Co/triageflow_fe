@@ -74,6 +74,7 @@ interface TriageStoreState {
 
     fetchAndMergeSymptoms: (regionId: string, dob?: string) => Promise<void>;
     toggleSymptom: (symptom: SymptomItem) => void;
+    parseAndAddSymptoms: (text: string) => Promise<{ addedCount: number }>;
     addSymptomsBatch: (symptoms: SymptomItem[]) => void;
     removeSymptom: (symptomId: string) => void;
     setSymptomDuration: (duration: string) => void;
@@ -400,6 +401,70 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
             ? current.filter(s => s.id !== symptom.id)
             : [...current, symptom];
         set({ selectedSymptoms: next });
+    },
+
+    parseAndAddSymptoms: async (text: string) => {
+        const rawInput = text?.trim();
+        if (!rawInput) return { addedCount: 0 };
+
+        const { useKioskStore } = await import('./kioskStore');
+        const { useAuthStore } = await import('./authStore');
+        const kioskState = useKioskStore.getState();
+        const authState = useAuthStore.getState();
+
+        const selectedGender = kioskState.selectedGender;
+        const gender = selectedGender === 'female' ? 'female' : 'male';
+        const dob = authState.patientInfo?.dob;
+        const age = calculateAgeFromDob(dob);
+
+        set({ isApiLoading: true });
+        try {
+            const res = await triageService.parseSymptoms({
+                question: rawInput,
+                age,
+                sex: gender
+            });
+
+            const rawMentions = res?.data?.mentions || (res as any)?.mentions || [];
+            const validMentions = Array.isArray(rawMentions)
+                ? rawMentions.filter((m: any) => m?.id && String(m.id).startsWith('s_'))
+                : [];
+
+            if (validMentions.length === 0) {
+                return { addedCount: 0 };
+            }
+
+            const current = get().selectedSymptoms;
+            const existingIds = new Set(current.map(s => s.id));
+
+            let addedCount = 0;
+            const newItems: SymptomItem[] = [];
+
+            validMentions.forEach((m: any) => {
+                if (!existingIds.has(m.id)) {
+                    existingIds.add(m.id);
+                    const viName = m.common_name || m.name || m.orth || m.id;
+                    newItems.push({
+                        id: m.id,
+                        labelVn: viName,
+                        labelEn: m.name || viName,
+                        categoryNameVn: "Mô tả AI",
+                    });
+                    addedCount++;
+                }
+            });
+
+            if (newItems.length > 0) {
+                set({ selectedSymptoms: [...current, ...newItems] });
+            }
+
+            return { addedCount };
+        } catch (error) {
+            console.error("Lỗi khi parse triệu chứng ở Kiosk:", error);
+            return { addedCount: 0 };
+        } finally {
+            set({ isApiLoading: false });
+        }
     },
 
     addSymptomsBatch: (symptoms) => set({ selectedSymptoms: symptoms }),

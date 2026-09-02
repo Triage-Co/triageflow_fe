@@ -16,6 +16,10 @@ export const triageService = {
         return apiClient.get<InfermedicaSymptomRef[]>(`/api/infermedica/search?${queryParams.toString()}`);
     },
 
+    parseSymptoms: (payload: { question: string; age: number; sex?: string }) => {
+        return apiClient.post<{ mentions?: any[]; obvious?: boolean }>(`/api/infermedica/parse`, payload);
+    },
+
     diagnose: (
         payload: { sex: string; age: number; evidence: InfermedicaEvidence[] },
         citizenId: string,

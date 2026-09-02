@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { applyTelex } from '../utils/vietnameseTyping';
 
 export interface VirtualKeyboardConfig {
   inputId: string;
@@ -15,6 +16,8 @@ interface VirtualKeyboardStoreState {
   title: string;
   value: string;
   placeholder: string;
+  isVietnameseMode: boolean;
+  isCapsLock: boolean;
   onChangeCallback: ((val: string) => void) | null;
   onSubmitCallback: ((val: string) => void) | null;
 
@@ -22,6 +25,8 @@ interface VirtualKeyboardStoreState {
   closeKeyboard: () => void;
   setValue: (value: string) => void;
   appendChar: (char: string) => void;
+  toggleVietnameseMode: () => void;
+  toggleCapsLock: () => void;
   backspace: () => void;
   clear: () => void;
   submit: () => void;
@@ -33,6 +38,8 @@ export const useVirtualKeyboardStore = create<VirtualKeyboardStoreState>((set, g
   title: 'Nhập nội dung tìm kiếm',
   value: '',
   placeholder: 'Chạm để gõ phím...',
+  isVietnameseMode: true, // Mặc định bật gõ tiếng Việt Telex
+  isCapsLock: false,
   onChangeCallback: null,
   onSubmitCallback: null,
 
@@ -66,14 +73,30 @@ export const useVirtualKeyboardStore = create<VirtualKeyboardStoreState>((set, g
   },
 
   appendChar: (char) => {
-    const nextVal = get().value + char;
+    const isVn = get().isVietnameseMode;
+    const isCaps = get().isCapsLock;
+    const formattedChar = isCaps ? char.toUpperCase() : char.toLowerCase();
+    const current = get().value;
+
+    const nextVal = applyTelex(current, formattedChar, isVn);
     get().setValue(nextVal);
+  },
+
+  toggleVietnameseMode: () => {
+    set((state) => ({ isVietnameseMode: !state.isVietnameseMode }));
+  },
+
+  toggleCapsLock: () => {
+    set((state) => ({ isCapsLock: !state.isCapsLock }));
   },
 
   backspace: () => {
     const current = get().value;
     if (current.length > 0) {
-      const nextVal = current.slice(0, -1);
+      // Use Array.from to correctly remove unicode surrogate pairs/diacritics if any
+      const chars = Array.from(current);
+      chars.pop();
+      const nextVal = chars.join('');
       get().setValue(nextVal);
     }
   },
