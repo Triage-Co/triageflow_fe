@@ -10,8 +10,6 @@ import {
 import { Button } from '@/shared/components/ui/Button';
 import { cn } from '@/lib/utils';
 import type { Serving } from '../types/queue.types';
-import { canStaffViewPatientEmr } from '@/modules/clinical/services/clinicalService';
-
 export interface RoomServingPanelProps {
     serving: Serving | null;
     isActing?: boolean;
@@ -45,8 +43,8 @@ function genderLabel(g: string): string {
     return g || '—';
 }
 
-const BRAND_CALLED_GRADIENT = 'bg-[#8B7CF6] shadow-[#8B7CF6]/25';
-const BRAND_CALLED_SURFACE = 'border-[#8B7CF6]/30 bg-gradient-to-b from-[#8B7CF6]/10 via-white to-white';
+const BRAND_GRADIENT = 'bg-[#8B7CF6] shadow-[#8B7CF6]/25';
+const BRAND_SURFACE = 'border-[#8B7CF6]/30 bg-gradient-to-b from-[#8B7CF6]/10 via-white to-white';
 
 export function RoomServingPanel({
     serving,
@@ -85,46 +83,54 @@ export function RoomServingPanel({
         serving.status === 'CALLED' ||
         (!serving.serving_started_at && String(serving.step?.step_status).toUpperCase() === 'PENDING');
 
-    const canOpenEmr = canStaffViewPatientEmr(serving.status, serving.step?.step_status);
+    const showEmrButton = Boolean(onOpenEmr);
 
     return (
         <div
             className={cn(
                 'flex flex-col justify-between rounded-2xl border p-5 shadow-sm relative transition-colors',
-                isCalled
-                    ? BRAND_CALLED_SURFACE
-                    : 'border-emerald-200/60 bg-gradient-to-b from-emerald-50/20 via-white to-white',
+                BRAND_SURFACE,
                 className,
             )}
         >
-            <div className="space-y-4">
-                {/* Header section with badge & EMR button */}
-                <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
+            {showEmrButton && (
+                <Button
+                    variant="outline"
+                    className="absolute top-4 right-4 z-10 h-8.5 rounded-xl border-[#8B7CF6]/35 bg-white/90 text-xs font-bold text-[#7C6FE0] hover:bg-[#F5F2FF] hover:text-[#8B7CF6] hover:border-[#8B7CF6]/50 shadow-xs cursor-pointer"
+                    onClick={() => onOpenEmr!(serving.queue_id)}
+                    disabled={isActing}
+                    startIcon={<ExternalLink className="h-3.5 w-3.5" />}
+                >
+                    Xem bệnh án
+                </Button>
+            )}
+
+            <div className="space-y-4 pr-28">
+                {/* Header section with badge */}
+                <div className="flex items-start gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
                         <div
                             className={cn(
                                 'flex h-13 w-13 shrink-0 flex-col items-center justify-center rounded-2xl text-white shadow-sm',
-                                isCalled
-                                    ? BRAND_CALLED_GRADIENT
-                                    : 'bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-200',
+                                BRAND_GRADIENT,
                             )}
                         >
                             <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">STT</span>
                             <span className="text-xl font-black leading-none">{serving.queue_number}</span>
                         </div>
-                        <div>
+                        <div className="min-w-0">
                             {isCalled ? (
                                 <div className="inline-flex items-center gap-1.5 rounded-md bg-[#8B7CF6] px-2 py-0.5 text-[11px] font-bold text-white border border-[#8B7CF6]">
                                     <span className="h-1.5 w-1.5 rounded-full bg-white animate-ping" />
                                     ĐANG GỌI VÀO PHÒNG
                                 </div>
                             ) : (
-                                <div className="inline-flex items-center gap-1.5 rounded-md bg-emerald-100/70 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                <div className="inline-flex items-center gap-1.5 rounded-md bg-[#EDE9FE] px-2 py-0.5 text-[11px] font-bold text-[#7C6FE0] border border-[#8B7CF6]/25">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-[#8B7CF6] animate-pulse" />
                                     ĐANG PHỤC VỤ
                                 </div>
                             )}
-                            <h2 className="mt-1 text-lg font-extrabold text-neutral-900 tracking-tight">
+                            <h2 className="mt-1 text-lg font-extrabold text-neutral-900 tracking-tight truncate">
                                 {serving.patient?.full_name || 'Bệnh nhân'}
                             </h2>
                             <p className="text-xs font-medium text-neutral-500">
@@ -132,17 +138,6 @@ export function RoomServingPanel({
                             </p>
                         </div>
                     </div>
-                    {onOpenEmr && canOpenEmr && (
-                        <Button
-                            variant="outline"
-                            className="h-8.5 rounded-xl border-neutral-200 text-xs font-bold text-neutral-700 hover:bg-neutral-50 hover:text-indigo-600 hover:border-indigo-200 shadow-xs cursor-pointer"
-                            onClick={() => onOpenEmr(serving.queue_id)}
-                            disabled={isActing}
-                            startIcon={<ExternalLink className="h-3.5 w-3.5" />}
-                        >
-                            Xem bệnh án
-                        </Button>
-                    )}
                 </div>
             </div>
 
@@ -180,7 +175,7 @@ export function RoomServingPanel({
                 ) : (
                     <>
                         <Button
-                            className="h-10 flex-1 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs sm:text-sm font-bold shadow-sm shadow-emerald-200 hover:from-emerald-700 hover:to-teal-700 active:scale-[0.99] transition-all cursor-pointer"
+                            className="h-10 flex-1 rounded-xl bg-[#8B7CF6] hover:bg-[#7C6FE0] text-white text-xs sm:text-sm font-bold shadow-sm shadow-[#8B7CF6]/25 active:scale-[0.99] transition-all cursor-pointer"
                             disabled={isActing || !onCompleteStep}
                             onClick={() => setIsConfirmOpen(true)}
                             startIcon={
@@ -222,8 +217,8 @@ export function RoomServingPanel({
                         {/* Header */}
                         <div className="px-6 pt-6 pb-4 flex items-center justify-between border-b border-neutral-100">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-2xl bg-emerald-50 flex items-center justify-center border border-emerald-100 shadow-xs">
-                                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                                <div className="w-10 h-10 rounded-2xl bg-[#F5F2FF] flex items-center justify-center border border-[#8B7CF6]/20 shadow-xs">
+                                    <CheckCircle2 className="w-5 h-5 text-[#8B7CF6]" />
                                 </div>
                                 <div>
                                     <h3 className="text-base font-extrabold text-neutral-900">
@@ -245,7 +240,7 @@ export function RoomServingPanel({
 
                         {/* Body */}
                         <div className="p-6 space-y-4 text-xs">
-                            <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4 space-y-2.5">
+                            <div className="bg-[#F5F2FF]/60 border border-[#8B7CF6]/15 rounded-2xl p-4 space-y-2.5">
                                 <div className="flex justify-between items-center">
                                     <span className="text-neutral-500 font-medium">Bệnh nhân:</span>
                                     <span className="font-extrabold text-neutral-900 text-sm">
@@ -254,12 +249,12 @@ export function RoomServingPanel({
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-neutral-500 font-medium">Số thứ tự:</span>
-                                    <span className="font-extrabold text-emerald-700 font-mono bg-emerald-100/80 px-2 py-0.5 rounded-md text-xs">
+                                    <span className="font-extrabold text-[#7C6FE0] font-mono bg-[#EDE9FE] px-2 py-0.5 rounded-md text-xs">
                                         Số {serving.queue_number}
                                     </span>
                                 </div>
                                 {serving.step?.step_name && (
-                                    <div className="flex justify-between items-start pt-2 border-t border-emerald-100/70">
+                                    <div className="flex justify-between items-start pt-2 border-t border-[#8B7CF6]/10">
                                         <span className="text-neutral-500 font-medium">Bước khám:</span>
                                         <span className="font-bold text-neutral-800 text-right max-w-[65%]">
                                             {serving.step.step_name}
@@ -269,7 +264,7 @@ export function RoomServingPanel({
                             </div>
 
                             <p className="text-xs text-neutral-600 leading-relaxed font-medium">
-                                Bạn có chắc chắn muốn Hoàn thành phiên khám này không ?<strong className="text-emerald-700 font-bold">Đã khám</strong>.
+                                Bạn có chắc chắn muốn Hoàn thành phiên khám này không? Trạng thái sẽ chuyển sang <strong className="text-[#7C6FE0] font-bold">Đã khám</strong>.
                             </p>
                         </div>
 
@@ -284,7 +279,7 @@ export function RoomServingPanel({
                                 Hủy
                             </Button>
                             <Button
-                                className="h-9.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold shadow-sm shadow-emerald-200 hover:from-emerald-700 hover:to-teal-700 px-5"
+                                className="h-9.5 rounded-xl bg-[#8B7CF6] hover:bg-[#7C6FE0] text-white text-xs font-bold shadow-sm shadow-[#8B7CF6]/25 px-5"
                                 disabled={isActing}
                                 onClick={async () => {
                                     setIsConfirmOpen(false);

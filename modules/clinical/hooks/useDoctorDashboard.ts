@@ -8,7 +8,10 @@ import { labService } from '@/modules/lab/services/labService';
 import type { ShiftInfo } from '@/modules/lab/types/lab.types';
 import { useRoomQueue } from '@/modules/queue/hooks/useRoomQueue';
 import { pickStaffShift } from '@/modules/clinical/utils/staffShift';
-import { canStaffViewPatientEmr } from '@/modules/clinical/services/clinicalService';
+import {
+    canStaffPreviewPatientEmr,
+    canStaffViewPatientEmr,
+} from '@/modules/clinical/services/clinicalService';
 
 export function useDoctorDashboard() {
     const router = useRouter();
@@ -77,16 +80,17 @@ export function useDoctorDashboard() {
         let stt = '';
 
         if (serving?.queue_id === queueId) {
-            if (
-                !canStaffViewPatientEmr(serving.status, serving.step?.step_status)
-            ) {
-                return;
-            }
             name = serving.patient?.full_name || 'Bệnh nhân';
             stt = serving.queue_number || '';
         } else {
             const waitingEntry = waiting.find((entry) => entry.queue_id === queueId);
             if (!waitingEntry) return;
+            if (
+                !canStaffPreviewPatientEmr(waitingEntry.status) &&
+                !canStaffViewPatientEmr(waitingEntry.status)
+            ) {
+                return;
+            }
             name = waitingEntry.patient_name || 'Bệnh nhân';
             stt = waitingEntry.queue_number || '';
         }
