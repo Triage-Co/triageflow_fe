@@ -368,3 +368,18 @@ input[type="password"]::-webkit-credentials-auto-fill-button {
 .show-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #a78bfa;
 }
+
+/* TV source-room overlay after confirmed rebalance */
+@keyframes tv-redirect-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.78;
+  }
+}
+
+.tv-redirect-blink {
+  animation: tv-redirect-blink 1.7s ease-in-out infinite;
+}

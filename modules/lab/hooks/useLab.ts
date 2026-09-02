@@ -265,13 +265,15 @@ export function useLab() {
     }, [mergedQueueLists, selectedPatient]);
 
     // Refresh Queue manually
-    const handleRefresh = async () => {
+    const handleRefresh = async (opts?: { silent?: boolean }) => {
         if (!activeShift) return;
         setIsLoadingQueue(true);
         try {
             const queue = await labService.getRoomQueue(activeShift.room_id);
             setQueueData(queue);
-            showToast('Đã làm mới danh sách hàng chờ thành công.', 'success');
+            if (!opts?.silent) {
+                showToast('Đã làm mới danh sách hàng chờ thành công.', 'success');
+            }
         } catch (e) {
             console.error(e);
             showToast('Không thể làm mới hàng chờ.', 'error');
