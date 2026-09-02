@@ -71,6 +71,7 @@ export function useDoctorDashboard() {
     const openPatientEmr = (queueId: string) => {
         const serving = roomQueue.queue?.serving;
         const waiting = roomQueue.queue?.waiting ?? [];
+        const finished = roomQueue.queue?.finished ?? [];
 
         let name = 'Bệnh nhân';
         let stt = '';
@@ -80,9 +81,18 @@ export function useDoctorDashboard() {
             stt = serving.queue_number || '';
         } else {
             const waitingEntry = waiting.find((entry) => entry.queue_id === queueId);
-            if (!waitingEntry) return;
-            name = waitingEntry.patient_name || 'Bệnh nhân';
-            stt = waitingEntry.queue_number || '';
+            if (waitingEntry) {
+                name = waitingEntry.patient_name || 'Bệnh nhân';
+                stt = waitingEntry.queue_number || '';
+            } else {
+                const finishedEntry = finished.find((entry) => entry.queue_id === queueId);
+                if (!finishedEntry) return;
+                name =
+                    finishedEntry.patient_name ||
+                    finishedEntry.patient?.full_name ||
+                    'Bệnh nhân';
+                stt = finishedEntry.queue_number || '';
+            }
         }
 
         openTab({ id: queueId, name, stt });

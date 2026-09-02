@@ -3,6 +3,7 @@ import { receptionService } from '@/modules/reception/services/receptionService'
 import type {
     InfermedicaDiagnoseResult,
     InfermedicaEvidence,
+    InfermedicaMention,
     InfermedicaQuestion,
     InfermedicaRecommendedSpecialist,
     InfermedicaSearchItem,
@@ -14,11 +15,9 @@ import type { Gender } from '@/shared/types/auth.types';
 import {
     dobToAge,
     genderToInfermedicaSex,
-    getSymptomParseCandidates,
     hasInterviewQuestion,
     isEmergencyTriage,
     mentionsToEvidence,
-    mergeMentions,
     normalizeDiagnoseQuestion,
     normalizeRecommendedSpecialist,
     sanitizeEvidenceForApi,
@@ -26,8 +25,6 @@ import {
 } from '@/modules/reception/utils/infermedicaMapper';
 import {
     getQuestionType,
-    isGroupMultipleQuestion,
-    localizeInfermedicaQuestion,
     localizeInfermedicaQuestionAsync,
 } from '@/modules/reception/utils/infermedicaInterviewI18n';
 import {
@@ -126,51 +123,54 @@ async function resolveSymptomEvidence(
     age: number,
     onDebug?: TriageDebugLogger,
 ): Promise<InfermedicaEvidence[]> {
-    const candidates = getSymptomParseCandidates(symptoms);
-    let mentions = mergeMentions([]);
+    const question = symptoms.trim();
+    if (!question) {
+        throw new Error('Hãy nhập triệu chứng trước khi phân tích AI.');
+    }
 
-    onDebug?.('parse.start', { candidates });
+    onDebug?.('parse.start', { question });
 
-    for (const question of candidates) {
-        try {
-            const parseRes = await infermedicaService.parseSymptoms({ question, age });
-            mentions = mergeMentions([mentions, parseRes.data?.mentions ?? []]);
-            onDebug?.('parse.response', {
-                question,
-                mention_count: parseRes.data?.mentions?.length ?? 0,
-                obvious: parseRes.data?.obvious ?? null,
-            });
-        } catch (err) {
-            onDebug?.('parse.error', {
-                question,
-                message: err instanceof Error ? err.message : String(err),
-            });
-        }
+    let mentions: InfermedicaMention[] = [];
+    try {
+        // BE /api/infermedica/parse tự xử lý dịch thuật — FE gửi nguyên văn, dùng response nguyên trạng.
+        const parseRes = await infermedicaService.parseSymptoms({ question, age });
+        mentions = parseRes.data?.mentions ?? [];
+        onDebug?.('parse.response', {
+            question,
+            mention_count: mentions.length,
+            obvious: parseRes.data?.obvious ?? null,
+        });
+    } catch (err) {
+        onDebug?.('parse.error', {
+            question,
+            message: err instanceof Error ? err.message : String(err),
+        });
     }
 
     let evidence = sanitizeEvidenceForApi(mentionsToEvidence(mentions));
 
     if (evidence.length === 0) {
-        onDebug?.('search.fallback.start', { candidates: [...candidates].reverse() });
-        for (const phrase of [...candidates].reverse()) {
-            try {
-                const searchRes = await infermedicaService.searchSymptoms(phrase, age);
-                const items = Array.isArray(searchRes.data) ? searchRes.data : [];
-                const top = items.find((item) => item.id?.trim());
-                if (top?.id) {
-                    evidence = sanitizeEvidenceForApi([{ id: top.id, choice_id: 'present' }]);
-                    onDebug?.('search.fallback.hit', { phrase, id: top.id, label: top.label });
-                    break;
-                }
-            } catch {
-                /* thử phrase khác */
+        onDebug?.('search.fallback.start', { phrase: question });
+        try {
+            const searchRes = await infermedicaService.searchSymptoms(question, age);
+            const items = Array.isArray(searchRes.data) ? searchRes.data : [];
+            const top = items.find((item) => item.id?.trim());
+            if (top?.id) {
+                evidence = sanitizeEvidenceForApi([{ id: top.id, choice_id: 'present' }]);
+                onDebug?.('search.fallback.hit', {
+                    phrase: question,
+                    id: top.id,
+                    label: top.label,
+                });
             }
+        } catch {
+            /* search fallback failed */
         }
     }
 
     if (evidence.length === 0) {
         throw new Error(
-            'Không nhận diện được triệu chứng. Hãy mô tả cụ thể hơn (VD: đau đầu, sốt) hoặc thêm tiếng Anh (headache, fever).',
+            'Không nhận diện được triệu chứng. Hãy mô tả cụ thể hơn (VD: đau đầu, sốt).',
         );
     }
 
@@ -428,8 +428,8 @@ export const symptomTriageService = {
     },
 
     /**
-     * Trả lời 1 lựa chọn → cộng evidence → diagnose tiếp (có token từ câu 2).
-     * group_multiple: gom đủ item trong batch rồi mới gọi diagnose.
+     * Trả lời câu hỏi phỏng vấn → cộng evidence → diagnose tiếp (có token từ câu 2).
+     * group_multiple: FE gửi đủ answers của mọi item trong 1 lần.
      */
     async answerQuestion(params: {
         session: SymptomTriageSession;
@@ -444,8 +444,10 @@ export const symptomTriageService = {
         email?: string;
         knownPatientId?: string | null;
         onDebug?: TriageDebugLogger;
-        itemId: string;
-        choiceId: string;
+        itemId?: string;
+        choiceId?: string;
+        /** group_multiple: trả lời tất cả item trong batch */
+        answers?: Array<{ itemId: string; choiceId: string }>;
     }): Promise<SymptomTriageResult> {
         const {
             session,
@@ -462,47 +464,46 @@ export const symptomTriageService = {
             onDebug,
             itemId,
             choiceId,
+            answers,
         } = params;
 
         const pendingQuestion = session.pending_question;
         const questionType = pendingQuestion ? getQuestionType(pendingQuestion) : 'single';
-        // group_single: user chọn 1 item → gửi item đó với choice_id=present
-        const resolvedChoiceId = questionType === 'group_single' ? 'present' : choiceId;
+
+        const answerEntries: Array<{ itemId: string; choiceId: string }> =
+            answers && answers.length > 0
+                ? answers
+                : itemId
+                  ? [
+                        {
+                            itemId,
+                            choiceId:
+                                questionType === 'group_single'
+                                    ? 'present'
+                                    : choiceId || 'present',
+                        },
+                    ]
+                  : [];
+
+        if (answerEntries.length === 0) {
+            throw new Error('Thiếu câu trả lời phỏng vấn.');
+        }
 
         const evidence: InfermedicaEvidence[] = sanitizeEvidenceForApi([
             ...session.evidence,
-            { id: itemId, choice_id: resolvedChoiceId },
+            ...answerEntries.map((entry) => ({
+                id: entry.itemId,
+                choice_id: entry.choiceId,
+            })),
         ]);
 
         onDebug?.('answer.apply', {
             question_type: questionType,
-            item_id: itemId,
-            choice_id: resolvedChoiceId,
+            answers: answerEntries,
             evidence_count: evidence.length,
             questions_answered_before: session.questions_answered,
             interview_token: tokenPreview(session.interview_token),
         });
-
-        // group_multiple: trả lời từng item trên UI, chưa gọi API
-        const itemIndex = session.pending_item_index ?? 0;
-        const hasMoreItemsInBatch =
-            pendingQuestion != null &&
-            isGroupMultipleQuestion(pendingQuestion) &&
-            itemIndex < pendingQuestion.items.length - 1;
-
-        if (hasMoreItemsInBatch) {
-            return {
-                session: {
-                    ...session,
-                    evidence,
-                    pending_item_index: itemIndex + 1,
-                },
-                specialties: [],
-                slots: [],
-                specialtyId: '',
-                departmentId: session.recommended_department_id ?? '',
-            };
-        }
 
         await ensurePatientForTriage({
             citizenId,
