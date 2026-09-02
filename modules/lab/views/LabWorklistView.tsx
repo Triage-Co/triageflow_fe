@@ -36,6 +36,8 @@ import OverrideConfirmModal from '../modals/OverrideConfirmModal';
 import RefuseConfirmModal from '../modals/RefuseConfirmModal';
 import CompleteConfirmModal from '../modals/CompleteConfirmModal';
 import { StaffQRScanModal } from '@/shared/components/modals/StaffQRScanModal';
+import { useRebalanceSuggestions } from '@/modules/queue/hooks/useRebalanceSuggestions';
+import { RebalanceActionCard } from '@/modules/queue/components/RebalanceActionCard';
 
 export default function LabWorklistView() {
     const [dragOverIndex, setDragOverIndex] = React.useState<number | null>(null);
@@ -81,6 +83,11 @@ export default function LabWorklistView() {
         handleScanTicket,
         handleStartServing,
     } = useLab();
+
+    const rebalance = useRebalanceSuggestions({
+        roomId: activeShift?.room_id,
+        enabled: Boolean(mounted && accessToken && activeShift?.room_id),
+    });
 
     if (!mounted || !accessToken) {
         return (
@@ -136,7 +143,7 @@ export default function LabWorklistView() {
                             <div className="flex items-center gap-2.5">
                                 <Button
                                     variant="outline"
-                                    onClick={handleRefresh}
+                                    onClick={() => void handleRefresh()}
                                     disabled={isLoadingQueue}
                                     isLoading={isLoadingQueue}
                                     startIcon={isLoadingQueue ? undefined : <RefreshCw className="w-3.5 h-3.5 text-neutral-500" />}
@@ -146,6 +153,21 @@ export default function LabWorklistView() {
                                 </Button>
                             </div>
                         </div>
+
+                        <RebalanceActionCard
+                            suggestions={rebalance.suggestions}
+                            currentRoomId={activeShift?.room_id}
+                            actingId={rebalance.actingId}
+                            error={rebalance.error}
+                            className="mt-4"
+                            onConfirm={async (id) => {
+                                await rebalance.confirm(id);
+                                await handleRefresh({ silent: true });
+                            }}
+                            onReject={async (id) => {
+                                await rebalance.reject(id);
+                            }}
+                        />
 
                         {/* Search & Tabs Layout */}
                         <div className="flex flex-col gap-4.5 mb-6 mt-6">

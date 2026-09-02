@@ -121,6 +121,11 @@ function normalizeWaiting(raw: unknown, index: number): WaitingEntry | null {
         eta_minutes: asNumber(w.eta_minutes),
         eta_time: w.eta_time != null ? asString(w.eta_time) : null,
         step_id: w.step_id != null ? asString(w.step_id) : undefined,
+        visit_session_id:
+            w.visit_session_id != null ? asString(w.visit_session_id) : undefined,
+        manual_rule_codes: Array.isArray(w.manual_rule_codes)
+            ? w.manual_rule_codes.map((c) => asString(c).trim().toUpperCase()).filter(Boolean)
+            : undefined,
     };
 }
 

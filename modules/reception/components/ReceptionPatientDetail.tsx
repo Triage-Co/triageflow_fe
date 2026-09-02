@@ -1,9 +1,15 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, User, Clock, CreditCard, Ticket, Loader2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ReceptionPatientDetail as PatientDetail } from '@/modules/reception/types/reception.types';
+import { useAuthStore } from '@/modules/auth/store/authStore';
+import { useFlaggableRules } from '@/modules/queue/hooks/useFlaggableRules';
+import { RuleFlagChipPicker } from '@/modules/queue/components/RuleFlagChipPicker';
+import { queueService } from '@/modules/queue/services/queueService';
+import { clinicalService } from '@/modules/clinical/services/clinicalService';
 
 const PRIORITY_STYLES = {
     'Khẩn cấp': 'bg-[#FEF2F2] text-[#DC2626] border-[#FECACA]',
@@ -26,6 +32,65 @@ function InfoRow({ label, value }: { label: string; value: string }) {
         <div className="flex justify-between gap-4 py-2.5 border-b border-[#F3F4F6] last:border-0">
             <span className="text-[12px] text-[#9CA3AF] font-medium shrink-0">{label}</span>
             <span className="text-[12px] text-[#374151] font-semibold text-right">{value}</span>
+        </div>
+    );
+}
+
+function VisitRuleFlags({
+    queueId,
+    visitSessionId,
+    initialCodes,
+}: {
+    queueId?: string;
+    visitSessionId?: string;
+    initialCodes: string[];
+}) {
+    const accessToken = useAuthStore((s) => s.accessToken);
+    const { rules, isLoading } = useFlaggableRules();
+    const [codes, setCodes] = useState(initialCodes);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    if (!queueId && !visitSessionId) return null;
+    if (!isLoading && rules.length === 0) return null;
+
+    const handleChange = async (next: string[]) => {
+        if (!accessToken) return;
+        const prev = codes;
+        setCodes(next);
+        setSaving(true);
+        setError(null);
+        try {
+            if (queueId) {
+                await queueService.updateQueueManualRules(queueId, next, accessToken);
+            } else if (visitSessionId) {
+                await clinicalService.updateVisitSession(
+                    visitSessionId,
+                    { manual_rule_codes: next },
+                    accessToken,
+                );
+            }
+        } catch (e) {
+            setCodes(prev);
+            setError(e instanceof Error ? e.message : 'Không lưu được cờ ưu tiên');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="rounded-[12px] border border-[#EDE9FE] bg-[#FAF5FF]/50 p-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+            <RuleFlagChipPicker
+                rules={rules}
+                selectedCodes={codes}
+                onChange={(next) => void handleChange(next)}
+                disabled={saving || !accessToken}
+                isLoading={isLoading}
+                accent="purple"
+            />
+            {error && (
+                <p className="mt-2 text-[11px] font-semibold text-red-600">{error}</p>
+            )}
         </div>
     );
 }
@@ -133,6 +198,15 @@ export function ReceptionPatientDetailView({ patient, isLoading, error }: Recept
                             </div>
                             <InfoRow label="Trạng thái TT" value={patient.paymentStatus} />
                         </div>
+                    </div>
+
+                    <div className="mb-5">
+                        <VisitRuleFlags
+                            key={`${patient.queueId}-${patient.visitSessionId ?? ''}`}
+                            queueId={patient.queueId}
+                            visitSessionId={patient.visitSessionId}
+                            initialCodes={patient.manualRuleCodes ?? []}
+                        />
                     </div>
 
                     <div className="rounded-[12px] border border-[#EBEBEB] bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">

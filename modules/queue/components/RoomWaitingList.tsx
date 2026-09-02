@@ -5,6 +5,8 @@ import { Clock, ExternalLink, Pin, PhoneCall, RotateCcw, UserX, CheckCircle2, X,
 import { Button } from '@/shared/components/ui/Button';
 import { cn } from '@/lib/utils';
 import type { FinishedEntry, MissingEntry, WaitingEntry } from '../types/queue.types';
+import { useFlaggableRules } from '../hooks/useFlaggableRules';
+import { RuleFlagChipPicker } from './RuleFlagChipPicker';
 
 export interface RoomWaitingListProps {
     waiting: WaitingEntry[];
@@ -15,6 +17,7 @@ export interface RoomWaitingListProps {
     onMiss?: (queueId: string) => void | Promise<void>;
     onRecall?: (queueId: string) => void | Promise<void>;
     onPinTop?: (queueId: string) => void | Promise<void>;
+    onSetManualRules?: (queueId: string, codes: string[]) => void | Promise<void>;
     onOpenEmr?: (queueId: string) => void;
     className?: string;
 }
@@ -30,6 +33,13 @@ const QUEUE_TYPE_LABEL: Record<string, string> = {
 
 function typeBadge(queueType: string): string {
     return QUEUE_TYPE_LABEL[queueType?.toUpperCase()] || queueType || '';
+}
+
+const SYSTEM_REASON_RE = /^(AGING|PINNED|HOLD_|INTERLEAVE)/i;
+
+function visibleReasons(reasons: string[] | undefined): string[] {
+    if (!reasons?.length) return [];
+    return reasons.filter((r) => r && !SYSTEM_REASON_RE.test(r));
 }
 
 function formatEtaTime(eta: string | null | undefined): string {
@@ -52,11 +62,13 @@ export function RoomWaitingList({
     onMiss,
     onRecall,
     onPinTop,
+    onSetManualRules,
     onOpenEmr,
     className,
 }: RoomWaitingListProps) {
     const [tab, setTab] = useState<'waiting' | 'missing' | 'finished'>('waiting');
     const [missPatient, setMissPatient] = useState<WaitingEntry | null>(null);
+    const { rules: flaggableRules, isLoading: flaggableLoading } = useFlaggableRules();
 
     return (
         <div className={cn('flex h-full min-h-0 flex-col rounded-2xl border border-neutral-200/70 bg-white shadow-sm overflow-hidden', className)}>
@@ -168,6 +180,32 @@ export function RoomWaitingList({
                                         <p className="mt-1 truncate text-sm font-bold text-neutral-800">
                                             {w.patient_name}
                                         </p>
+                                        {visibleReasons(w.reasons).length > 0 && (
+                                            <div className="mt-1 flex flex-wrap gap-1">
+                                                {visibleReasons(w.reasons).map((reason) => (
+                                                    <span
+                                                        key={`${w.queue_id}-${reason}`}
+                                                        className="rounded-md bg-violet-50 border border-violet-200/70 px-1.5 py-0.5 text-[10px] font-bold text-violet-700"
+                                                    >
+                                                        {reason}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {onSetManualRules && (
+                                            <RuleFlagChipPicker
+                                                rules={flaggableRules}
+                                                selectedCodes={w.manual_rule_codes ?? []}
+                                                onChange={(codes) =>
+                                                    void onSetManualRules(w.queue_id, codes)
+                                                }
+                                                disabled={isActing}
+                                                isLoading={flaggableLoading}
+                                                compact
+                                                accent="indigo"
+                                                className="mt-1.5"
+                                            />
+                                        )}
                                         <p className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-neutral-400">
                                             <Clock className="h-3 w-3" />
                                             Thời gian chờ ~{w.eta_minutes ?? '—'}p

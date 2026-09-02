@@ -138,6 +138,8 @@ export interface ReceptionPatientDetail {
   waitMinutes: number;
   priority: ReceptionPriority;
   status: ReceptionStatus;
+  manualRuleCodes?: string[];
+  visitSessionId?: string;
 }
 export interface PatientSearchResult {
   accountId: string;

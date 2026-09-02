@@ -74,6 +74,8 @@ import { mapActiveFlowsList } from "@/modules/reception/utils/receptionFlowMappe
 import { isValidPhone } from "@/shared/utils/validators";
 
 import type { Gender } from "@/shared/types/auth.types";
+import { useFlaggableRules } from "@/modules/queue/hooks/useFlaggableRules";
+import { RuleFlagChipPicker } from "@/modules/queue/components/RuleFlagChipPicker";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -361,6 +363,9 @@ export function ReceptionRegisterForm() {
     bookingId: string;
     stepId: string;
   } | null>(null);
+  const [manualRuleCodes, setManualRuleCodes] = useState<string[]>([]);
+  const { rules: flaggableRules, isLoading: flaggableLoading } =
+    useFlaggableRules();
 
   useEffect(() => {
     setCreatedBooking(null);
@@ -703,6 +708,7 @@ export function ReceptionRegisterForm() {
     setScanBanner(null);
     setRegistrationResult(null);
     setCreatedBooking(null);
+    setManualRuleCodes([]);
     patientPromiseRef.current = null;
     setStep(1);
   }
@@ -883,6 +889,23 @@ export function ReceptionRegisterForm() {
           throw new Error("Không tạo được lịch khám.");
         }
 
+        const bookingExtracted = extractBookingCreateFields(bData);
+        const visitSessionId = bookingExtracted.visitSessionId;
+
+        const persistManualFlags = async () => {
+          if (!accessToken || manualRuleCodes.length === 0) return;
+          try {
+            await receptionService.persistVisitManualRuleCodes({
+              patientId,
+              codes: manualRuleCodes,
+              token: accessToken,
+              visitSessionId,
+            });
+          } catch (flagErr) {
+            console.warn("[Register] manual rule flags persist failed:", flagErr);
+          }
+        };
+
         let ticketCode: string | undefined;
         if (bData) {
           const dataBody = (bData as Record<string, unknown>)?.data ?? bData;
@@ -952,6 +975,7 @@ export function ReceptionRegisterForm() {
             paymentAccountNumber: accountNumber,
             paymentDescription: description,
           });
+          await persistManualFlags();
           setStep(4);
           return;
         }
@@ -1055,6 +1079,7 @@ export function ReceptionRegisterForm() {
           paymentAccountNumber: "",
           paymentDescription: "",
         });
+        await persistManualFlags();
         setStep(4);
       } catch (err) {
         console.error("[Register] submit failed:", err);
@@ -1329,6 +1354,18 @@ export function ReceptionRegisterForm() {
                     </div>
                   </div>
                 </div>
+
+                {(flaggableLoading || flaggableRules.length > 0) && (
+                  <div className="rounded-[12px] border border-[#EDE9FE] bg-[#FAF5FF]/60 p-5 md:p-6">
+                    <RuleFlagChipPicker
+                      rules={flaggableRules}
+                      selectedCodes={manualRuleCodes}
+                      onChange={setManualRuleCodes}
+                      isLoading={flaggableLoading}
+                      accent="purple"
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -1645,24 +1682,37 @@ export function ReceptionRegisterForm() {
 
             {/* ── STEP 3 ── */}
             {step === 3 && (
-              <RegisterConfirmStep
-                fullName={form.full_name}
-                citizenId={form.citizen_id}
-                dob={form.dob}
-                phone={form.phone}
-                insuranceId={form.insurance_id}
-                symptoms={form.symptoms}
-                paymentMethod={form.payment_method}
-                onPaymentMethodChange={(method) =>
-                  update("payment_method", method)
-                }
-                departmentId={form.department_id}
-                specialtyCatalog={specialtyCatalog}
-                selectedSpecialty={selectedSpecialty}
-                selectedSlot={selectedSlot}
-                triageSession={triageSession}
-                bookingMode={bookingMode}
-              />
+              <div className="space-y-4">
+                <RegisterConfirmStep
+                  fullName={form.full_name}
+                  citizenId={form.citizen_id}
+                  dob={form.dob}
+                  phone={form.phone}
+                  insuranceId={form.insurance_id}
+                  symptoms={form.symptoms}
+                  paymentMethod={form.payment_method}
+                  onPaymentMethodChange={(method) =>
+                    update("payment_method", method)
+                  }
+                  departmentId={form.department_id}
+                  specialtyCatalog={specialtyCatalog}
+                  selectedSpecialty={selectedSpecialty}
+                  selectedSlot={selectedSlot}
+                  triageSession={triageSession}
+                  bookingMode={bookingMode}
+                />
+                {(flaggableLoading || flaggableRules.length > 0) && (
+                  <div className="rounded-[14px] border border-[#EDE9FE] bg-white p-5 md:p-6 shadow-[0_1px_6px_rgba(0,0,0,0.04)]">
+                    <RuleFlagChipPicker
+                      rules={flaggableRules}
+                      selectedCodes={manualRuleCodes}
+                      onChange={setManualRuleCodes}
+                      isLoading={flaggableLoading}
+                      accent="purple"
+                    />
+                  </div>
+                )}
+              </div>
             )}
 
             {step === 4 && !registrationResult && (
