@@ -107,44 +107,56 @@ interface ProjectedMarker {
   heatmapData?: HeatmapRoom;
 }
 
-function createArrowTexture(): THREE.Texture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 128;
-  canvas.height = 32;
-  const ctx = canvas.getContext('2d')!;
+/** Mobile-like route: solid cyan path + white tip arrow */
+const ROUTE_LINE_COLOR = 0x5ec8ff;
+const ROUTE_LINE_RADIUS = 0.38;
+const ROUTE_ARROW_COLOR = 0xffffff;
+/** World units per second — shorter routes finish faster, longer ones stay readable */
+const ROUTE_ARROW_SPEED = 8;
 
-  // Background: Transparent
-  ctx.clearRect(0, 0, 128, 32);
+function disposeObject3D(obj: THREE.Object3D) {
+  obj.traverse((child) => {
+    if (child instanceof THREE.Mesh) {
+      child.geometry.dispose();
+      if (Array.isArray(child.material)) {
+        child.material.forEach((m) => m.dispose());
+      } else {
+        child.material.dispose();
+      }
+    }
+  });
+}
 
-  // Draw three black triangles representing arrows pointing right
-  ctx.fillStyle = '#000000'; // Black color
+function createRouteArrowMesh(): THREE.Mesh {
+  const cone = new THREE.Mesh(
+    new THREE.ConeGeometry(ROUTE_LINE_RADIUS * 2.4, ROUTE_LINE_RADIUS * 5.2, 16),
+    new THREE.MeshBasicMaterial({
+      color: ROUTE_ARROW_COLOR,
+      depthWrite: false,
+      transparent: true,
+      opacity: 0.98,
+    })
+  );
+  cone.renderOrder = 101;
+  return cone;
+}
 
-  // Triangle 1
-  ctx.beginPath();
-  ctx.moveTo(30, 8);
-  ctx.lineTo(46, 16);
-  ctx.lineTo(30, 24);
-  ctx.fill();
+const _arrowUp = new THREE.Vector3(0, 1, 0);
+const _arrowTangent = new THREE.Vector3();
+const _arrowQuat = new THREE.Quaternion();
 
-  // Triangle 2
-  ctx.beginPath();
-  ctx.moveTo(60, 8);
-  ctx.lineTo(76, 16);
-  ctx.lineTo(60, 24);
-  ctx.fill();
-
-  // Triangle 3
-  ctx.beginPath();
-  ctx.moveTo(90, 8);
-  ctx.lineTo(106, 16);
-  ctx.lineTo(90, 24);
-  ctx.fill();
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = THREE.RepeatWrapping;
-  // Repeat along the length of the tube
-  texture.repeat.set(35, 1);
-  return texture;
+function placeArrowOnCurve(
+  arrow: THREE.Mesh,
+  curve: THREE.CatmullRomCurve3,
+  t: number
+) {
+  const clamped = Math.min(Math.max(t, 0), 1);
+  curve.getPointAt(clamped, arrow.position);
+  curve.getTangentAt(clamped, _arrowTangent);
+  if (_arrowTangent.lengthSq() < 1e-8) return;
+  _arrowTangent.normalize();
+  _arrowQuat.setFromUnitVectors(_arrowUp, _arrowTangent);
+  arrow.quaternion.copy(_arrowQuat);
 }
 
 function findHeatmapRoom(
@@ -226,9 +238,11 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
   const onClearRoomSelectRef = useRef(onClearRoomSelect);
   const onHoverRoomRef = useRef(onHoverRoom);
   const sceneRef = useRef<THREE.Scene | null>(null);
-  const pathMeshRef = useRef<THREE.Mesh | null>(null);
-  const routeLineRef = useRef<THREE.Mesh | null>(null);
-  const routeTextureRef = useRef<THREE.CanvasTexture | THREE.Texture | null>(null);
+  const pathMeshRef = useRef<THREE.Group | null>(null);
+  const routeArrowRef = useRef<THREE.Mesh | null>(null);
+  const routeCurveRef = useRef<THREE.CatmullRomCurve3 | null>(null);
+  const routeArrowProgressRef = useRef(0);
+  const routeArrowLastTsRef = useRef<number | null>(null);
   const routePathRef = useRef(routePath);
   const nodesGroupRef = useRef<THREE.Group | null>(null);
   const walkableMeshRef = useRef<THREE.Mesh | null>(null);
@@ -315,17 +329,16 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
 
   const clearPathMesh = () => {
     const scene = sceneRef.current;
-    const mesh = pathMeshRef.current;
-    if (scene && mesh) {
-      scene.remove(mesh);
-      mesh.geometry.dispose();
-      if (Array.isArray(mesh.material)) {
-        mesh.material.forEach((m: THREE.Material) => m.dispose());
-      } else {
-        mesh.material.dispose();
-      }
+    const group = pathMeshRef.current;
+    if (scene && group) {
+      scene.remove(group);
+      disposeObject3D(group);
       pathMeshRef.current = null;
     }
+    routeArrowRef.current = null;
+    routeCurveRef.current = null;
+    routeArrowProgressRef.current = 0;
+    routeArrowLastTsRef.current = null;
   };
 
   const applyFloorColors = (focusId: string | null) => {
@@ -424,11 +437,6 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
 
     clearPathMesh();
 
-    if (routeTextureRef.current) {
-      routeTextureRef.current.dispose();
-      routeTextureRef.current = null;
-    }
-
     if (!path || path.length < 2) return;
 
     const centerShiftX = floorData.centerShiftX ?? 0;
@@ -476,24 +484,54 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
 
     try {
       const curve = new THREE.CatmullRomCurve3(uniquePoints);
-      // Create a nice glowing thicker 3D Tube for the path with animated arrow texture
-      const geometry = new THREE.TubeGeometry(curve, 100, 0.3, 8, false);
+      const segments = Math.max(48, uniquePoints.length * 12);
+      const geometry = new THREE.TubeGeometry(
+        curve,
+        segments,
+        ROUTE_LINE_RADIUS,
+        12,
+        false
+      );
 
-      const arrowTexture = createArrowTexture();
-      routeTextureRef.current = arrowTexture;
+      // Soft under-glow + solid cyan body (mobile-style continuous route)
+      const glow = new THREE.Mesh(
+        new THREE.TubeGeometry(curve, segments, ROUTE_LINE_RADIUS * 1.55, 12, false),
+        new THREE.MeshBasicMaterial({
+          color: ROUTE_LINE_COLOR,
+          transparent: true,
+          opacity: 0.28,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        })
+      );
+      glow.renderOrder = 99;
 
-      const material = new THREE.MeshBasicMaterial({
-        map: arrowTexture,
-        transparent: true,
-        opacity: 0.95,
-        depthWrite: false, // Prevents Z-sorting issues with slab/rooms
-        side: THREE.DoubleSide, // Always visible from all camera angles
-      });
+      const tube = new THREE.Mesh(
+        geometry,
+        new THREE.MeshBasicMaterial({
+          color: ROUTE_LINE_COLOR,
+          transparent: true,
+          opacity: 0.92,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        })
+      );
+      tube.renderOrder = 100;
 
-      const tube = new THREE.Mesh(geometry, material);
-      tube.renderOrder = 100; // Guaranteed to render after transparent floor slab
-      scene.add(tube);
-      pathMeshRef.current = tube;
+      const group = new THREE.Group();
+      group.add(glow);
+      group.add(tube);
+
+      const arrow = createRouteArrowMesh();
+      placeArrowOnCurve(arrow, curve, 0);
+      group.add(arrow);
+
+      scene.add(group);
+      pathMeshRef.current = group;
+      routeArrowRef.current = arrow;
+      routeCurveRef.current = curve;
+      routeArrowProgressRef.current = 0;
+      routeArrowLastTsRef.current = null;
     } catch (error) {
       console.error('Failed to build curve or tube geometry:', error);
     }
@@ -1408,8 +1446,18 @@ export const BuildingMapCanvas: React.FC<BuildingMapCanvasProps> = ({
       animationFrameId = requestAnimationFrame(animate);
       controls.update();
 
-      if (routeTextureRef.current) {
-        routeTextureRef.current.offset.x -= 0.015;
+      const arrow = routeArrowRef.current;
+      const curve = routeCurveRef.current;
+      if (arrow && curve) {
+        const now = performance.now();
+        const last = routeArrowLastTsRef.current;
+        routeArrowLastTsRef.current = now;
+        const dt = last == null ? 0 : Math.min((now - last) / 1000, 0.05);
+        const length = Math.max(curve.getLength(), 0.001);
+        const duration = Math.max(length / ROUTE_ARROW_SPEED, 2.8);
+        routeArrowProgressRef.current =
+          (routeArrowProgressRef.current + dt / duration) % 1;
+        placeArrowOnCurve(arrow, curve, routeArrowProgressRef.current);
       }
 
       const currentHlId = activeHighlightIdRef.current;
