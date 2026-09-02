@@ -1077,7 +1077,7 @@ export function ReceptionRegisterForm() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-[#F5F2FF] py-0 md:py-6">
-      <div className="flex-1 flex flex-col min-h-0 bg-white rounded-none md:rounded-tl-[48px] md:rounded-bl-[48px] overflow-hidden shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
+      <div className="flex-1 flex flex-col min-h-0 bg-white rounded-none md:rounded-tl-[15px] md:rounded-bl-[48px] overflow-hidden shadow-[0_4px_20px_-4px_rgba(139,124,246,0.08)]">
         <div className="flex-1 overflow-y-auto overscroll-y-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden px-4 py-5 md:px-10 md:py-8 pb-8">
           <div className={cn("mx-auto", step >= 2 ? "max-w-6xl" : "max-w-3xl")}>
             <h1 className="text-[22px] font-bold text-[#1F2937] tracking-tight">
