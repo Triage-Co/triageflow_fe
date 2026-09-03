@@ -423,9 +423,8 @@ export default function LabWorklistView() {
                                                                     </Button>
                                                                     <Button
                                                                         onClick={() => handleStartServing(patient.queue_id)}
-                                                                        className="h-8 px-3.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11.5px] font-extrabold shadow-xs shrink-0 cursor-pointer gap-1 border-0"
+                                                                        className="h-8 px-3.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11.5px] font-extrabold shadow-xs shrink-0 cursor-pointer border-0"
                                                                     >
-                                                                        <Play className="w-3 h-3 fill-current" />
                                                                         Bắt đầu thực hiện
                                                                     </Button>
                                                                 </>
@@ -462,8 +461,7 @@ export default function LabWorklistView() {
                                                             )}
                                                             <Button
                                                                 onClick={() => handleOpenViewModal(patient)}
-                                                                startIcon={<Eye className="w-3.5 h-3.5" />}
-                                                                className="h-8 px-3.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11.5px] font-bold shadow-xs shrink-0 cursor-pointer gap-1.5 border-0"
+                                                                className="h-8 px-3.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11.5px] font-bold shadow-xs shrink-0 cursor-pointer border-0"
                                                             >
                                                                 Xem chi tiết
                                                             </Button>

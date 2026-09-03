@@ -27,26 +27,16 @@ export const RegisterStepper: React.FC<RegisterStepperProps> = ({ currentStep })
   const currentStepNum = STEP_ORDER[currentStep] || 1;
 
   return (
-    <div className="hidden md:flex w-52 lg:w-64 bg-white rounded-[28px] sm:rounded-[36px] p-5 sm:p-6 lg:p-8 shadow-sm border border-neutral-100/80 flex-col justify-between shrink-0 self-stretch select-none">
+    <div className="hidden md:flex w-52 lg:w-64 bg-white rounded-[28px] sm:rounded-[36px] p-5 sm:p-6 lg:p-8 shadow-sm border border-neutral-100/80 flex-col shrink-0 self-stretch select-none">
       {STEPS.map((step, idx) => {
         const isCompleted = step.stepNo < currentStepNum;
         const isActive = step.stepNo === currentStepNum;
         const isLast = idx === STEPS.length - 1;
 
         return (
-          <div key={step.id} className="relative flex items-center gap-3 lg:gap-4 py-2">
-            {/* Circle Badge & Stepper Line Wrapper */}
-            <div className="relative flex items-center justify-center shrink-0 w-9 h-9 sm:w-10 sm:h-10">
-              {/* Connecting vertical line (Connecting edge to edge between circles) */}
-              {!isLast && (
-                <div
-                  className={cn(
-                    "absolute top-[40px] bottom-[-140px] left-1/2 -translate-x-1/2 w-0.5 transition-colors duration-300 z-0",
-                    (isCompleted || isActive) ? "bg-[#A0C2F9]" : "bg-neutral-200"
-                  )}
-                />
-              )}
-
+          <React.Fragment key={step.id}>
+            {/* Step Row */}
+            <div className="flex items-center gap-3 lg:gap-4 shrink-0">
               {/* Circle Badge */}
               <div
                 className={cn(
@@ -58,20 +48,32 @@ export const RegisterStepper: React.FC<RegisterStepperProps> = ({ currentStep })
               >
                 {(isCompleted || isActive) ? <Check className="w-4 h-4 sm:w-5 sm:h-5 stroke-[3]" /> : step.stepNo}
               </div>
+
+              {/* Step Label */}
+              <span
+                className={cn(
+                  "text-xs lg:text-sm font-extrabold transition-colors leading-snug",
+                  isActive && "text-[#2563EB]",
+                  isCompleted && "text-neutral-800",
+                  !isActive && !isCompleted && "text-[#8D95A5]"
+                )}
+              >
+                {step.label}
+              </span>
             </div>
 
-            {/* Step Label */}
-            <span
-              className={cn(
-                "text-xs lg:text-sm font-extrabold transition-colors leading-snug",
-                isActive && "text-[#2563EB]",
-                isCompleted && "text-neutral-800",
-                !isActive && !isCompleted && "text-[#8D95A5]"
-              )}
-            >
-              {step.label}
-            </span>
-          </div>
+            {/* Connecting Vertical Line */}
+            {!isLast && (
+              <div className="w-9 sm:w-10 flex justify-center flex-1 my-1.5 shrink-0 min-h-6">
+                <div
+                  className={cn(
+                    "w-0.5 h-full rounded-full transition-colors duration-300",
+                    (isCompleted || isActive) ? "bg-[#A0C2F9]" : "bg-neutral-200"
+                  )}
+                />
+              </div>
+            )}
+          </React.Fragment>
         );
       })}
     </div>

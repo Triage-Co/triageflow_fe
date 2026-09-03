@@ -120,7 +120,6 @@ body {
     
     <div class="centered footer-text">VUI LÒNG GIỮ PHIẾU NÀY TRONG SUỐT QUÁ TRÌNH KHÁM</div>
     <div class="centered footer-text">CHÚC QUÝ KHÁCH NHIỀU SỨC KHỎE!</div>
-    <div class="centered footer-time">In lúc: ${printTime}</div>
 </div>
 <script>window.onload=()=>{window.print();}</script></body></html>`;
 }
