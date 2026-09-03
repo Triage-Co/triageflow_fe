@@ -481,14 +481,14 @@ export function ReceptionRegisterForm() {
 
   const step2Valid = Boolean(
     bookingMode &&
-      (bookingMode === "ai_triage"
-        ? triageSession.is_analyzed &&
-          (form.slot_id.length > 0 || Boolean(triageSession.best_slot_id))
-        : bookingMode === "package"
-          ? form.package_id.length > 0 && form.slot_id.length > 0
-          : form.department_id.length > 0 &&
-            form.specialty_id.length > 0 &&
-            form.slot_id.length > 0),
+    (bookingMode === "ai_triage"
+      ? triageSession.is_analyzed &&
+      (form.slot_id.length > 0 || Boolean(triageSession.best_slot_id))
+      : bookingMode === "package"
+        ? form.package_id.length > 0 && form.slot_id.length > 0
+        : form.department_id.length > 0 &&
+        form.specialty_id.length > 0 &&
+        form.slot_id.length > 0),
   );
 
   async function lookupPatientByCitizen(citizenId: string) {
@@ -629,17 +629,17 @@ export function ReceptionRegisterForm() {
                 prev
                   ? { ...prev, patient_id: patientId }
                   : {
-                      account_id: "",
-                      patient_id: patientId,
-                      full_name: form.full_name.trim(),
-                      citizen_id: form.citizen_id.trim(),
-                      email: cleanEmail,
-                      dob: form.dob,
-                      gender: form.gender,
-                      role: "PATIENT",
-                      phone: form.phone || null,
-                      bhyt: form.insurance_id || null,
-                    },
+                    account_id: "",
+                    patient_id: patientId,
+                    full_name: form.full_name.trim(),
+                    citizen_id: form.citizen_id.trim(),
+                    email: cleanEmail,
+                    dob: form.dob,
+                    gender: form.gender,
+                    role: "PATIENT",
+                    phone: form.phone || null,
+                    bhyt: form.insurance_id || null,
+                  },
               );
             }
             return patientId;
@@ -1403,12 +1403,12 @@ export function ReceptionRegisterForm() {
                           <div className="w-14 h-14 rounded-2xl bg-[#8B7CF6] text-white flex items-center justify-center text-[20px] font-bold shadow-md shrink-0">
                             {form.full_name
                               ? form.full_name
-                                  .trim()
-                                  .split(" ")
-                                  .slice(-2)
-                                  .map((w) => w[0])
-                                  .join("")
-                                  .toUpperCase()
+                                .trim()
+                                .split(" ")
+                                .slice(-2)
+                                .map((w) => w[0])
+                                .join("")
+                                .toUpperCase()
                               : "?"}
                           </div>
                           <div className="min-w-0">
@@ -1451,13 +1451,13 @@ export function ReceptionRegisterForm() {
                             value={
                               form.dob
                                 ? new Date(form.dob).toLocaleDateString(
-                                    "vi-VN",
-                                    {
-                                      day: "2-digit",
-                                      month: "2-digit",
-                                      year: "numeric",
-                                    },
-                                  )
+                                  "vi-VN",
+                                  {
+                                    day: "2-digit",
+                                    month: "2-digit",
+                                    year: "numeric",
+                                  },
+                                )
                                 : "—"
                             }
                           />

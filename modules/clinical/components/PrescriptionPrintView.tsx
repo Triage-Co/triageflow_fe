@@ -44,7 +44,7 @@ body {
 .meta-left { flex: 1; min-width: 0; }
 .meta p { margin: 2px 0; font-size: 10px; }
 .qr-box { text-align: center; width: 88px; flex-shrink: 0; }
-.qr-box svg { width: 72px; height: 72px; }
+.qr-box svg { width: 96px; height: 96px; }
 .qr-box p { margin: 3px 0 0; font-size: 8px; line-height: 1.2; }
 table { width: 100%; border-collapse: collapse; margin: 6px 0; }
 th, td { border: 1px solid #333; padding: 3px 4px; vertical-align: top; font-size: 10px; }

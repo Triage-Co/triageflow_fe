@@ -906,11 +906,6 @@ export function RightMedicalArea({
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden">
-            {isReadOnly && user?.role === 'DOCTOR' ? (
-                <div className="px-5 py-2 bg-[#F5F2FF] border-b border-[#E8E4FF] text-[11px] font-semibold text-[#6B5FD6] shrink-0">
-                    Ca khám ngày tương lai — chỉ xem, không chỉnh sửa hồ sơ
-                </div>
-            ) : null}
             {/* ── Patient mini-header ── */}
             <div className="flex items-center gap-3 px-5 py-3 bg-white border-b border-[#EBEBEB] shrink-0">
                 {/* Avatar */}

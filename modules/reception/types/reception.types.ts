@@ -16,12 +16,12 @@ export interface QueuePatient {
   name: string;
   specialty: string;
   specialtyIcon:
-    | "emergency"
-    | "internal"
-    | "trauma"
-    | "dermatology"
-    | "obgyn"
-    | "general";
+  | "emergency"
+  | "internal"
+  | "trauma"
+  | "dermatology"
+  | "obgyn"
+  | "general";
   priority: ReceptionPriority;
   status: ReceptionStatus;
   waitMinutes: number;

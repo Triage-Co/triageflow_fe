@@ -1,3 +1,5 @@
+import type { Status } from '@/modules/clinical/types/clinical.types';
+
 /** Normalize API / ISO values to local calendar `YYYY-MM-DD`. */
 export function toLocalYmd(raw?: string | null): string | undefined {
     if (!raw) return undefined;
@@ -30,16 +32,15 @@ export function isFutureLocalDate(dateYmd?: string | null): boolean {
     return day > todayLocalYmd();
 }
 
-import type { Status } from '@/modules/clinical/types/clinical.types';
-
-/** Nurse always view-only; doctor view-only for future appointment days or waiting-queue preview. */
+/**
+ * Nurse always view-only.
+ * Doctors may view and edit EMR regardless of appointment day or queue status
+ * (waiting, no-show, completed).
+ */
 export function isClinicalEmrReadOnly(
     role: string | undefined,
-    appointmentDate?: string | null,
-    patientStatus?: Status | null,
+    _appointmentDate?: string | null,
+    _patientStatus?: Status | null,
 ): boolean {
-    if (role === 'NURSE') return true;
-    if (role === 'DOCTOR' && isFutureLocalDate(appointmentDate)) return true;
-    if (role === 'DOCTOR' && patientStatus === 'Đang chờ') return true;
-    return false;
+    return role === 'NURSE';
 }
