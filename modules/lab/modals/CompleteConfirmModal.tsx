@@ -43,17 +43,13 @@ export default function CompleteConfirmModal({
 
                 {/* Header */}
                 <div className="px-6 pt-6 pb-4 flex items-center justify-between border-b border-neutral-100">
-                    <div className="flex items-center gap-2.5">
-                        <div className="w-10 h-10 rounded-2xl bg-emerald-50 flex items-center justify-center border border-emerald-100 shadow-xs">
-                        </div>
-                        <div>
-                            <h3 className="text-sm font-black text-neutral-850">
-                                Xác nhận hoàn thành lượt phục vụ
-                            </h3>
-                            <p className="text-[11px] text-neutral-450 font-medium">
-                                Kết thúc lượt xét nghiệm của bệnh nhân
-                            </p>
-                        </div>
+                    <div>
+                        <h3 className="text-sm font-black text-neutral-850">
+                            Xác nhận hoàn thành lượt phục vụ
+                        </h3>
+                        <p className="text-[11px] text-neutral-450 font-medium">
+                            Kết thúc lượt xét nghiệm của bệnh nhân
+                        </p>
                     </div>
                     <button
                         onClick={onClose}
@@ -120,9 +116,8 @@ export default function CompleteConfirmModal({
                         onClick={handleConfirm}
                         disabled={isLoading}
                         isLoading={isLoading}
-                        className="h-9 px-4.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs cursor-pointer shadow-sm shadow-emerald-500/20 border-0 flex items-center gap-1.5"
+                        className="h-9 px-4.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs cursor-pointer shadow-sm shadow-emerald-500/20 border-0"
                     >
-                        <CheckCircle2 className="w-4 h-4" />
                         Xác nhận hoàn thành
                     </Button>
                 </div>

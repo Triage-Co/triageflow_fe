@@ -292,13 +292,6 @@ export function RoomServingPanel({
                                     setIsConfirmOpen(false);
                                     await onCompleteStep?.();
                                 }}
-                                startIcon={
-                                    isActing ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                        <CheckCircle2 className="h-4 w-4" />
-                                    )
-                                }
                             >
                                 Xác nhận hoàn thành
                             </Button>

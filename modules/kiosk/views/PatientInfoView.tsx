@@ -259,9 +259,6 @@ export const PatientInfoView: React.FC = () => {
                 <div className="text-[10px] font-bold uppercase leading-tight mb-1">
                   CHÚC QUÝ KHÁCH NHIỀU SỨC KHỎE!
                 </div>
-                <div className="text-[9px] font-bold mt-2 text-neutral-700">
-                  In lúc: {currentTimeStr} {currentDateStr}
-                </div>
               </div>
             </div>
 
