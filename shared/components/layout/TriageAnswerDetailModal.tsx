@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import { clinicalService } from '@/modules/clinical/services/clinicalService';
 import { ApiError } from '@/shared/services/apiClient';
-import { fetchGoogleTranslate, COMMON_MEDICAL_TERMS } from '@/modules/reception/services/googleTranslationService';
 import { commonSymptomDataset } from '@/modules/kiosk/data/commonSymptoms';
 import { useAuthStore } from '@/store/authStore';
 import type {
@@ -82,88 +81,14 @@ function isMissingTriageAnswerError(err: unknown): boolean {
     );
 }
 
-const DELIMITER = ' @@@ ';
+/** API đã trả tiếng Việt — giữ nguyên, không gọi Google Translate */
 async function translateMedicalBatch(texts: string[]): Promise<Map<string, string>> {
     const resultMap = new Map<string, string>();
-    const needTranslate: string[] = [];
     texts.forEach((text) => {
         if (!text || !text.trim()) return;
         const trimmed = text.trim();
-
-        if (COMMON_MEDICAL_TERMS[trimmed]) {
-            resultMap.set(trimmed, COMMON_MEDICAL_TERMS[trimmed]);
-            return;
-        }
-
-        if (textTranslationCache.has(trimmed)) {
-            resultMap.set(trimmed, textTranslationCache.get(trimmed)!);
-            return;
-        }
-
-        if (typeof window !== 'undefined') {
-            try {
-                const local = localStorage.getItem(`triage_tr_${trimmed}`);
-                if (local) {
-                    textTranslationCache.set(trimmed, local);
-                    resultMap.set(trimmed, local);
-                    return;
-                }
-            } catch {
-                // ignore storage error
-            }
-        }
-
-        needTranslate.push(trimmed);
+        resultMap.set(trimmed, textTranslationCache.get(trimmed) ?? trimmed);
     });
-
-    if (needTranslate.length === 0) {
-        return resultMap;
-    }
-
-    const combinedString = needTranslate.join(DELIMITER);
-    let translatedCombined = '';
-    try {
-        const res = await fetch('/api/translate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: combinedString }),
-        });
-        if (res.ok) {
-            const data = await res.json();
-            if (data?.success && data?.data?.translatedText) {
-                translatedCombined = data.data.translatedText;
-            }
-        }
-    } catch {
-    }
-
-    if (!translatedCombined) {
-        try {
-            translatedCombined = await fetchGoogleTranslate(combinedString, 'en', 'vi');
-        } catch {
-            translatedCombined = '';
-        }
-    }
-
-    if (translatedCombined) {
-        const parts = translatedCombined.split(/\s*@@@\s*/);
-        needTranslate.forEach((original, idx) => {
-            const translated = parts[idx]?.trim() || original;
-            resultMap.set(original, translated);
-            textTranslationCache.set(original, translated);
-            if (typeof window !== 'undefined') {
-                try {
-                    localStorage.setItem(`triage_tr_${original}`, translated);
-                } catch {
-                }
-            }
-        });
-    } else {
-        needTranslate.forEach((original) => {
-            resultMap.set(original, original);
-        });
-    }
-
     return resultMap;
 }
 
