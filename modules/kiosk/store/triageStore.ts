@@ -11,6 +11,128 @@ import {
     InfermedicaRecommendedSpecialist
 } from '../types/triage.types';
 import { calculateAgeFromDob } from '../utils/kioskHelpers';
+import { fetchGoogleTranslate } from '@/modules/reception/services/googleTranslationService';
+
+let activeFetchSessionToken = 0;
+
+const INFERMEDICA_SEARCH_KEYWORDS: Record<string, string> = {
+    head: 'head',
+    'Đầu': 'head',
+    'Đầu & Cổ': 'head',
+    eye: 'eye',
+    'Mắt': 'eye',
+    ear: 'ear',
+    'Tai': 'ear',
+    nose: 'nose',
+    'Mũi': 'nose',
+    'oral-cavity': 'mouth',
+    'oral cavity': 'mouth',
+    oralCavity: 'mouth',
+    'Khoang miệng': 'mouth',
+    'Miệng': 'mouth',
+    'neck-or-throat': 'throat',
+    'neck or throat': 'throat',
+    neckOrThroat: 'throat',
+    neckThroat: 'throat',
+    'Cổ / Họng': 'throat',
+    'Cổ': 'neck',
+    'Họng': 'throat',
+    'nape-of-neck': 'neck',
+    'nape of neck': 'neck',
+    'Gáy': 'neck',
+    'Gáy & Cổ': 'neck',
+    chest: 'chest',
+    'Ngực': 'chest',
+    'Vùng Ngực': 'chest',
+    breast: 'breast',
+    'Bầu ngực': 'breast',
+    'upper-abdomen': 'stomach',
+    'upper abdomen': 'stomach',
+    upperAbdomen: 'stomach',
+    'Bụng trên': 'stomach',
+    'middle-abdomen': 'abdomen',
+    'middle abdomen': 'abdomen',
+    midAbdomen: 'abdomen',
+    'Bụng giữa': 'abdomen',
+    'Bụng': 'abdomen',
+    'Bụng & Vùng Chậu': 'abdomen',
+    'lower-abdomen': 'pelvis',
+    'lower abdomen': 'pelvis',
+    lowerAbdomen: 'pelvis',
+    'Bụng dưới': 'pelvis',
+    'upper-arm': 'arm',
+    'upper arm': 'arm',
+    upperArm: 'arm',
+    'Bắp tay': 'arm',
+    'Lưng trên & Vai': 'shoulder',
+    'Cánh tay trái': 'arm',
+    'Cánh tay phải': 'arm',
+    'Cánh tay trái (Sau)': 'arm',
+    'Cánh tay phải (Sau)': 'arm',
+    forearm: 'forearm',
+    'Cẳng tay': 'forearm',
+    elbow: 'elbow',
+    'Khuỷu tay': 'elbow',
+    'Khớp khuỷu': 'elbow',
+    'Cùi chỏ': 'elbow',
+    hand: 'hand',
+    'Bàn tay': 'hand',
+    genitals: 'genital',
+    'Bộ phận sinh dục': 'genital',
+    'Sinh dục': 'genital',
+    'Vùng Mông': 'buttock',
+    thigh: 'thigh',
+    'Đùi': 'thigh',
+    'Đùi / Chân trái': 'thigh',
+    'Đùi / Chân phải': 'thigh',
+    'Bắp chân trái (Sau)': 'calf',
+    'Bắp chân phải (Sau)': 'calf',
+    knee: 'knee',
+    'Đầu gối': 'knee',
+    'Khớp gối': 'knee',
+    'lower-leg': 'leg',
+    'lower leg': 'leg',
+    lowerLeg: 'leg',
+    'Cẳng chân': 'leg',
+    'Bắp chân': 'calf',
+    foot: 'foot',
+    'Bàn chân': 'foot',
+    back: 'back',
+    'Lưng': 'back',
+    'Lưng trên': 'back',
+    'lower-back': 'lower back',
+    'lower back': 'lower back',
+    lowerBack: 'lower back',
+    'Lưng dưới': 'lower back',
+    'Thắt lưng': 'lower back',
+    'Lưng dưới & Thắt lưng': 'lower back',
+    buttocks: 'buttock',
+    'Mông': 'buttock',
+    anus: 'anus',
+    'Hậu môn': 'anus',
+};
+
+const resolveInfermedicaKeyword = (regionId: string, gender: 'male' | 'female'): string => {
+    if (!regionId) return 'general';
+    const trimmed = regionId.trim();
+
+    if (trimmed === 'genitals' || trimmed === 'Bộ phận sinh dục' || trimmed === 'Sinh dục') {
+        return gender === 'female' ? 'vagina' : 'penis';
+    }
+
+    if (INFERMEDICA_SEARCH_KEYWORDS[trimmed]) {
+        return INFERMEDICA_SEARCH_KEYWORDS[trimmed];
+    }
+
+    const mapped = PART_KEY_MAPPING[trimmed];
+    if (mapped && mapped.length > 0) {
+        for (const k of mapped) {
+            if (INFERMEDICA_SEARCH_KEYWORDS[k]) return INFERMEDICA_SEARCH_KEYWORDS[k];
+        }
+    }
+
+    return trimmed.replace(/[-_]/g, ' ');
+};
 
 const compileGlobalStaticSymptomMap = (): Record<string, string> => {
     const map: Record<string, string> = {};
@@ -68,6 +190,7 @@ interface TriageStoreState {
     historyStack: QuestionHistoryItem[];
     restoredAnswers: Record<string, 'present' | 'absent' | 'unknown' | undefined> | null;
 
+    cancelFetchSymptoms: () => void;
     fetchAndMergeSymptoms: (regionId: string, dob?: string) => Promise<void>;
     toggleSymptom: (symptom: SymptomItem) => void;
     parseAndAddSymptoms: (text: string) => Promise<{ addedCount: number }>;
@@ -130,89 +253,104 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
 
     clearRestoredAnswers: () => set({ restoredAnswers: null }),
 
+    cancelFetchSymptoms: () => {
+        activeFetchSessionToken++;
+        set({ isApiLoading: false });
+    },
+
     fetchAndMergeSymptoms: async (regionId: string, dob?: string) => {
+        const currentSession = ++activeFetchSessionToken;
+
         const { useKioskStore } = await import('./kioskStore');
+        const { useAuthStore } = await import('./authStore');
+
         const selectedGender = useKioskStore.getState().selectedGender;
         const gender = selectedGender === 'female' ? 'female' : 'male';
 
+        // BƯỚC 1: Lấy ngay triệu chứng có sẵn từ data logic cũ và hiển thị tức thì
         const localSymptoms = getSymptomsForBodyPart(regionId, gender);
         set({ currentRegionSymptoms: localSymptoms });
 
-        const allDatasets: Record<string, any> = {
-            ...commonSymptomDataset,
-            ...femaleSymptomDataset,
-            ...maleSymptomDataset
-        };
+        const searchKeyword = resolveInfermedicaKeyword(regionId, gender);
+        const authDob = useAuthStore.getState().patientInfo?.dob;
+        const patientAge = calculateAgeFromDob(dob || authDob);
 
-        const mappedKeys = PART_KEY_MAPPING[regionId];
-        const primaryKey = mappedKeys?.[0];
-
-        let englishPhrase = '';
-        if (primaryKey && allDatasets[primaryKey]) {
-            englishPhrase = allDatasets[primaryKey].nameEn;
-        } else {
-            const normalizedRegion = regionId.toLowerCase().replace(/[-_]/g, '');
-            const foundKey = Object.keys(allDatasets).find((key) =>
-                key.toLowerCase() === regionId.toLowerCase() ||
-                key.toLowerCase() === normalizedRegion ||
-                allDatasets[key].nameVn?.toLowerCase() === regionId.toLowerCase() ||
-                allDatasets[key].nameEn?.toLowerCase() === regionId.toLowerCase()
-            );
-            englishPhrase = foundKey ? allDatasets[foundKey].nameEn : regionId.replace(/[-_]/g, ' ');
-        }
-
-        const patientAge = calculateAgeFromDob(dob);
-
+        // BƯỚC 2: Gọi API tìm thêm triệu chứng từ Infermedica
         set({ isApiLoading: true });
         try {
-            const response = await triageService.searchSymptoms(englishPhrase, patientAge);
+            const response = await triageService.searchSymptoms(searchKeyword, patientAge);
+
+            // Nếu người dùng đã ngưng xem hoặc bấm đổi sang vùng khác: DỪNG NGAY
+            if (currentSession !== activeFetchSessionToken) return;
 
             if (response && response.status === 'success' && Array.isArray(response.data)) {
                 const currentGenderDataset = gender === 'female' ? femaleSymptomDataset : maleSymptomDataset;
                 const oppositeGenderDataset = gender === 'female' ? maleSymptomDataset : femaleSymptomDataset;
 
-                const candidateItems: { apiItem: any; matchedLocal: any }[] = [];
+                // BƯỚC 3: Duyệt từng triệu chứng tiếng Anh, dịch từng từ 1 và đưa dần vào khung
+                for (const apiItem of response.data) {
+                    // Kiểm tra session trước mỗi bước xử lý
+                    if (currentSession !== activeFetchSessionToken) return;
+                    if (!apiItem?.id || !apiItem?.label) continue;
 
-                response.data.forEach((apiItem) => {
-                    if (!apiItem.id) return;
                     const apiIdTarget = cleanId(apiItem.id);
 
-                    const isInOppositeGender = findSymptomInDataset(oppositeGenderDataset, apiIdTarget);
-                    if (isInOppositeGender) return;
+                    // Bỏ qua nếu thuộc tập triệu chứng của giới tính đối diện
+                    if (findSymptomInDataset(oppositeGenderDataset, apiIdTarget)) continue;
 
-                    const isIdExisted = get().currentRegionSymptoms.some((localItem) => cleanId(localItem.id) === apiIdTarget);
+                    // Bỏ qua nếu triệu chứng đã có sẵn trong danh sách hiển thị
+                    if (get().currentRegionSymptoms.some((it) => cleanId(it.id) === apiIdTarget)) continue;
 
-                    if (!isIdExisted) {
-                        const localSymptomInCurrentGender = findSymptomInDataset(currentGenderDataset, apiIdTarget);
-                        const localSymptomInCommon = findSymptomInDataset(commonSymptomDataset, apiIdTarget);
-                        const matchedLocal = localSymptomInCurrentGender || localSymptomInCommon;
+                    // Kiểm tra xem triệu chứng này đã có tiếng Việt trong từ điển tĩnh chưa
+                    const localInCurrent = findSymptomInDataset(currentGenderDataset, apiIdTarget);
+                    const localInCommon = findSymptomInDataset(commonSymptomDataset, apiIdTarget);
+                    const matchedLocal = localInCurrent || localInCommon;
 
-                        candidateItems.push({ apiItem, matchedLocal });
-                    }
-                });
+                    let translatedVn = matchedLocal?.labelVn;
 
-                // API đã trả tiếng Việt — dùng label API / từ điển tĩnh, không dịch Google
-                if (candidateItems.length > 0) {
-                    const mergedList = [...get().currentRegionSymptoms];
-                    candidateItems.forEach(({ apiItem, matchedLocal }) => {
-                        const apiIdTarget = cleanId(apiItem.id);
-                        if (!mergedList.some((item) => cleanId(item.id) === apiIdTarget)) {
-                            mergedList.push({
-                                id: apiItem.id,
-                                labelVn: matchedLocal ? matchedLocal.labelVn : apiItem.label,
-                                labelEn: matchedLocal ? matchedLocal.labelEn : apiItem.label,
-                                categoryNameVn: "Mở rộng từ Hệ thống"
-                            });
+                    // Nếu chưa có tiếng Việt trong từ điển tĩnh -> Dịch từ tiếng Anh sang tiếng Việt
+                    if (!translatedVn) {
+                        try {
+                            const trans = await fetchGoogleTranslate(apiItem.label);
+                            if (trans && trans.trim().toLowerCase() !== apiItem.label.trim().toLowerCase()) {
+                                // Viết hoa chữ cái đầu
+                                translatedVn = trans.trim().charAt(0).toUpperCase() + trans.trim().slice(1);
+                            }
+                        } catch (err) {
+                            console.warn(`Lỗi dịch triệu chứng [${apiItem.label}]:`, err);
                         }
-                    });
+                    }
 
-                    set({ currentRegionSymptoms: mergedList });
+                    // Kiểm tra lại session sau khi await dịch xong
+                    if (currentSession !== activeFetchSessionToken) return;
+
+                    const finalLabelVn = translatedVn || apiItem.label;
+
+                    const newSymptom: SymptomItem = {
+                        id: apiItem.id,
+                        labelVn: finalLabelVn,
+                        labelEn: apiItem.label,
+                        categoryNameVn: 'Mở rộng từ Hệ thống',
+                    };
+
+                    // ĐƯA TỪNG TỪ 1 VÀO KHUNG TRIỆU CHỨNG NGAY LẬP TỨC
+                    set((state) => {
+                        if (currentSession !== activeFetchSessionToken) return state;
+                        if (state.currentRegionSymptoms.some((it) => cleanId(it.id) === apiIdTarget)) {
+                            return state;
+                        }
+                        return {
+                            currentRegionSymptoms: [...state.currentRegionSymptoms, newSymptom],
+                        };
+                    });
                 }
             }
         } catch (error) {
-            console.error("Lỗi khi gọi searchSymptoms:", error);
+            console.error('Lỗi khi gọi searchSymptoms:', error);
         } finally {
-            set({ isApiLoading: false });
+            if (currentSession === activeFetchSessionToken) {
+                set({ isApiLoading: false });
+            }
         }
     },
 

@@ -166,7 +166,10 @@ export const BodySelectStep: React.FC = () => {
 
       <SymptomSelectorModal
         isOpen={isSymptomModalOpen}
-        onClose={() => setIsSymptomModalOpen(false)}
+        onClose={() => {
+          setIsSymptomModalOpen(false);
+          useTriageStore.getState().cancelFetchSymptoms();
+        }}
         bodyPartIdOrName={modalBodyPart}
         gender={selectedGender}
       />
