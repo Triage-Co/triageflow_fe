@@ -19,7 +19,8 @@ import {
     Clock,
     Receipt,
     ExternalLink,
-    Wallet
+    Wallet,
+    Lightbulb
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { paymentService } from '../services/paymentService';
@@ -515,7 +516,7 @@ export function PatientPaymentDisplay({
                             </div>
 
                             <div className="p-3 bg-white/90 dark:bg-neutral-900/90 rounded-xl border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-900 dark:text-emerald-200 font-medium leading-relaxed text-center space-y-1 shadow-xs">
-                                <p>💊 Vui lòng di chuyển sang Quầy Cấp Phát Thuốc để nhận thuốc kê đơn.</p>
+                                <p className="flex items-center justify-center gap-1.5"><Pill className="w-4 h-4 text-emerald-600 shrink-0" /> Vui lòng di chuyển sang Quầy Cấp Phát Thuốc để nhận thuốc kê đơn.</p>
                                 <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">Tự động trở về màn hình chờ sau 10 giây...</p>
                             </div>
                         </div>
@@ -538,8 +539,9 @@ export function PatientPaymentDisplay({
                                 </div>
                             </div>
 
-                            <div className="p-3 bg-white/80 dark:bg-neutral-800/80 rounded-xl border border-emerald-100 dark:border-emerald-900/50 text-xs text-slate-600 dark:text-neutral-300 font-medium text-left leading-relaxed">
-                                💡 <strong>Hướng dẫn:</strong> Vui lòng chuẩn bị đúng số tiền mặt và đối chiếu danh sách loại thuốc & chỉ định liều dùng bên phải trước khi gửi cho Thu ngân.
+                            <div className="p-3 bg-white/80 dark:bg-neutral-800/80 rounded-xl border border-emerald-100 dark:border-emerald-900/50 text-xs text-slate-600 dark:text-neutral-300 font-medium text-left leading-relaxed flex items-start gap-1.5">
+                                <Lightbulb className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                                <div><strong>Hướng dẫn:</strong> Vui lòng chuẩn bị đúng số tiền mặt và đối chiếu danh sách loại thuốc & chỉ định liều dùng bên phải trước khi gửi cho Thu ngân.</div>
                             </div>
 
                             {/* Staff Action Button (Xác nhận đã thu tiền mặt) */}

@@ -18,6 +18,7 @@ import {
   Settings,
   ShieldCheck,
   ChevronRight,
+  AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -341,8 +342,9 @@ export const KioskSettingsView: React.FC = () => {
                     ✓ ĐANG BẬT: Bệnh nhân quét/nhập CCCD sẽ nhận mã OTP qua SMS và cần xác thực 2 bước để đăng nhập.
                   </span>
                 ) : (
-                  <span className="text-amber-700 font-bold">
-                    ⚠ ĐANG TẮT: Bệnh nhân quét/nhập CCCD sẽ đăng nhập thẳng trực tiếp vào hệ thống (bỏ qua bước nhập OTP).
+                  <span className="text-amber-700 font-bold flex items-center gap-1">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>ĐANG TẮT: Bệnh nhân quét/nhập CCCD sẽ đăng nhập thẳng trực tiếp vào hệ thống (bỏ qua bước nhập OTP).</span>
                   </span>
                 )}
               </p>

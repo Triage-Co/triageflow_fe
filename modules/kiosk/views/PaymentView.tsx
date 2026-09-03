@@ -7,7 +7,8 @@ import {
   CheckCircle2,
   Clock,
   CreditCard,
-  Loader2
+  Loader2,
+  User
 } from 'lucide-react';
 
 import { useAuthStore } from '../store/authStore';
@@ -221,7 +222,7 @@ export const PaymentView: React.FC = () => {
           {/* Top Blue Banner */}
           <div className="bg-[#4F80E1] text-white rounded-[28px] p-8 shadow-xl flex flex-col items-center text-center space-y-4">
             <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center text-2xl font-bold backdrop-blur-md">
-              👤
+              <User className="w-7 h-7 text-white" />
             </div>
             <div className="space-y-1">
               <h3 className="text-2xl font-black tracking-tight">Vui lòng di chuyển đến Quầy thu ngân sảnh chính</h3>

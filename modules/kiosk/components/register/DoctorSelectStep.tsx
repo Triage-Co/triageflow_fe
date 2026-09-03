@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useBookingStore } from '../../store/bookingStore';
 import { DoctorItem, DoctorSlotItem } from '../../types/booking.types';
-import { Clock, Loader2, Award, ShieldCheck } from 'lucide-react';
+import { Clock, Loader2, Award, ShieldCheck, Stethoscope, Zap, UserCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export const DoctorSelectStep: React.FC = () => {
@@ -105,7 +105,7 @@ export const DoctorSelectStep: React.FC = () => {
                       />
                     ) : null}
                     <div className={cn("w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-blue-100 text-[#155DFC] flex items-center justify-center font-bold text-xl shrink-0 shadow-inner", avatarUrl && "hidden")}>
-                      👨‍⚕️
+                      <Stethoscope className="w-6 h-6" />
                     </div>
                   </div>
 
@@ -141,7 +141,7 @@ export const DoctorSelectStep: React.FC = () => {
               onClick={executeAutoBooking}
               className="px-5 py-2.5 bg-[#155DFC] text-white rounded-xl font-extrabold text-xs shadow-md hover:bg-blue-700 transition-all cursor-pointer inline-flex items-center gap-1.5"
             >
-              ⚡ Xếp phòng tự động ngay
+              <Zap className="w-4 h-4 text-amber-300" /> Xếp phòng tự động ngay
             </button>
           </div>
         )}
@@ -156,7 +156,7 @@ export const DoctorSelectStep: React.FC = () => {
             <div className="flex-1 flex flex-col min-h-0 space-y-3 sm:space-y-4 overflow-hidden">
               <div className="flex items-center gap-3 p-3.5 bg-blue-50/60 rounded-2xl border border-blue-100 shrink-0">
                 <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#155DFC] text-white flex items-center justify-center font-bold text-lg sm:text-xl shrink-0 shadow-md">
-                  👨‍⚕️
+                  <UserCheck className="w-6 h-6" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <h4 className="font-black text-[#1E2939] text-xs sm:text-sm truncate">{selectedDoctorObj.full_name}</h4>

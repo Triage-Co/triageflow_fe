@@ -309,7 +309,7 @@ export default function StaffSettingsView() {
                     </div>
                 )}
 
-                {/* ── Section 1: 👤 Thông tin nhân viên ── */}
+                {/* ── Section 1: Thông tin nhân viên ── */}
                 <div className="bg-white rounded-[24px] border border-slate-200/80 p-6 md:p-8 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.03)] space-y-6">
                     <div className="flex items-center gap-2">
                         <User className="w-5 h-5 text-[#8B7CF6]" />
@@ -384,7 +384,7 @@ export default function StaffSettingsView() {
                     </div>
                 </div>
 
-                {/* ── Section 2: 🔒 Bảo mật & Đổi mật khẩu ── */}
+                {/* ── Section 2: Bảo mật & Đổi mật khẩu ── */}
                 <div className="bg-white rounded-[24px] border border-slate-200/80 p-6 md:p-8 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.03)] space-y-4">
                     <div className="flex items-center gap-2 mb-2">
                         <Lock className="w-5 h-5 text-[#8B7CF6]" />

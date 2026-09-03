@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-    Eye, EyeOff, AlertCircle, Loader2, CheckCircle2,
+    Eye, EyeOff, AlertCircle, Loader2, CheckCircle2, Mail,
 } from 'lucide-react';
 import { authService } from '@/modules/auth/services/authService';
 import type { Gender } from '@/shared/types/auth.types';
@@ -150,8 +150,8 @@ export function RegisterForm() {
 
                 {/* Email confirmation notice */}
                 <div className="mb-6 rounded-xl border border-brand-200 bg-brand-50 px-5 py-4 text-left">
-                    <p className="text-sm font-semibold text-brand-700 mb-1">
-                        ✉️ Xác thực email của bạn
+                    <p className="text-sm font-semibold text-brand-700 mb-1 flex items-center gap-1.5">
+                        <Mail className="h-4 w-4 text-brand-600 shrink-0" /> Xác thực email của bạn
                     </p>
                     <p className="text-sm text-brand-600 leading-relaxed">
                         Mail confirm đã được gửi tới{' '}

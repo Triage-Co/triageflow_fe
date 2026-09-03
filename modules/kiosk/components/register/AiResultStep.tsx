@@ -2,7 +2,7 @@ import { useKioskStore } from '../../store/kioskStore';
 import { useTriageStore } from '../../store/triageStore';
 import { useBookingStore } from '../../store/bookingStore';
 import { AIRegisterStep } from '../../types/kiosk.types';
-import { CheckCircle2, Sparkles, Loader2 } from 'lucide-react';
+import { CheckCircle2, Sparkles, Loader2, Stethoscope } from 'lucide-react';
 
 export const AiResultStep: React.FC = () => {
   const recommendedSpecialists = useTriageStore((state) => state.recommendedSpecialists);
@@ -59,7 +59,7 @@ export const AiResultStep: React.FC = () => {
             ))
           ) : (
             <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 text-blue-900 flex items-center gap-3">
-              <span className="text-xl">👨‍⚕️</span>
+              <Stethoscope className="w-6 h-6 text-[#155DFC] shrink-0" />
               <div>
                 <h4 className="font-extrabold text-base">Nội Tổng Quát</h4>
                 <p className="text-[11px] text-blue-500 font-bold mt-0.5">Hệ thống tự động điều hướng sang chuyên khoa Nội Tổng Quát</p>

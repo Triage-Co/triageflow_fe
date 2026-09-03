@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useKioskStore } from '../store/kioskStore';
 import { usePackageBookingStore } from '../store/packageBookingStore';
-import { ArrowLeft, ChevronRight, BriefcaseMedical, Loader2 } from 'lucide-react';
+import { ArrowLeft, ChevronRight, BriefcaseMedical, Loader2, Package } from 'lucide-react';
 
 export const PackageSelectView: React.FC = () => {
   const navigateToView = useKioskStore((state) => state.navigateToView);
@@ -42,7 +42,9 @@ export const PackageSelectView: React.FC = () => {
           </div>
         ) : packages.length === 0 ? (
           <div className="text-center space-y-3 bg-white p-8 rounded-[28px] sm:rounded-[36px] border border-neutral-100/80 shadow-sm max-w-md mx-auto my-12">
-            <div className="text-4xl">📦</div>
+            <div className="w-14 h-14 mx-auto rounded-2xl bg-blue-50 text-[#155DFC] flex items-center justify-center">
+              <Package className="w-8 h-8" />
+            </div>
             <h3 className="text-lg font-black text-neutral-800">Không tìm thấy gói khám nào</h3>
             <p className="text-xs text-neutral-400 font-semibold">Hiện tại hệ thống chưa cập nhật gói khám dịch vụ. Vui lòng quay lại sau.</p>
           </div>

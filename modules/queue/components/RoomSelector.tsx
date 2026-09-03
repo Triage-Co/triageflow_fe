@@ -22,7 +22,8 @@ import {
     Pill,
     FileImage,
     UserCheck,
-    FolderKanban
+    FolderKanban,
+    MapPin
 } from 'lucide-react';
 
 export function RoomSelector() {
@@ -155,8 +156,9 @@ export function RoomSelector() {
                         )}
 
                         {selectedSpecialty && (
-                            <div className="text-indigo-950 text-xl font-extrabold tracking-wide">
-                                📍 BƯỚC 3: CHỌN PHÒNG THUỘC KHOA &quot;{selectedSpecialty.specialtyName.toUpperCase()}&quot;
+                            <div className="text-indigo-950 text-xl font-extrabold tracking-wide flex items-center gap-1.5">
+                                <MapPin className="w-5 h-5 text-indigo-600 shrink-0" />
+                                <span>BƯỚC 3: CHỌN PHÒNG THUỘC KHOA &quot;{selectedSpecialty.specialtyName.toUpperCase()}&quot;</span>
                             </div>
                         )}
                     </div>

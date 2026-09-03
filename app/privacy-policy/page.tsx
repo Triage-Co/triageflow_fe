@@ -1,5 +1,5 @@
 import React from "react";
-import { ShieldCheck, Lock, Smartphone, Database, HeartHandshake, ArrowLeft } from "lucide-react";
+import { ShieldCheck, Lock, Smartphone, Database, HeartHandshake, ArrowLeft, ArrowRight } from "lucide-react";
 import Link from "next/link";
 
 export default function PrivacyPolicyPage() {
@@ -64,12 +64,13 @@ export default function PrivacyPolicyPage() {
             <p>
               Người dùng có quyền yêu cầu xem, chỉnh sửa hoặc xoá bỏ tài khoản và dữ liệu cá nhân của mình bất kỳ lúc nào.
             </p>
-            <p className="mt-2">
-              👉 Truy cập trang{" "}
+            <p className="mt-2 flex items-center gap-1">
+              <ArrowRight className="w-4 h-4 text-blue-600 shrink-0" />
+              <span>Truy cập trang{" "}
               <Link href="/delete-account" className="text-blue-600 font-semibold underline">
                 Yêu cầu xoá tài khoản TriageFlow
               </Link>{" "}
-              để gửi yêu cầu trực tuyến.
+              để gửi yêu cầu trực tuyến.</span>
             </p>
           </section>
         </div>

@@ -130,20 +130,20 @@ export const AREA_COLORS: Record<string, number> = {
 
 function getRoomIcon(label: string): string {
   const l = label.toLowerCase();
-  if (l.includes('tim mạch')) return '❤️';
-  if (l.includes('tiêu hóa')) return '🤢';
-  if (l.includes('thần kinh')) return '🧠';
-  if (l.includes('nhi')) return '👶';
-  if (l.includes('mắt')) return '👁️';
-  if (l.includes('tai mũi họng') || l.includes('họng')) return '👂';
-  if (l.includes('chấn thương') || l.includes('ngoại')) return '🩹';
-  if (l.includes('phế quản') || l.includes('hô hấp')) return '🫁';
-  if (l.includes('da liễu')) return '🩺';
-  if (l.includes('răng') || l.includes('hàm')) return '🦷';
-  if (l.includes('phụ khoa') || l.includes('thai')) return '🤰';
-  if (l.includes('tiêm chủng')) return '💉';
-  if (l.includes('tiếp nhận')) return '🏥';
-  return '🏥';
+  if (l.includes('tim mạch')) return 'heart';
+  if (l.includes('tiêu hóa')) return 'activity';
+  if (l.includes('thần kinh')) return 'brain';
+  if (l.includes('nhi')) return 'baby';
+  if (l.includes('mắt')) return 'eye';
+  if (l.includes('tai mũi họng') || l.includes('họng')) return 'ear';
+  if (l.includes('chấn thương') || l.includes('ngoại')) return 'bandage';
+  if (l.includes('phế quản') || l.includes('hô hấp')) return 'lungs';
+  if (l.includes('da liễu')) return 'stethoscope';
+  if (l.includes('răng') || l.includes('hàm')) return 'tooth';
+  if (l.includes('phụ khoa') || l.includes('thai')) return 'user';
+  if (l.includes('tiêm chủng')) return 'syringe';
+  if (l.includes('tiếp nhận')) return 'hospital';
+  return 'hospital';
 }
 
 // ─── Boundary → Wall Segment ───────────────────────────────────────────────────

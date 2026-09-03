@@ -865,13 +865,24 @@ export function PatientActiveFlowsView({
                             {(st.roomName ||
                               st.doctorName ||
                               st.slotTimeLabel) && (
-                              <div className="flex flex-wrap items-center gap-x-2 text-[11px] text-neutral-500 mt-1">
-                                {st.roomName && <span>📍 {st.roomName}</span>}
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-neutral-500 mt-1">
+                                {st.roomName && (
+                                  <span className="inline-flex items-center gap-1">
+                                    <MapPin className="w-3 h-3 text-sky-500" />
+                                    {st.roomName}
+                                  </span>
+                                )}
                                 {st.doctorName && (
-                                  <span>👨‍⚕️ {st.doctorName}</span>
+                                  <span className="inline-flex items-center gap-1">
+                                    <User className="w-3 h-3 text-emerald-500" />
+                                    {st.doctorName}
+                                  </span>
                                 )}
                                 {st.slotTimeLabel && (
-                                  <span>🕒 {st.slotTimeLabel}</span>
+                                  <span className="inline-flex items-center gap-1">
+                                    <Clock className="w-3 h-3 text-amber-500" />
+                                    {st.slotTimeLabel}
+                                  </span>
                                 )}
                               </div>
                             )}

@@ -17,6 +17,9 @@ import {
     Pencil,
     CalendarRange,
     Upload,
+    User,
+    Building2,
+    Calendar,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useShiftStore } from '../store/shiftStore';
@@ -850,10 +853,10 @@ export function AdminShiftPage() {
                     {createForm.staff_id && createForm.room_id && createForm.date && (
                         <div className="bg-[#F5F2FF] rounded-xl p-3.5 border border-[#E0DCFB] text-[12px] text-[#5B4ED6] font-semibold space-y-1">
                             <p className="font-bold text-[#2D2D2D] mb-1.5">Xem trước thông tin ca trực</p>
-                            <p>👤 {getStaffName(createForm.staff_id)}</p>
-                            <p>🏥 {getRoomName(createForm.room_id)}</p>
-                            <p>📅 {formatDate(createForm.date)}</p>
-                            <p>🕐 {createForm.start_time} – {createForm.end_time}</p>
+                            <p className="flex items-center gap-1.5"><User className="w-3.5 h-3.5 text-[#8B7CF6]" /> {getStaffName(createForm.staff_id)}</p>
+                            <p className="flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5 text-[#8B7CF6]" /> {getRoomName(createForm.room_id)}</p>
+                            <p className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-[#8B7CF6]" /> {formatDate(createForm.date)}</p>
+                            <p className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-[#8B7CF6]" /> {createForm.start_time} – {createForm.end_time}</p>
                         </div>
                     )}
 
