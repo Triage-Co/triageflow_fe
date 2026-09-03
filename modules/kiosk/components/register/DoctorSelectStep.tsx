@@ -51,12 +51,16 @@ export const DoctorSelectStep: React.FC = () => {
     return slotTotal < currentTotal;
   };
 
-  // Xác định danh sách slot của bác sĩ đã chọn (từ shifts gộp sẵn hoặc từ store)
+  // Xác định danh sách slot của bác sĩ đã chọn (từ shifts gộp sẵn hoặc từ store), sắp xếp theo giờ
   const currentSlots: DoctorSlotItem[] = React.useMemo(() => {
-    if (selectedDoctorObj?.shifts && selectedDoctorObj.shifts.length > 0 && selectedDoctorObj.shifts[0]?.slots) {
-      return selectedDoctorObj.shifts[0].slots;
+    let rawSlots: DoctorSlotItem[] = [];
+    if (selectedDoctorObj?.shifts && selectedDoctorObj.shifts.length > 0) {
+      rawSlots = selectedDoctorObj.shifts.flatMap((s) => s.slots || []);
+    } else if (availableSlots && availableSlots.length > 0) {
+      rawSlots = availableSlots;
     }
-    return availableSlots;
+
+    return [...rawSlots].sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
   }, [selectedDoctorObj, availableSlots]);
 
   return (

@@ -103,7 +103,9 @@ export const usePackageBookingStore = create<PackageBookingStoreState>((set, get
       const response = await packageBookingService.getRoomSlots(date);
       const list = (response as any)?.data || response || [];
       const availableSlots = Array.isArray(list)
-        ? list.filter((s: RoomSlot) => s.status === 'AVAILABLE')
+        ? [...list]
+            .filter((s: RoomSlot) => s.status === 'AVAILABLE')
+            .sort((a: RoomSlot, b: RoomSlot) => (a.start_time || '').localeCompare(b.start_time || ''))
         : [];
       set({ slots: availableSlots });
     } catch (error: any) {

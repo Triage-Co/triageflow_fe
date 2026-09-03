@@ -114,7 +114,10 @@ export const useBookingStore = create<BookingStoreState>((set, get) => ({
       const response = await bookingService.getDoctorSlots(doctorId, targetDate);
       const apiResponse = response?.data as any;
       const slotsList = apiResponse?.data?.data || apiResponse?.data || apiResponse || [];
-      set({ availableSlots: Array.isArray(slotsList) ? slotsList : [] });
+      const sortedSlots = Array.isArray(slotsList)
+        ? [...slotsList].sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
+        : [];
+      set({ availableSlots: sortedSlots });
     } catch (error) {
       console.error('Lỗi lấy khung giờ bác sĩ:', error);
       set({ availableSlots: [] });
