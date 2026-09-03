@@ -237,8 +237,8 @@ export interface BackendQueuePatient {
 }
 
 /**
- * Staff may open EMR only after the patient has been called into the room
- * (CALLED / SERVING / FINISHED). Blocks PENDING / QUEUED / WAITING / MISSING.
+ * Staff may open EMR after call-next, while serving, after finish, or for no-show.
+ * Blocks cancelled / declined only.
  */
 export function canStaffViewPatientEmr(
     queueStatus?: string | null,
@@ -247,12 +247,7 @@ export function canStaffViewPatientEmr(
     const q = (queueStatus || '').toUpperCase();
     const step = (stepStatus || '').toUpperCase();
 
-    if (
-        q === 'MISSING' ||
-        q === 'SKIPPED' ||
-        q === 'CANCELLED' ||
-        q === 'DECLINED'
-    ) {
+    if (q === 'CANCELLED' || q === 'DECLINED') {
         return false;
     }
 
@@ -262,7 +257,9 @@ export function canStaffViewPatientEmr(
         q === 'SERVING' ||
         q === 'IN_PROGRESS' ||
         q === 'FINISHED' ||
-        q === 'COMPLETED'
+        q === 'COMPLETED' ||
+        q === 'MISSING' ||
+        q === 'SKIPPED'
     ) {
         return true;
     }

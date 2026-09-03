@@ -459,17 +459,17 @@ export function mapActiveFlowsList(
     // Chuyên khoa lấy từ step hoặc room/shift
     const specialty = String(
       activeStepRaw?.specialty_info?.specialty_name ||
-        specialtyObj.specialty_name ||
-        specialtyObj.name ||
-        flow.specialty ||
-        "Khám chuyên khoa",
+      specialtyObj.specialty_name ||
+      specialtyObj.name ||
+      flow.specialty ||
+      "Khám chuyên khoa",
     );
 
     // Tên Bác sĩ phụ trách từ staff_info của active step hoặc doctor của shift
     const stepDoctorName = String(
       activeStepRaw?.staff_info?.full_name ||
-        activeStepRaw?.staff_info?.name ||
-        "",
+      activeStepRaw?.staff_info?.name ||
+      "",
     ).trim();
     const shiftDoctorName = String(
       doctorObj.full_name || doctorObj.name || "",
@@ -484,8 +484,8 @@ export function mapActiveFlowsList(
     // Phòng khám từ room_info của active step hoặc room của shift
     const stepRoomName = String(
       activeStepRaw?.room_info?.room_name ||
-        activeStepRaw?.room_info?.name ||
-        "",
+      activeStepRaw?.room_info?.name ||
+      "",
     ).trim();
     const shiftRoomName = String(room.room_name || room.name || "").trim();
     const roomLabel =
