@@ -10,10 +10,6 @@ import {
     InfermedicaQuestion,
     InfermedicaRecommendedSpecialist
 } from '../types/triage.types';
-import { 
-    translateQuestionWithGoogle, 
-    translateSymptomLabelsWithGoogle 
-} from '@/modules/reception/services/googleTranslationService';
 import { calculateAgeFromDob } from '../utils/kioskHelpers';
 
 const compileGlobalStaticSymptomMap = (): Record<string, string> => {
@@ -175,7 +171,6 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
                 const oppositeGenderDataset = gender === 'female' ? maleSymptomDataset : femaleSymptomDataset;
 
                 const candidateItems: { apiItem: any; matchedLocal: any }[] = [];
-                const needsTranslationItems: { id: string; label: string }[] = [];
 
                 response.data.forEach((apiItem) => {
                     if (!apiItem.id) return;
@@ -192,30 +187,18 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
                         const matchedLocal = localSymptomInCurrentGender || localSymptomInCommon;
 
                         candidateItems.push({ apiItem, matchedLocal });
-                        if (!matchedLocal) {
-                            needsTranslationItems.push({ id: apiItem.id, label: apiItem.label });
-                        }
                     }
                 });
 
-                // Dịch tự động các triệu chứng mới chưa có trong từ điển tĩnh
-                let translationMap = new Map<string, string>();
-                if (needsTranslationItems.length > 0) {
-                    translationMap = await translateSymptomLabelsWithGoogle(needsTranslationItems);
-                }
-
+                // API đã trả tiếng Việt — dùng label API / từ điển tĩnh, không dịch Google
                 if (candidateItems.length > 0) {
                     const mergedList = [...get().currentRegionSymptoms];
                     candidateItems.forEach(({ apiItem, matchedLocal }) => {
                         const apiIdTarget = cleanId(apiItem.id);
                         if (!mergedList.some((item) => cleanId(item.id) === apiIdTarget)) {
-                            const translatedVn = matchedLocal
-                                ? matchedLocal.labelVn
-                                : translationMap.get(apiItem.id) || apiItem.label;
-
                             mergedList.push({
                                 id: apiItem.id,
-                                labelVn: translatedVn,
+                                labelVn: matchedLocal ? matchedLocal.labelVn : apiItem.label,
                                 labelEn: matchedLocal ? matchedLocal.labelEn : apiItem.label,
                                 categoryNameVn: "Mở rộng từ Hệ thống"
                             });
@@ -285,17 +268,7 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
                     }
                     kioskState.setAIRegisterStep('ai_result');
                 } else {
-                    let finalQuestion = question;
-                    const qText = (question as any)?.text || '';
-                    const isVn = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i.test(qText);
-                    if (!isVn) {
-                        try {
-                            finalQuestion = await translateQuestionWithGoogle(question as any) as any;
-                        } catch (err: any) {
-                            console.error("Translation error:", err);
-                        }
-                    }
-                    set({ currentQuestion: finalQuestion });
+                    set({ currentQuestion: question });
                     kioskState.setAIRegisterStep('quiz_detail');
                 }
             }
@@ -373,17 +346,7 @@ export const useTriageStore = create<TriageStoreState>((set, get) => ({
                     }
                     kioskState.setAIRegisterStep('ai_result');
                 } else {
-                    let finalQuestion = question;
-                    const qText = (question as any)?.text || '';
-                    const isVn = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i.test(qText);
-                    if (!isVn) {
-                        try {
-                            finalQuestion = await translateQuestionWithGoogle(question as any) as any;
-                        } catch (err: any) {
-                            console.error("Translation error:", err);
-                        }
-                    }
-                    set({ currentQuestion: finalQuestion });
+                    set({ currentQuestion: question });
                 }
             }
         } catch (error) {
