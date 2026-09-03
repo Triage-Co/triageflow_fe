@@ -74,12 +74,40 @@ export const PackageSlotSelectView: React.FC = () => {
     }
   }, [selectedDate, daysList, selectDate]);
 
-  // Phân chia khung giờ thành Ca Sáng (< 12:00) và Ca Chiều (>= 12:00)
+  // Kiểm tra ngày đang chọn có phải là hôm nay hay không
+  const isToday = useMemo(() => {
+    if (!selectedDate) return false;
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return selectedDate === `${y}-${m}-${d}`;
+  }, [selectedDate]);
+
+  // Kiểm tra khung giờ đã qua so với thời gian hiện tại hay chưa
+  const isSlotInPast = (startTimeStr: string): boolean => {
+    if (!isToday || !startTimeStr) return false;
+    const now = new Date();
+    const currentHours = now.getHours();
+    const currentMinutes = now.getMinutes();
+
+    const parts = startTimeStr.split(':');
+    if (parts.length < 2) return false;
+
+    const slotHours = parseInt(parts[0], 10);
+    const slotMinutes = parseInt(parts[1], 10);
+    if (isNaN(slotHours) || isNaN(slotMinutes)) return false;
+
+    return slotHours * 60 + slotMinutes <= currentHours * 60 + currentMinutes;
+  };
+
+  // Sắp xếp và phân chia khung giờ thành Ca Sáng (< 12:00) và Ca Chiều (>= 12:00)
   const { morningSlots, afternoonSlots } = useMemo(() => {
+    const sorted = [...slots].sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
     const morning = [];
     const afternoon = [];
 
-    for (const slot of slots) {
+    for (const slot of sorted) {
       const startHour = parseInt(slot.start_time.split(':')[0], 10);
       if (startHour < 12) {
         morning.push(slot);
@@ -205,17 +233,22 @@ export const PackageSlotSelectView: React.FC = () => {
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                     {morningSlots.map((slot) => {
                       const isActive = selectedSlotId === slot.slot_id;
+                      const isPast = isSlotInPast(slot.start_time);
                       const hasCapacity = slot.capacity > 0;
+                      const isAvailable = hasCapacity && !isPast;
                       return (
                         <button
                           key={slot.slot_id}
                           type="button"
-                          onClick={() => selectSlot(isActive ? null : slot.slot_id)}
+                          disabled={!isAvailable}
+                          onClick={() => isAvailable && selectSlot(isActive ? null : slot.slot_id)}
                           className={cn(
-                            'p-3.5 sm:p-4 rounded-2xl border text-left flex items-center justify-between gap-2.5 transition-all duration-200 cursor-pointer active:scale-95 shadow-2xs',
+                            'p-3.5 sm:p-4 rounded-2xl border text-left flex items-center justify-between gap-2.5 transition-all duration-200 shadow-2xs',
                             isActive
                               ? 'bg-[#155DFC] border-[#155DFC] text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-300/40'
-                              : 'bg-neutral-50/70 hover:bg-blue-50/40 border-neutral-200/70 hover:border-blue-300 text-neutral-800'
+                              : isAvailable
+                              ? 'bg-neutral-50/70 hover:bg-blue-50/40 border-neutral-200/70 hover:border-blue-300 text-neutral-800 cursor-pointer active:scale-95'
+                              : 'bg-neutral-100 border-neutral-200 text-neutral-400 cursor-not-allowed'
                           )}
                         >
                           <div className="space-y-1 flex-1 min-w-0">
@@ -223,10 +256,15 @@ export const PackageSlotSelectView: React.FC = () => {
                               <Clock
                                 className={cn(
                                   'w-3.5 h-3.5 shrink-0',
-                                  isActive ? 'text-blue-100' : 'text-[#155DFC]'
+                                  isActive ? 'text-blue-100' : isAvailable ? 'text-[#155DFC]' : 'text-neutral-400'
                                 )}
                               />
-                              <span className="text-xs sm:text-sm font-black tracking-tight truncate">
+                              <span
+                                className={cn(
+                                  'text-xs sm:text-sm font-black tracking-tight truncate',
+                                  isPast && 'line-through text-neutral-400'
+                                )}
+                              >
                                 {slot.start_time} - {slot.end_time}
                               </span>
                             </div>
@@ -236,12 +274,14 @@ export const PackageSlotSelectView: React.FC = () => {
                                   'text-[10px] font-extrabold px-2 py-0.5 rounded-full border inline-block',
                                   isActive
                                     ? 'bg-blue-600/70 border-blue-400/80 text-white'
+                                    : isPast
+                                    ? 'bg-neutral-200/60 text-neutral-500 border-neutral-300/80'
                                     : hasCapacity
                                     ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                     : 'bg-rose-50 text-rose-700 border-rose-200'
                                 )}
                               >
-                                {hasCapacity ? `Còn ${slot.capacity} chỗ` : 'Hết chỗ'}
+                                {isPast ? 'Đã qua giờ' : hasCapacity ? `Còn ${slot.capacity} chỗ` : 'Hết chỗ'}
                               </span>
                             </div>
                           </div>
@@ -251,7 +291,9 @@ export const PackageSlotSelectView: React.FC = () => {
                               'w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-all',
                               isActive
                                 ? 'bg-white text-[#155DFC] shadow-xs'
-                                : 'border-2 border-neutral-300 bg-white'
+                                : isAvailable
+                                ? 'border-2 border-neutral-300 bg-white'
+                                : 'border border-neutral-200 bg-neutral-200/50 text-neutral-300'
                             )}
                           >
                             {isActive && <Check className="w-3.5 h-3.5 stroke-[3]" />}
@@ -281,17 +323,22 @@ export const PackageSlotSelectView: React.FC = () => {
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                     {afternoonSlots.map((slot) => {
                       const isActive = selectedSlotId === slot.slot_id;
+                      const isPast = isSlotInPast(slot.start_time);
                       const hasCapacity = slot.capacity > 0;
+                      const isAvailable = hasCapacity && !isPast;
                       return (
                         <button
                           key={slot.slot_id}
                           type="button"
-                          onClick={() => selectSlot(isActive ? null : slot.slot_id)}
+                          disabled={!isAvailable}
+                          onClick={() => isAvailable && selectSlot(isActive ? null : slot.slot_id)}
                           className={cn(
-                            'p-3.5 sm:p-4 rounded-2xl border text-left flex items-center justify-between gap-2.5 transition-all duration-200 cursor-pointer active:scale-95 shadow-2xs',
+                            'p-3.5 sm:p-4 rounded-2xl border text-left flex items-center justify-between gap-2.5 transition-all duration-200 shadow-2xs',
                             isActive
                               ? 'bg-[#155DFC] border-[#155DFC] text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-300/40'
-                              : 'bg-neutral-50/70 hover:bg-blue-50/40 border-neutral-200/70 hover:border-blue-300 text-neutral-800'
+                              : isAvailable
+                              ? 'bg-neutral-50/70 hover:bg-blue-50/40 border-neutral-200/70 hover:border-blue-300 text-neutral-800 cursor-pointer active:scale-95'
+                              : 'bg-neutral-100 border-neutral-200 text-neutral-400 cursor-not-allowed'
                           )}
                         >
                           <div className="space-y-1 flex-1 min-w-0">
@@ -299,10 +346,15 @@ export const PackageSlotSelectView: React.FC = () => {
                               <Clock
                                 className={cn(
                                   'w-3.5 h-3.5 shrink-0',
-                                  isActive ? 'text-blue-100' : 'text-[#155DFC]'
+                                  isActive ? 'text-blue-100' : isAvailable ? 'text-[#155DFC]' : 'text-neutral-400'
                                 )}
                               />
-                              <span className="text-xs sm:text-sm font-black tracking-tight truncate">
+                              <span
+                                className={cn(
+                                  'text-xs sm:text-sm font-black tracking-tight truncate',
+                                  isPast && 'line-through text-neutral-400'
+                                )}
+                              >
                                 {slot.start_time} - {slot.end_time}
                               </span>
                             </div>
@@ -312,12 +364,14 @@ export const PackageSlotSelectView: React.FC = () => {
                                   'text-[10px] font-extrabold px-2 py-0.5 rounded-full border inline-block',
                                   isActive
                                     ? 'bg-blue-600/70 border-blue-400/80 text-white'
+                                    : isPast
+                                    ? 'bg-neutral-200/60 text-neutral-500 border-neutral-300/80'
                                     : hasCapacity
                                     ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                     : 'bg-rose-50 text-rose-700 border-rose-200'
                                 )}
                               >
-                                {hasCapacity ? `Còn ${slot.capacity} chỗ` : 'Hết chỗ'}
+                                {isPast ? 'Đã qua giờ' : hasCapacity ? `Còn ${slot.capacity} chỗ` : 'Hết chỗ'}
                               </span>
                             </div>
                           </div>
@@ -327,7 +381,9 @@ export const PackageSlotSelectView: React.FC = () => {
                               'w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-all',
                               isActive
                                 ? 'bg-white text-[#155DFC] shadow-xs'
-                                : 'border-2 border-neutral-300 bg-white'
+                                : isAvailable
+                                ? 'border-2 border-neutral-300 bg-white'
+                                : 'border border-neutral-200 bg-neutral-200/50 text-neutral-300'
                             )}
                           >
                             {isActive && <Check className="w-3.5 h-3.5 stroke-[3]" />}
