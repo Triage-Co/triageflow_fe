@@ -77,6 +77,12 @@ function normalizeServing(raw: unknown): Serving | null {
         queue_number: asString(s.queue_number),
         serving_started_at:
             s.serving_started_at != null ? asString(s.serving_started_at) : null,
+        appointment_time:
+            s.appointment_time != null ? asString(s.appointment_time) : null,
+        slot_start_time:
+            s.slot_start_time != null ? asString(s.slot_start_time) : null,
+        slot_end_time:
+            s.slot_end_time != null ? asString(s.slot_end_time) : null,
         patient: patientRaw
             ? {
                   patient_id: asString(patientRaw.patient_id || patientRaw.id),
@@ -112,6 +118,12 @@ function normalizeWaiting(raw: unknown, index: number): WaitingEntry | null {
         queue_id: queueId,
         queue_number: asString(w.queue_number),
         patient_name: asString(w.patient_name || w.full_name),
+        appointment_time:
+            w.appointment_time != null ? asString(w.appointment_time) : null,
+        slot_start_time:
+            w.slot_start_time != null ? asString(w.slot_start_time) : null,
+        slot_end_time:
+            w.slot_end_time != null ? asString(w.slot_end_time) : null,
         queue_type: asString(w.queue_type, 'NEW'),
         effective_score: asNumber(w.effective_score),
         reasons,
@@ -139,6 +151,12 @@ function normalizeMissing(raw: unknown): MissingEntry | null {
         queue_id: queueId || queueNumber,
         queue_number: queueNumber,
         patient_name: asString(m.patient_name || m.full_name),
+        appointment_time:
+            m.appointment_time != null ? asString(m.appointment_time) : null,
+        slot_start_time:
+            m.slot_start_time != null ? asString(m.slot_start_time) : null,
+        slot_end_time:
+            m.slot_end_time != null ? asString(m.slot_end_time) : null,
         missed_at: m.missed_at != null ? asString(m.missed_at) : null,
         step_id: m.step_id != null ? asString(m.step_id) : undefined,
     };
@@ -173,6 +191,12 @@ function normalizeFinished(raw: unknown): FinishedEntry | null {
         finished_at: f.finished_at != null ? asString(f.finished_at) : null,
         duration_minutes: asNumber(f.duration_minutes),
         refusal_reason: f.refusal_reason != null ? asString(f.refusal_reason) : null,
+        appointment_time:
+            f.appointment_time != null ? asString(f.appointment_time) : null,
+        slot_start_time:
+            f.slot_start_time != null ? asString(f.slot_start_time) : null,
+        slot_end_time:
+            f.slot_end_time != null ? asString(f.slot_end_time) : null,
         patient_name: patientName,
         patient: patientRaw
             ? {

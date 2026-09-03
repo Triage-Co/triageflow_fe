@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+    Calendar,
     CheckCircle2,
     ExternalLink,
     Loader2,
@@ -136,6 +137,12 @@ export function RoomServingPanel({
                             <p className="text-xs font-medium text-neutral-500">
                                 {formatDob(serving.patient?.dob ?? null)} · {genderLabel(serving.patient?.gender ?? '')}
                             </p>
+                            {serving.appointment_time && (
+                                <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-neutral-600">
+                                    <Calendar className="h-3.5 w-3.5 text-neutral-400" />
+                                    <span>Hẹn khám: {serving.appointment_time}</span>
+                                </p>
+                            )}
                         </div>
                     </div>
                 </div>

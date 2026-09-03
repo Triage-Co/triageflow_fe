@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Clock, ExternalLink, Pin, PhoneCall, RotateCcw, UserX, CheckCircle2, X, Loader2 } from 'lucide-react';
+import { Calendar, Clock, ExternalLink, Pin, PhoneCall, RotateCcw, UserX, CheckCircle2, X, Loader2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/Button';
 import { cn } from '@/lib/utils';
 import type { FinishedEntry, MissingEntry, WaitingEntry } from '../types/queue.types';
@@ -190,10 +190,17 @@ export function RoomWaitingList({
                                             accent="indigo"
                                             className="mt-1.5"
                                         />
-                                        <p className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-neutral-400">
-                                            <Clock className="h-3 w-3" />
-                                            Thời gian chờ ~{w.eta_minutes ?? '—'}p
-                                            {w.eta_time ? ` · ${formatEtaTime(w.eta_time)}` : ''}
+                                        <p className="mt-0.5 flex flex-wrap items-center gap-x-2.5 text-[11px] font-medium text-neutral-400">
+                                            {w.appointment_time && (
+                                                <span className="flex items-center gap-1 text-neutral-600 font-semibold">
+                                                    <Calendar className="h-3 w-3 text-neutral-400" />
+                                                    Hẹn khám: {w.appointment_time}
+                                                </span>
+                                            )}
+                                            <span className="flex items-center gap-1">
+                                                <Clock className="h-3 w-3" />
+                                                Thời gian chờ ~{w.eta_minutes ?? '—'}p
+                                            </span>
                                         </p>
                                     </div>
                                 </div>
@@ -270,7 +277,15 @@ export function RoomWaitingList({
                                 </div>
                                 <div>
                                     <p className="text-sm font-bold text-neutral-800">{m.patient_name}</p>
-                                    <p className="text-[11px] font-medium text-amber-700">Trạng thái: Vắng mặt</p>
+                                    <p className="text-[11px] font-medium text-neutral-400 flex flex-wrap items-center gap-2 mt-0.5">
+                                        {m.appointment_time && (
+                                            <span className="flex items-center gap-1 text-neutral-600 font-semibold">
+                                                <Calendar className="h-3 w-3 text-neutral-400" />
+                                                Hẹn khám: {m.appointment_time}
+                                            </span>
+                                        )}
+                                        <span className="text-amber-700">Trạng thái: Vắng mặt</span>
+                                    </p>
                                 </div>
                             </div>
                             {onRecall && (
@@ -323,14 +338,22 @@ export function RoomWaitingList({
                                             <p className="mt-1 truncate text-sm font-bold text-neutral-800">
                                                 {patientName}
                                             </p>
-                                            <p className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-neutral-400">
-                                                <Clock className="h-3 w-3 text-emerald-600" />
-                                                {f.finished_at
-                                                    ? `Đã khám lúc ${formatEtaTime(f.finished_at)}`
-                                                    : 'Đã hoàn thành'}
-                                                {f.duration_minutes !== undefined && f.duration_minutes !== null
-                                                    ? ` · ${f.duration_minutes} phút`
-                                                    : ''}
+                                            <p className="mt-0.5 flex flex-wrap items-center gap-x-2.5 text-[11px] font-medium text-neutral-400">
+                                                {f.appointment_time && (
+                                                    <span className="flex items-center gap-1 text-neutral-600 font-semibold">
+                                                        <Calendar className="h-3 w-3 text-neutral-400" />
+                                                        Hẹn: {f.appointment_time}
+                                                    </span>
+                                                )}
+                                                <span className="flex items-center gap-1">
+                                                    <Clock className="h-3 w-3 text-emerald-600" />
+                                                    {f.finished_at
+                                                        ? `Đã khám lúc ${formatEtaTime(f.finished_at)}`
+                                                        : 'Đã hoàn thành'}
+                                                    {f.duration_minutes !== undefined && f.duration_minutes !== null
+                                                        ? ` · ${f.duration_minutes} phút`
+                                                        : ''}
+                                                </span>
                                             </p>
                                         </div>
                                     </div>
