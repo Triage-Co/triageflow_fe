@@ -598,12 +598,8 @@ export function flowItemToRegistrationResult(
     bhyt?: string | null;
   },
 ): RegistrationResult {
-  const qrPayload = JSON.stringify({
-    ticket: flowItem.ticketNo,
-    bookingId: flowItem.bookingId,
-    flowId: flowItem.flowId,
-    citizenId: patient.citizen_id,
-  });
+  const qrPayload =
+    flowItem.ticketCode || flowItem.ticketNo || "TRIAGEFLOW-TICKET";
 
   return {
     appointmentDate: flowItem.appointmentDate,
