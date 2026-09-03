@@ -941,12 +941,8 @@ export function ReceptionRegisterForm() {
           // Thanh toán QR → chuyển sang bước 4 ở trạng thái chờ thanh toán để quét mã VietQR PayOS
           const doctorLabelQr = getDoctorDisplayLabel(selectedSpecialty);
           const slotTimeLabelQr = slotTimeLabelWithDate;
-          const qrPayloadPending = JSON.stringify({
-            ticket: "Chờ thanh toán",
-            bookingId,
-            citizenId: form.citizen_id,
-            patientId,
-          });
+          const qrPayloadPending =
+            ticketCode || "Chờ thanh toán";
           setRegistrationResult({
             ticketNo: "Chờ thanh toán",
             appointmentDate: selectedSlot?.shift?.date
@@ -1043,12 +1039,8 @@ export function ReceptionRegisterForm() {
           // ignore
         }
 
-        const qrPayload = JSON.stringify({
-          ticket: ticketNo,
-          bookingId: bookingId,
-          citizenId: form.citizen_id,
-          patientId,
-        });
+        const qrPayload =
+          ticketCode || ticketNo || "TRIAGEFLOW-TICKET";
 
         setRegistrationResult({
           ticketNo,
