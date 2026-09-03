@@ -150,6 +150,9 @@ export interface Serving {
     queue_number: string;
     status?: QueueStatus;
     serving_started_at: string | null;
+    appointment_time?: string | null;
+    slot_start_time?: string | null;
+    slot_end_time?: string | null;
     patient: ServingPatient | null;
     step: ServingStep | null;
     service_order: ServingServiceOrder | null;
@@ -160,6 +163,9 @@ export interface WaitingEntry {
     queue_id: string;
     queue_number: string;
     patient_name: string;
+    appointment_time?: string | null;
+    slot_start_time?: string | null;
+    slot_end_time?: string | null;
     queue_type: string;
     effective_score: number;
     reasons: string[];
@@ -179,6 +185,9 @@ export interface MissingEntry {
     queue_id: string;
     queue_number: string;
     patient_name: string;
+    appointment_time?: string | null;
+    slot_start_time?: string | null;
+    slot_end_time?: string | null;
     missed_at: string | null;
     step_id?: string;
 }
@@ -192,6 +201,9 @@ export interface FinishedEntry {
     finished_at: string | null;
     duration_minutes: number;
     refusal_reason: string | null;
+    appointment_time?: string | null;
+    slot_start_time?: string | null;
+    slot_end_time?: string | null;
     patient_name?: string;
     patient?: {
         patient_id: string;
