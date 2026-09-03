@@ -373,12 +373,12 @@ export function PatientActiveFlowsView({
 
   const activeRegistrationResult: RegistrationResult | null = selectedFlow
     ? flowItemToRegistrationResult(selectedFlow, {
-        full_name: patient.name,
-        citizen_id: patient.citizenId,
-        phone: patient.phone,
-        dob: patient.dob,
-        medical_coverage_id: patient.bhyt,
-      })
+      full_name: patient.name,
+      citizen_id: patient.citizenId,
+      phone: patient.phone,
+      dob: patient.dob,
+      medical_coverage_id: patient.bhyt,
+    })
     : null;
 
   const handlePrint = (result: RegistrationResult) => {
@@ -671,32 +671,6 @@ export function PatientActiveFlowsView({
                             <span>{flow.slotTimeLabel}</span>
                           </div>
                         </div>
-
-                        {flow.steps.length > 0 && (
-                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                            {flow.steps.map((st, i) => (
-                              <span
-                                key={st.stepId || i}
-                                className={cn(
-                                  "inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md border",
-                                  st.stepStatus === "COMPLETED" ||
-                                    st.stepStatus === "DONE"
-                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                    : st.stepStatus === "IN_PROGRESS" ||
-                                        st.stepStatus === "PROCESSING"
-                                      ? "bg-blue-50 text-blue-700 border-blue-200"
-                                      : "bg-neutral-50 text-neutral-600 border-neutral-200",
-                                )}
-                              >
-                                {st.stepStatus === "COMPLETED" ||
-                                  st.stepStatus === "DONE" ? (
-                                  <Check className="w-3 h-3" />
-                                ) : null}
-                                {st.stepName}
-                              </span>
-                            ))}
-                          </div>
-                        )}
                       </div>
                     </div>
 
@@ -865,27 +839,27 @@ export function PatientActiveFlowsView({
                             {(st.roomName ||
                               st.doctorName ||
                               st.slotTimeLabel) && (
-                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-neutral-500 mt-1">
-                                {st.roomName && (
-                                  <span className="inline-flex items-center gap-1">
-                                    <MapPin className="w-3 h-3 text-sky-500" />
-                                    {st.roomName}
-                                  </span>
-                                )}
-                                {st.doctorName && (
-                                  <span className="inline-flex items-center gap-1">
-                                    <User className="w-3 h-3 text-emerald-500" />
-                                    {st.doctorName}
-                                  </span>
-                                )}
-                                {st.slotTimeLabel && (
-                                  <span className="inline-flex items-center gap-1">
-                                    <Clock className="w-3 h-3 text-amber-500" />
-                                    {st.slotTimeLabel}
-                                  </span>
-                                )}
-                              </div>
-                            )}
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-neutral-500 mt-1">
+                                  {st.roomName && (
+                                    <span className="inline-flex items-center gap-1">
+                                      <MapPin className="w-3 h-3 text-sky-500" />
+                                      {st.roomName}
+                                    </span>
+                                  )}
+                                  {st.doctorName && (
+                                    <span className="inline-flex items-center gap-1">
+                                      <User className="w-3 h-3 text-emerald-500" />
+                                      {st.doctorName}
+                                    </span>
+                                  )}
+                                  {st.slotTimeLabel && (
+                                    <span className="inline-flex items-center gap-1">
+                                      <Clock className="w-3 h-3 text-amber-500" />
+                                      {st.slotTimeLabel}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                           </div>
                         );
                       })}
@@ -1147,7 +1121,7 @@ export function PatientActiveFlowsView({
                     (sum: number, d: any) =>
                       sum +
                       (d.price_at_order ?? d.service?.price ?? 0) *
-                        (d.quantity || 1),
+                      (d.quantity || 1),
                     0,
                   );
                   const total = calculatedTotal > 0 ? calculatedTotal : (order.total_price || 0);
