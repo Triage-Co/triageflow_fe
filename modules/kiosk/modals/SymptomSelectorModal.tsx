@@ -25,6 +25,7 @@ export const SymptomSelectorModal: React.FC<SymptomSelectorModalProps> = ({
   const isApiLoading = useTriageStore((state) => state.isApiLoading);
 
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const isKeyboardOpen = useVirtualKeyboardStore((state) => state.isOpen);
 
   // SỬA: Chuyển đổi kiểu dữ liệu từ string[] sang SymptomItem[] để đồng bộ với Store
   const [tempSelected, setTempSelected] = useState<SymptomItem[]>([]);
@@ -79,17 +80,32 @@ export const SymptomSelectorModal: React.FC<SymptomSelectorModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-4xl max-h-[85vh] bg-white rounded-[36px] shadow-2xl border border-neutral-100 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+    <div
+      className={cn(
+        "fixed inset-0 z-50 flex justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200 transition-all",
+        isKeyboardOpen ? "items-start pt-3 sm:pt-4" : "items-center"
+      )}
+    >
+      <div
+        className={cn(
+          "relative w-full max-w-4xl bg-white rounded-[36px] shadow-2xl border border-neutral-100 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 transition-all",
+          isKeyboardOpen ? "max-h-[48vh] sm:max-h-[50vh] shadow-xl" : "max-h-[85vh]"
+        )}
+      >
 
         {/* Modal Header */}
-        <div className="px-8 pt-8 pb-4 flex items-center justify-between border-b border-neutral-100 shrink-0 bg-white z-10">
+        <div
+          className={cn(
+            "px-8 flex items-center justify-between border-b border-neutral-100 shrink-0 bg-white z-10 transition-all",
+            isKeyboardOpen ? "pt-4 pb-3" : "pt-8 pb-4"
+          )}
+        >
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#2563EB] flex items-center justify-center font-bold shadow-sm">
-              <Activity className="w-6 h-6" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-blue-50 text-[#2563EB] flex items-center justify-center font-bold shadow-sm shrink-0">
+              <Activity className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
             <div className="flex items-center gap-3">
-              <h2 className="text-2xl sm:text-3xl font-black text-[#1E2939] tracking-tight">
+              <h2 className="text-xl sm:text-3xl font-black text-[#1E2939] tracking-tight">
                 {bodyPartIdOrName}
               </h2>
               {isApiLoading && (
@@ -110,7 +126,7 @@ export const SymptomSelectorModal: React.FC<SymptomSelectorModalProps> = ({
         </div>
 
         {/* Search Bar with Virtual Keyboard */}
-        <div className="px-8 py-3 bg-neutral-50/80 border-b border-neutral-100 shrink-0">
+        <div className="px-8 py-2.5 sm:py-3 bg-neutral-50/80 border-b border-neutral-100 shrink-0">
           <div className="relative flex items-center">
             <Search className="w-5 h-5 text-neutral-400 absolute left-4 pointer-events-none" />
             <input
@@ -119,7 +135,7 @@ export const SymptomSelectorModal: React.FC<SymptomSelectorModalProps> = ({
               onClick={handleOpenVirtualKeyboard}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Tìm kiếm nhanh triệu chứng..."
-              className="w-full pl-11 pr-24 py-3 bg-white rounded-2xl border border-neutral-200 text-sm font-semibold text-neutral-800 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#2563EB] shadow-sm transition-all cursor-pointer"
+              className="w-full pl-11 pr-24 py-2.5 sm:py-3 bg-white rounded-2xl border border-neutral-200 text-sm font-semibold text-neutral-800 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#2563EB] shadow-sm transition-all cursor-pointer"
             />
             <div className="absolute right-3 flex items-center gap-1.5">
               {searchQuery && (
@@ -143,7 +159,12 @@ export const SymptomSelectorModal: React.FC<SymptomSelectorModalProps> = ({
         </div>
 
         {/* Symptom Grid Content */}
-        <div className="p-8 overflow-y-auto flex-1 max-h-[50vh] space-y-3">
+        <div
+          className={cn(
+            "px-8 overflow-y-auto flex-1 space-y-3",
+            isKeyboardOpen ? "py-3 max-h-[26vh]" : "py-8 max-h-[50vh]"
+          )}
+        >
           {filteredSymptoms.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               {filteredSymptoms.map((symptom) => {
@@ -191,7 +212,12 @@ export const SymptomSelectorModal: React.FC<SymptomSelectorModalProps> = ({
         </div>
 
         {/* Modal Footer / Action Bar */}
-        <div className="px-8 py-5 bg-white border-t border-neutral-100 flex items-center justify-between shrink-0">
+        <div
+          className={cn(
+            "px-8 bg-white border-t border-neutral-100 flex items-center justify-between shrink-0 transition-all",
+            isKeyboardOpen ? "py-3" : "py-5"
+          )}
+        >
           <div className="text-xs font-bold text-neutral-500">
             Đã chọn: <span className="text-[#2563EB] font-black text-sm">{tempSelected.length}</span> triệu chứng
           </div>
