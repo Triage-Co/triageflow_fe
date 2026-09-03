@@ -53,7 +53,7 @@ export default function PatientDetailsModal({
     return (
         <div className="fixed inset-0 bg-black/45 backdrop-blur-xs flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-[28px] border border-neutral-100 shadow-2xl max-w-xl w-full overflow-hidden animate-in fade-in-0 zoom-in-95 duration-200">
-                
+
                 {/* Modal Header */}
                 <div className="px-6 py-4.5 border-b border-neutral-100 flex items-center justify-between">
                     <h3 className="font-extrabold text-neutral-800 text-[15px] tracking-tight">Chi tiết thông tin bệnh nhân</h3>
@@ -67,7 +67,7 @@ export default function PatientDetailsModal({
 
                 {/* Modal Body */}
                 <div className="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
-                    
+
                     {/* 1. Patient Profile Card */}
                     <div className="bg-[#F4F3FF]/70 border border-[#8B7CF6]/10 rounded-[22px] p-5 flex items-center justify-between">
                         <div className="flex items-center gap-3.5">
@@ -105,7 +105,7 @@ export default function PatientDetailsModal({
                             <Activity className="w-3.5 h-3.5 text-neutral-400" />
                             Hàng chờ & Trạng thái
                         </h4>
-                        
+
                         <div className="space-y-2 text-xs">
                             <div className="flex justify-between items-center py-1 border-b border-slate-100/50">
                                 <span className="text-neutral-500 font-semibold">Trạng thái:</span>
@@ -264,14 +264,14 @@ export default function PatientDetailsModal({
                                         selectedPatient.step.step_status === 'COMPLETED'
                                             ? "bg-emerald-50 border-emerald-200 text-emerald-700"
                                             : selectedPatient.step.step_status === 'IN_PROGRESS'
-                                            ? "bg-indigo-50 border-indigo-200 text-[#8B7CF6]"
-                                            : "bg-neutral-100 border-neutral-200 text-neutral-600"
+                                                ? "bg-indigo-50 border-indigo-200 text-[#8B7CF6]"
+                                                : "bg-neutral-100 border-neutral-200 text-neutral-600"
                                     )}>
                                         {selectedPatient.step.step_status === 'COMPLETED'
                                             ? 'Đã hoàn thành'
                                             : selectedPatient.step.step_status === 'IN_PROGRESS'
-                                            ? 'Đang thực hiện'
-                                            : selectedPatient.step.step_status}
+                                                ? 'Đang thực hiện'
+                                                : selectedPatient.step.step_status}
                                     </span>
                                 </div>
                             </div>
@@ -310,7 +310,7 @@ export default function PatientDetailsModal({
                                                         x{detail.quantity}
                                                     </span>
                                                 )}
-                                                
+
                                                 {detail.status === 'COMPLETED' ? (
                                                     <span className="text-[9.5px] font-extrabold px-2.5 py-1 rounded-full border bg-emerald-50 border-emerald-150 text-emerald-600 uppercase tracking-wider shrink-0 flex items-center gap-1 font-sans">
                                                         <CheckCircle2 className="w-3 h-3 text-emerald-500" />
@@ -421,7 +421,6 @@ export default function PatientDetailsModal({
                                 }}
                                 className="rounded-xl font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white border-0 px-4 text-xs shadow-xs cursor-pointer flex items-center gap-1.5"
                             >
-                                <CheckCircle2 className="w-3.5 h-3.5" />
                                 Hoàn thành lượt khám
                             </Button>
                         )}

@@ -45,7 +45,6 @@ export default function CompleteConfirmModal({
                 <div className="px-6 pt-6 pb-4 flex items-center justify-between border-b border-neutral-100">
                     <div className="flex items-center gap-2.5">
                         <div className="w-10 h-10 rounded-2xl bg-emerald-50 flex items-center justify-center border border-emerald-100 shadow-xs">
-                            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                         </div>
                         <div>
                             <h3 className="text-sm font-black text-neutral-850">
