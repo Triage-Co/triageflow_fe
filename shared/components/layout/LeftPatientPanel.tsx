@@ -13,7 +13,7 @@ import { useAuthStore } from '@/store/authStore';
 import { isClinicalEmrReadOnly } from '@/modules/clinical/utils/appointmentDate';
 
 type SidePanelTab = 'process' | 'info';
-type EditingField = 'visitReason' | 'medicalHistory' | 'vitals' | null;
+type EditingField = 'medicalHistory' | 'vitals' | null;
 
 interface VisitSessionData {
     visit_session_id?: string;
@@ -128,7 +128,6 @@ export function LeftPatientPanel({
     const [initialSymptom, setInitialSymptom] = useState<string>('');
 
     // Edit state for each editable field
-    const [editVisitReason, setEditVisitReason] = useState('');
     const [editMedicalHistory, setEditMedicalHistory] = useState('');
     const [editVitals, setEditVitals] = useState({
         heart_rate: '',
@@ -228,7 +227,6 @@ export function LeftPatientPanel({
                         sessionPatientId = session.patient_id;
                         setResolvedPid(session.patient_id);
                     }
-                    setEditVisitReason(session.chief_complaint || '');
                     setEditMedicalHistory(session.pmh || '');
                     setEditVitals({
                         heart_rate: session.heart_rate !== undefined ? String(session.heart_rate) : '',
@@ -268,10 +266,6 @@ export function LeftPatientPanel({
             vitalInputRefs.current.heart_rate?.focus();
         }
     }, [editingField]);
-
-    const displayVisitReason = sessionData?.chief_complaint
-        || (patient.visitReason && patient.visitReason !== 'Chưa có lý do khám từ hệ thống' ? patient.visitReason : '')
-        || 'Chưa có lý do khám';
 
     const formatVitalValue = (val: string | number | undefined | null) => {
         if (val === undefined || val === null || (typeof val === 'number' && isNaN(val)) || String(val) === 'NaN') {
@@ -327,9 +321,7 @@ export function LeftPatientPanel({
         try {
             let patchBody: Record<string, unknown> = {};
 
-            if (field === 'visitReason') {
-                patchBody = { chief_complaint: editVisitReason };
-            } else if (field === 'medicalHistory') {
+            if (field === 'medicalHistory') {
                 patchBody = { pmh: editMedicalHistory.trim() };
             } else if (field === 'vitals') {
                 patchBody = {
@@ -346,7 +338,6 @@ export function LeftPatientPanel({
 
             setSessionData((prev) => {
                 if (!prev) return prev;
-                if (field === 'visitReason') return { ...prev, chief_complaint: editVisitReason };
                 if (field === 'medicalHistory') return { ...prev, pmh: editMedicalHistory.trim() };
                 if (field === 'vitals') return {
                     ...prev,
@@ -367,7 +358,6 @@ export function LeftPatientPanel({
     };
 
     const handleCancel = (field: EditingField) => {
-        if (field === 'visitReason') setEditVisitReason(sessionData?.chief_complaint || '');
         if (field === 'medicalHistory') setEditMedicalHistory(sessionData?.pmh || '');
         if (field === 'vitals') {
             setEditVitals({
@@ -520,30 +510,19 @@ export function LeftPatientPanel({
                                     </div>
                                 </div>
 
-                                {/* 2. Visit Reason Card */}
-                                <div className="bg-neutral-50/70 border border-neutral-100 rounded-[16px] p-4">
-                                    <div className="flex items-center justify-between mb-1">
-                                        <SectionLabel>Lý do đến khám</SectionLabel>
-                                        {sessionData?.visit_session_id && editingField !== 'visitReason' && !isReadOnly && (
-                                            <button
-                                                onClick={() => { setEditVisitReason(sessionData?.chief_complaint || displayVisitReason); setEditingField('visitReason'); }}
-                                                className="w-5 h-5 flex items-center justify-center text-neutral-300 hover:text-[#8B7CF6] transition-colors cursor-pointer"
-                                            >
-                                                <Pencil className="w-3 h-3" />
-                                            </button>
-                                        )}
-                                        {editingField === 'visitReason' && renderEditActions('visitReason')}
-                                    </div>
-                                    {editingField === 'visitReason' ? (
-                                        <textarea
-                                            value={editVisitReason}
-                                            onChange={(e) => setEditVisitReason(e.target.value)}
-                                            className="w-full text-[12px] text-neutral-800 border border-neutral-200 rounded-lg p-2 focus:border-[#8B7CF6] outline-none min-h-16 resize-none"
-                                        />
-                                    ) : (
-                                        <p className="text-[12px] font-semibold text-neutral-800 leading-relaxed">{displayVisitReason}</p>
-                                    )}
-                                </div>
+                                {/* 2. Gợi ý AI Button */}
+                                <button
+                                    type="button"
+                                    onClick={() => setIsTriageModalOpen(true)}
+                                    className="w-full p-4 rounded-[16px] bg-neutral-50/70 border border-neutral-100 hover:border-[#DDD6FE] hover:bg-[#FAF8FF] transition-all group shadow-2xs cursor-pointer text-left"
+                                >
+                                    <p className="text-[10px] font-bold text-[#8B7CF6] uppercase tracking-wider mb-1.5">
+                                        Gợi ý AI
+                                    </p>
+                                    <p className="text-[12px] font-bold text-neutral-800 leading-snug">
+                                        Lý do: <span className="font-medium text-neutral-700">{initialSymptom || 'Chưa có thông tin'}</span>
+                                    </p>
+                                </button>
 
                                 {/* 3. Allergies Card */}
                                 {realAllergies.length > 0 && (
@@ -629,20 +608,6 @@ export function LeftPatientPanel({
                                         </div>
                                     )}
                                 </div>
-
-                                {/* 6. Gợi ý AI Button */}
-                                <button
-                                    type="button"
-                                    onClick={() => setIsTriageModalOpen(true)}
-                                    className="w-full p-4 rounded-[16px] bg-neutral-50/70 border border-neutral-100 hover:border-[#DDD6FE] hover:bg-[#FAF8FF] transition-all group shadow-2xs cursor-pointer text-left"
-                                >
-                                    <p className="text-[10px] font-bold text-[#8B7CF6] uppercase tracking-wider mb-1.5">
-                                        Gợi ý AI
-                                    </p>
-                                    <p className="text-[12px] font-bold text-neutral-800 leading-snug">
-                                        Lý do: <span className="font-medium text-neutral-700">{initialSymptom || 'Chưa có thông tin'}</span>
-                                    </p>
-                                </button>
                             </>
                         )}
                     </div>
